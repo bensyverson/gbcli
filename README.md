@@ -8,7 +8,7 @@ gbcli runs a Game Boy emulator in the background with no window, so an AI agent 
 
 ## Install
 
-Not yet available. gbcli will be a single Go binary for macOS and Linux, and it will need [RGBDS](https://rgbds.gbdev.io/) at a pinned version for building games.
+Not yet available. gbcli will be a single Rust binary for macOS and Linux, and it will need [RGBDS](https://rgbds.gbdev.io/) at a pinned version for building games.
 
 ## Quick start
 

@@ -1,6 +1,6 @@
 # Backend evaluation: which emulator core, and how to drive it
 
-2026-11-06. **Decision: wrap SameBoy (vendored, pinned) behind a C interface of our own design, driven from Go; keep a bespoke Rust core as a defended option with a scheduled decision.** The plan that follows from this is [2026-11-06-plan.md](2026-11-06-plan.md).
+2026-11-06. **Decision: wrap SameBoy (vendored, pinned) behind a core interface of our own design — a Rust trait — with the harness in Rust; keep a bespoke Rust core as a defended option with a scheduled decision.** (The harness language was first decided as Go, then changed to Rust the same day; see Language.) The plan that follows from this is [2026-11-06-plan.md](2026-11-06-plan.md).
 
 This is a point-in-time record. Upstream snapshots evaluated:
 
@@ -152,7 +152,9 @@ Measured on this machine (Go 1.27.3, Apple clang 21, arm64), `scripts/bench/`:
 > **Correction, 2026-11-06 (later the same day):** after `brew upgrade rust llvm` (rustc 1.99.1), Rust was measured with `scripts/bench/rust-build` (SameBoy compiled via the `cc` crate, plus serde, serde_json, png): clean debug 26.4 s, **incremental debug 4.6 s**, clean release 38.8 s, incremental release 6.2 s. Go's incremental build is 0.98 s on the same machine. This supports the Go-for-the-harness split.
 
 - **A Go callback per instruction would roughly halve emulation speed.** So the per-instruction check lives in C: a small shim holds bank-aware address bitmaps for breakpoints and watchpoints and calls into Go only on a match. Matches are rare, so the overhead is near zero; condition evaluation, the protocol and everything else stay in Go.
-- **Decision (user, 2026-11-06): Go for the SameBoy wrapper; Rust if a bespoke core is built.** Go gives the fastest builds, is already maintained by the user, and agents write it reliably. Rust's zero-cost C calls matter more for a bespoke core's raw speed.
+- ~~**Decision (user, 2026-11-06): Go for the SameBoy wrapper; Rust if a bespoke core is built.**~~ Superseded the same day — see the correction below.
+
+> **Correction, 2026-11-06 (later the same day): the harness is Rust, not Go.** The "tiny C shim" premise was wrong: breakpoints are only the first per-access hook. The per-routine profiler needs the execution hook on every instruction; the raster timeline and audio log need every IO write; the flash model needs every ROM-space write and busy reads; watchpoints need every access. In Go each either moves into C or pays ≈39 ns per call (roughly halving speed while active: ≈20k accesses/frame against ≈0.77 ms of emulation per frame), so the C side would keep growing and split the most important logic across two languages. Rust calls C at no extra cost, its enums with data and exhaustive matching suit stop reasons, protocol messages and capability results, and a bespoke Rust core would share types with the harness directly. The 4.6 s vs 0.98 s incremental build figures come from toy crates and don't predict scaling; the risk is managed by a workspace of small crates and measured as the project grows (scaffold leaf). The core boundary becomes a Rust trait instead of a C interface. Decided by the user, 2026-11-06.
 - Zig was considered: best C interop, but it still breaks compatibility between releases, which makes it harder for agents to write. C for the server was the original default; the Go harness keeps C to the hot-path shim.
 
 ## The bespoke core question
@@ -162,10 +164,10 @@ The user asked to keep a from-scratch (or ported) core on the table. Findings:
 - **For:** every wrapper limitation above — side-effecting reads, instruction-only stepping, no layer identity, no saved cycle counter, global RNG — disappears in a core designed for agents. DMG+CGB without SGB, camera and printer is roughly 12–15k lines (SameBoy's whole `Core/` is 22,467 lines including a 3,099-line debugger; measured with `wc -l`). docboy and SameBoy are MIT, so behavior can be ported, and a large test corpus exists.
 - **Against:** the last few percent of DMG fidelity (mode-3 length, the OAM bug, APU quirks, STAT edge cases) took those projects years, and the user's use case aims straight at those edges. Lockstep against SameBoy treats SameBoy's ~11 failures as truth unless docboy breaks ties.
 - **Decision (user, 2026-11-06): wrapper first, bespoke as a *defended* option:**
-  1. Our C interface is designed for the ideal core; where SameBoy can't deliver, the shim returns an explicit *unsupported*.
+  1. Our core interface (a Rust trait, after the language correction above) is designed for the ideal core; where SameBoy can't deliver, the SameBoy backend returns an explicit *unsupported*.
   2. A **gap ledger** counts every *unsupported* an agent hits.
   3. A **scheduled decision leaf**, blocked by the first agent eval, must answer "spike now" or "park with an un-park condition".
-- **The spike, if run:** Rust, implementing the same C interface; DMG only, no APU. Checkpoint 1 (~2 agent sessions): blargg `cpu_instrs` + `instr_timing`, instruction-level lockstep with SameBoy. Checkpoint 2 (~3 more): `mem_timing`, mooneye timer/interrupt/OAM DMA, dmg-acid2 pixel-exact, frame-level lockstep across homebrew ROMs. Gate: at least SameBoy's pass list on that set, plus a cost projection for the APU and CGB tail. Stop at ~6 sessions either way.
+- **The spike, if run:** Rust, implementing the same core trait; DMG only, no APU. Checkpoint 1 (~2 agent sessions): blargg `cpu_instrs` + `instr_timing`, instruction-level lockstep with SameBoy. Checkpoint 2 (~3 more): `mem_timing`, mooneye timer/interrupt/OAM DMA, dmg-acid2 pixel-exact, frame-level lockstep across homebrew ROMs. Gate: at least SameBoy's pass list on that set, plus a cost projection for the APU and CGB tail. Stop at ~6 sessions either way.
 
 ## Open questions carried into the plan
 

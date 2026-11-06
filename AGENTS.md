@@ -2,13 +2,13 @@ IMPORTANT: As you implement features, keep the documentation in `project/` up to
 
 ## Overview
 
-gbcli is an agent-friendly Game Boy development tool for homebrew developers working with AI agents: a headless, deterministic emulator session (JSON Lines server plus a CLI client) with checkpoints, a debugger, profiling and faithful screenshots and audio views, an RGBDS build loop, and just enough built-in onboarding for a Sonnet-class model to get productive. DMG fidelity comes first; GBC is supported. Shape (planned, not yet built): a Go library (engine) with thin server and CLI adapters, over a core C interface of our own that a small C shim implements on vendored SameBoy. Build cost: not yet measured — the scaffold leaf records it here.
+gbcli is an agent-friendly Game Boy development tool for homebrew developers working with AI agents: a headless, deterministic emulator session (JSON Lines server plus a CLI client) with checkpoints, a debugger, profiling and faithful screenshots and audio views, an RGBDS build loop, and just enough built-in onboarding for a Sonnet-class model to get productive. DMG fidelity comes first; GBC is supported. Shape (planned, not yet built): a Rust workspace — an engine library with thin server and CLI adapters, over a core trait of our own that a SameBoy backend implements on vendored SameBoy (built by the cc crate). Build cost: not yet measured — the scaffold leaf records it here.
 
 ## Documentation
 
 - [README.md](README.md) — what gbcli is and its status
 - [project/](project/) — dated plans, findings and decisions; the current plan is [project/2026-11-06-plan.md](project/2026-11-06-plan.md) (in `job` as root `9b5RBA`)
-- [project/2026-11-06-backend-evaluation.md](project/2026-11-06-backend-evaluation.md) — why SameBoy, why Go, the bespoke-core question, cart research, measured baselines
+- [project/2026-11-06-backend-evaluation.md](project/2026-11-06-backend-evaluation.md) — why SameBoy, why Rust, the bespoke-core question, cart research, measured baselines
 - [project/backlog.md](project/backlog.md) — work decided against, with un-park conditions
 - [project/gotchas.md](project/gotchas.md) — project quirks that cost time
 - [scripts/bench/](scripts/bench/) — re-runnable benchmarks behind the evaluation's figures

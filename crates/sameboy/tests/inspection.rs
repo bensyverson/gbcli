@@ -50,6 +50,9 @@ fn assert_inspection_is_pure(core: &dyn Core, at: &str) {
     check("pixel_layers", &|| {
         let _ = core.pixel_layers();
     });
+    check("apu", &|| {
+        let _ = core.apu();
+    });
     for region in REGIONS {
         check(&format!("region {region:?}"), &|| {
             let _ = core.region(region);

@@ -81,7 +81,7 @@ fn div_is_decoded_from_the_internal_counter_not_the_io_array() {
 }
 
 #[test]
-fn an_apu_register_needs_a_bus_read_so_is_unsupported() {
+fn nr52_is_unsupported_while_the_apu_has_unrun_cycles() {
     let core = quick_dmg(BUSY);
     let err = core.io_register(IoReg::NR52).unwrap_err();
     assert!(

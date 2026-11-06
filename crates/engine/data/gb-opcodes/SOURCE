@@ -1,0 +1,13 @@
+Opcodes.json is the SM83 (Game Boy CPU) opcode table from gbdev's gb-opcodes:
+
+  repository: https://github.com/gbdev/gb-opcodes
+  file:       https://raw.githubusercontent.com/gbdev/gb-opcodes/376f61c86fdac2048f7ce5fe838ae756b306017e/Opcodes.json
+  commit:     376f61c86fdac2048f7ce5fe838ae756b306017e (2024-12-13, the latest commit touching Opcodes.json)
+  fetched:    2026-11-06
+  license:    CC0-1.0 (LICENSE, copied from the same commit)
+
+It is committed unmodified. scripts/disasm/gen_opcodes.py generates
+crates/engine/src/disasm/table.rs from it, and
+crates/engine/tests/disasm_table.rs checks the disassembler against it for all
+512 opcodes. Cycles are T-cycles at single speed; a second figure is the
+not-taken cost of a conditional branch.

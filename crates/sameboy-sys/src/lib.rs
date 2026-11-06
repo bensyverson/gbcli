@@ -69,6 +69,13 @@ pub const GB_VBLANK_TYPE_ARTIFICIAL: GB_vblank_type_t = 2;
 pub const GB_VBLANK_TYPE_REPEAT: GB_vblank_type_t = 3;
 pub const GB_VBLANK_TYPE_SKIPPED_FRAME: GB_vblank_type_t = 4;
 
+/// `GB_channel_t` (apu.h), a C enum.
+pub type GB_channel_t = c_uint;
+pub const GB_SQUARE_1: GB_channel_t = 0;
+pub const GB_SQUARE_2: GB_channel_t = 1;
+pub const GB_WAVE: GB_channel_t = 2;
+pub const GB_NOISE: GB_channel_t = 3;
+
 /// `GB_rtc_mode_t` (timing.h), a C enum.
 pub type GB_rtc_mode_t = c_uint;
 pub const GB_RTC_MODE_ACCURATE: GB_rtc_mode_t = 1;
@@ -187,6 +194,15 @@ unsafe extern "C" {
         buffer: *const u8,
         length: usize,
     ) -> c_int;
+
+    // APU getters (apu.h): plain reads of APU state, which lags while SameBoy
+    // batches APU cycles (`gbcli_apu_synced`). `GB_get_channel_edge_triggered`
+    // is left out: it clears the flag it reads.
+    pub fn GB_get_channel_volume(gb: *mut GB_gameboy_t, channel: GB_channel_t) -> u8;
+    pub fn GB_get_channel_amplitude(gb: *mut GB_gameboy_t, channel: GB_channel_t) -> u8;
+    pub fn GB_get_channel_period(gb: *mut GB_gameboy_t, channel: GB_channel_t) -> u16;
+    /// Fills 32 bytes: wave RAM as nibbles, high nibble first.
+    pub fn GB_get_apu_wave_table(gb: *mut GB_gameboy_t, wave_table: *mut u8);
 }
 
 // gbcli's own accessors over SameBoy internals (`shim/gbcli_shim.c`). The
@@ -203,6 +219,7 @@ unsafe extern "C" {
     pub fn gbcli_ppu_batched(gb: *mut GB_gameboy_t) -> bool;
     pub fn gbcli_bank_for(gb: *mut GB_gameboy_t, addr: u16) -> u16;
     pub fn gbcli_cart_ram_offset(gb: *mut GB_gameboy_t, addr: u16) -> i32;
+    pub fn gbcli_apu_synced(gb: *mut GB_gameboy_t) -> bool;
     pub fn gbcli_io_peek(gb: *mut GB_gameboy_t, reg: u8) -> c_int;
     pub fn gbcli_peek(gb: *mut GB_gameboy_t, addr: u16) -> c_int;
     pub fn gbcli_next_opcode(gb: *mut GB_gameboy_t) -> c_int;

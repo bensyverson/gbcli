@@ -32,8 +32,10 @@ pub(crate) fn builtin_boot_rom(model: Model) -> &'static [u8] {
     }
 }
 
-pub(crate) fn unsupported(feature: Feature) -> Support {
+/// The capability table.
+pub(crate) fn support(feature: Feature) -> Support {
     let reason = match feature {
+        Feature::ApuChannels => return Support::Yes,
         Feature::DotStep => "SameBoy's finest public step is one CPU step (GB_run)",
         Feature::MCycleStep => "SameBoy's finest public step is one CPU step (GB_run)",
         Feature::PpuDot => {
@@ -42,7 +44,7 @@ pub(crate) fn unsupported(feature: Feature) -> Support {
         }
         Feature::PixelLayers => "SameBoy's renderer doesn't record which layer drew a pixel",
         Feature::SideEffectFreeIo => {
-            "APU (NRxx, PCM) and some CGB registers decode only through a bus read; PPU \
+            "NR52, PCM12/PCM34 and wave RAM during playback need the APU synced; PPU \
              registers are unavailable while mode-3 cycles are batched"
         }
         Feature::ExtraOam => "FEA0-FEFF reads are model-specific bus behavior, not storage",
@@ -60,8 +62,8 @@ pub(crate) fn unsupported(feature: Feature) -> Support {
 }
 
 pub(crate) fn unsupported_err(feature: Feature) -> CoreError {
-    match unsupported(feature) {
+    match support(feature) {
         Support::No { reason } => CoreError::Unsupported { feature, reason },
-        Support::Yes => unreachable!("unsupported() only says no"),
+        Support::Yes => unreachable!("only unsupported features become errors"),
     }
 }

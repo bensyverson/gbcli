@@ -129,6 +129,7 @@ Read in full by a research subagent; key claims spot-checked ✓.
 ### 8. Audio
 
 - Per-channel public getters: `GB_get_channel_volume`, `_amplitude`, `_period`, `_edge_triggered`, `GB_get_apu_wave_table`, plus `GB_set_channel_muted` (apu.h ✓). A sample callback and `GB_start_audio_recording` with RAW/AIFF/WAV/**VGM** formats ✓. VGM is a timestamped log of APU register writes — the structured audio view we want.
+  > **Note, 2026-11-06 (leaf MQqwp5):** `GB_get_channel_edge_triggered` is not a pure getter: it clears the flag it returns (apu.c:2767–2772), so inspection doesn't call it. The other getters read state that lags while SameBoy batches APU cycles (`apu.apu_cycles`); `Core::apu` reports that as `ApuSync::Lagging`.
 - Per-channel waveforms: sample the amplitude getters, or replay from a checkpoint with other channels muted (determinism makes the replay exact; to be verified).
 
 ## Cartridges and save mechanisms

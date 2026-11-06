@@ -3,6 +3,7 @@
 //! limits show up as [`Support::No`] and [`CoreError::Unsupported`], never as
 //! approximations.
 
+mod apu;
 mod error;
 mod filter;
 mod region;
@@ -11,6 +12,7 @@ mod state;
 mod stop;
 mod time;
 
+pub use apu::{ApuChannel, ApuChannelState, ApuState, ApuSync};
 pub use error::{CoreError, Feature, Support};
 pub use filter::{AddrFilter, BankSel, canonical_addr};
 pub use region::{
@@ -50,6 +52,14 @@ pub trait Core {
     fn ppu(&self) -> PpuStatus;
     fn last_complete_frame(&self) -> Option<FrameRef<'_>>;
     fn pixel_layers(&self) -> Result<LayerMap<'_>, CoreError>;
+    /// The sound channels' state ([`Feature::ApuChannels`]). The default is for
+    /// a core without it, so adding this method broke no backend.
+    fn apu(&self) -> Result<ApuState, CoreError> {
+        Err(CoreError::Unsupported {
+            feature: Feature::ApuChannels,
+            reason: "this core doesn't report APU channel state",
+        })
+    }
     /// Never-written tracking for WRAM, HRAM or cart RAM (design §9).
     /// `InvalidState` when the core was built with tracking off.
     fn written(&self, region: Region) -> Result<WrittenView<'_>, CoreError>;

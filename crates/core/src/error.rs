@@ -17,8 +17,10 @@ pub enum Feature {
     SideEffectFreeIo,
     /// The unusable OAM area FEA0–FEFF.
     ExtraOam,
-    /// APU internals beyond the registers.
+    /// APU internals beyond the registers and the channel state.
     ApuInternals,
+    /// Per-channel volume, amplitude and period, and the wave table (`Core::apu`).
+    ApuChannels,
     /// The write hook seeing OAM DMA and HDMA destination writes.
     WriteHookCoversDma,
     /// The execution hook seeing interrupt dispatch.

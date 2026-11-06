@@ -14,16 +14,16 @@ use std::ptr::NonNull;
 use std::sync::Mutex;
 
 use gbcli_core::{
-    BootRom, Budget, BudgetKind, Core, CoreConfig, CoreError, CoreInfo, Feature, FrameRef, IoReg,
-    JoypadBounce, Keys, LayerMap, Model, PpuMode, PpuStatus, Region, RegionView, Registers,
-    Rendering, RtcMode, RunRequest, StepUnit, Stop, StopReason, Support, Ticks, WriteTracking,
-    WrittenView,
+    ApuState, BootRom, Budget, BudgetKind, Core, CoreConfig, CoreError, CoreInfo, Feature,
+    FrameRef, IoReg, JoypadBounce, Keys, LayerMap, Model, PpuMode, PpuStatus, Region, RegionView,
+    Registers, Rendering, RtcMode, RunRequest, StepUnit, Stop, StopReason, Support, Ticks,
+    WriteTracking, WrittenView,
 };
 use sameboy_sys as sb;
 
 use hooks::Hooks;
 pub(crate) use support::unsupported_err;
-use support::{builtin_boot_rom, sameboy_model, unsupported};
+use support::{builtin_boot_rom, sameboy_model, support};
 
 /// SameBoy's RNG is process-global: seeding and `GB_init` happen under this
 /// lock so two constructions can't interleave.
@@ -177,7 +177,7 @@ impl Core for SameBoy {
     }
 
     fn supports(&self, feature: Feature) -> Support {
-        unsupported(feature)
+        support(feature)
     }
 
     fn run(&mut self, req: &mut RunRequest<'_>) -> Result<Stop, CoreError> {
@@ -268,6 +268,10 @@ impl Core for SameBoy {
 
     fn pixel_layers(&self) -> Result<LayerMap<'_>, CoreError> {
         Err(unsupported_err(Feature::PixelLayers))
+    }
+
+    fn apu(&self) -> Result<ApuState, CoreError> {
+        Ok(memory::apu(self))
     }
 
     fn written(&self, region: Region) -> Result<WrittenView<'_>, CoreError> {

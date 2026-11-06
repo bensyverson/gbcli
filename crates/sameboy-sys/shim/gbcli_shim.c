@@ -70,6 +70,43 @@ int32_t gbcli_cart_ram_offset(GB_gameboy_t *gb, uint16_t addr)
     return ((addr & 0x1FFF) + bank * 0x2000) & (gb->mbc_ram_size - 1);
 }
 
+// Whether the APU has run every cycle that has passed. SameBoy batches APU
+// cycles (apu.apu_cycles) and catches up on any APU register access.
+bool gbcli_apu_synced(GB_gameboy_t *gb) { return gb->apu.apu_cycles == 0; }
+
+// Mirrors GB_apu_read (apu.c) minus its GB_apu_run: -1 where that run could
+// change the result (NR52's channel bits, wave RAM while channel 3 plays).
+static int apu_peek(GB_gameboy_t *gb, uint8_t reg)
+{
+    if (reg == GB_IO_NR52) {
+        if (!gbcli_apu_synced(gb)) return -1;
+        uint8_t value = 0;
+        for (unsigned i = 0; i < GB_N_CHANNELS; i++) {
+            value >>= 1;
+            if (gb->apu.is_active[i]) value |= 0x8;
+        }
+        if (gb->apu.global_enable) value |= 0x80;
+        return value | 0x70;
+    }
+    static const uint8_t read_mask[GB_IO_WAV_END - GB_IO_NR10 + 1] = {
+        0x80, 0x3F, 0x00, 0xFF, 0xBF, // NR1X
+        0xFF, 0x3F, 0x00, 0xFF, 0xBF, // NR2X
+        0x7F, 0xFF, 0x9F, 0xFF, 0xBF, // NR3X
+        0xFF, 0xFF, 0x00, 0x00, 0xBF, // NR4X
+        0x00, 0x00, 0x70, 0xFF, 0xFF, // NR5X
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // Unused
+        0, // Wave RAM
+    };
+    if (reg >= GB_IO_WAV_START && reg <= GB_IO_WAV_END && gb->apu.is_active[GB_WAVE]) {
+        if (!gbcli_apu_synced(gb)) return -1;
+        if (!GB_is_cgb(gb) && !gb->apu.wave_channel.wave_form_just_read) return 0xFF;
+        if (gb->model > GB_MODEL_CGB_E) return 0xFF;
+        reg = GB_IO_WAV_START + gb->apu.wave_channel.current_sample_index / 2;
+    }
+    return gb->io_registers[reg] | read_mask[reg - GB_IO_NR10];
+}
+
+// Mirrors read_high_memory's IO cases (memory.c), in its order.
 int gbcli_io_peek(GB_gameboy_t *gb, uint8_t reg)
 {
     switch (reg) {
@@ -77,13 +114,39 @@ int gbcli_io_peek(GB_gameboy_t *gb, uint8_t reg)
         case GB_IO_IF: case GB_IO_LCDC: case GB_IO_STAT: case GB_IO_SCY:
         case GB_IO_SCX: case GB_IO_LY: case GB_IO_LYC: case GB_IO_BGP:
         case GB_IO_OBP0: case GB_IO_OBP1: case GB_IO_WY: case GB_IO_WX:
+        case GB_IO_HDMA5: case GB_IO_BGPI: case GB_IO_BGPD: case GB_IO_OBPI:
+        case GB_IO_OBPD: case GB_IO_OPRI:
             if (gbcli_ppu_batched(gb)) return -1;
             switch (reg) {
                 case GB_IO_IF: return gb->io_registers[reg] | 0xE0;
                 case GB_IO_STAT: return gb->io_registers[reg] | 0x80;
+                case GB_IO_OPRI:
+                    return GB_is_cgb(gb) ? gb->io_registers[reg] | 0xFE : 0xFF;
+                case GB_IO_HDMA5:
+                    if (!gb->cgb_mode) return 0xFF;
+                    return ((gb->hdma_on || gb->hdma_on_hblank) ? 0 : 0x80) |
+                           ((gb->hdma_steps_left - 1) & 0x7F);
+                case GB_IO_BGPI: case GB_IO_OBPI:
+                    return GB_is_cgb(gb) ? gb->io_registers[reg] | 0x40 : 0xFF;
+                case GB_IO_BGPD: case GB_IO_OBPD: {
+                    if (!gb->cgb_mode && gb->boot_rom_finished) return 0xFF;
+                    if (gb->cgb_palettes_blocked) return 0xFF;
+                    uint8_t index = gb->io_registers[reg - 1] & 0x3F;
+                    return (reg == GB_IO_BGPD ? gb->background_palettes_data
+                                              : gb->object_palettes_data)[index];
+                }
                 default: return gb->io_registers[reg];
             }
         case GB_IO_TAC: return gb->io_registers[reg] | 0xF8;
+        case GB_IO_PCM12: case GB_IO_PCM34: {
+            if (!GB_is_cgb(gb)) return 0xFF;
+            if (!gbcli_apu_synced(gb)) return -1;
+            bool high = reg == GB_IO_PCM34;
+            GB_channel_t lo = high ? GB_WAVE : GB_SQUARE_1, hi = high ? GB_NOISE : GB_SQUARE_2;
+            uint8_t value = (gb->apu.is_active[hi] ? gb->apu.samples[hi] << 4 : 0) |
+                            (gb->apu.is_active[lo] ? gb->apu.samples[lo] : 0);
+            return value & (gb->model <= GB_MODEL_CGB_C ? gb->apu.pcm_mask[high] : 0xFF);
+        }
         case GB_IO_TMA: case GB_IO_SC: case GB_IO_SB: case GB_IO_DMA:
             return gb->io_registers[reg];
         case GB_IO_JOYP:
@@ -100,10 +163,23 @@ int gbcli_io_peek(GB_gameboy_t *gb, uint8_t reg)
             if (!gb->cgb_mode) return 0xFF;
             return (gb->io_registers[reg] & 0x7F) | (gb->cgb_double_speed ? 0xFE : 0x7E);
         case GB_IO_BANK: return 0xFE | gb->boot_rom_finished;
+        case GB_IO_RP: {
+            if (!gb->cgb_mode) return 0xFF;
+            uint8_t value = (gb->io_registers[reg] & 0xC1) | 0x2E;
+            if (gb->model != GB_MODEL_CGB_E) value |= 0x10;
+            if ((gb->io_registers[reg] & 0xC0) == 0xC0 && gb->effective_ir_input &&
+                gb->model <= GB_MODEL_CGB_E) {
+                value &= ~2;
+            }
+            return value;
+        }
+        case GB_IO_PSWX: case GB_IO_PSWY:
+            return GB_is_cgb(gb) ? gb->io_registers[reg] : 0xFF;
+        case GB_IO_PSW: return gb->cgb_mode ? gb->io_registers[reg] : 0xFF;
+        case GB_IO_PGB: return GB_is_cgb(gb) ? gb->io_registers[reg] | 0x8F : 0xFF;
         default:
-            // APU registers go through GB_apu_read, which runs the APU; the CGB
-            // registers not listed have model-specific paths we don't mirror.
-            return -1;
+            if (reg >= GB_IO_NR10 && reg <= GB_IO_WAV_END) return apu_peek(gb, reg);
+            return 0xFF;
     }
 }
 

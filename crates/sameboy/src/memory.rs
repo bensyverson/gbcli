@@ -1,6 +1,8 @@
 //! Direct access: region views, decoded registers, pokes and ROM patches.
 
-use gbcli_core::{CoreError, Feature, IoReg, Region, RegionView};
+use gbcli_core::{
+    ApuChannel, ApuChannelState, ApuState, ApuSync, CoreError, Feature, IoReg, Region, RegionView,
+};
 use sameboy_sys as sb;
 
 use crate::{SameBoy, unsupported_err};
@@ -65,6 +67,42 @@ pub(crate) fn io_register(core: &SameBoy, reg: IoReg) -> Result<u8, CoreError> {
     // SAFETY: a side-effect-free peek on a live instance.
     let value = unsafe { sb::gbcli_io_peek(core.raw(), reg.0) };
     u8::try_from(value).map_err(|_| unsupported_err(Feature::SideEffectFreeIo))
+}
+
+/// Channel state through SameBoy's public getters, which only read.
+pub(crate) fn apu(core: &SameBoy) -> ApuState {
+    let gb = core.raw();
+    let channel = |c: ApuChannel| {
+        let id = match c {
+            ApuChannel::Square1 => sb::GB_SQUARE_1,
+            ApuChannel::Square2 => sb::GB_SQUARE_2,
+            ApuChannel::Wave => sb::GB_WAVE,
+            ApuChannel::Noise => sb::GB_NOISE,
+        };
+        // SAFETY: plain getters on a live instance.
+        unsafe {
+            ApuChannelState {
+                volume: sb::GB_get_channel_volume(gb, id),
+                amplitude: sb::GB_get_channel_amplitude(gb, id),
+                period: sb::GB_get_channel_period(gb, id),
+            }
+        }
+    };
+    let mut wave_table = [0u8; 32];
+    // SAFETY: SameBoy fills exactly 32 bytes; both calls only read.
+    let synced = unsafe {
+        sb::GB_get_apu_wave_table(gb, wave_table.as_mut_ptr());
+        sb::gbcli_apu_synced(gb)
+    };
+    ApuState {
+        channels: ApuChannel::ALL.map(channel),
+        wave_table,
+        sync: if synced {
+            ApuSync::Current
+        } else {
+            ApuSync::Lagging
+        },
+    }
 }
 
 fn check_range(what: &'static str, offset: u32, len: usize, size: usize) -> Result<(), CoreError> {

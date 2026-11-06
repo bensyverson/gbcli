@@ -1,0 +1,6 @@
+.DS_Store
+# job
+# Jobs cache and its sidecars — disposable, rebuilt from .jobs/log
+.jobs.db*
+# This machine's replica id, identity and focus
+.jobs/local.json

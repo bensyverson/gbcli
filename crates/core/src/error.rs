@@ -31,6 +31,26 @@ pub enum Feature {
     EventSinks,
 }
 
+impl Feature {
+    /// The name the gap ledger and `gbcli doctor --core` spell.
+    pub fn name(self) -> &'static str {
+        match self {
+            Feature::DotStep => "dot_step",
+            Feature::MCycleStep => "mcycle_step",
+            Feature::PpuDot => "ppu_dot",
+            Feature::PixelLayers => "pixel_layers",
+            Feature::SideEffectFreeIo => "side_effect_free_io",
+            Feature::ExtraOam => "extra_oam",
+            Feature::ApuInternals => "apu_internals",
+            Feature::ApuChannels => "apu_channels",
+            Feature::WriteHookCoversDma => "write_hook_covers_dma",
+            Feature::ExecHookCoversInterrupts => "exec_hook_covers_interrupts",
+            Feature::Mmm01RomPatch => "mmm01_rom_patch",
+            Feature::EventSinks => "event_sinks",
+        }
+    }
+}
+
 /// Whether a core has a [`Feature`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Support {

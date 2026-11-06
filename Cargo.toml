@@ -6,6 +6,8 @@ members = [
     "crates/sameboy",
     "crates/engine",
     "crates/protocol",
+    "crates/bundle",
+    "crates/server",
     "crates/gbcli",
     "crates/corpus",
 ]
@@ -21,6 +23,8 @@ gbcli-core = { path = "crates/core" }
 gbcli-engine = { path = "crates/engine" }
 gbcli-sameboy = { path = "crates/sameboy" }
 gbcli-protocol = { path = "crates/protocol" }
+gbcli-bundle = { path = "crates/bundle" }
+gbcli-server = { path = "crates/server" }
 sameboy-sys = { path = "crates/sameboy-sys" }
 cc = "1"
 serde = { version = "1", features = ["derive"] }

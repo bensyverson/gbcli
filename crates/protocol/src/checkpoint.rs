@@ -70,9 +70,9 @@ pub struct TimeMark {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Patch {
     pub offset: u32,
-    #[serde(with = "hex_bytes")]
+    #[serde(with = "crate::hex::bytes")]
     pub bytes: Vec<u8>,
-    #[serde(with = "hex_bytes")]
+    #[serde(with = "crate::hex::bytes")]
     pub before: Vec<u8>,
 }
 
@@ -147,7 +147,7 @@ pub struct Sha256(pub [u8; 32]);
 
 impl fmt::Display for Sha256 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&hex_bytes::encode(&self.0))
+        f.write_str(&crate::hex::encode(&self.0))
     }
 }
 
@@ -160,7 +160,7 @@ impl fmt::Debug for Sha256 {
 impl FromStr for Sha256 {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, String> {
-        let bytes = hex_bytes::decode(s)?;
+        let bytes = crate::hex::decode(s)?;
         let digest: [u8; 32] = bytes
             .try_into()
             .map_err(|b: Vec<u8>| format!("a SHA-256 has 32 bytes, got {}", b.len()))?;
@@ -181,35 +181,6 @@ impl<'de> Deserialize<'de> for Sha256 {
     }
 }
 
-mod hex_bytes {
-    use serde::{Deserialize, Deserializer, Serializer};
-
-    pub fn encode(bytes: &[u8]) -> String {
-        bytes.iter().map(|b| format!("{b:02x}")).collect()
-    }
-
-    pub fn decode(text: &str) -> Result<Vec<u8>, String> {
-        if !text.len().is_multiple_of(2) || !text.is_ascii() {
-            return Err(format!("not an even run of hex digits: {text:?}"));
-        }
-        (0..text.len())
-            .step_by(2)
-            .map(|i| {
-                u8::from_str_radix(&text[i..i + 2], 16)
-                    .map_err(|_| format!("not hex: {:?}", &text[i..i + 2]))
-            })
-            .collect()
-    }
-
-    pub fn serialize<S: Serializer>(bytes: &[u8], s: S) -> Result<S::Ok, S::Error> {
-        s.serialize_str(&encode(bytes))
-    }
-
-    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<u8>, D::Error> {
-        decode(&String::deserialize(d)?).map_err(serde::de::Error::custom)
-    }
-}
-
 /// A model's wire name, as the header spells it (`dmg-b`, `cgb-e`).
 pub fn model_name(model: Model) -> &'static str {
     match model {
@@ -227,12 +198,30 @@ pub fn model_name(model: Model) -> &'static str {
     }
 }
 
+/// A model from its wire name; `None` for an unknown name.
+pub fn model_from_name(name: &str) -> Option<Model> {
+    Some(match name {
+        "dmg-b" | "dmg" => Model::DmgB,
+        "mgb" => Model::Mgb,
+        "sgb" => Model::Sgb,
+        "sgb2" => Model::Sgb2,
+        "cgb0" | "cgb" => Model::Cgb0,
+        "cgb-a" => Model::CgbA,
+        "cgb-b" => Model::CgbB,
+        "cgb-c" => Model::CgbC,
+        "cgb-d" => Model::CgbD,
+        "cgb-e" => Model::CgbE,
+        "agb" => Model::Agb,
+        _ => return None,
+    })
+}
+
 // Serde mirrors of the core's enums. `remote` derives check every variant
 // against the core's definition at compile time, so they can't drift.
 
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "Model", rename_all = "kebab-case")]
-enum ModelDef {
+pub(crate) enum ModelDef {
     DmgB,
     Mgb,
     Sgb,
@@ -346,6 +335,18 @@ mod tests {
             let json = serde_json::to_value(h).unwrap();
             assert_eq!(json["model"], model_name(model));
         }
+    }
+
+    #[test]
+    fn model_names_round_trip() {
+        use Model::*;
+        for model in [
+            DmgB, Mgb, Sgb, Sgb2, Cgb0, CgbA, CgbB, CgbC, CgbD, CgbE, Agb,
+        ] {
+            assert_eq!(model_from_name(model_name(model)), Some(model));
+        }
+        assert_eq!(model_from_name("dmg"), Some(DmgB));
+        assert_eq!(model_from_name("nintendo"), None);
     }
 
     #[test]

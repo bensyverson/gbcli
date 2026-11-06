@@ -7,8 +7,15 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+gbcli-bundle.workspace = true
+gbcli-core.workspace = true
 gbcli-engine.workspace = true
 gbcli-protocol.workspace = true
+gbcli-server.workspace = true
+lexopt.workspace = true
 # Until the SameBoy backend crate exists, the binary links the core directly so
 # build-time measurements include compiling and linking SameBoy.
 sameboy-sys.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

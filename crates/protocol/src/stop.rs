@@ -36,6 +36,9 @@ pub enum StopReason {
     Stopped,
     /// The caller asked the run to stop.
     UserBreak,
+    /// The server's wall-clock guard ended the run (design §3). The result is
+    /// not reproducible; host time is the only input.
+    WallGuard,
 }
 
 /// What a step stepped by.
@@ -90,12 +93,29 @@ pub struct FrameShown {
     pub vblank: VblankKind,
 }
 
-/// How much of its budget a run used.
+/// The limits a run was given, whichever ends first (design §3). `None` for a
+/// unit the caller left uncapped.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BudgetLimits {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ticks: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub instructions: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frames: Option<u64>,
+}
+
+/// How much of its budget a run used, and what that budget was.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BudgetUse {
     pub ticks: u64,
     pub instructions: u64,
     pub frames: u64,
+    /// The configured limits. `null` when the caller didn't say.
+    pub limits: BudgetLimits,
+    /// True when the server supplied a default budget because the request
+    /// named none (design §3).
+    pub defaulted: bool,
 }
 
 impl From<Usage> for BudgetUse {
@@ -104,6 +124,8 @@ impl From<Usage> for BudgetUse {
             ticks: u.ticks,
             instructions: u.instructions,
             frames: u.frames,
+            limits: BudgetLimits::default(),
+            defaulted: false,
         }
     }
 }
@@ -182,6 +204,12 @@ mod tests {
                 ticks: 1,
                 instructions: 2,
                 frames: 31,
+                limits: BudgetLimits {
+                    ticks: None,
+                    instructions: None,
+                    frames: Some(600),
+                },
+                defaulted: true,
             },
         };
         let json = serde_json::to_value(&record).unwrap();
@@ -190,6 +218,8 @@ mod tests {
         assert_eq!(json["time"]["since"]["kind"], "boot");
         assert_eq!(json["time"]["dot"], serde_json::Value::Null);
         assert_eq!(json["frame_shown"]["vblank"], "normal");
+        assert_eq!(json["budget"]["limits"]["frames"], 600);
+        assert_eq!(json["budget"]["defaulted"], true);
         let back: StopRecord = serde_json::from_value(json).unwrap();
         assert_eq!(back, record);
     }

@@ -172,6 +172,40 @@ pub fn drive(m: &mut Machine, opts: &RunOptions<'_>, goal: Goal) -> Result<Outco
         if halted_forever(m.core()) {
             return finish(m, StopReason::HaltForever, used, warnings);
         }
+        // The core skips an execution filter at the first instruction of each
+        // call, so resuming from a breakpoint makes progress. After a
+        // passed-over candidate, that skipped PC may be the goal: the boot ROM
+        // falls through to $0100 right after the FF50 write the engine passed
+        // over, so checking it here is what makes the handoff stoppable.
+        if used.instructions > 0 {
+            let pc = m.core().registers().pc;
+            if exec.may_match(pc) {
+                let bank = mem::bank_at(m.core(), pc);
+                if exec.matches(pc, bank) {
+                    let old = mem::peek(m.core(), pc).ok();
+                    let hit = Hit {
+                        access: Access::Exec,
+                        addr: pc,
+                        bank,
+                        old,
+                        new: old.unwrap_or(0xFF),
+                        pc,
+                        vetoed: false,
+                    };
+                    match decide(m, &compiled, &goal, hit, opts, &mut warnings) {
+                        Err((id, reason, error)) => {
+                            return Err(DebugError::Eval {
+                                id,
+                                error,
+                                stop: Box::new(record(m, reason, used, &opts.since)),
+                            });
+                        }
+                        Ok(Some(reason)) => return finish(m, reason, used, warnings),
+                        Ok(None) => {}
+                    }
+                }
+            }
+        }
         let chunk = if goal.fine() { 1 } else { CHUNK };
         let before = m.core().registers();
         let opcode = mem::peek(m.core(), before.pc).unwrap_or(0);

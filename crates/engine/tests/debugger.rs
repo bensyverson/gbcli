@@ -234,6 +234,29 @@ fn stepping_a_scanline_ends_when_ly_changes() {
 }
 
 #[test]
+fn running_to_the_handoff_stops_right_after_the_boot_rom() {
+    // The FF50 write is a passed-over candidate, and the boot ROM falls
+    // through to $0100: the exec filter must be checked at that PC even
+    // though it begins the next core call.
+    let mut config = CoreConfig::new(Model::DmgB, V1.to_vec());
+    let _ = &mut config;
+    let mut m = Machine::new(Backend::sameboy(), config, Some(V1_SYM)).unwrap();
+    let stop = m
+        .run_to(at(0x0100), &RunOptions::new(Budget::frames(600)))
+        .expect("run to the handoff")
+        .stop;
+    assert_eq!(
+        stop.reason,
+        StopReason::StepDone {
+            unit: StepKind::ToAddress
+        }
+    );
+    assert_eq!(stop.pc, 0x0100);
+    assert!(m.boot().is_some(), "the FF50 write was seen");
+    assert!(stop.time.frame < 120, "the handoff is near frame 84");
+}
+
+#[test]
 fn running_to_an_address() {
     let mut m = machine(V1, Some(V1_SYM));
     let stop = m.run_to(at(0x0170), &opts()).unwrap().stop;

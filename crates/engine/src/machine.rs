@@ -192,6 +192,16 @@ impl Machine {
         self.boot
     }
 
+    /// The moment `frame` and `t` in expressions and stop records count from
+    /// (design §9). `Boot` before the handoff falls back to power-on.
+    pub fn time_base(&self, since: &crate::debug::Since) -> TimeMark {
+        match since {
+            crate::debug::Since::PowerOn => TimeMark { ticks: 0, frame: 0 },
+            crate::debug::Since::Boot => self.boot.unwrap_or(TimeMark { ticks: 0, frame: 0 }),
+            crate::debug::Since::Checkpoint { mark, .. } => *mark,
+        }
+    }
+
     pub fn debugger_config(&self) -> &DebuggerConfig {
         &self.debugger
     }

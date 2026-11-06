@@ -1,0 +1,15 @@
+[package]
+name = "gbcli-server"
+description = "gbcli's request/response layer and JSON Lines stdio server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gbcli-bundle.workspace = true
+gbcli-core.workspace = true
+gbcli-engine.workspace = true
+gbcli-protocol.workspace = true
+serde.workspace = true
+serde_json.workspace = true

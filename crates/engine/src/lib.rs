@@ -1,6 +1,7 @@
 //! gbcli's logic, as a library the server and CLI adapters wrap. The engine
 //! never prints; adapters format. See `project/2026-11-06-design.md`.
 
+pub mod addr;
 pub mod disasm;
 pub mod inspect;
 

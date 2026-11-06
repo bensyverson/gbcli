@@ -17,7 +17,3 @@ The sandbox can't read `~/.gitconfig`, so `git clone` and friends fail with "una
 ## 2026-11-06 — subagents can't write report files
 
 The harness refuses a subagent's Write to a findings file ("Subagents should return findings as text"). Brief research agents to return findings in their final message, and have the main thread save them.
-
-## 2026-11-06 — `$TMPDIR` differs inside and outside the sandbox
-
-Git writes to `.git` need the sandbox off, but an unsandboxed command sees a different `$TMPDIR` than the sandboxed one that wrote your commit-message file, so `-F $TMPDIR/msg.txt` fails. Write the message to `.git/<name>.txt` instead (untracked, writable once the sandbox is off), commit with `-F` on it, then delete it.

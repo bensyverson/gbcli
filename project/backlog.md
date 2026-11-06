@@ -25,3 +25,7 @@ What: the other candidates from the original brief. Why parked: MiSTer has a T80
 ## 2026-11-06 — CI on macOS and Linux
 
 What: hosted CI building and testing on macOS arm64 and Linux x86_64 (job leaf `j2uBID`, cancelled). Why parked: the repo has no remote and one committer working on a Mac, so CI would only duplicate the local pre-commit hook (`scripts/hooks/pre-commit`: fmt, clippy, tests). The real gap it would close is Linux portability (SameBoy's `_GNU_SOURCE`, gcc vs clang), which matters only once someone builds on Linux. Un-park when: the repo gets a GitHub remote or goes public, a second contributor arrives, or the first Linux build is needed. A one-off Linux build in Docker can check portability before then.
+
+## 2026-11-06 — More test-ROM suites in the corpus
+
+What: the suites the corpus leaf weighed and left out — the Gambatte test suite (3,524 ROMs, GPL-2.0), wilbertpol's mooneye fork (GPL-3.0), rtc3test, MBC3 Tester, little-things-gb, TurtleTests, Scribbltests, the shootout's own `daid`/`cpp` tests, and docboy's CGB configs. Why parked: size and overlap for Gambatte, superseded for wilbertpol, mapper scope for the RTC/MBC3 tests, no license file for MBC3 Tester and TurtleTests, DMG first for docboy's CGB set. Details in project/2026-11-06-test-rom-corpus.md ▸ Rejected. Un-park when: a failure the current suites can't localize (Gambatte), the mapper leaf starts (rtc3test, MBC3 Tester), we want to reproduce shootout rows exactly (`daid`/`cpp`), or CGB fidelity work begins (docboy CGB).

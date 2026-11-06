@@ -27,6 +27,8 @@ This is a point-in-time record. Upstream snapshots evaluated:
 
 Fidelity reference: the gbdev emulator shootout, <https://gbdev.io/GBEmulatorShootout/>, updated 2026-06-04: docboy 258/261, Emulicious 254/261 (closed source), SameBoy 253/264, bgb 205/264, GambatteSpeedrun 169/207, mGBA 150/264, PyBoy 91/261 (likely a stale version), ares 26/261. **The denominators differ, so these totals are not directly comparable**; the per-test failure lists have not been extracted yet (a plan leaf does it).
 
+> **Update, 2026-11-06 (corpus leaf):** extracted in [2026-11-06-shootout-failures.md](2026-11-06-shootout-failures.md). SameBoy's 11 failures are 9 DMG Mealybug mid-mode-3 LCDC/SCY tests, judged against references from another emulator ("DMG-blob"), plus 2 SGB tests; docboy's 3 are cgb-acid-hell, one SameSuite APU test and one MBC3 RTC test.
+
 | | SameBoy | docboy | PyBoy 2.9 | GateBoy | MiSTer |
 |---|---|---|---|---|---|
 | Throughput, cpu_instrs, 60 emulated s | **21.8× realtime** (measured) | 6.2× (2.3× with debugger compiled in) (measured) | — | 6–8 fps (README) | ModelSim: "1 s realtime ≈ 5 min" |

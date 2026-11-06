@@ -10,3 +10,6 @@ scripts/bench/rust-build/target/
 .claude/worktrees/
 # Cargo build output
 /target/
+# Test-ROM corpus (fetched by scripts/corpus/fetch.py)
+/tests/corpus/fetched/
+/tests/corpus/.downloads/

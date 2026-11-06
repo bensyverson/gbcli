@@ -12,10 +12,13 @@ gbcli is an agent-friendly Game Boy development tool for homebrew developers wor
 - [project/2026-11-06-dx-note-existing-tools.md](project/2026-11-06-dx-note-existing-tools.md) — friction from doing a homebrew task with PyBoy and SameBoy, and the rules it implies
 - [project/2026-11-06-design.md](project/2026-11-06-design.md) — approved design: core trait, stop records, JSONL protocol, session bundle (no daemon), checkpoints, address and expression grammar, CLI verbs
 - [project/2026-11-06-sameboy-vendoring.md](project/2026-11-06-sameboy-vendoring.md) — the vendored SameBoy commit, compile flags, debugger and rewind compiled out, boot ROMs, the headless smoke test
+- [project/2026-11-06-test-rom-corpus.md](project/2026-11-06-test-rom-corpus.md) — test-ROM suites, licenses (blargg has none: fetch only, never commit), the manifest and how to fetch the corpus
+- [project/2026-11-06-shootout-failures.md](project/2026-11-06-shootout-failures.md) — SameBoy's and docboy's gbdev shootout failures, test by test
 - [project/2026-11-06-handoff.md](project/2026-11-06-handoff.md) — latest session handoff
 - [project/backlog.md](project/backlog.md) — work decided against, with un-park conditions
 - [project/gotchas.md](project/gotchas.md) — project quirks that cost time
 - [scripts/bench/](scripts/bench/) — re-runnable benchmarks behind the evaluation's figures and the build-cost figures above
+- [scripts/corpus/](scripts/corpus/) — fetch the pinned test-ROM corpus (`python3 -I scripts/corpus/fetch.py`), rebuild its manifest, parse the shootout
 - [scripts/vendor-sameboy.sh](scripts/vendor-sameboy.sh) and [scripts/build-roms.sh](scripts/build-roms.sh) — re-vendor SameBoy at a commit; rebuild the committed boot ROMs and test ROMs (needs RGBDS)
 
 <!-- agents:begin core@3cc73e -->

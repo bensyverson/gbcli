@@ -17,3 +17,11 @@ The sandbox can't read `~/.gitconfig`, so `git clone` and friends fail with "una
 ## 2026-11-06 — subagents can't write report files
 
 The harness refuses a subagent's Write to a findings file ("Subagents should return findings as text"). Brief research agents to return findings in their final message, and have the main thread save them.
+
+## 2026-11-06 — `GIT_CONFIG_GLOBAL=/dev/null` is refused in an isolated worktree
+
+A worktree-isolated subagent's harness refuses any git command carrying `GIT_CONFIG_GLOBAL` ("injecting git configuration whose effect on where git writes can't be verified"), so the entry above doesn't work there. Run the plain git command with the sandbox disabled for that one call instead, as `project/agents/harness.md` says.
+
+## 2026-11-06 — Python downloads through the sandbox proxy end early, silently
+
+`urllib` through the Bash sandbox's filtering proxy stopped short of `Content-Length` on most archives (e.g. 409,600 of 423,779 bytes, every attempt) with no exception, or raised `IncompleteRead`; `curl` through the same proxy got whole files. `scripts/corpus/fetch.py` checks the length and resumes with HTTP `Range`; anything else that downloads in Python needs the same.

@@ -81,6 +81,31 @@ impl Budget {
             None
         }
     }
+
+    /// What is left of each limit after `used`, saturating at zero; for
+    /// resuming a run that stopped on a candidate the engine passed over.
+    pub fn remaining_after(&self, used: &Usage) -> Budget {
+        let left = |limit: Option<u64>, used: u64| limit.map(|l| l.saturating_sub(used));
+        Budget {
+            ticks: left(self.ticks, used.ticks),
+            instructions: left(self.instructions, used.instructions),
+            frames: left(self.frames, used.frames),
+        }
+    }
+
+    /// Lowers the instruction limit to `n` if it is higher or unset.
+    pub fn capped_instructions(self, n: u64) -> Budget {
+        let n = self.instructions.map_or(n, |limit| limit.min(n));
+        self.with_instructions(n)
+    }
+}
+
+impl std::ops::AddAssign for Usage {
+    fn add_assign(&mut self, rhs: Usage) {
+        self.ticks += rhs.ticks;
+        self.instructions += rhs.instructions;
+        self.frames += rhs.frames;
+    }
 }
 
 /// The unit of a single step.
@@ -193,6 +218,36 @@ mod tests {
         let budget = Budget::frames(10).with_ticks(500);
         assert_eq!(budget.exhausted(&used(500, 0, 3)), Some(BudgetKind::Ticks));
         assert_eq!(budget.exhausted(&used(10, 0, 10)), Some(BudgetKind::Frames));
+    }
+
+    #[test]
+    fn the_remainder_subtracts_what_was_used_from_each_limit() {
+        let budget = Budget::frames(10).with_ticks(500);
+        let rest = budget.remaining_after(&used(200, 7, 4));
+        assert_eq!(rest, Budget::frames(6).with_ticks(300));
+        assert_eq!(
+            budget.remaining_after(&used(900, 0, 0)),
+            Budget::frames(10).with_ticks(0)
+        );
+    }
+
+    #[test]
+    fn capping_instructions_keeps_the_smaller_limit() {
+        assert_eq!(
+            Budget::frames(3).capped_instructions(10),
+            Budget::frames(3).with_instructions(10)
+        );
+        assert_eq!(
+            Budget::instructions(4).capped_instructions(10),
+            Budget::instructions(4)
+        );
+    }
+
+    #[test]
+    fn usage_adds_up() {
+        let mut total = used(1, 2, 3);
+        total += used(10, 20, 30);
+        assert_eq!(total, used(11, 22, 33));
     }
 
     #[test]

@@ -1,6 +1,24 @@
 //! gbcli's logic, as a library the server and CLI adapters wrap. The engine
-//! never prints; adapters format. Stage 2 is being built per
-//! `project/2026-11-06-design.md`: inspection and the disassembler so far.
+//! never prints; adapters format. See `project/2026-11-06-design.md`.
 
 pub mod disasm;
 pub mod inspect;
+
+mod checkpoint;
+mod checkpoint_error;
+pub mod cond;
+mod debug;
+mod machine;
+pub mod mem;
+mod romcheck;
+mod session;
+mod sha256;
+mod sym;
+
+pub use checkpoint::{Checkpoint, LoadOptions, MAGIC, SaveMeta, VERSION};
+pub use checkpoint_error::{CheckpointError, LoadWarning, Moved, MovedRole, SymbolAt, SymbolSide};
+pub use debug::{CallFrame, DebugError, Outcome, RunOptions, Since};
+pub use machine::{Backend, Machine, SetupError};
+pub use session::{MachineId, Session};
+pub use sha256::sha256;
+pub use sym::{Area, MappedSymbols, SymError, Symbol, Symbols};

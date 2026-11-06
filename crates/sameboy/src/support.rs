@@ -19,7 +19,8 @@ pub(crate) fn sameboy_model(model: Model) -> sb::GB_model_t {
     }
 }
 
-pub(crate) fn builtin_boot_rom(model: Model) -> &'static [u8] {
+/// The open-source boot ROM SameBoy runs for a model when none is supplied.
+pub fn builtin_boot_rom(model: Model) -> &'static [u8] {
     use sb::boot_roms;
     match model {
         Model::DmgB => boot_roms::DMG,

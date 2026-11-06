@@ -1,14 +1,17 @@
-//! Shared helpers for the engine's tests over the SameBoy backend.
+//! Shared helpers for the engine's tests over the SameBoy backend: ROMs,
+//! their symbols, cores and machines.
 
 #![allow(dead_code)] // each test binary uses a different subset
 
 use gbcli_core::{BootRom, Budget, Core, CoreConfig, IoReg, Model, RunRequest, StepUnit};
+use gbcli_engine::{Backend, Machine};
 use gbcli_sameboy::SameBoy;
 
 pub const BUSY: &[u8] = include_bytes!("../../../sameboy/tests/roms/busy.gb");
 /// MBC5, 4 ROM banks, 4 cart RAM banks (see banked.asm).
 pub const BANKED: &[u8] = include_bytes!("../../../sameboy/tests/roms/banked.gb");
-const QUICK_BOOT: &[u8] = include_bytes!("../../../sameboy/tests/roms/quick_boot.bin");
+/// Hands over in four instructions; not a faithful boot (see its .asm).
+pub const QUICK_BOOT: &[u8] = include_bytes!("../../../sameboy/tests/roms/quick_boot.bin");
 
 /// A DMG core on `rom`, handed over to the cartridge (PC $0100) by the quick boot ROM.
 pub fn quick_dmg(rom: &[u8]) -> SameBoy {
@@ -65,4 +68,49 @@ impl Rng {
         self.0 ^= self.0 >> 27;
         self.0.wrapping_mul(0x2545_F491_4F6C_DD1D) % n
     }
+}
+
+pub const V1: &[u8] = include_bytes!("../roms/rebuild_v1.gb");
+pub const V2: &[u8] = include_bytes!("../roms/rebuild_v2.gb");
+pub const V3: &[u8] = include_bytes!("../roms/rebuild_v3.gb");
+pub const V4: &[u8] = include_bytes!("../roms/rebuild_v4.gb");
+pub const V1_SYM: &str = include_str!("../roms/rebuild_v1.sym");
+pub const V2_SYM: &str = include_str!("../roms/rebuild_v2.sym");
+pub const V3_SYM: &str = include_str!("../roms/rebuild_v3.sym");
+pub const V4_SYM: &str = include_str!("../roms/rebuild_v4.sym");
+
+/// A DMG config on `rom` with the quick boot ROM.
+pub fn config(rom: &[u8]) -> CoreConfig {
+    let mut config = CoreConfig::new(Model::DmgB, rom.to_vec());
+    config.boot_rom = BootRom::Custom(QUICK_BOOT.to_vec());
+    config
+}
+
+/// A DMG machine on `rom` with the quick boot ROM, handed over (PC $0100).
+pub fn machine(rom: &[u8], sym: Option<&str>) -> Machine {
+    let mut m = Machine::new(Backend::sameboy(), config(rom), sym).expect("machine");
+    steps(&mut m, 4);
+    assert_eq!(
+        m.core().registers().pc,
+        0x0100,
+        "quick boot didn't hand over"
+    );
+    m
+}
+
+pub fn steps(m: &mut Machine, n: usize) {
+    for _ in 0..n {
+        m.core_mut().step(StepUnit::Instruction).expect("step");
+    }
+}
+
+/// Steps until PC is `pc`, within a bound.
+pub fn step_to(m: &mut Machine, pc: u16) {
+    for _ in 0..100_000 {
+        if m.core().registers().pc == pc {
+            return;
+        }
+        steps(m, 1);
+    }
+    panic!("PC never reached {pc:#06x}");
 }

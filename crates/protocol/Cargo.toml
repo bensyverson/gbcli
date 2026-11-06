@@ -5,3 +5,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
+
+[dependencies]
+gbcli-core.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

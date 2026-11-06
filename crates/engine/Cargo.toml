@@ -8,7 +8,7 @@ publish.workspace = true
 
 [dependencies]
 gbcli-core.workspace = true
-
-[dev-dependencies]
+gbcli-protocol.workspace = true
 gbcli-sameboy.workspace = true
+serde.workspace = true
 serde_json.workspace = true

@@ -22,8 +22,9 @@ use gbcli_core::{
 use sameboy_sys as sb;
 
 use hooks::Hooks;
+pub use support::builtin_boot_rom;
 pub(crate) use support::unsupported_err;
-use support::{builtin_boot_rom, sameboy_model, support};
+use support::{sameboy_model, support};
 
 /// SameBoy's RNG is process-global: seeding and `GB_init` happen under this
 /// lock so two constructions can't interleave.

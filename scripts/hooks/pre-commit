@@ -1,0 +1,15 @@
+#!/bin/zsh
+# Pre-commit gate: formatting, lints and the full test suite must pass.
+# Installed by:  git config core.hooksPath scripts/hooks
+# Each step runs on its own so a failure stops the commit with that step's output.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+print -u2 "pre-commit: cargo fmt --check"
+cargo fmt --all --check
+
+print -u2 "pre-commit: cargo clippy"
+cargo clippy --quiet --workspace --all-targets -- -D warnings
+
+print -u2 "pre-commit: cargo test"
+cargo test --quiet --workspace

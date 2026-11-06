@@ -2,7 +2,8 @@
 # Builds the ROM binaries the repository commits, so a normal `cargo build` needs no RGBDS:
 #   - SameBoy's open-source boot ROMs (Expat) from crates/sameboy-sys/SameBoy/BootROMs/*.asm
 #     into crates/sameboy-sys/bootroms/, with their license alongside;
-#   - gbcli's own test ROMs from crates/sameboy-sys/tests/roms/*.asm.
+#   - gbcli's own test ROMs from crates/sameboy-sys/tests/roms/*.asm and crates/sameboy/tests/roms/*.asm
+#     (a name ending in _boot assembles to an unpadded .bin boot ROM, the rest to fixed-up .gb carts).
 # Never put Nintendo boot ROM dumps in the repository.
 #
 # Requires RGBDS (tested with v1.0.4) and a C compiler (for SameBoy's pb12 logo compressor).
@@ -13,7 +14,7 @@ repo_root=${0:A:h:h}
 sys=$repo_root/crates/sameboy-sys
 src=$sys/SameBoy/BootROMs
 out=$sys/bootroms
-roms=$sys/tests/roms
+rom_dirs=($sys/tests/roms $repo_root/crates/sameboy/tests/roms)
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/gbcli-roms.XXXXXX")
 trap 'rm -rf "$work"' EXIT
@@ -36,10 +37,17 @@ for name in $boot_roms; do
 done
 cp "$sys/SameBoy/LICENSE" "$out/LICENSE"
 
-for asm in $roms/*.asm; do
-    name=${asm:t:r}
-    rgbasm -o "$work/$name.o" "$asm"
-    rgblink -o "$roms/$name.gb" "$work/$name.o"
-    rgbfix -v -p 0 "$roms/$name.gb"
-    print "built tests/roms/$name.gb"
+for roms in $rom_dirs; do
+    for asm in $roms/*.asm; do
+        name=${asm:t:r}
+        rgbasm -o "$work/$name.o" "$asm"
+        if [[ $name == *_boot ]]; then
+            rgblink -x -o "$roms/$name.bin" "$work/$name.o"
+            print "built ${roms#$repo_root/}/$name.bin"
+        else
+            rgblink -o "$roms/$name.gb" "$work/$name.o"
+            rgbfix -v -p 0 "$roms/$name.gb"
+            print "built ${roms#$repo_root/}/$name.gb"
+        fi
+    done
 done

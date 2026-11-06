@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/sameboy-sys",
     "crates/core",
+    "crates/sameboy",
     "crates/engine",
     "crates/protocol",
     "crates/gbcli",
@@ -17,6 +18,7 @@ publish = false
 [workspace.dependencies]
 gbcli-core = { path = "crates/core" }
 gbcli-engine = { path = "crates/engine" }
+gbcli-sameboy = { path = "crates/sameboy" }
 gbcli-protocol = { path = "crates/protocol" }
 sameboy-sys = { path = "crates/sameboy-sys" }
 cc = "1"

@@ -1,0 +1,11 @@
+[package]
+name = "gbcli-sameboy"
+description = "The SameBoy backend of gbcli's core trait"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gbcli-core.workspace = true
+sameboy-sys.workspace = true

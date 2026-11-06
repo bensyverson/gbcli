@@ -10,6 +10,8 @@ use std::fs;
 use std::path::Path;
 
 const SAMEBOY: &str = "SameBoy";
+/// Our C accessors over SameBoy internals, compiled with the same flags.
+const SHIM: &str = "shim/gbcli_shim.c";
 
 /// Sources left out because their features are compiled out below
 /// (the same files SameBoy's Makefile filters for these switches).
@@ -47,6 +49,7 @@ const WARNING_FLAGS: &[&str] = &[
 fn main() {
     let root = Path::new(SAMEBOY);
     println!("cargo::rerun-if-changed={SAMEBOY}");
+    println!("cargo::rerun-if-changed={SHIM}");
 
     let version = makefile_value(&root.join("version.mk"), "VERSION");
     let copyright_year = copyright_year(&root.join("LICENSE"));
@@ -60,11 +63,13 @@ fn main() {
             build.file(&path);
         }
     }
+    build.file(SHIM);
     build
         .include(root)
         .std("gnu11")
-        .opt_level(2) // even in debug builds: tests run the emulator for real
+        .opt_level(3) // even in debug builds: tests run the emulator for real
         .define("_GNU_SOURCE", None)
+        .define("NDEBUG", None)
         .define("GB_INTERNAL", None)
         .define("GB_VERSION", format!("\"{version}\"").as_str())
         .define(

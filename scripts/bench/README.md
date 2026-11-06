@@ -14,6 +14,16 @@ cc -O2 -std=gnu11 -I"$SAMEBOY" -o sb_bench scripts/bench/sameboy-throughput/sb_b
 ./sb_bench path/to/cpu_instrs.gb 3600 1   # args: rom, frames, render(0|1)
 ```
 
+## gbcli-sameboy (the backend, through the core trait)
+
+Throughput of the SameBoy backend on a ROM after a 100-frame boot through the built-in DMG boot ROM, then the mean and worst time to restore a checkpoint and run one frame of ticks (1,000 times). Mode `plain` (write tracking off, no filters), `tracking` (never-written tracking on, the default), or `filters` (1,000 armed filters that never match). Figures are in `project/2026-11-06-design.md` (§9) and the `job` notes of leaves jQ3ATQ and m65CaC. On a shared machine, take the best of several interleaved runs.
+
+```sh
+python3 -I scripts/corpus/fetch.py --only blargg
+cargo run --release -p gbcli-sameboy --example bench -- \
+    tests/corpus/fetched/blargg/cpu_instrs/cpu_instrs.gb 3600 1 plain   # args: rom, frames, render, mode
+```
+
 ## cgo-overhead
 
 Cost of a Go→C call and a C→Go callback (10M iterations each).

@@ -6,3 +6,5 @@
 .jobs/local.json
 # Benchmark build output
 scripts/bench/rust-build/target/
+# Agent worktrees
+.claude/worktrees/

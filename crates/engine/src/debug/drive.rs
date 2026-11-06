@@ -6,9 +6,10 @@ use std::sync::atomic::Ordering;
 use gbcli_core::{
     Access, AddrFilter, BankSel, Core, Hit, Region, RunRequest, StopReason as CoreReason, Usage,
 };
-use gbcli_protocol::{Location, StepKind, StopReason, TimeMark, WatchAccess};
+use gbcli_protocol::{Cadence, Location, StepKind, StopReason, TimeMark, WatchAccess};
 
 use super::record::record;
+use super::until::{Until, evaluate};
 use super::{DebugError, Outcome, RunOptions};
 use crate::cond::eval::frame_number;
 use crate::cond::{AccessValues, Condition, EvalCtx, EvalWarning};
@@ -129,6 +130,24 @@ fn compile(m: &Machine) -> Result<Compiled, DebugError> {
 }
 
 pub fn drive(m: &mut Machine, opts: &RunOptions<'_>, goal: Goal) -> Result<Outcome, DebugError> {
+    run(m, opts, goal, None)
+}
+
+/// Runs until `condition` holds, evaluating it on the cadence it needs.
+pub fn drive_until(
+    m: &mut Machine,
+    opts: &RunOptions<'_>,
+    condition: &Condition,
+) -> Result<Outcome, DebugError> {
+    run(m, opts, Goal::Run, Some(condition))
+}
+
+fn run(
+    m: &mut Machine,
+    opts: &RunOptions<'_>,
+    goal: Goal,
+    condition: Option<&Condition>,
+) -> Result<Outcome, DebugError> {
     let compiled = compile(m)?;
     let (mut exec, mut read, mut write) = (AddrFilter::new(), AddrFilter::new(), AddrFilter::new());
     for (_, at, _) in &compiled.breakpoints {
@@ -151,6 +170,13 @@ pub fn drive(m: &mut Machine, opts: &RunOptions<'_>, goal: Goal) -> Result<Outco
         write.insert(BOOT_OFF, BankSel::Any);
     }
 
+    let until = condition.map(Until::new);
+    if let Some(until) = &until {
+        for (addr, bank) in &until.writes {
+            write.insert(*addr, *bank);
+        }
+    }
+
     let mut used = Usage::default();
     let mut warnings: Vec<EvalWarning> = Vec::new();
     let finish = |m: &Machine, reason, used: Usage, warnings: Vec<EvalWarning>| {
@@ -159,6 +185,22 @@ pub fn drive(m: &mut Machine, opts: &RunOptions<'_>, goal: Goal) -> Result<Outco
             warnings,
         })
     };
+
+    // Before the first instruction: a predicate that already holds must not
+    // spend the budget. This also makes resuming idempotent.
+    if let Some(until) = &until {
+        match evaluate(m, opts, until.condition, &mut warnings) {
+            Ok(true) => return finish(m, until.reason(), used, warnings),
+            Ok(false) => {}
+            Err(error) => {
+                return Err(DebugError::Until {
+                    error,
+                    stop: Box::new(record(m, until.reason(), used, &opts.since)),
+                });
+            }
+        }
+    }
+
     loop {
         if let Some(kind) = opts.budget.exhausted(&used) {
             return finish(m, StopReason::BudgetExhausted { kind }, used, warnings);
@@ -206,8 +248,13 @@ pub fn drive(m: &mut Machine, opts: &RunOptions<'_>, goal: Goal) -> Result<Outco
                 }
             }
         }
-        let chunk = if goal.fine() { 1 } else { CHUNK };
+        let fine = goal.fine()
+            || until.as_ref().is_some_and(|u| {
+                matches!(u.cadence, Cadence::Scanline | Cadence::EveryInstruction)
+            });
+        let chunk = if fine { 1 } else { CHUNK };
         let before = m.core().registers();
+        let ly_before = m.core().ppu().ly;
         let opcode = mem::peek(m.core(), before.pc).unwrap_or(0);
         let mut req = RunRequest::new(
             opts.budget
@@ -217,15 +264,35 @@ pub fn drive(m: &mut Machine, opts: &RunOptions<'_>, goal: Goal) -> Result<Outco
         req.exec = &exec;
         req.read = &read;
         req.write = &write;
-        req.stop_at_frame = goal == Goal::Frame;
+        req.stop_at_frame =
+            goal == Goal::Frame || until.as_ref().is_some_and(|u| u.cadence == Cadence::Vblank);
         let stop = m.core_mut().run(&mut req)?;
         used += stop.used;
+        let fired = match &until {
+            Some(u) => {
+                let wrote = matches!(stop.reason, CoreReason::Candidate(hit) if hit.access == Access::Write);
+                wrote
+                    || match u.cadence {
+                        Cadence::Writes => false,
+                        Cadence::Vblank => stop.used.frames > 0,
+                        Cadence::Scanline => m.core().ppu().ly != ly_before,
+                        Cadence::EveryInstruction => stop.used.instructions > 0,
+                    }
+            }
+            None => false,
+        };
         let decided = match stop.reason {
             CoreReason::Locked { opcode } => Some(StopReason::IllegalOpcode { opcode }),
             CoreReason::Stopped => Some(StopReason::Stopped),
-            CoreReason::Frame => Some(StopReason::StepDone {
-                unit: StepKind::Frame,
-            }),
+            CoreReason::Frame => {
+                if goal == Goal::Frame {
+                    Some(StopReason::StepDone {
+                        unit: StepKind::Frame,
+                    })
+                } else {
+                    None
+                }
+            }
             CoreReason::Candidate(hit) => {
                 let stopped = decide(m, &compiled, &goal, hit, opts, &mut warnings);
                 match stopped {
@@ -250,6 +317,27 @@ pub fn drive(m: &mut Machine, opts: &RunOptions<'_>, goal: Goal) -> Result<Outco
             }
             return finish(m, reason, used, warnings);
         }
+        if fired {
+            let Some(until) = &until else { continue };
+            match evaluate(m, opts, until.condition, &mut warnings) {
+                Ok(true) => {
+                    // A breakpoint at this boundary wins; a predicate that
+                    // lands on one reports the breakpoint instead.
+                    match exec_breakpoint(m, &compiled, opts, used, &mut warnings) {
+                        Ok(Some(reason)) => return finish(m, reason, used, warnings),
+                        Ok(None) => return finish(m, until.reason(), used, warnings),
+                        Err(error) => return Err(error),
+                    }
+                }
+                Ok(false) => {}
+                Err(error) => {
+                    return Err(DebugError::Until {
+                        error,
+                        stop: Box::new(record(m, until.reason(), used, &opts.since)),
+                    });
+                }
+            }
+        }
         let after = m.core().registers();
         let done = match goal {
             Goal::Instruction => used.instructions >= 1,
@@ -265,6 +353,38 @@ pub fn drive(m: &mut Machine, opts: &RunOptions<'_>, goal: Goal) -> Result<Outco
             };
             return finish(m, StopReason::StepDone { unit }, used, warnings);
         }
+    }
+}
+
+/// The breakpoint that would stop at the current boundary, if any. A
+/// predicate stop yields to one, since both describe the same instruction.
+fn exec_breakpoint(
+    m: &mut Machine,
+    compiled: &Compiled,
+    opts: &RunOptions<'_>,
+    used: Usage,
+    warnings: &mut Vec<EvalWarning>,
+) -> Result<Option<StopReason>, DebugError> {
+    if compiled.breakpoints.is_empty() {
+        return Ok(None);
+    }
+    let regs = m.core().registers();
+    let hit = Hit {
+        access: Access::Exec,
+        addr: regs.pc,
+        bank: mem::bank_at(m.core(), regs.pc),
+        old: mem::peek(m.core(), regs.pc).ok(),
+        new: 0,
+        pc: regs.pc,
+        vetoed: false,
+    };
+    match decide(m, compiled, &Goal::Run, hit, opts, warnings) {
+        Ok(stop) => Ok(stop),
+        Err((id, reason, error)) => Err(DebugError::Eval {
+            id,
+            error,
+            stop: Box::new(record(m, reason, used, &opts.since)),
+        }),
     }
 }
 

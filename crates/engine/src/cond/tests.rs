@@ -1,6 +1,7 @@
 //! Parser tests; evaluation is tested against a real core in tests/conditions.rs.
 
 use super::*;
+use gbcli_protocol::Cadence;
 
 const SYM: &str = "00:0150 Main\n00:015e Main.loop\n03:4123 Far\n02:a000 sSave\n\
                    00:c000 wFrame\n01:4000 Init\n02:4000 Init\n";
@@ -245,6 +246,60 @@ fn unknown_and_ambiguous_symbols_list_candidates() {
         Condition::compile("[wFrame]", None),
         Err(ExprError::UnknownSymbol { .. })
     ));
+}
+
+#[test]
+fn the_cadence_is_the_finest_trigger_the_reads_need() {
+    let cadence = |text: &str| Condition::compile(text, Some(&syms())).unwrap().cadence();
+
+    // The write hook covers these, so only a write can change them.
+    assert_eq!(cadence("u16[wFrame] >= 60"), Cadence::Writes);
+    assert_eq!(cadence("[wFrame] == 3"), Cadence::Writes);
+    assert_eq!(cadence("[wram:0x1A0] == 1"), Cadence::Writes);
+    assert_eq!(cadence("[hram:0] == 1"), Cadence::Writes);
+    assert_eq!(cadence("[ie:0] == 1"), Cadence::Writes);
+    // A symbol in a switchable area reads in its own bank, so a bank switch
+    // cannot change it: only a write can.
+    assert_eq!(cadence("[Far+2] == 1"), Cadence::Writes);
+    assert_eq!(cadence("[sSave] == 1"), Cadence::Writes);
+    assert_eq!(cadence("[rom:0x4000] == 1"), Cadence::Writes);
+    // A CPU address in the switchable ROM window changes on a bank switch.
+    assert_eq!(cadence("[$4123] == 1"), Cadence::EveryInstruction);
+    // VRAM and OAM writes can come from DMA, which the write hook misses.
+    assert_eq!(cadence("[$8000] == 1"), Cadence::EveryInstruction);
+    assert_eq!(cadence("[$FE00] == 1"), Cadence::EveryInstruction);
+    assert_eq!(cadence("[vram:0] == 1"), Cadence::EveryInstruction);
+    // Registers, flags, machine values and dynamic addresses.
+    assert_eq!(cadence("a == 1"), Cadence::EveryInstruction);
+    assert_eq!(cadence("pc == Main"), Cadence::EveryInstruction);
+    assert_eq!(cadence("zf == 1"), Cadence::EveryInstruction);
+    assert_eq!(cadence("ime == 1"), Cadence::EveryInstruction);
+    assert_eq!(cadence("bank == 1"), Cadence::EveryInstruction);
+    assert_eq!(cadence("t > 100"), Cadence::EveryInstruction);
+    assert_eq!(cadence("[hl] == 1"), Cadence::EveryInstruction);
+    assert_eq!(cadence("[wFrame + b] == 1"), Cadence::EveryInstruction);
+    // Vblank and scanline counters.
+    assert_eq!(cadence("frame >= 3"), Cadence::Vblank);
+    assert_eq!(cadence("ly == 100"), Cadence::Scanline);
+    // The finest trigger among everything read wins; a mixed predicate also
+    // keeps its write candidates, so a mid-frame change is not missed.
+    assert_eq!(cadence("frame >= 3 && [wFrame] == 2"), Cadence::Vblank);
+    assert_eq!(cadence("ly == 100 && frame >= 3"), Cadence::Scanline);
+    assert_eq!(
+        cadence("frame >= 3 && pc == Main"),
+        Cadence::EveryInstruction
+    );
+    // Any IO read takes the baseline: internal writes (serial, APU, PPU) do
+    // not go through the write hook.
+    assert_eq!(cadence("[rLCDC] & $80"), Cadence::EveryInstruction);
+    assert_eq!(cadence("[rLY] >= 100"), Cadence::EveryInstruction);
+    assert_eq!(cadence("[rDIV] > 0"), Cadence::EveryInstruction);
+    assert_eq!(cadence("[rTIMA] > 0"), Cadence::EveryInstruction);
+    assert_eq!(cadence("[rIF] != 0"), Cadence::EveryInstruction);
+    assert_eq!(cadence("[rSTAT] != 0"), Cadence::EveryInstruction);
+    // A CPU address in a switchable area changes with the bank, not the byte.
+    assert_eq!(cadence("[$D000] == 1"), Cadence::EveryInstruction);
+    assert_eq!(cadence("[$A000] == 1"), Cadence::EveryInstruction);
 }
 
 #[test]

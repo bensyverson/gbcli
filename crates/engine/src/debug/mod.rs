@@ -5,6 +5,7 @@
 mod backtrace;
 mod drive;
 mod record;
+mod until;
 
 use std::fmt;
 use std::sync::atomic::AtomicBool;
@@ -79,6 +80,16 @@ pub enum DebugError {
         error: EvalError,
         stop: Box<StopRecord>,
     },
+    /// An `--until` predicate doesn't compile.
+    UntilSyntax {
+        error: ExprError,
+    },
+    /// An `--until` predicate failed while evaluated; `stop` is where the
+    /// machine is.
+    Until {
+        error: EvalError,
+        stop: Box<StopRecord>,
+    },
     Core(CoreError),
     /// `step` doesn't take `ToAddress`: use `run_to`.
     NeedsAddress,
@@ -89,6 +100,8 @@ impl fmt::Display for DebugError {
         match self {
             DebugError::Condition { id, error } => write!(f, "condition of #{id}: {error}"),
             DebugError::Eval { id, error, .. } => write!(f, "condition of #{id}: {error}"),
+            DebugError::UntilSyntax { error } => write!(f, "until: {error}"),
+            DebugError::Until { error, .. } => write!(f, "until: {error}"),
             DebugError::Core(e) => write!(f, "{e}"),
             DebugError::NeedsAddress => write!(f, "stepping to an address needs the address"),
         }
@@ -153,6 +166,19 @@ impl Machine {
     /// Runs until a breakpoint, watch or other stop, within the budget.
     pub fn run(&mut self, opts: &RunOptions<'_>) -> Result<Outcome, DebugError> {
         drive::drive(self, opts, Goal::Run)
+    }
+
+    /// Runs until `predicate` holds, evaluating it on the cadence derived from
+    /// what it reads (design §8, §11). The predicate is evaluated once before
+    /// the first instruction; if it already holds, no instructions run.
+    pub fn run_until(
+        &mut self,
+        predicate: &str,
+        opts: &RunOptions<'_>,
+    ) -> Result<Outcome, DebugError> {
+        let condition = Condition::compile(predicate, self.symbols())
+            .map_err(|error| DebugError::UntilSyntax { error })?;
+        drive::drive_until(self, opts, &condition)
     }
 
     /// Steps by `kind`; breakpoints and watches still stop a longer step.

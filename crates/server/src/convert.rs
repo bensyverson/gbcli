@@ -68,6 +68,16 @@ pub fn debug(e: &DebugError) -> ErrorBody {
             body.message = format!("condition of #{id}: {}", body.message);
             body.with_stop((**stop).clone())
         }
+        DebugError::UntilSyntax { error } => {
+            let mut body = expr(error);
+            body.message = format!("until: {}", body.message);
+            body
+        }
+        DebugError::Until { error, stop } => {
+            let mut body = eval(error);
+            body.message = format!("until: {}", body.message);
+            body.with_stop((**stop).clone())
+        }
         DebugError::Core(core) => core_error(core),
         DebugError::NeedsAddress => ErrorBody::new(
             ErrorCode::BadRequest,
@@ -92,6 +102,10 @@ pub fn gap_of(e: &DebugError) -> Option<(&'static str, &'static str)> {
     let core = match e {
         DebugError::Core(core) => core,
         DebugError::Eval {
+            error: EvalError::Core(core),
+            ..
+        }
+        | DebugError::Until {
             error: EvalError::Core(core),
             ..
         } => core,

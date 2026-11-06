@@ -39,6 +39,31 @@ pub enum StopReason {
     /// The server's wall-clock guard ended the run (design §3). The result is
     /// not reproducible; host time is the only input.
     WallGuard,
+    /// An `--until` predicate became true. `cadence` is the finest trigger
+    /// that predicate needs, which is also what evaluating it costs.
+    Predicate {
+        /// The predicate as it was written.
+        text: String,
+        cadence: Cadence,
+    },
+}
+
+/// How often a predicate has to be evaluated, from cheapest to finest. A
+/// predicate needs the finest trigger among everything it reads; the stop
+/// record names it so the cost is visible.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Cadence {
+    /// Only when an address the predicate reads is written: memory the write
+    /// hook covers. The cheapest, and exact for a memory-only predicate.
+    Writes,
+    /// At each vblank: `frame` alone.
+    Vblank,
+    /// When LY changes: `ly` alone.
+    Scanline,
+    /// After every instruction: registers, flags, `pc`, `t`, dynamic
+    /// addresses, and memory whose value changes without a write to it.
+    EveryInstruction,
 }
 
 /// What a step stepped by.
@@ -222,5 +247,19 @@ mod tests {
         assert_eq!(json["budget"]["defaulted"], true);
         let back: StopRecord = serde_json::from_value(json).unwrap();
         assert_eq!(back, record);
+    }
+
+    #[test]
+    fn a_predicate_reason_carries_its_text_and_cadence() {
+        let reason = StopReason::Predicate {
+            text: "u16[wFrame] >= 60".into(),
+            cadence: Cadence::Writes,
+        };
+        let json = serde_json::to_value(&reason).unwrap();
+        assert_eq!(json["reason"], "predicate");
+        assert_eq!(json["text"], "u16[wFrame] >= 60");
+        assert_eq!(json["cadence"], "writes");
+        let back: StopReason = serde_json::from_value(json).unwrap();
+        assert_eq!(back, reason);
     }
 }

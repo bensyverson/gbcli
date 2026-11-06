@@ -28,5 +28,6 @@ pub use response::{
 pub use rev::Rev;
 pub use session::{EventLogLine, GapCount, GapLine, SessionFile, SessionRow, StopSummary};
 pub use stop::{
-    BudgetLimits, BudgetUse, FrameShown, StepKind, StopReason, StopRecord, StopTime, TimeBase,
+    BudgetLimits, BudgetUse, Cadence, FrameShown, StepKind, StopReason, StopRecord, StopTime,
+    TimeBase,
 };

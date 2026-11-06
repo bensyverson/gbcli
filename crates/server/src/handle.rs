@@ -253,7 +253,7 @@ impl Handler {
     ) -> Result<ResultBody, Failure> {
         match &request.op {
             Op::Run(args) => self.run(store, meta, args, actor, warnings),
-            Op::Step(args) => self.step(store, meta, args),
+            Op::Step(args) => self.step(store, meta, args, warnings),
             Op::Show => self.show(store, meta),
             Op::Read(args) => self.read(store, meta, args),
             Op::Break(args) => self.breakpoint(store, meta, args),
@@ -350,13 +350,6 @@ impl Handler {
                 "drop one of them",
             )));
         }
-        if args.until.is_some() {
-            return Err(Failure::new(ErrorBody::new(
-                ErrorCode::Unsupported,
-                "this build has no --until yet",
-                "use --to <address> or --frames <n>",
-            )));
-        }
 
         let flag = Arc::new(AtomicBool::new(false));
         watch_wall(flag.clone());
@@ -364,14 +357,14 @@ impl Handler {
         opts.since = since.clone();
         opts.allow_uninit = args.allow_uninit;
         opts.interrupt = Some(&flag);
-        let goal = args.to.clone();
-        let outcome = match &goal {
-            Some(text) => {
+        let outcome = match (&args.until, &args.to) {
+            (Some(predicate), _) => machine.run_until(predicate, &opts),
+            (None, Some(text)) => {
                 let at = addr::parse(text, machine.symbols())
                     .map_err(|e| Failure::new(convert::addr(&e)))?;
                 machine.run_to(at, &opts)
             }
-            None => machine.run(&opts),
+            (None, None) => machine.run(&opts),
         };
         let guarded = flag.load(Ordering::Relaxed);
         let mut outcome = match outcome {
@@ -385,8 +378,9 @@ impl Handler {
         }
         outcome.stop.budget.limits = limits;
         outcome.stop.budget.defaulted = defaulted;
+        warnings.extend(outcome.warnings.iter().map(warning_text));
 
-        let reads = read_values(&machine, &args.read, &since)?;
+        let reads = read_values(&machine, &args.read, &since, warnings)?;
         let checkpoint = match &args.checkpoint {
             Some(name) => Some(write_checkpoint(store, &machine, name, actor, meta.rev)?),
             None => None,
@@ -480,6 +474,7 @@ impl Handler {
         store: &SessionStore,
         meta: &mut SessionFile,
         args: &StepArgs,
+        warnings: &mut Vec<String>,
     ) -> Result<ResultBody, Failure> {
         if args.unit == StepKind::ToAddress {
             return Err(Failure::new(ErrorBody::new(
@@ -503,6 +498,7 @@ impl Handler {
             .step(args.unit, &opts)
             .map_err(|e| Failure::from_debug(&e))?;
         let _ = flag;
+        warnings.extend(outcome.warnings.iter().map(warning_text));
         let stop = outcome.stop;
         save_head(store, meta, &machine, None, None, Some(&stop))?;
         self.keep_warm(store, meta, machine);
@@ -542,7 +538,7 @@ impl Handler {
     ) -> Result<ResultBody, Failure> {
         let since = self.since(store, args.since.as_deref())?;
         let (machine, _) = self.machine_for(store, meta, Need::Read, None, Start::PowerOn)?;
-        let reads = read_values(&machine, &args.reads, &since)?;
+        let reads = read_values(&machine, &args.reads, &since, &mut Vec::new())?;
         self.keep_warm(store, meta, machine);
         Ok(ResultBody {
             reads: Some(reads),
@@ -918,17 +914,23 @@ fn write_checkpoint(
     })
 }
 
+fn warning_text(warning: &EvalWarning) -> String {
+    match warning {
+        EvalWarning::UninitializedRead(read) => format!("uninitialized read of {read}"),
+    }
+}
+
 fn read_values(
     machine: &Machine,
     reads: &[String],
     since: &Since,
+    warnings: &mut Vec<String>,
 ) -> Result<Vec<ReadValue>, Failure> {
     let base = machine.time_base(since);
     let mut values = Vec::new();
     for text in reads {
         let condition = Condition::compile(text, machine.symbols())
             .map_err(|e| Failure::new(convert::expr(&e)))?;
-        let mut warnings: Vec<EvalWarning> = Vec::new();
         let ctx = EvalCtx {
             core: machine.core(),
             symbols: machine.symbols(),
@@ -936,10 +938,14 @@ fn read_values(
             base,
             allow_uninit: false,
         };
-        let value = condition.eval(&ctx, &mut warnings).map_err(|e| Failure {
-            body: Box::new(convert::eval(&e)),
-            gap: convert::gap_of_eval(&e),
-        })?;
+        let mut eval_warnings: Vec<EvalWarning> = Vec::new();
+        let value = condition
+            .eval(&ctx, &mut eval_warnings)
+            .map_err(|e| Failure {
+                body: Box::new(convert::eval(&e)),
+                gap: convert::gap_of_eval(&e),
+            })?;
+        warnings.extend(eval_warnings.iter().map(warning_text));
         values.push(ReadValue {
             expr: text.clone(),
             value,
@@ -1117,6 +1123,55 @@ mod tests {
             stop.time.frame, 1,
             "one vblank since power-on, not from boot"
         );
+    }
+
+    #[test]
+    fn until_stops_where_the_predicate_holds_and_names_its_cadence() {
+        let f = Fixture::new("until");
+        let mut h = handler(&f);
+        assert!(run_frames(&mut h, 2).ok);
+        let response = h.handle(&request(Op::Run(RunArgs {
+            until: Some("u16[$C000] >= 2000".into()),
+            frames: Some(600),
+            ..RunArgs::default()
+        })));
+        let stop = response.result.unwrap().stop.unwrap();
+        assert!(
+            matches!(stop.reason, StopReason::Predicate { ref cadence, .. } if *cadence == gbcli_protocol::Cadence::Writes),
+            "{:?}",
+            stop.reason
+        );
+        assert!(!stop.budget.defaulted);
+    }
+
+    #[test]
+    fn a_predicate_already_true_at_the_start_costs_no_instructions() {
+        let f = Fixture::new("until-start");
+        let mut h = handler(&f);
+        assert!(run_frames(&mut h, 1).ok);
+        let response = h.handle(&request(Op::Run(RunArgs {
+            until: Some("1".into()),
+            frames: Some(600),
+            ..RunArgs::default()
+        })));
+        let stop = response.result.unwrap().stop.unwrap();
+        assert!(matches!(stop.reason, StopReason::Predicate { .. }));
+        assert_eq!(stop.budget.instructions, 0);
+    }
+
+    #[test]
+    fn a_predicate_reading_never_written_memory_points_at_allow_uninit() {
+        let f = Fixture::new("until-uninit");
+        let mut h = handler(&f);
+        let response = h.handle(&request(Op::Run(RunArgs {
+            until: Some("[$C003] == 0".into()),
+            frames: Some(600),
+            ..RunArgs::default()
+        })));
+        let error = response.error.expect("an uninitialized read fails the run");
+        assert_eq!(error.code, ErrorCode::UninitializedRead);
+        assert!(error.remedy.contains("--allow-uninit"), "{}", error.remedy);
+        assert!(error.stop.is_some(), "the stop record rides on the error");
     }
 
     #[test]

@@ -2,6 +2,7 @@
 //! since evaluation reads only through `region`, `io_register` and
 //! `registers`, never `bus_read`. Used by breakpoint and watch conditions.
 
+mod cadence;
 pub(crate) mod eval;
 mod lex;
 mod names;
@@ -9,7 +10,7 @@ mod parse;
 
 use std::fmt;
 
-use gbcli_core::{CoreError, Region};
+use gbcli_core::{BankSel, CoreError, Region};
 
 use crate::sym::{Symbol, Symbols};
 
@@ -52,6 +53,21 @@ impl Condition {
         warnings: &mut Vec<EvalWarning>,
     ) -> Result<bool, EvalError> {
         Ok(self.eval(ctx, warnings)? != 0)
+    }
+
+    /// The finest trigger this condition needs (design §8, §11): the cadence
+    /// the run evaluates it on, and thus what it costs.
+    pub fn cadence(&self) -> gbcli_protocol::Cadence {
+        cadence::analyze(&self.expr).cadence
+    }
+
+    /// The static addresses to arm with the write hook, one per byte of each
+    /// read. Used for every cadence but `EveryInstruction`, which already
+    /// sees every write.
+    ///
+    /// [`cadence`]: Condition::cadence
+    pub(crate) fn write_candidates(&self) -> Vec<(u16, BankSel)> {
+        cadence::analyze(&self.expr).writes
     }
 }
 

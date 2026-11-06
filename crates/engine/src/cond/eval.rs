@@ -307,7 +307,12 @@ fn check_written(
         symbol,
     };
     if ctx.allow_uninit {
-        warnings.push(EvalWarning::UninitializedRead(read));
+        let warning = EvalWarning::UninitializedRead(read);
+        // One predicate is evaluated after every instruction; report each
+        // uninitialized byte once, not millions of times.
+        if !warnings.contains(&warning) {
+            warnings.push(warning);
+        }
         Ok(())
     } else {
         Err(EvalError::UninitializedRead(read))

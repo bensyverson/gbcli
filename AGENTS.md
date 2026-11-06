@@ -2,7 +2,7 @@ IMPORTANT: As you implement features, keep the documentation in `project/` up to
 
 ## Overview
 
-gbcli is an agent-friendly Game Boy development tool for homebrew developers working with AI agents: a headless, deterministic emulator session (JSON Lines server plus a CLI client) with checkpoints, a debugger, profiling and faithful screenshots and audio views, an RGBDS build loop, and just enough built-in onboarding for a Sonnet-class model to get productive. DMG fidelity comes first; GBC is supported. Shape: a Rust workspace — an engine library with thin server and CLI adapters, over a core trait of our own that a SameBoy backend implements on vendored SameBoy (built by the cc crate). Built so far: `crates/core` (`gbcli-core`, the `Core` trait), `crates/sameboy` (`gbcli-sameboy`, the SameBoy backend with bank-aware filters and never-written tracking), and `crates/sameboy-sys` (vendored SameBoy, hand-written FFI and the small C accessors in `shim/`). The `engine`, `protocol` and `gbcli` crates are still empty. Build cost (`cargo build --workspace`, debug; Apple M1, 8 CPUs, rustc 1.99.1, Apple clang 21; `scripts/bench/workspace-build/run.sh 3`), measured 2026-11-06 after stage 1, with SameBoy at `-O3`: clean 7.5 s; incremental 0.32 s after touching the binary crate and 0.31 s after touching the engine crate (medians of 3). The scaffold's first figures were clean 5.1–6.3 s and incremental 0.20/0.26 s. `cargo test` needs the blargg corpus: run `python3 -I scripts/corpus/fetch.py --only blargg` first; without it, the tests fail and name that command. Re-run it when the crates grow and update these figures. The pre-commit hook, `scripts/hooks/pre-commit`, runs `cargo fmt --check`, clippy with `-D warnings` and `cargo test`. A fresh clone enables it with `git config core.hooksPath scripts/hooks`. It needs the sandbox off, because cargo's registry cache is outside it.
+gbcli is an agent-friendly Game Boy development tool for homebrew developers working with AI agents: a headless, deterministic emulator session (JSON Lines server plus a CLI client) with checkpoints, a debugger, profiling and faithful screenshots and audio views, an RGBDS build loop, and just enough built-in onboarding for a Sonnet-class model to get productive. DMG fidelity comes first; GBC is supported. Shape: a Rust workspace — an engine library with thin server and CLI adapters, over a core trait of our own that a SameBoy backend implements on vendored SameBoy (built by the cc crate). Built so far: `crates/core` (`gbcli-core`, the `Core` trait), `crates/sameboy` (`gbcli-sameboy`, the SameBoy backend with bank-aware filters and never-written tracking), and `crates/sameboy-sys` (vendored SameBoy, hand-written FFI and the small C accessors in `shim/`). `crates/engine` (inspection, disassembler, sessions, checkpoints, debugger), `crates/protocol` (checkpoint header and stop record) and `crates/corpus` (`gbcli-corpus`, the test-ROM runner and SameBoy baseline). The `gbcli` binary is still a placeholder. Build cost (`cargo build --workspace`, debug; Apple M1, 8 CPUs, rustc 1.99.1, Apple clang 21; `scripts/bench/workspace-build/run.sh 3`), measured 2026-11-06 after stage 1, with SameBoy at `-O3`: clean 7.5 s; incremental 0.32 s after touching the binary crate and 0.31 s after touching the engine crate (medians of 3). The scaffold's first figures were clean 5.1–6.3 s and incremental 0.20/0.26 s. `cargo test` needs part of the corpus: run `python3 -I scripts/corpus/fetch.py --only blargg --only mooneye --only gbmicrotest --only dmg-acid2` (or the whole corpus) first; without it, the tests fail and name the command. Re-run it when the crates grow and update these figures. The pre-commit hook, `scripts/hooks/pre-commit`, runs `cargo fmt --check`, clippy with `-D warnings` and `cargo test`. A fresh clone enables it with `git config core.hooksPath scripts/hooks`. It needs the sandbox off, because cargo's registry cache is outside it.
 
 ## Documentation
 
@@ -14,6 +14,7 @@ gbcli is an agent-friendly Game Boy development tool for homebrew developers wor
 - [project/2026-11-06-sameboy-vendoring.md](project/2026-11-06-sameboy-vendoring.md) — the vendored SameBoy commit, compile flags, debugger and rewind compiled out, boot ROMs, the headless smoke test
 - [project/2026-11-06-test-rom-corpus.md](project/2026-11-06-test-rom-corpus.md) — test-ROM suites, licenses (blargg has none: fetch only, never commit), the manifest and how to fetch the corpus
 - [project/2026-11-06-shootout-failures.md](project/2026-11-06-shootout-failures.md) — SameBoy's and docboy's gbdev shootout failures, test by test
+- [project/2026-11-06-sameboy-baseline.md](project/2026-11-06-sameboy-baseline.md) — the whole corpus through SameBoy: every difference from its published results explained, and the one command that re-checks the baseline
 - [project/2026-11-06-handoff.md](project/2026-11-06-handoff.md) — latest session handoff
 - [project/backlog.md](project/backlog.md) — work decided against, with un-park conditions
 - [project/gotchas.md](project/gotchas.md) — project quirks that cost time
@@ -93,7 +94,7 @@ Defaults, not laws. When we break one, we do it consciously and say so in the re
 - **Event streams where they fit.** Append-only logs are auditable, undoable, and time-travelable.
 <!-- agents:end principles -->
 
-<!-- agents:begin docs@7ba2fd -->
+<!-- agents:begin docs@426033 -->
 ## Documentation practice
 
 - **Plans, findings, designs and decisions go in `project/` as dated documents** (`YYYY-MM-DD-title.md`) — the written history of the project. They are point-in-time records: correct an earlier one *in place*, as a marked block quote, rather than silently editing a number or leaving a stale claim standing.
@@ -103,7 +104,7 @@ Defaults, not laws. When we break one, we do it consciously and say so in the re
 - **A wrong documented cause is worse than none** — it stops the next reader looking. Correcting one means saying it was wrong, not quietly rewording.
 - **Open the note before you cite it**, and check whether a recorded ruling has been superseded before passing it on.
 - **Every repo has a README; if none exists, write one (delegate it if you can).** It is tight: the project's name and a one-line description a non-technical reader understands (6th-grade reading level); one short paragraph of what it is; how to install or consume it; a crisp Quick Start with an example or two; links out to the specific docs for anything more; authorship and license at the end.
-- **The head of `AGENTS.md` lists where the docs live; keep that list current.**
+- **The head of `AGENTS.md` lists where the docs live; keep that list current with documentation, but exclude project/ docs such as plans and research.**
 <!-- agents:end docs -->
 
 <!-- agents:begin index@f4b312 -->

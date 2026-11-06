@@ -25,3 +25,7 @@ A worktree-isolated subagent's harness refuses any git command carrying `GIT_CON
 ## 2026-11-06 — Python downloads through the sandbox proxy end early, silently
 
 `urllib` through the Bash sandbox's filtering proxy stopped short of `Content-Length` on most archives (e.g. 409,600 of 423,779 bytes, every attempt) with no exception, or raised `IncompleteRead`; `curl` through the same proxy got whole files. `scripts/corpus/fetch.py` checks the length and resumes with HTTP `Range`; anything else that downloads in Python needs the same.
+
+## 2026-11-06 — Claude Code kills a background command at about 10 minutes
+
+A `run_in_background` Bash command that ran past ~595 s died with `time: command terminated abnormally`, and a `cargo run` child it spawned kept running orphaned, writing the same output file as the next attempt. Start anything longer (the full corpus run) detached — `nohup … > log 2>&1 & disown` — and wait on its pid; check for orphans with `pgrep -fl` before re-running.

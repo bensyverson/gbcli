@@ -9,6 +9,8 @@ gbcli is an agent-friendly Game Boy development tool for homebrew developers wor
 - [README.md](README.md) — what gbcli is and its status
 - [project/](project/) — dated plans, findings and decisions; the current plan is [project/2026-11-06-plan.md](project/2026-11-06-plan.md) (in `job` as root `9b5RBA`)
 - [project/2026-11-06-backend-evaluation.md](project/2026-11-06-backend-evaluation.md) — why SameBoy, why Rust, the bespoke-core question, cart research, measured baselines
+- [project/2026-11-06-dx-note-existing-tools.md](project/2026-11-06-dx-note-existing-tools.md) — friction from doing a homebrew task with PyBoy and SameBoy, and the rules it implies
+- [project/2026-11-06-handoff.md](project/2026-11-06-handoff.md) — latest session handoff
 - [project/backlog.md](project/backlog.md) — work decided against, with un-park conditions
 - [project/gotchas.md](project/gotchas.md) — project quirks that cost time
 - [scripts/bench/](scripts/bench/) — re-runnable benchmarks behind the evaluation's figures

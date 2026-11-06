@@ -676,6 +676,9 @@ struct GB_gameboy_internal_s {
 
         /* I/O */
         uint32_t *screen;
+        /* gbcli: optional per-pixel layer tags, one byte per 160-pixel row; NULL
+           when capture is off. Owned by the caller of gbcli_set_layer_buffer. */
+        uint8_t *layer_buffer;
         uint32_t background_palettes_rgb[0x20];
         uint32_t object_palettes_rgb[0x20];
         const GB_palette_t *dmg_palette;

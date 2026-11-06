@@ -29,3 +29,7 @@ A worktree-isolated subagent's harness refuses any git command carrying `GIT_CON
 ## 2026-11-06 — Claude Code kills a background command at about 10 minutes
 
 A `run_in_background` Bash command that ran past ~595 s died with `time: command terminated abnormally`, and a `cargo run` child it spawned kept running orphaned, writing the same output file as the next attempt. Start anything longer (the full corpus run) detached — `nohup … > log 2>&1 & disown` — and wait on its pid; check for orphans with `pgrep -fl` before re-running.
+
+## 2026-11-06 — SameBoy publishes a blank frame after the LCD is turned on, after rendering it
+
+On the first vblank after LCDC's enable bit is written, `GB_display_vblank` (display.c:235) fills `gb->screen` with the LCD-off colour *before* calling the vblank callback, while `frame_skip_state` is still `GB_FRAMESKIP_LCD_TURNED_ON` (it is cleared right after the callback returns, display.c:2213–2225). The frame's pixels are therefore the blank screen even though the PPU just rendered a full frame; anything captured during that render and published at the same vblank (as the layer tags are) describes pixels the caller will never see. Detect it from the callback with `gbcli_frame_scrubbed` and publish no side data for that frame. It shows up as an apparently one-frame lag between pixels and tags (observed 2026-11-06, leaf n2WX5r).

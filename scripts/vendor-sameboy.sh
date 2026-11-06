@@ -1,6 +1,7 @@
 #!/bin/zsh
 # Vendors SameBoy's Core/, its boot ROM sources and its license into crates/sameboy-sys/SameBoy
-# at a given commit (default: latest master), and records the commit in SameBoy/COMMIT.
+# at a given commit (default: latest master), records the commit in SameBoy/COMMIT,
+# then re-applies gbcli's patches from crates/sameboy-sys/patches/.
 # Run from the repository root:   scripts/vendor-sameboy.sh [commit]
 # Then rebuild the boot ROMs:      scripts/build-roms.sh
 # and update project/YYYY-MM-DD-sameboy-vendoring.md with the new commit and why.
@@ -25,5 +26,13 @@ cp "$work/SameBoy/LICENSE" "$work/SameBoy/version.mk" "$dest/"
 cp "$work/SameBoy/BootROMs/"*.asm "$work/SameBoy/BootROMs/"*.inc \
    "$work/SameBoy/BootROMs/pb12.c" "$work/SameBoy/BootROMs/SameBoyLogo.png" "$dest/BootROMs/"
 print -r -- "$resolved" > "$dest/COMMIT"
+
+# gbcli's own patches, applied on top of the pristine Core. Each is pinned to
+# the commit above: a failed check means the commit moved and the patch needs
+# rebasing (see the vendoring doc), not that the step can be skipped.
+for patch in "$repo_root"/crates/sameboy-sys/patches/*.patch; do
+    git -C "$repo_root" apply --check --whitespace=nowarn "$patch"
+    git -C "$repo_root" apply --whitespace=nowarn "$patch"
+done
 
 print "Vendored SameBoy $resolved into $dest"

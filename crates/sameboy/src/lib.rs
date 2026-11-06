@@ -21,7 +21,7 @@ use gbcli_core::{
 };
 use sameboy_sys as sb;
 
-use hooks::Hooks;
+use hooks::{Hooks, LAYER_BACKGROUND};
 pub use support::builtin_boot_rom;
 pub(crate) use support::unsupported_err;
 use support::{sameboy_model, support};
@@ -178,7 +178,13 @@ impl Core for SameBoy {
     }
 
     fn supports(&self, feature: Feature) -> Support {
-        support(feature)
+        if feature == Feature::PixelLayers && self.model.is_sgb() {
+            Support::No {
+                reason: support::SGB_LAYERS_REASON,
+            }
+        } else {
+            support(feature)
+        }
     }
 
     fn run(&mut self, req: &mut RunRequest<'_>) -> Result<Stop, CoreError> {
@@ -268,7 +274,54 @@ impl Core for SameBoy {
     }
 
     fn pixel_layers(&self) -> Result<LayerMap<'_>, CoreError> {
-        Err(unsupported_err(Feature::PixelLayers))
+        if !self.hooks().layers_on {
+            return Err(CoreError::InvalidState {
+                reason: "pixel layer capture is off; call set_pixel_layers(true) first".into(),
+            });
+        }
+        let frame = &self.hooks().frame;
+        if frame.tag.is_none() || frame.layers.len() != (frame.width * frame.height) as usize {
+            return Err(CoreError::InvalidState {
+                reason:
+                    "the last complete frame has no layer map: capture had just been turned on, \
+                         or the frame was not rendered normally (LCD off, or the blank frame after \
+                         the LCD is turned on)"
+                        .into(),
+            });
+        }
+        Ok(LayerMap {
+            width: frame.width,
+            height: frame.height,
+            layers: &frame.layers,
+        })
+    }
+
+    fn set_pixel_layers(&mut self, on: bool) -> Result<(), CoreError> {
+        if on && self.model.is_sgb() {
+            return Err(CoreError::Unsupported {
+                feature: Feature::PixelLayers,
+                reason: support::SGB_LAYERS_REASON,
+            });
+        }
+        let gb = self.raw();
+        let hooks = self.hooks_mut();
+        if on {
+            // A frame already in progress was only partly tagged: drop it and
+            // leave a clean background map for the next one.
+            hooks.layers_on = true;
+            hooks.layers_skip_next = true;
+            hooks.layers.fill(LAYER_BACKGROUND);
+            hooks.frame.layers.clear();
+            // SAFETY: the buffer lives in `hooks`, which outlives the instance.
+            unsafe { sb::gbcli_set_layer_buffer(gb, hooks.layers.as_mut_ptr()) };
+        } else {
+            hooks.layers_on = false;
+            hooks.layers_skip_next = false;
+            hooks.frame.layers.clear();
+            // SAFETY: detaches the buffer before it could be written again.
+            unsafe { sb::gbcli_set_layer_buffer(gb, std::ptr::null_mut()) };
+        }
+        Ok(())
     }
 
     fn apu(&self) -> Result<ApuState, CoreError> {

@@ -101,6 +101,9 @@ pub(crate) fn decode(bytes: &[u8]) -> Result<Blob, CoreError> {
             height,
             shades,
             rgb,
+            // Layer tags are an observation of a frame, not part of the state:
+            // a load leaves none until the next complete frame.
+            layers: Vec::new(),
         },
         screen,
         written,

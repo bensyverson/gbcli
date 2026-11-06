@@ -8,7 +8,7 @@
 use std::ffi::{CStr, c_char};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
-use gbcli_core::{FrameTag, Hit, Pixels, VblankKind};
+use gbcli_core::{FrameTag, Hit, Layer, Pixels, VblankKind};
 use sameboy_sys as sb;
 
 use crate::watch::{Armed, Tracking};
@@ -17,6 +17,9 @@ use crate::watch::{Armed, Tracking};
 const LOG_LINES: usize = 256;
 /// The largest screen SameBoy draws (SGB with border).
 pub(crate) const SCREEN_PIXELS: usize = 256 * 224;
+/// The layer tag for "background" in SameBoy's side buffer; the others are
+/// `1` for the window and `2 + n` for OAM object `n` (see display.c).
+pub(crate) const LAYER_BACKGROUND: u8 = 0;
 
 /// The DMG palette whose "colors" are shade indices, so the encoder hands back
 /// raw shades: SameBoy maps shade `s` (0 lightest) to `colors[3 - s]`, and
@@ -33,6 +36,8 @@ pub(crate) struct FrameCopy {
     pub height: u32,
     pub shades: Vec<u8>,
     pub rgb: Vec<u32>,
+    /// Which layer drew each pixel, when layer capture was on; empty otherwise.
+    pub layers: Vec<Layer>,
 }
 
 impl FrameCopy {
@@ -48,6 +53,14 @@ impl FrameCopy {
 pub(crate) struct Hooks {
     /// SameBoy draws here (`GB_set_pixels_output`); live and partial.
     pub screen: Box<[u32]>,
+    /// SameBoy writes one tag per drawn pixel here while capture is on
+    /// (`gbcli_set_layer_buffer`); the tags of the frame being rendered.
+    pub layers: Box<[u8]>,
+    /// Whether `layers` is attached to SameBoy.
+    pub layers_on: bool,
+    /// Whether the next vblank ends a frame that was only partly captured, so
+    /// its tags must not be published.
+    pub layers_skip_next: bool,
     pub dmg_shades: bool,
     pub rendering: bool,
     pub frame: FrameCopy,
@@ -71,6 +84,9 @@ impl Hooks {
     pub fn new(dmg_shades: bool, rendering: bool) -> Self {
         Hooks {
             screen: vec![0; SCREEN_PIXELS].into_boxed_slice(),
+            layers: vec![LAYER_BACKGROUND; SCREEN_PIXELS].into_boxed_slice(),
+            layers_on: false,
+            layers_skip_next: false,
             dmg_shades,
             rendering,
             frame: FrameCopy::default(),
@@ -160,6 +176,28 @@ pub(crate) unsafe extern "C" fn on_vblank(gb: *mut sb::GB_gameboy_t, kind: sb::G
             frame.rgb.clear();
             frame.rgb.extend_from_slice(live);
         }
+        if hooks.layers_on {
+            // Not every published frame was rendered: an LCD-off or artificial
+            // frame, and the blank frame SameBoy substitutes at the first vblank
+            // after the LCD is turned on, get no layer map. The buffer of a
+            // partly captured frame is dropped too.
+            let rendered = vblank_kind(kind) == Some(VblankKind::Normal)
+                && !hooks.layers_skip_next
+                // SAFETY: a plain read of the live instance, inside its callback.
+                && !unsafe { sb::gbcli_frame_scrubbed(gb) };
+            frame.layers.clear();
+            if rendered {
+                frame.layers.extend(
+                    hooks.layers[..n.min(SCREEN_PIXELS)]
+                        .iter()
+                        .map(|&t| layer(t)),
+                );
+            }
+            hooks.layers_skip_next = false;
+            // Start the next frame clean: everything the renderer doesn't tag
+            // (an LCD-off frame, a border) is background.
+            hooks.layers.fill(LAYER_BACKGROUND);
+        }
         hooks.frame_copied = true;
     });
 }
@@ -181,5 +219,14 @@ fn shade(pixel: u32) -> u8 {
     match pixel & 0xFF {
         index @ 0..=3 => 3 - index as u8,
         _ => 0,
+    }
+}
+
+/// SameBoy's side-buffer tag back to a [`Layer`] (see `display.c`).
+fn layer(tag: u8) -> Layer {
+    match tag {
+        0 => Layer::Background,
+        1 => Layer::Window,
+        n => Layer::Object { index: n - 2 },
     }
 }

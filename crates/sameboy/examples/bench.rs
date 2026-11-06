@@ -11,7 +11,8 @@
 //! full frame of ticks (70,224 T-cycles), 1,000 times. Modes:
 //! - `plain`: write tracking off, no filters;
 //! - `tracking`: never-written tracking on (keeps the write hook armed);
-//! - `filters`: tracking off, 1,000 armed filters that never match (see `filters`).
+//! - `filters`: tracking off, 1,000 armed filters that never match (see `filters`);
+//! - `layers`: tracking off, per-pixel layer capture on (see `Feature::PixelLayers`).
 
 use std::time::Instant;
 
@@ -57,7 +58,7 @@ fn main() {
     };
     config.write_tracking = match mode.as_str() {
         "tracking" => WriteTracking::On,
-        "plain" | "filters" => WriteTracking::Off,
+        "plain" | "filters" | "layers" => WriteTracking::Off,
         other => panic!("unknown mode {other}"),
     };
     let (exec, read, write) = filters();
@@ -74,6 +75,9 @@ fn main() {
     let mut core = SameBoy::new(config).expect("construct");
     core.run(&mut request(Budget::frames(BOOT_FRAMES)))
         .expect("boot");
+    if mode == "layers" {
+        core.set_pixel_layers(true).expect("layer capture");
+    }
 
     let ticks = frames * Ticks::PER_FRAME;
     let start = Instant::now();

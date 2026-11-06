@@ -16,6 +16,16 @@ bool gbcli_stopped(GB_gameboy_t *gb) { return gb->stopped; }
 bool gbcli_double_speed(GB_gameboy_t *gb) { return gb->cgb_double_speed; }
 bool gbcli_is_mmm01(GB_gameboy_t *gb) { return gb->cartridge_type->mbc_type == GB_MMM01; }
 
+// The per-pixel layer tags the display patch writes while capture is on;
+// NULL detaches the buffer. SameBoy keeps the pointer, so the caller owns it.
+void gbcli_set_layer_buffer(GB_gameboy_t *gb, uint8_t *buffer) { gb->layer_buffer = buffer; }
+
+// Whether the vblank ending now belongs to the blank frame SameBoy substitutes
+// after the LCD is turned on: display.c scrubs the screen to the LCD-off colour
+// at that vblank, then clears the state. Read from inside the vblank callback,
+// so it still describes the frame just published.
+bool gbcli_frame_scrubbed(GB_gameboy_t *gb) { return gb->frame_skip_state == GB_FRAMESKIP_LCD_TURNED_ON; }
+
 // GB_set_rtc_mode stamps last_rtc_second with time(NULL), and that field is in
 // the save state; in accurate mode only its increments matter, so pin it.
 void gbcli_clear_rtc_epoch(GB_gameboy_t *gb) { gb->last_rtc_second = 0; }

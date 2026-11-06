@@ -105,7 +105,6 @@ fn unsupported_features_say_no_with_a_reason() {
         Feature::DotStep,
         Feature::MCycleStep,
         Feature::PpuDot,
-        Feature::PixelLayers,
         Feature::WriteHookCoversDma,
         Feature::ExecHookCoversInterrupts,
         Feature::SideEffectFreeIo,
@@ -119,12 +118,26 @@ fn unsupported_features_say_no_with_a_reason() {
             "{feature:?}"
         );
     }
+}
+
+#[test]
+fn pixel_layer_capture_is_off_until_asked_for() {
+    let mut core = quick_dmg(BUSY);
+    assert!(matches!(core.supports(Feature::PixelLayers), Support::Yes));
+    run(&mut core, Budget::frames(2));
     assert!(matches!(
         core.pixel_layers(),
-        Err(CoreError::Unsupported {
-            feature: Feature::PixelLayers,
-            ..
-        })
+        Err(CoreError::InvalidState { .. })
+    ));
+    core.set_pixel_layers(true).unwrap();
+    run(&mut core, Budget::frames(2));
+    let map = core.pixel_layers().unwrap();
+    assert_eq!((map.width, map.height), (160, 144));
+    assert_eq!(map.layers.len(), 160 * 144);
+    core.set_pixel_layers(false).unwrap();
+    assert!(matches!(
+        core.pixel_layers(),
+        Err(CoreError::InvalidState { .. })
     ));
 }
 

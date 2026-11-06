@@ -108,6 +108,11 @@ impl Model {
     pub fn has_dmg_shades(self) -> bool {
         matches!(self, Model::DmgB | Model::Mgb)
     }
+
+    /// Whether this is a Super Game Boy model, whose frames include a border.
+    pub fn is_sgb(self) -> bool {
+        matches!(self, Model::Sgb | Model::Sgb2)
+    }
 }
 
 /// Which boot ROM runs at power-on.

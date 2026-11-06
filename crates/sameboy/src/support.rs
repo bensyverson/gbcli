@@ -37,13 +37,13 @@ pub fn builtin_boot_rom(model: Model) -> &'static [u8] {
 pub(crate) fn support(feature: Feature) -> Support {
     let reason = match feature {
         Feature::ApuChannels => return Support::Yes,
+        Feature::PixelLayers => return Support::Yes,
         Feature::DotStep => "SameBoy's finest public step is one CPU step (GB_run)",
         Feature::MCycleStep => "SameBoy's finest public step is one CPU step (GB_run)",
         Feature::PpuDot => {
             "SameBoy keeps no single dot counter: cycles_for_line resets inside mode 0 and \
              stops on lines 144-153 (design §2.2)"
         }
-        Feature::PixelLayers => "SameBoy's renderer doesn't record which layer drew a pixel",
         Feature::SideEffectFreeIo => {
             "NR52, PCM12/PCM34 and wave RAM during playback need the APU synced; PPU \
              registers are unavailable while mode-3 cycles are batched"
@@ -68,3 +68,10 @@ pub(crate) fn unsupported_err(feature: Feature) -> CoreError {
         Support::Yes => unreachable!("only unsupported features become errors"),
     }
 }
+
+/// Why layer capture is refused on SGB models: their frame is composited in
+/// `sgb.c` (border, mask modes, frozen masks) after the PPU's mixing point, so
+/// a tag from `display.c` would either miss most of the frame or describe a
+/// pixel the mask hid.
+pub(crate) const SGB_LAYERS_REASON: &str =
+    "the SGB path composites its border and mask modes outside the PPU's mixing point";

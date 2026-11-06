@@ -51,7 +51,19 @@ pub trait Core {
     fn io_register(&self, reg: IoReg) -> Result<u8, CoreError>;
     fn ppu(&self) -> PpuStatus;
     fn last_complete_frame(&self) -> Option<FrameRef<'_>>;
+    /// Which layer drew each pixel of the last complete frame
+    /// ([`Feature::PixelLayers`]). Capture is off until
+    /// [`set_pixel_layers`](Core::set_pixel_layers) turns it on; the map is not
+    /// part of the state blob, so a load clears it until the next frame.
     fn pixel_layers(&self) -> Result<LayerMap<'_>, CoreError>;
+    /// Turns per-pixel layer capture on or off. Off by default. The default is
+    /// for a core without it, so adding this method broke no backend.
+    fn set_pixel_layers(&mut self, _on: bool) -> Result<(), CoreError> {
+        Err(CoreError::Unsupported {
+            feature: Feature::PixelLayers,
+            reason: "this core doesn't capture pixel layers",
+        })
+    }
     /// The sound channels' state ([`Feature::ApuChannels`]). The default is for
     /// a core without it, so adding this method broke no backend.
     fn apu(&self) -> Result<ApuState, CoreError> {

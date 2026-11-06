@@ -16,7 +16,7 @@ cc -O2 -std=gnu11 -I"$SAMEBOY" -o sb_bench scripts/bench/sameboy-throughput/sb_b
 
 ## gbcli-sameboy (the backend, through the core trait)
 
-Throughput of the SameBoy backend on a ROM after a 100-frame boot through the built-in DMG boot ROM, then the mean and worst time to restore a checkpoint and run one frame of ticks (1,000 times). Mode `plain` (write tracking off, no filters), `tracking` (never-written tracking on, the default), or `filters` (1,000 armed filters that never match). Figures are in `project/2026-11-06-design.md` (§9) and the `job` notes of leaves jQ3ATQ and m65CaC. On a shared machine, take the best of several interleaved runs.
+Throughput of the SameBoy backend on a ROM after a 100-frame boot through the built-in DMG boot ROM, then the mean and worst time to restore a checkpoint and run one frame of ticks (1,000 times). Mode `plain` (write tracking off, no filters), `tracking` (never-written tracking on, the default), `filters` (1,000 armed filters that never match) or `layers` (per-pixel layer capture on). Figures are in `project/2026-11-06-design.md` (§9), `project/2026-11-06-sameboy-vendoring.md` and the `job` notes of leaves jQ3ATQ, m65CaC and n2WX5r. On a shared machine, take the best of several interleaved runs.
 
 ```sh
 python3 -I scripts/corpus/fetch.py --only blargg

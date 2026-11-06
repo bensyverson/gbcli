@@ -92,7 +92,7 @@ static const GB_fifo_item_t *fifo_pop(GB_fifo_t *fifo)
     return ret;
 }
 
-static void fifo_push_bg_row(GB_fifo_t *fifo, uint8_t lower, uint8_t upper, uint8_t palette, bool bg_priority, bool flip_x)
+static void fifo_push_bg_row(GB_fifo_t *fifo, uint8_t lower, uint8_t upper, uint8_t palette, bool bg_priority, bool flip_x, bool window)
 {
     assert(fifo->size == 0);
     fifo->size = 8;
@@ -103,6 +103,7 @@ static void fifo_push_bg_row(GB_fifo_t *fifo, uint8_t lower, uint8_t upper, uint
                 palette,
                 0,
                 bg_priority,
+                window,
             };
             lower <<= 1;
             upper <<= 1;
@@ -115,6 +116,7 @@ static void fifo_push_bg_row(GB_fifo_t *fifo, uint8_t lower, uint8_t upper, uint
                 palette,
                 0,
                 bg_priority,
+                window,
             };
             lower >>= 1;
             upper >>= 1;
@@ -122,7 +124,7 @@ static void fifo_push_bg_row(GB_fifo_t *fifo, uint8_t lower, uint8_t upper, uint
     }
 }
 
-static void fifo_overlay_object_row(GB_fifo_t *fifo, uint8_t lower, uint8_t upper, uint8_t palette, bool bg_priority, uint8_t priority, bool flip_x)
+static void fifo_overlay_object_row(GB_fifo_t *fifo, uint8_t lower, uint8_t upper, uint8_t palette, bool bg_priority, uint8_t priority, uint8_t object, bool flip_x)
 {
     while (fifo->size < GB_FIFO_LENGTH) {
         fifo->fifo[(fifo->read_end + fifo->size) & (GB_FIFO_LENGTH - 1)] = (GB_fifo_item_t) {0,};
@@ -139,6 +141,7 @@ static void fifo_overlay_object_row(GB_fifo_t *fifo, uint8_t lower, uint8_t uppe
             target->palette = palette;
             target->bg_priority = bg_priority;
             target->priority = priority;
+            target->object = object;
         }
         lower <<= 1;
         upper <<= 1;
@@ -162,6 +165,15 @@ static void fifo_overlay_object_row(GB_fifo_t *fifo, uint8_t lower, uint8_t uppe
 #define BORDERED_WIDTH 256
 #define BORDERED_HEIGHT 224
 #define VIRTUAL_LINES (LCDC_PERIOD / LINE_LENGTH) // = 154
+
+/* gbcli: per-pixel layer tags. 0 is background, 1 is window, 2 + n is OAM
+   object n. Written only when a layer buffer is attached (capture is on), and
+   written nowhere else: no read, no state and no pixel depends on it. */
+static inline void layer_store(GB_gameboy_t *gb, unsigned x, unsigned y, uint8_t layer)
+{
+    if (likely(gb->layer_buffer == NULL) || unlikely(gb->border_mode == GB_BORDER_ALWAYS)) return;
+    gb->layer_buffer[x + y * WIDTH] = layer;
+}
 
 typedef struct __attribute__((packed)) {
     uint8_t y;
@@ -765,8 +777,11 @@ static void render_pixel_if_possible(GB_gameboy_t *gb)
         }
     }
     
+    uint8_t layer = (bg_enabled && fifo_item->window)? 1 : 0;
+    
     if (draw_oam) {
         uint8_t pixel = oam_fifo_item->pixel;
+        layer = 2 + oam_fifo_item->object;
         if (!gb->cgb_mode) {
             /* Todo: Verify access timings */
             pixel = ((gb->io_registers[oam_fifo_item->palette? GB_IO_OBP1 : GB_IO_OBP0] >> (pixel << 1)) & 3);
@@ -787,6 +802,10 @@ static void render_pixel_if_possible(GB_gameboy_t *gb)
         else {
             *dest = gb->object_palettes_rgb[oam_fifo_item->palette * 4 + pixel];
         }
+    }
+    
+    if (!gb->sgb) {
+        layer_store(gb, gb->lcd_x, gb->current_line, layer);
     }
     
     if (gb->model & GB_MODEL_NO_SFC_BIT) {
@@ -1099,7 +1118,7 @@ static void advance_fetcher_state_machine(GB_gameboy_t *gb, unsigned *cycles)
             }
             
             fifo_push_bg_row(&gb->bg_fifo, gb->current_tile_data[0], gb->current_tile_data[1],
-                             gb->current_tile_attributes & 7, gb->current_tile_attributes & 0x80, gb->current_tile_attributes & 0x20);
+                             gb->current_tile_attributes & 7, gb->current_tile_attributes & 0x80, gb->current_tile_attributes & 0x20, gb->wx_triggered);
             gb->fetcher_state = GB_FETCHER_GET_TILE_T1;
         }
         break;
@@ -1174,6 +1193,7 @@ static void render_line(GB_gameboy_t *gb)
         unsigned priority:6; // Object priority – 0 in DMG, OAM index in CGB
         unsigned palette:3; // Palette, 0 - 7 (CGB); 0-1 in DMG (or just 0 for BG)
         bool bg_priority:1; // BG priority bit
+        unsigned object:6; // gbcli: OAM index of the object that won this pixel
     } _object_buffer[160 + 16]; // allocate extra to avoid per pixel checks
     static const uint8_t empty_object_buffer[sizeof(_object_buffer)];
     const typeof(_object_buffer[0]) *object_buffer;
@@ -1211,6 +1231,7 @@ static void render_line(GB_gameboy_t *gb)
                 if (pixel && (!p->pixel || priority < p->priority)) {
                     p->pixel = pixel;
                     p->priority = priority;
+                    p->object = object_index;
                     
                     if (gb->cgb_mode) {
                         p->palette = object->flags & 0x7;
@@ -1247,9 +1268,11 @@ static void render_line(GB_gameboy_t *gb)
                 if (!gb->cgb_mode) {
                     pixel = ((gb->io_registers[GB_IO_OBP0 + object_buffer_pointer->palette] >> (pixel << 1)) & 3);
                 }
+                layer_store(gb, 160 - i - 1, gb->current_line, 2 + object_buffer_pointer->object);
                 *(p++) = gb->object_palettes_rgb[pixel + (object_buffer_pointer->palette & 7) * 4];
             }
             else {
+                layer_store(gb, 160 - i - 1, gb->current_line, 0);
                 *(p++) = bg;
             }
             object_buffer_pointer++;
@@ -1271,11 +1294,13 @@ static void render_line(GB_gameboy_t *gb)
     
 #define DO_PIXEL() \
 uint8_t pixel = (data0 >> 7) | ((data1 >> 7) << 1);\
+uint8_t layer = 0;\
 data0 <<= 1;\
 data1 <<= 1;\
 \
 if (unlikely(object_buffer_pointer->pixel) && (pixel == 0 || !(object_buffer_pointer->bg_priority || (attributes & 0x80)) || !(gb->io_registers[GB_IO_LCDC] & GB_LCDC_BG_EN))) {\
     pixel = object_buffer_pointer->pixel;\
+    layer = 2 + object_buffer_pointer->object;\
     if (!gb->cgb_mode) {\
         pixel = ((gb->io_registers[GB_IO_OBP0 + object_buffer_pointer->palette] >> (pixel << 1)) & 3);\
     }\
@@ -1285,8 +1310,10 @@ else {\
     if (!gb->cgb_mode) {\
         pixel = ((gb->io_registers[GB_IO_BGP] >> (pixel << 1)) & 3);\
     }\
+    layer = fetching_window? 1 : 0;\
     *(p++) = gb->background_palettes_rgb[pixel + (attributes & 7) * 4];\
 }\
+layer_store(gb, pixels, gb->current_line, layer);\
 pixels++;\
 object_buffer_pointer++\
     
@@ -1294,10 +1321,12 @@ object_buffer_pointer++\
     data0 <<= fractional_scroll;
     data1 <<= fractional_scroll;
     bool check_window = gb->wy_triggered && (gb->io_registers[GB_IO_LCDC] & GB_LCDC_WIN_ENABLE);
+    bool fetching_window = false;
     nounroll for (unsigned i = fractional_scroll; i < 8; i++) {
         if (check_window && gb->io_registers[GB_IO_WX] == pixels + 7) {
 activate_window:
             check_window = false;
+            fetching_window = true;
             map = gb->io_registers[GB_IO_LCDC] & GB_LCDC_WIN_MAP? 0x1C00 : 0x1800;
             tile_x = -1;
             y = ++gb->window_y;
@@ -1848,7 +1877,7 @@ void GB_display_run(GB_gameboy_t *gb, unsigned cycles, bool force)
             fifo_clear(&gb->bg_fifo);
             fifo_clear(&gb->oam_fifo);
             /* Fill the FIFO with 8 pixels of "junk", it's going to be dropped anyway. */
-            fifo_push_bg_row(&gb->bg_fifo, 0, 0, 0, false, false);
+            fifo_push_bg_row(&gb->bg_fifo, 0, 0, 0, false, false, false);
             gb->lcd_x = 0;
             
             /* The actual rendering cycle */
@@ -2019,6 +2048,7 @@ void GB_display_run(GB_gameboy_t *gb, unsigned cycles, bool force)
                                             palette,
                                             gb->object_flags & 0x80,
                                             gb->object_priority == GB_OBJECT_PRIORITY_INDEX? gb->visible_objs[gb->n_visible_objs - 1] : 0,
+                                            gb->visible_objs[gb->n_visible_objs - 1],
                                             gb->object_flags & 0x20);
 
                     gb->data_for_sel_glitch = gb->vram_ppu_blocked? 0xFF : gb->vram[gb->object_low_line_address + 1];

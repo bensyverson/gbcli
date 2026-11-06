@@ -2,7 +2,7 @@ IMPORTANT: As you implement features, keep the documentation in `project/` up to
 
 ## Overview
 
-gbcli is an agent-friendly Game Boy development tool for homebrew developers working with AI agents: a headless, deterministic emulator session (JSON Lines server plus a CLI client) with checkpoints, a debugger, profiling and faithful screenshots and audio views, an RGBDS build loop, and just enough built-in onboarding for a Sonnet-class model to get productive. DMG fidelity comes first; GBC is supported. Shape (planned, not yet built): a Rust workspace — an engine library with thin server and CLI adapters, over a core trait of our own that a SameBoy backend implements on vendored SameBoy (built by the cc crate). Build cost: not yet measured — the scaffold leaf records it here.
+gbcli is an agent-friendly Game Boy development tool for homebrew developers working with AI agents: a headless, deterministic emulator session (JSON Lines server plus a CLI client) with checkpoints, a debugger, profiling and faithful screenshots and audio views, an RGBDS build loop, and just enough built-in onboarding for a Sonnet-class model to get productive. DMG fidelity comes first; GBC is supported. Shape: a Rust workspace — an engine library with thin server and CLI adapters, over a core trait of our own that a SameBoy backend implements on vendored SameBoy (built by the cc crate). Scaffolded so far: `crates/sameboy-sys` (vendored SameBoy plus FFI and a headless smoke test), and empty `core`, `engine`, `protocol` and `gbcli` crates. Build cost (`cargo build --workspace`, debug; 2026-11-06, Apple M1, 8 CPUs, rustc 1.99.1, Apple clang 21; `scripts/bench/workspace-build/run.sh`): clean 5.1–6.3 s (two runs; mostly SameBoy's C, compiled serially), incremental after touching the binary crate 0.20 s, after touching the engine crate 0.26 s (medians of 5 and 3 runs). Re-run it when the crates grow and update these figures.
 
 ## Documentation
 
@@ -10,10 +10,13 @@ gbcli is an agent-friendly Game Boy development tool for homebrew developers wor
 - [project/](project/) — dated plans, findings and decisions; the current plan is [project/2026-11-06-plan.md](project/2026-11-06-plan.md) (in `job` as root `9b5RBA`)
 - [project/2026-11-06-backend-evaluation.md](project/2026-11-06-backend-evaluation.md) — why SameBoy, why Rust, the bespoke-core question, cart research, measured baselines
 - [project/2026-11-06-dx-note-existing-tools.md](project/2026-11-06-dx-note-existing-tools.md) — friction from doing a homebrew task with PyBoy and SameBoy, and the rules it implies
+- [project/2026-11-06-design.md](project/2026-11-06-design.md) — approved design: core trait, stop records, JSONL protocol, session bundle (no daemon), checkpoints, address and expression grammar, CLI verbs
+- [project/2026-11-06-sameboy-vendoring.md](project/2026-11-06-sameboy-vendoring.md) — the vendored SameBoy commit, compile flags, debugger and rewind compiled out, boot ROMs, the headless smoke test
 - [project/2026-11-06-handoff.md](project/2026-11-06-handoff.md) — latest session handoff
 - [project/backlog.md](project/backlog.md) — work decided against, with un-park conditions
 - [project/gotchas.md](project/gotchas.md) — project quirks that cost time
-- [scripts/bench/](scripts/bench/) — re-runnable benchmarks behind the evaluation's figures
+- [scripts/bench/](scripts/bench/) — re-runnable benchmarks behind the evaluation's figures and the build-cost figures above
+- [scripts/vendor-sameboy.sh](scripts/vendor-sameboy.sh) and [scripts/build-roms.sh](scripts/build-roms.sh) — re-vendor SameBoy at a commit; rebuild the committed boot ROMs and test ROMs (needs RGBDS)
 
 <!-- agents:begin core@3cc73e -->
 ## Working rules

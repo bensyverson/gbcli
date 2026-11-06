@@ -1,0 +1,11 @@
+[package]
+name = "sameboy-sys"
+description = "Vendored SameBoy Core/, compiled by the cc crate, with hand-written FFI declarations"
+version.workspace = true
+edition.workspace = true
+license = "MIT"
+publish.workspace = true
+links = "sameboy"
+
+[build-dependencies]
+cc.workspace = true

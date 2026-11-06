@@ -1,0 +1,10 @@
+[package]
+name = "gbcli-core"
+description = "The emulator core trait gbcli's engine drives"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "gbcli_core"

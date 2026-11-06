@@ -1,6 +1,6 @@
 # Benchmarks
 
-Re-runnable measurements behind figures in `project/2026-11-06-backend-evaluation.md`.
+Re-runnable measurements behind figures in `project/2026-11-06-backend-evaluation.md` and, for `workspace-build`, the head of `AGENTS.md`.
 
 ## sameboy-throughput
 
@@ -28,4 +28,12 @@ Rust build times for a crate that compiles SameBoy's `Core/*.c` via the `cc` cra
 
 ```sh
 cd scripts/bench/rust-build && SAMEBOY=/path/to/SameBoy cargo build   # time clean and incremental
+```
+
+## workspace-build
+
+gbcli's own debug build times: a clean `cargo build --workspace`, then incremental builds after touching the binary crate (`crates/gbcli/src/main.rs`) and the engine crate (`crates/engine/src/lib.rs`); prints the median of N runs for each incremental case. Uses `target/bench-workspace-build`, so the normal build cache is untouched. Figures are recorded in the head of `AGENTS.md`.
+
+```sh
+scripts/bench/workspace-build/run.sh      # optional arg: runs per incremental case (default 5)
 ```

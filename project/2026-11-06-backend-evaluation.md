@@ -55,6 +55,8 @@ Tags: **P** public API in the exported headers; **I** needs internal access (com
 - `make lib CONF=release` exits 0 in 13.4 s on arm64 with no SDL or rgbds (measured). **But the macOS dylib exports zero symbols** (Makefile:388 passes `-exported_symbols_list /dev/null` ✓), and without the `cppp` tool all 22 generated headers are **empty while make still exits 0** (Makefile:932-934 reports sed's status).
 - Compiling `Core/*.c` directly with `-DGB_INTERNAL` takes 3.3 s and gives struct access (measured). Flags: `-std=gnu11 -O2 -D_GNU_SOURCE -DGB_VERSION='"1.0.5"' -DGB_COPYRIGHT_YEAR='"2026"' -Wno-multichar`. **So we vendor `Core/` at a pinned commit and compile it ourselves.**
 - Feature switches `DISABLE_TIMEKEEPING`, `DISABLE_REWIND`, `DISABLE_DEBUGGER`, `DISABLE_CHEATS` (Makefile:62-121). The debugger agent suspects `debugger.c` tests `DISABLE_REWIND` where the build defines `GB_DISABLE_REWIND` (assumed build break; untested).
+
+  > **Update, 2026-11-06 (scaffold leaf): confirmed.** Compiling `debugger.c` with `-DGB_DISABLE_REWIND` alone fails with 17 errors (`no member named 'rewind_sequences'`, undeclared `GB_rewind_pop`). We compile with the debugger and rewind both disabled, so `debugger.c` isn't built; evidence and reasons in [2026-11-06-sameboy-vendoring.md](2026-11-06-sameboy-vendoring.md).
 - rgbds is needed only to build SameBoy's own boot ROMs. `BOOTROMS_DIR=` accepts prebuilt ones (Makefile:123).
 
 ### 1. Headless execution

@@ -1,0 +1,14 @@
+[package]
+name = "gbcli"
+description = "An agent-friendly Game Boy development tool"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gbcli-engine.workspace = true
+gbcli-protocol.workspace = true
+# Until the SameBoy backend crate exists, the binary links the core directly so
+# build-time measurements include compiling and linking SameBoy.
+sameboy-sys.workspace = true

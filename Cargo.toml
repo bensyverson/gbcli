@@ -1,0 +1,22 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/sameboy-sys",
+    "crates/core",
+    "crates/engine",
+    "crates/protocol",
+    "crates/gbcli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+gbcli-core = { path = "crates/core" }
+gbcli-engine = { path = "crates/engine" }
+gbcli-protocol = { path = "crates/protocol" }
+sameboy-sys = { path = "crates/sameboy-sys" }
+cc = "1"

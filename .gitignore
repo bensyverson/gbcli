@@ -8,3 +8,5 @@
 scripts/bench/rust-build/target/
 # Agent worktrees
 .claude/worktrees/
+# Cargo build output
+/target/

@@ -17,7 +17,3 @@ The sandbox can't read `~/.gitconfig`, so `git clone` and friends fail with "una
 ## 2026-11-06 — subagents can't write report files
 
 The harness refuses a subagent's Write to a findings file ("Subagents should return findings as text"). Brief research agents to return findings in their final message, and have the main thread save them.
-
-## 2026-11-06 — Homebrew `rustc` 1.96.0 is broken on this machine
-
-`rustc -vV` aborts with a missing LLVM symbol (`__ZN4llvm17OptimizationLevel2O0E`): Homebrew's rust and llvm 23.1.4 are mismatched. Not fixed (it is the user's system). Rust build times in the evaluation are unmeasured for this reason; use rustup or ask the user before relying on cargo here.

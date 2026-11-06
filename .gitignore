@@ -4,3 +4,5 @@
 .jobs.db*
 # This machine's replica id, identity and focus
 .jobs/local.json
+# Benchmark build output
+scripts/bench/rust-build/target/

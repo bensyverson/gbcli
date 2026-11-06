@@ -21,3 +21,11 @@ Cost of a Go→C call and a C→Go callback (10M iterations each).
 ```sh
 cd scripts/bench/cgo-overhead && GOTELEMETRY=off go run .
 ```
+
+## rust-build
+
+Rust build times for a crate that compiles SameBoy's `Core/*.c` via the `cc` crate and depends on serde, serde_json and png. Clean, then incremental after touching `main.rs`.
+
+```sh
+cd scripts/bench/rust-build && SAMEBOY=/path/to/SameBoy cargo build   # time clean and incremental
+```

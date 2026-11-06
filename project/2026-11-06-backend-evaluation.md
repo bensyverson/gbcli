@@ -149,6 +149,8 @@ Measured on this machine (Go 1.27.3, Apple clang 21, arm64), `scripts/bench/`:
 | Go build, clean cold cache | 6.2 s |
 | Rust build | not measured — Homebrew `rustc` 1.96.0 aborts on an LLVM symbol mismatch |
 
+> **Correction, 2026-11-06 (later the same day):** after `brew upgrade rust llvm` (rustc 1.99.1), Rust was measured with `scripts/bench/rust-build` (SameBoy compiled via the `cc` crate, plus serde, serde_json, png): clean debug 26.4 s, **incremental debug 4.6 s**, clean release 38.8 s, incremental release 6.2 s. Go's incremental build is 0.98 s on the same machine. This supports the Go-for-the-harness split.
+
 - **A Go callback per instruction would roughly halve emulation speed.** So the per-instruction check lives in C: a small shim holds bank-aware address bitmaps for breakpoints and watchpoints and calls into Go only on a match. Matches are rare, so the overhead is near zero; condition evaluation, the protocol and everything else stay in Go.
 - **Decision (user, 2026-11-06): Go for the SameBoy wrapper; Rust if a bespoke core is built.** Go gives the fastest builds, is already maintained by the user, and agents write it reliably. Rust's zero-cost C calls matter more for a bespoke core's raw speed.
 - Zig was considered: best C interop, but it still breaks compatibility between releases, which makes it harder for agents to write. C for the server was the original default; the Go harness keeps C to the hot-path shim.

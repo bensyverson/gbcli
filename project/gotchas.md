@@ -12,15 +12,11 @@ Format: one dated H2 headline, then one paragraph. If an entry needs more than t
 
 ## 2026-11-06 — git in the Bash sandbox needs `GIT_CONFIG_GLOBAL=/dev/null`
 
-The sandbox can't read `~/.gitconfig`, so `git clone` and friends fail with "unable to access '/Users/ben/.gitconfig': Operation not permitted". Prefix git commands with `GIT_CONFIG_GLOBAL=/dev/null`; the warning about `~/.config/git/ignore` is harmless. In an isolated agent worktree the harness refuses that prefix ("injecting git configuration whose effect on where git writes can't be verified"); there, run the plain git call with the sandbox off instead (observed 2026-11-06, leaf eeTyfo).
+The sandbox can't read `~/.gitconfig`, so `git clone` and friends fail with "unable to access '/Users/ben/.gitconfig': Operation not permitted". Prefix git commands with `GIT_CONFIG_GLOBAL=/dev/null`; the warning about `~/.config/git/ignore` is harmless. In an isolated agent worktree the harness refuses any git command carrying that variable ("injecting git configuration whose effect on where git writes can't be verified"); there, run the plain git call with the sandbox off for that one call (`project/agents/harness.md`; observed 2026-11-06, leaf eeTyfo).
 
 ## 2026-11-06 — subagents can't write report files
 
 The harness refuses a subagent's Write to a findings file ("Subagents should return findings as text"). Brief research agents to return findings in their final message, and have the main thread save them.
-
-## 2026-11-06 — `GIT_CONFIG_GLOBAL=/dev/null` is refused in an isolated worktree
-
-A worktree-isolated subagent's harness refuses any git command carrying `GIT_CONFIG_GLOBAL` ("injecting git configuration whose effect on where git writes can't be verified"), so the entry above doesn't work there. Run the plain git command with the sandbox disabled for that one call instead, as `project/agents/harness.md` says.
 
 ## 2026-11-06 — Python downloads through the sandbox proxy end early, silently
 

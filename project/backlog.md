@@ -45,3 +45,7 @@ What: a watch or breakpoint on cart RAM smaller than a bank also catching the in
 **Why parked:** it needs a nightly toolchain and a second build of SameBoy, and nothing has yet pointed at memory corruption. The cheap guards come first: `unsafe_code = "forbid"` in the crates without FFI and a required `SAFETY` comment on every `unsafe` block (user discussion, 2026-11-06).
 
 **Un-park when:** a crash, a nondeterministic test or a state divergence we can't explain; before a first release (as part of the pre-release suite); or when the FFI surface grows substantially (a new shim family, a second backend).
+
+## 2026-11-07 — Music authoring: hUGEDriver songs an agent can write
+
+What: let an agent author and wire in music — hUGEDriver as the player (optionally in `new`'s template), songs as `.uge` files or a lossless `.uge` ↔ ASCII tracker text conversion an agent can read and write, and playback checked with the existing audio views (write log, piano roll, per-channel WAV, spectrogram). Why parked: agents can't drive hUGETracker's GUI, the format and licenses are unsurveyed, and image checks are cheaper and come first (`project/2026-11-07-asset-pipeline-plan.md`). The user expects `.uge` to be tractable for agents. Un-park when: the research leaf `O5swhd` finds a tractable `.uge` ↔ text path and a vendorable driver, the agent eval shows agents need music, or a user asks.

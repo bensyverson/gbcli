@@ -7,7 +7,10 @@ const DAY_S: u64 = 24 * 60 * 60;
 /// ([`Core::advance_rtc`](crate::Core::advance_rtc)) can move it: to
 /// [`max_advance_s`](CartClock::max_advance_s), the shortest advance after
 /// which the clock shows nothing new, so no reading is out of reach of one
-/// advance. The advance also costs host time per emulated day (per minute on
+/// advance. That holds from in-range counters; a game can write
+/// out-of-range ones (HuC3 minutes past 1439, MBC3 hours past 23), which
+/// first count up to their wrap, so from there a second advance may be
+/// needed. The advance also costs host time per emulated day (per minute on
 /// HuC3), so an unbounded one could hold the session for minutes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CartClock {

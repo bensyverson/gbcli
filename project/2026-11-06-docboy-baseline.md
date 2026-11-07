@@ -2,6 +2,8 @@
 
 2026-11-06. **Finding: run from the post-boot state docboy assumes, SameBoy fails 173 of docboy's 2,949 cases, not 469; 26 of those 173 are runner artifacts, and none of the rest is a boot-state effect.** 136 are disagreements with docboy's own tests, which state no hardware verification; 10 are SameBoy gaps already known from third-party suites. Leaf `5ewkYZ`; it follows the SameBoy baseline ([2026-11-06-sameboy-baseline.md](2026-11-06-sameboy-baseline.md)), which ran docboy's cases after SameBoy's open boot ROM and left them unclassified.
 
+> **Update 2026-11-06 (leaf `Jwo9sg`): 166 fail now, not 173.** The STOP wake bug below is fixed: `gbcli_pre_run` now lets `GB_run` take its STOP step while SameBoy's joypad has unapplied input (`inputs_changed`) or is still settling (`!joypad_is_stable`), so a key pressed in STOP wakes the core as SameBoy would. Of the 19 cases it held, 7 now pass (`stop_joypad0_interrupt0/1`, `stop_hello_world`, `stop_read_tima_round1/2`, `stop_tima_falling_edge`, `dma_stop_during_transfer_timing_round2`). The other 12 now wake and then write their own fail value ($02 at $FFF0); they are reclassified "Unexplained: after STOP" below. So 7 of the 166 are runner artifacts (6 power-on OAM seed, 1 STOP unexplained), not 26. The counts in the tables below are updated in place; the 2,765 / 173 line is the original result.
+
 ## Re-running it
 
 ```
@@ -35,17 +37,17 @@ Only docboy rows use it. `judge::run` boots every other row with the model's bui
 
 | docboy category | Cases | Fail, open boot ROM | Fail, docboy's state |
 |---|---|---|---|
-| ppu | 1,641 | 239 | 114 |
+| ppu | 1,641 | 239 | 114 → 113 |
 | interrupts | 164 | 73 | 0 |
 | boot | 88 | 49 | 6 |
 | serial | 78 | 40 | 1 |
 | apu | 321 | 24 | 11 |
 | oam_bug | 275 | 22 | 22 |
 | mbc/mbc3 | 29 | 6 | 6 |
-| timers | 78 | 5 | 5 |
-| cpu | 46 | 4 | 3 |
+| timers | 78 | 5 | 5 → 2 |
+| cpu | 46 | 4 | 3 → 1 |
 | stat_write_bug | 43 | 3 | 2 |
-| dma | 74 | 2 | 2 |
+| dma | 74 | 2 | 2 → 1 |
 | mbc/huc3 | 9 | 1 | 1 |
 | integration | 1 | 1 | 0 |
 | the other 7 | 107 | 0 | 0 |
@@ -54,14 +56,19 @@ Only docboy rows use it. `judge::run` boots every other row with the model's bui
 
 | Class | Cases | Evidence |
 |---|---|---|
-| Harness: STOP wake bug | 19 | below; job `Jwo9sg` |
+| ~~Harness: STOP wake bug~~ | ~~19~~ 0 | fixed, job `Jwo9sg`: 7 now pass, 12 moved to the next row |
+| Unexplained: after STOP | 12 | below |
 | Harness: STOP, unexplained | 1 | below |
 | Harness: power-on OAM seed | 6 | below |
 | Reference problem, probable | 1 | below |
 | SameBoy gap, third-party reference | 10 | below |
 | Disputed with docboy's own tests | 136 | below |
 
+> **Fixed 2026-11-06 (leaf `Jwo9sg`).** The cause below was right; the fix is in `gbcli_pre_run`, and 7 of the 19 now pass. See the update at the top and the next paragraph.
+
 **Harness: a STOPped core never wakes on a key (19).** These are `stop_read_ly*` (6), `stop_read_stat*` (3), `stop_read_tima*` (2), `stop_tima_falling_edge`, `stop_joypad0_interrupt0/1`, `dma_stop_during_transfer_timing_round1/2`, `stop_trigger_interrupt`, `stop_hello_world` and `mbc3_rtc_gb_stopped_recover`. Each enters STOP and expects a key press scheduled later to wake it; each ends "the CPU stopped with no wake source". The cases where the key is already down when STOP runs (`stop_joypad1_*`) pass. Cause: `gbcli_pre_run` (`crates/sameboy-sys/shim/gbcli_shim.c:276`) reports STOP while JOYP's low nibble is $F, and `run` returns before calling `GB_run`. But `set_keys` (`GB_set_key_mask`) only marks the inputs changed, and SameBoy recomputes JOYP in `GB_joypad_run`, inside `GB_run`. Observed with a scratch test on `stop_joypad0_interrupt0` from docboy's state: STOP at 8,464 ticks, `set_keys(UP)`, JOYP still reads $EF, `run` stops again. After a P1 write that changes the select bits, which calls `GB_update_joyp`, the next `run` proceeds. This is a gbcli-sameboy bug, not a SameBoy gap and not docboy's. It is filed as `Jwo9sg` and not fixed here: the leaf's scope is classification, and the fix changes the backend.
+
+**Unexplained: after STOP (12).** `stop_read_ly*` (6), `stop_read_stat*` (3), `stop_trigger_interrupt`, `dma_stop_during_transfer_timing_round1` and `mbc3_rtc_gb_stopped_recover`. With the wake fixed they leave STOP on the scheduled key and then write $02 to $FFF0, the test's own fail value. Not investigated. Two facts bound it. The runner skips the judge's clock to the next scheduled input while the core sits in STOP (`Drive::idle_until`, `crates/corpus/src/drive.rs`), so no emulated time passes inside STOP. For LY and STAT that matches SameBoy, whose DMG PPU does not advance in STOP (`display.c`, "The PPU does not advance while in STOP mode on the DMG"), and timers also stop in STOP (`timers_run`), which fits the three TIMA cases now passing. SameBoy's RTC does run in STOP (`rtc_run`), so the skip may explain `mbc3_rtc_gb_stopped_recover`; that is a guess, not a measurement. docboy's sources are not in the corpus, so what each case expects is unknown here.
 
 **Harness: STOP, unexplained (1).** `stop_immediate_exit_joypad_interrupt` presses A before STOP and releases it at 131,072 T-cycles, then times out. It is STOP-adjacent but does not end in "stopped", so the bug above does not obviously explain it. Not investigated further.
 
@@ -93,6 +100,7 @@ Only docboy rows use it. `judge::run` boots every other row with the model's bui
 
 ## What would change these results
 
-- Fixing `Jwo9sg` should flip some or all of the 19 STOP cases. Re-run `--check`, rewrite the baseline and the counts here.
+- ~~Fixing `Jwo9sg` should flip some or all of the 19 STOP cases.~~ Done: 7 flipped (see the update at the top).
+- Letting emulated time pass in STOP (a core that runs through STOP until a budget, rather than stopping with `Stopped`) would test the RTC guess above.
 - A per-row seed, or seeding OAM the way docboy does, would flip the six `poweron_oam` cases in both suites. Deliberately not done: the runner's fixed seed is a determinism choice, and tuning it to pass tests would hide what it does.
 - Hardware evidence for any disputed family would move it to "SameBoy gap" or "reference problem".

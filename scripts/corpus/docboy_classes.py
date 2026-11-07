@@ -15,9 +15,9 @@ import sys
 # (class, why, id pattern). Patterns match the part of the id after "docboy/roms/dmg/";
 # the first match wins, so the specific ones come first.
 CLASSES = [
-    ("harness: STOP wake", "gbcli-sameboy's STOP check reads a stale JOYP, so a key pressed in STOP never wakes the core (job Jwo9sg)",
-     r"^docboy/(cpu|ppu|timers|dma)/interactive(_visual)?/(stop_joypad0_interrupt[01]|stop_read_\w+|stop_tima_falling_edge|"
-     r"dma_stop_during_transfer_timing_round[12]|stop_trigger_interrupt|stop_hello_world)\.gb$|"
+    ("unexplained: after STOP", "the key wakes the core (job Jwo9sg), then the case writes its fail value; not investigated",
+     r"^docboy/(cpu|ppu|dma)/interactive(_visual)?/(stop_read_(ly|stat)\w*|"
+     r"dma_stop_during_transfer_timing_round1|stop_trigger_interrupt)\.gb$|"
      r"^docboy/mbc/mbc3/interactive/mbc3_rtc_gb_stopped_recover\.gb$"),
     ("harness: STOP, unexplained", "the key is held into STOP and released; the case times out",
      r"^docboy/cpu/interactive_visual/stop_immediate_exit_joypad_interrupt\.gb$"),

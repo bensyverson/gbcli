@@ -4,8 +4,8 @@ mod common;
 
 use common::*;
 use gbcli_core::{
-    Budget, BudgetKind, Core, CoreConfig, CoreError, Feature, IoReg, Model, Region, RunRequest,
-    StepUnit, StopReason, Support, Ticks,
+    Budget, BudgetKind, Core, CoreConfig, CoreError, Feature, IoReg, JoypadBounce, Keys, Model,
+    Region, RunRequest, StepUnit, Stop, StopReason, Support, Ticks,
 };
 use gbcli_sameboy::SameBoy;
 
@@ -189,4 +189,43 @@ fn stop_with_no_wake_source_ends_the_run() {
     assert_eq!(stop.reason, StopReason::Stopped);
     assert!(stop.used.frames < 10);
     assert_eq!(core.region(Region::Wram).unwrap().bytes[0], 0x00);
+}
+
+/// Runs `stop_wake.gb` into STOP, presses `keys`, and runs again.
+fn press_while_stopped(mut core: SameBoy, keys: Keys) -> (SameBoy, Stop) {
+    let stop = run(&mut core, Budget::frames(10));
+    assert_eq!(stop.reason, StopReason::Stopped);
+    assert_eq!(core.region(Region::Wram).unwrap().bytes[0], 0x00);
+    core.set_keys(keys);
+    let woke = run(&mut core, Budget::frames(2));
+    (core, woke)
+}
+
+#[test]
+fn a_key_in_the_selected_row_wakes_a_stopped_core() {
+    let (core, woke) = press_while_stopped(quick_dmg(STOP_WAKE), Keys::UP);
+    assert_eq!(woke.reason, StopReason::Budget(BudgetKind::Frames));
+    assert_eq!(core.region(Region::Wram).unwrap().bytes[0], 0x99);
+}
+
+#[test]
+fn a_bouncing_key_in_the_selected_row_wakes_a_stopped_core() {
+    let mut config = CoreConfig::new(Model::DmgB, STOP_WAKE.to_vec());
+    config.joypad_bounce = JoypadBounce::On;
+    let (core, woke) = press_while_stopped(quick_boot(config), Keys::UP);
+    assert_eq!(woke.reason, StopReason::Budget(BudgetKind::Frames));
+    assert_eq!(core.region(Region::Wram).unwrap().bytes[0], 0x99);
+}
+
+#[test]
+fn a_key_outside_the_selected_row_lets_time_pass_but_stays_stopped() {
+    let (mut core, still) = press_while_stopped(quick_dmg(STOP_WAKE), Keys::A);
+    assert_eq!(still.reason, StopReason::Stopped);
+    // The CPU steps once in STOP to see the new keys, as on hardware.
+    assert!(still.used.ticks > 0);
+    assert_eq!(core.region(Region::Wram).unwrap().bytes[0], 0x00);
+    // With the keys settled, nothing can wake it and no time passes.
+    let again = run(&mut core, Budget::frames(2));
+    assert_eq!(again.reason, StopReason::Stopped);
+    assert_eq!(again.used.ticks, 0);
 }

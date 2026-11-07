@@ -11,6 +11,7 @@ use gbcli_sameboy::SameBoy;
 pub const BUSY: &[u8] = include_bytes!("../roms/busy.gb");
 pub const ILLEGAL: &[u8] = include_bytes!("../roms/illegal.gb");
 pub const STOP: &[u8] = include_bytes!("../roms/stop.gb");
+pub const STOP_WAKE: &[u8] = include_bytes!("../roms/stop_wake.gb");
 /// Hands over in four instructions; not a faithful boot (see quick_boot.asm).
 pub const QUICK_BOOT: &[u8] = include_bytes!("../roms/quick_boot.bin");
 
@@ -43,7 +44,12 @@ pub fn cpu_instrs() -> Vec<u8> {
 
 /// A DMG core on `rom` with the quick boot ROM, already handed over (PC $0100).
 pub fn quick_dmg(rom: &[u8]) -> SameBoy {
-    let mut config = CoreConfig::new(Model::DmgB, rom.to_vec());
+    quick_boot(CoreConfig::new(Model::DmgB, rom.to_vec()))
+}
+
+/// A core built from `config` with the quick boot ROM, already handed over
+/// (PC $0100).
+pub fn quick_boot(mut config: CoreConfig) -> SameBoy {
     config.boot_rom = BootRom::Custom(QUICK_BOOT.to_vec());
     let mut core = SameBoy::new(config).expect("construct core");
     for _ in 0..4 {

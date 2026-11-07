@@ -4,6 +4,8 @@
 
 > **Updated 2026-11-06 (leaf `5ewkYZ`):** docboy's cases now run from docboy's own post-boot state and are classified case by case in [2026-11-06-docboy-baseline.md](2026-11-06-docboy-baseline.md): 173 fail, not 469, and none of the 173 is a boot-state effect. Two causes below were wrong and are corrected in place: six GBMicrotest `poweron_oam_*` failures are a power-on OAM seed artifact, not boot-ROM dependent, and blargg's `7-timing_effect` overflows its own output buffer rather than depending on boot state. The two manifest problems are fixed.
 
+> **Updated 2026-11-06 (leaf `Jwo9sg`):** the STOP-wake bug in gbcli-sameboy is fixed, and the baseline was rewritten by the same command (`cargo run --release -p gbcli-corpus -- --write tests/corpus/baseline-sameboy.json`): **4,491 runs: 4,126 pass, 317 fail, 48 skip**, docboy 2,772 / 166 / 11. The only status changes are 7 docboy STOP cases, fail → pass; the other 12 of the 19 now wake and fail their own check. Details in [2026-11-06-docboy-baseline.md](2026-11-06-docboy-baseline.md).
+
 ## Re-running it
 
 ```

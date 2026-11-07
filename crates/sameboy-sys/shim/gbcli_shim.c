@@ -304,7 +304,7 @@ int gbcli_next_opcode(GB_gameboy_t *gb)
 enum {
     GBCLI_PRE_RUN = 0,         // run the next step
     GBCLI_PRE_ILLEGAL = 1,     // the next step executes an illegal opcode (in *opcode)
-    GBCLI_PRE_STOPPED = 2,     // in STOP mode with no joypad line low to wake it
+    GBCLI_PRE_STOPPED = 2,     // in STOP mode, the joypad settled, no line low to wake it
 };
 
 static const bool illegal_opcode[256] = {
@@ -318,6 +318,11 @@ static const bool illegal_opcode[256] = {
 int gbcli_pre_run(GB_gameboy_t *gb, uint8_t *opcode)
 {
     if (unlikely(gb->stopped)) {
+        // JOYP's low nibble is recomputed from the keys only inside GB_run
+        // (GB_joypad_run), so after GB_set_key_mask, or while a key bounces or
+        // a select change settles, it is stale: let GB_run take its STOP step,
+        // which updates JOYP and wakes on a low line as SameBoy would.
+        if (gb->inputs_changed || !gb->joypad_is_stable) return GBCLI_PRE_RUN;
         return (gbcli_io_peek(gb, GB_IO_JOYP) & 0x0F) == 0x0F ? GBCLI_PRE_STOPPED : GBCLI_PRE_RUN;
     }
     uint16_t pc = gb->pc;

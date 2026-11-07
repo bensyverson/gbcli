@@ -29,7 +29,7 @@ gbcli is an agent-friendly Game Boy development tool for homebrew developers wor
 
 Review baseline: 2026-11-07T04:55:00Z
 
-<!-- agents:begin core@ffe7d8 -->
+<!-- agents:begin core@c84939 -->
 ## Working rules
 
 **Understand the why.** If the goal behind a request isn't clear, ask before solving — beware the XY problem.
@@ -61,6 +61,8 @@ Review baseline: 2026-11-07T04:55:00Z
 **Where these rules come from.** The marked regions are generated and shared across repos via a CLI tool named `agents`; don't edit inside them. If a rule here is wrong or cost you time, say so in `project/gotchas.md` prefixed `rule:`; that is how shared rules get reviewed.
 
 **Local rulings.** A repo-local ruling, or an override of a shared rule, lives in the project-owned head of `AGENTS.md`, above the generated regions — say plainly that it overrides, and link a dated project doc for the why.
+
+**American English.** Write American English everywhere; code, comments, docs, commit messages, memories: color, behavior, center, -ize, labeled, gray, catalog. Keep an external API's own spelling as-is (e.g. Apple's `isCancelled`).
 
 ## A session
 

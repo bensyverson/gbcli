@@ -53,20 +53,22 @@ pub fn command(inv: &Invocation, env: &Env) -> Command {
 
 pub fn song(command: SongCommand, io: Io) -> u8 {
     let response = match made(&command) {
-        Ok(made) => Response::ok(
+        Ok((made, warnings)) => Response::ok(
             ID,
             None,
             ResultBody {
                 song: Some(made),
                 ..ResultBody::default()
             },
-        ),
+        )
+        .with_warnings(warnings),
         Err(body) => Response::failed(ID, None, *body),
     };
     render::response(&response, command.json, io.out, io.err)
 }
 
-fn made(command: &SongCommand) -> Result<SongMade, Box<ErrorBody>> {
+/// What the song made, and what of it hUGEDriver never plays.
+fn made(command: &SongCommand) -> Result<(SongMade, Vec<String>), Box<ErrorBody>> {
     let input = &command.input;
     let bytes = std::fs::read(&input.path).map_err(|e| {
         Box::new(ErrorBody::new(
@@ -94,7 +96,11 @@ fn made(command: &SongCommand) -> Result<SongMade, Box<ErrorBody>> {
         wrote.push(output);
     }
     let song = &loaded.song;
-    Ok(SongMade {
+    let warnings = gbcli_music::unplayable(song)
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    let made = SongMade {
         path: input.shown.clone(),
         format: match loaded.format {
             SongFormat::Uge => SongFileFormat::Uge,
@@ -111,7 +117,8 @@ fn made(command: &SongCommand) -> Result<SongMade, Box<ErrorBody>> {
         patterns: song.patterns.len() as u32,
         orders: song.orders.iter().map(Vec::len).max().unwrap_or(0) as u32,
         wrote,
-    })
+    };
+    Ok((made, warnings))
 }
 
 fn output(kind: SongOutputKind, given: &Given) -> SongOutput {

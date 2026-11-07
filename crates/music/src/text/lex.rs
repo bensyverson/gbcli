@@ -93,7 +93,7 @@ fn string(chars: &[char], start: usize, line_no: u32) -> Result<(Vec<u8>, usize)
                     't' => bytes.push(b'\t'),
                     'x' => {
                         let hex: String = chars.get(i..i + 2).unwrap_or(&[]).iter().collect();
-                        let Ok(b) = u8::from_str_radix(&hex, 16) else {
+                        let Some(b) = super::spell::hex_byte(&hex) else {
                             return Err(err(i - 2, "\\x needs two hex digits".into()));
                         };
                         bytes.push(b);

@@ -28,10 +28,7 @@ impl Block {
                 "the banks are square (channels 1 and 2), wave (3) and noise (4)",
             )
         })?;
-        let slot = a[1]
-            .text
-            .parse::<usize>()
-            .ok()
+        let slot = spell::decimal::<usize>(&a[1].text)
             .filter(|n| (1..=BANK_SIZE).contains(n))
             .ok_or_else(|| {
                 at(
@@ -195,7 +192,8 @@ impl Block {
             bad(
                 &tokens[3],
                 "a jump",
-                "a jump is J01-J64 (the row to go to next, counting from 1), or ... for none",
+                "a jump is J01-J31 (the row to go to next, counting from 1; hUGEDriver plays \
+                 rows 00-31 and encodes no higher jump), or ... for none",
             )
         })?;
         let (code, param) = spell::read_effect(&tokens[4].text).ok_or_else(|| {
@@ -219,7 +217,11 @@ fn length(line: u32, tokens: &[Token], bank: Bank, ins: &mut Instrument) -> Resu
          ENABLED VALUE"
     );
     let a = &tokens[1..];
-    let steps = |t: &Token| number(line, t, 1, max, "the length").map(|n| max - n);
+    // N counts steps; `!N`, like everywhere else, is the stored register.
+    let steps = |t: &Token| match spell::read_bang(&t.text) {
+        Some(stored) => Ok(stored),
+        None => number(line, t, 1, max, "the length").map(|n| max - n),
+    };
     let (enabled, raw) = match a.iter().map(|t| t.text.as_str()).collect::<Vec<_>>()[..] {
         ["off"] => (0, 0),
         ["off", _] => (0, steps(&a[1])?),
@@ -264,7 +266,7 @@ fn unused(line: u32, tokens: &[Token], bank: Bank, ins: &mut Instrument) -> Resu
                 remedy,
             ));
         };
-        let fits = value.parse::<i64>().ok().is_some_and(|v| (raw.set)(ins, v));
+        let fits = spell::decimal::<i64>(value).is_some_and(|v| (raw.set)(ins, v));
         if !fits {
             return Err(at(
                 line,

@@ -9,7 +9,7 @@ use super::FORMAT_LINE;
 use super::grid::{Blocks, Orders};
 use super::instrument::Block;
 use super::lex::{Token, tokens};
-use super::spell::read_bang;
+use super::spell::{decimal, hex_byte, read_bang};
 use super::values::{args, at, int, number, string};
 use crate::error::ParseError;
 use crate::model::{INSTRUMENTS, ROUTINES, Song, WAVE_LEN, WAVES};
@@ -287,14 +287,7 @@ impl Parser {
                 .chars()
                 .map(|c| c.to_digit(16).map(|d| d as u8))
                 .collect(),
-            many if many.len() == WAVE_LEN => many
-                .iter()
-                .map(|t| {
-                    (t.text.len() == 2)
-                        .then(|| u8::from_str_radix(&t.text, 16).ok())
-                        .flatten()
-                })
-                .collect(),
+            many if many.len() == WAVE_LEN => many.iter().map(|t| hex_byte(&t.text)).collect(),
             _ => None,
         };
         let samples = samples
@@ -314,10 +307,7 @@ impl Parser {
                 shape,
             ));
         }
-        let index = tokens[1]
-            .text
-            .parse::<usize>()
-            .ok()
+        let index = decimal::<usize>(&tokens[1].text)
             .filter(|n| *n < ROUTINES)
             .ok_or_else(|| {
                 at(

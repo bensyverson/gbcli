@@ -271,3 +271,54 @@ fn a_cell_in_a_column_with_no_pattern_must_be_blank() {
     ));
     check(&e, 3, 21, "no pattern", "blank");
 }
+
+#[test]
+fn uneven_orders_are_refused_where_a_channel_has_no_pattern() {
+    // hUGETracker has no shorter channel: it shows the missing orders as
+    // pattern 0 and saves every channel at one length.
+    let e = error(&format!(
+        "{FORMAT_LINE}\norders\n00 P0 P1 P2 P3\n01 P0 - - -\n\
+         pattern P0 P1 P2 P3\n00 {BLANK4}\n"
+    ));
+    check(&e, 4, 7, "channel 2", "same number of orders");
+}
+
+#[test]
+fn signed_numbers_are_refused_where_the_form_writes_digits() {
+    let wave_bytes = ["+F"; 32].join(" ");
+    let p_plus = "orders\n00 P+0 P1 P2 P3\npattern P0 P1 P2 P3\n00 ... .. ... ... | \
+                  ... .. ... ... | ... .. ... ... | ... .. ... ...";
+    for body in [
+        "name \"\\x+F0\"".to_string(),
+        "ticks_per_row +7".to_string(),
+        "ticks_per_row !+7".to_string(),
+        format!("wave 0 {wave_bytes}"),
+        "instrument square +1 \"x\"".to_string(),
+        "instrument square 1 \"x\"\n  unused output_level=+1".to_string(),
+        "routine +1 \"x\"".to_string(),
+        p_plus.to_string(),
+        song_with("00 C-5 01 ... !+3:+4 | ... .. ... ... | ... .. ... ... | ... .. ... ...")
+            .trim_start_matches(FORMAT_LINE)
+            .to_string(),
+    ] {
+        let text = format!("{FORMAT_LINE}\n{body}\n");
+        assert!(parse_text(&text).is_err(), "accepted:\n{text}");
+        // The same line with a leading zero for the sign reads.
+        let unsigned = text.replace('+', "0");
+        assert!(parse_text(&unsigned).is_ok(), "refused:\n{unsigned}");
+    }
+}
+
+#[test]
+fn a_bang_length_is_the_stored_register_value() {
+    // `!N` is a stored number everywhere else (spell.rs); length is no
+    // exception.
+    let song = parse_text(&format!(
+        "{FORMAT_LINE}\ninstrument square 1 \"x\"\n  length !70\ninstrument square 2 \"y\"\n  length off !70\n"
+    ))
+    .unwrap();
+    let (a, b) = (&song.instruments[0], &song.instruments[1]);
+    assert_eq!((a.length_enabled, a.length), (1, 70));
+    assert_eq!((b.length_enabled, b.length), (0, 70));
+    assert!(parse_text(&to_text(&song)).unwrap() == song);
+}

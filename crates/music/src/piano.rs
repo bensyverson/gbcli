@@ -80,7 +80,10 @@ struct Walk {
 type Sounding = [Option<usize>; 4];
 
 fn play(song: &Song) -> Walk {
-    let orders = song.orders.iter().map(Vec::len).min().unwrap_or(0);
+    let mut normal = song.clone();
+    normal.normalize();
+    let song = &normal;
+    let orders = song.orders[0].len();
     let mut walk = Walk {
         notes: Vec::new(),
         ticks: 0,
@@ -117,12 +120,17 @@ fn play(song: &Song) -> Walk {
                     instrument[c] = cell.instrument;
                 }
                 let param = u64::from(cell.effect_param);
-                let at = if cell.effect_code == 7 {
-                    t + param.min(speed)
-                } else {
-                    t
+                // hUGEDriver acts on a tick of the row, 0 to speed - 1:
+                // note delay plays at tick xx and never at 0 (fx_note_delay),
+                // and note cut fires at tick xx (fx_note_cut). A tick the row
+                // never reaches never plays the note, or never cuts it.
+                let within = param < speed;
+                let plays = match cell.effect_code {
+                    7 => within && param > 0,
+                    _ => true,
                 };
-                if cell.note != NO_NOTE && (0..=HIGHEST_NOTE).contains(&cell.note) {
+                let at = if cell.effect_code == 7 { t + param } else { t };
+                if plays && cell.note != NO_NOTE && (0..=HIGHEST_NOTE).contains(&cell.note) {
                     stop(&mut walk.notes, &mut sounding, c, at);
                     let volume = match (cell.effect_code, cell.effect_param) {
                         (0xC, p) => p & 0xF,
@@ -138,7 +146,7 @@ fn play(song: &Song) -> Walk {
                     });
                 }
                 match cell.effect_code {
-                    0xE => stop(&mut walk.notes, &mut sounding, c, t + param),
+                    0xE if within => stop(&mut walk.notes, &mut sounding, c, t + param),
                     0xB => {
                         row_break = row_break.max(1);
                         next_order = usize::from(cell.effect_param);
@@ -177,8 +185,9 @@ fn stop(notes: &mut [Played], sounding: &mut Sounding, c: usize, at: u64) {
 /// volume, or the wave level as 15, 8 or 4.
 fn volume(song: &Song, channel: usize, instrument: i32) -> u8 {
     let bank = Bank::of_channel(channel);
-    let Some(ins) = usize::try_from(instrument - 1)
-        .ok()
+    let Some(ins) = instrument
+        .checked_sub(1)
+        .and_then(|i| usize::try_from(i).ok())
         .filter(|i| *i < BANK_SIZE)
         .map(|i| &song.instruments[bank as usize * BANK_SIZE + i])
     else {

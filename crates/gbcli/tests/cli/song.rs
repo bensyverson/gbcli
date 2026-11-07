@@ -105,6 +105,30 @@ fn a_missing_song_file_is_song_unreadable() {
 }
 
 #[test]
+fn song_warns_of_subpattern_rows_and_jumps_hugedriver_never_plays() {
+    let p = project("song-subpattern");
+    let instrument = "instrument square 3 \"Arp\"\n  subpattern on\n  05 +00 .. J40 ...\n  \
+                      40 +12 .. ... ...\n";
+    let text = gbcli_music::EXAMPLE.replacen("\norders", &format!("\n{instrument}\norders"), 1);
+    fs::write(p.path("arp.song"), text).unwrap();
+    let run = p.gbcli(&["song", "arp.song"]);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    let warnings: Vec<&str> = run
+        .stderr
+        .lines()
+        .filter(|l| l.starts_with("warning: "))
+        .collect();
+    assert_eq!(warnings.len(), 2, "{}", run.stderr);
+    assert!(warnings[0].contains("J40"), "{}", warnings[0]);
+    assert!(warnings[1].contains("row 40"), "{}", warnings[1]);
+    let json = p.gbcli(&["song", "arp.song", "--json"]);
+    let line: serde_json::Value = serde_json::from_str(json.stdout.trim()).unwrap();
+    assert_eq!(line["warnings"].as_array().map(Vec::len), Some(2));
+    // The example song plays every row it has.
+    assert!(p.gbcli(&["song", "example.song"]).stderr.is_empty());
+}
+
+#[test]
 fn song_needs_its_file() {
     let p = project("song-usage");
     p.gbcli(&["song"]).fails(2, "bad_request", "gbcli song");

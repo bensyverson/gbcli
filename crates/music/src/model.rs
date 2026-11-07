@@ -18,6 +18,12 @@ pub const ROUTINES: usize = 16;
 pub const NO_NOTE: i32 = 90;
 /// The highest note, B-8; the lowest, 0, is C-3.
 pub const HIGHEST_NOTE: i32 = 71;
+/// Subpattern rows hUGEDriver plays: hUGETracker exports rows 00-31 of the
+/// 64 it stores (utils.pas `SubpatternToBytes`).
+pub const PLAYED_SUBPATTERN_ROWS: usize = 32;
+/// The highest subpattern jump hUGEDriver encodes: the jump is five bits
+/// (utils.pas `DN`, hUGEDriver.asm `do_table`), so J32 and up never jump.
+pub const HIGHEST_JUMP: i32 = 31;
 /// The note value a subpattern treats as "no transposition" (hUGETracker's
 /// `MIDDLE_NOTE`): a subpattern note is shown as its offset from this.
 pub const MIDDLE_NOTE: i32 = 36;
@@ -290,5 +296,28 @@ impl Default for Song {
 impl Song {
     pub fn pattern(&self, key: i32) -> Option<&Pattern> {
         self.patterns.iter().find(|p| p.key == key)
+    }
+
+    /// The song as hUGETracker holds it once loaded: a channel with fewer
+    /// orders than the longest plays pattern 0 for the rest (tracker.pas
+    /// `CopyOrderMatrixToOrderGrid` shows them as 0, and saving writes them),
+    /// and a pattern an order names but the file lacks is blank, added after
+    /// the others (hugedatatypes.pas `TPatternMap.GetOrCreateNew`).
+    pub fn normalize(&mut self) {
+        let len = self.orders.iter().map(Vec::len).max().unwrap_or(0);
+        for order in &mut self.orders {
+            order.resize(len, 0);
+        }
+        for c in 0..self.orders.len() {
+            for i in 0..len {
+                let key = self.orders[c][i];
+                if self.pattern(key).is_none() {
+                    self.patterns.push(Pattern {
+                        key,
+                        rows: BLANK_ROWS,
+                    });
+                }
+            }
+        }
     }
 }

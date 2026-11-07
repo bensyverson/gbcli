@@ -6,7 +6,12 @@ use super::fields::{self, length_max};
 use super::spell::{self, DIRECTIONS, DUTIES, LEVELS, MODES, SWITCH, choice, number};
 use crate::model::{BLANK_ROWS, Bank, Instrument, ROWS, Rows, Song, WAVE_LEN};
 
+/// `song`'s canonical text, of the song [`Song::normalize`]d: the text has
+/// no spelling for uneven orders or an order naming a missing pattern.
 pub fn to_text(song: &Song) -> String {
+    let mut normal = song.clone();
+    normal.normalize();
+    let song = &normal;
     let mut out = String::new();
     let o = &mut out;
     line(o, FORMAT_LINE);
@@ -188,7 +193,7 @@ fn orders(out: &mut String, song: &Song) {
     line(out, "orders");
     let width = (len - 1).to_string().len().max(2);
     for i in 0..len {
-        let names: Vec<String> = song.orders.iter().map(|o| name(o.get(i))).collect();
+        let names: Vec<String> = song.orders.iter().map(|o| name(Some(&o[i]))).collect();
         line(out, &format!("{i:0width$} {}", names.join(" ")));
     }
     let keys: Vec<i32> = song.patterns.iter().map(|p| p.key).collect();

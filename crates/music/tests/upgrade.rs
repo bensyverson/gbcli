@@ -318,7 +318,7 @@ fn a_v4_noise_macro_becomes_the_noise_instruments_subpattern() {
 fn a_v5_file_keeps_its_pattern_keys_and_their_storage_order() {
     let mut file = OldFile::new(5);
     file.patterns = vec![(7, vec![(0, 1, 0, 0)]), (3, vec![(12, 1, 0, 0)])];
-    file.orders = [vec![7, 3, 0], vec![3, 0], vec![3, 0], vec![3, 0]];
+    file.orders = [vec![7, 3, 0], vec![3, 3, 0], vec![3, 3, 0], vec![3, 3, 0]];
     let song = read_uge(&file.bytes()).unwrap().song;
     let keys: Vec<i32> = song.patterns.iter().map(|p| p.key).collect();
     assert_eq!(keys, [7, 3]);

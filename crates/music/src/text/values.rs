@@ -1,7 +1,7 @@
 //! Reading one token as a value, with an error that says what was wanted.
 
 use super::lex::{Kind, Token};
-use super::spell::{Choices, read_bang};
+use super::spell::{Choices, decimal, read_bang};
 use crate::error::ParseError;
 use crate::model::ShortString;
 
@@ -28,15 +28,15 @@ pub fn number(line: u32, token: &Token, min: i64, max: i64, what: &str) -> Resul
     if let Some(n) = read_bang(&token.text) {
         return Ok(n);
     }
-    match token.text.parse::<i64>() {
-        Ok(n) if (min..=max).contains(&n) => Ok(n),
-        Ok(n) => Err(at(
+    match decimal::<i64>(&token.text) {
+        Some(n) if (min..=max).contains(&n) => Ok(n),
+        Some(n) => Err(at(
             line,
             token,
             format!("{n} is out of range for {what} ({min}-{max})"),
             format!("use {min}-{max}; {BANG}"),
         )),
-        Err(_) => Err(at(
+        None => Err(at(
             line,
             token,
             format!("`{}` is not a number, and {what} is one", token.text),

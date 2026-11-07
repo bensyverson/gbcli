@@ -1,4 +1,4 @@
-//! gbcli's music: hUGETracker `.uge` songs (read v1–v6, write v6), a
+//! gbcli's music: hUGETracker `.uge` songs (read v0–v6, write v6), a
 //! canonical tracker-grid text form an agent can read and edit, conversion
 //! both ways, and a piano roll drawn from a song file without building it.
 //!
@@ -10,17 +10,20 @@ mod example;
 mod model;
 mod notes;
 mod piano;
+mod playable;
 mod text;
 mod uge;
 
 pub use error::{ParseError, SongError, UgeError};
 pub use example::EXAMPLE;
 pub use model::{
-    BANK_SIZE, BLANK_ROWS, Bank, Cell, DEFAULT_WAVES, HIGHEST_NOTE, INSTRUMENTS, Instrument,
-    MIDDLE_NOTE, NO_NOTE, Pattern, ROUTINES, ROWS, Rows, ShortString, Song, WAVE_LEN, WAVES,
+    BANK_SIZE, BLANK_ROWS, Bank, Cell, DEFAULT_WAVES, HIGHEST_JUMP, HIGHEST_NOTE, INSTRUMENTS,
+    Instrument, MIDDLE_NOTE, NO_NOTE, PLAYED_SUBPATTERN_ROWS, Pattern, ROUTINES, ROWS, Rows,
+    ShortString, Song, WAVE_LEN, WAVES,
 };
 pub use notes::{EFFECTS, Effect, note_name, period_of};
 pub use piano::{PianoMade, piano_roll};
+pub use playable::{Unplayable, unplayable};
 pub use text::{FORMAT_LINE, parse_text, to_text};
 pub use uge::{FORMAT_VERSION, Uge, read_uge, write_uge};
 
@@ -49,13 +52,15 @@ pub struct Loaded {
     pub song: Song,
 }
 
-/// Reads `bytes` as a `.uge` when its first four bytes are a version
-/// hUGETracker writes (0-6), and as song text otherwise.
+/// Reads `bytes` as a `.uge` when its first four bytes are a little-endian
+/// number below 256 (a version; its bytes 2-4 are NUL, which song text never
+/// holds), and as song text otherwise. A version past [`FORMAT_VERSION`] is
+/// refused as a `.uge` from a newer hUGETracker.
 pub fn read_song(bytes: &[u8]) -> Result<Loaded, SongError> {
     let version = bytes
         .get(..4)
         .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
-    if version.is_some_and(|v| v <= FORMAT_VERSION) {
+    if version.is_some_and(|v| v < 256) {
         let uge = read_uge(bytes)?;
         return Ok(Loaded {
             format: SongFormat::Uge,

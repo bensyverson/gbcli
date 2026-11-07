@@ -31,11 +31,14 @@ Each line's first word says what it is; # starts a comment line.
     subpattern on|off             then rows NN OFFSET .. JUMP EFFECT, one
                                   per tick: OFFSET +00/-05 transposes the
                                   note (... none); JUMP J05 goes next to
-                                  row 04 (J counts from 1; ... next row)
+                                  row 04 (J counts from 1; ... next row).
+                                  hUGEDriver plays rows 00-31 and jumps
+                                  J01-J31; `song` warns of any past them
     unused KEY=N                  stored numbers this bank ignores, kept
   routine N [crlf]              code effect 6 calls: | lines, then end
   orders                        then NN P0 P1 P2 P3: the pattern each channel
-                                plays at each order, in play order
+                                plays at each order, in play order; every
+                                channel names one on every order line
   storage P3 P1 ...             the .uge's pattern order, when not by number
   pattern P0 P1 P2 P3           then rows: NN cell | cell | cell | cell
 

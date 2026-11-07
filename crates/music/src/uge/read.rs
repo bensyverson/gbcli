@@ -12,7 +12,8 @@ const REMEDY_DAMAGED: &str = "the file is cut short or isn't a .uge; open it in 
                               it again, and retry";
 
 /// Reads a `.uge` file of any version hUGETracker writes (0-6), upgraded to
-/// version 6 the way hUGETracker's song.pas upgrades it.
+/// version 6 the way hUGETracker's song.pas upgrades it, and normalized as
+/// hUGETracker loads it ([`Song::normalize`]).
 pub fn read_uge(bytes: &[u8]) -> Result<Uge, UgeError> {
     let mut r = Reader { bytes, at: 0 };
     let version = r.i32("the version")?;
@@ -41,7 +42,7 @@ pub fn read_uge(bytes: &[u8]) -> Result<Uge, UgeError> {
         let orders = r.orders()?;
         let routines = r.routines()?;
         r.end()?;
-        let song = Song {
+        let mut song = Song {
             name,
             artist,
             comment,
@@ -54,6 +55,7 @@ pub fn read_uge(bytes: &[u8]) -> Result<Uge, UgeError> {
             orders,
             routines,
         };
+        song.normalize();
         return Ok(Uge { version, song });
     }
     let count = if version < 3 { 15 } else { INSTRUMENTS };
@@ -71,7 +73,7 @@ pub fn read_uge(bytes: &[u8]) -> Result<Uge, UgeError> {
         Default::default()
     };
     r.end()?;
-    let song = upgrade(OldSong {
+    let mut song = upgrade(OldSong {
         version,
         name,
         artist,
@@ -83,6 +85,7 @@ pub fn read_uge(bytes: &[u8]) -> Result<Uge, UgeError> {
         orders,
         routines,
     });
+    song.normalize();
     Ok(Uge { version, song })
 }
 

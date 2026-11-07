@@ -40,7 +40,21 @@ pub fn choice(n: impl Into<i64>, choices: Choices) -> String {
 
 /// The stored number a `!N` token holds.
 pub fn read_bang(token: &str) -> Option<i64> {
-    token.strip_prefix('!')?.parse().ok()
+    decimal(token.strip_prefix('!')?)
+}
+
+/// A decimal as the text spells one: an optional `-`, then digits. (`str::
+/// parse` also takes a leading `+`, which the text never writes.)
+pub fn decimal<T: std::str::FromStr>(text: &str) -> Option<T> {
+    let digits = text.strip_prefix('-').unwrap_or(text);
+    let plain = !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit());
+    plain.then(|| text.parse().ok()).flatten()
+}
+
+/// Two hex digits as a byte. (`from_str_radix` also takes a leading `+`.)
+pub fn hex_byte(text: &str) -> Option<u8> {
+    let plain = text.len() == 2 && text.bytes().all(|b| b.is_ascii_hexdigit());
+    plain.then(|| u8::from_str_radix(text, 16).ok()).flatten()
 }
 
 pub fn note(n: i32) -> String {
@@ -134,7 +148,7 @@ pub fn read_jump(token: &str) -> Option<i32> {
         return Some(0);
     }
     if let Some(d) = token.strip_prefix('J') {
-        let n: i32 = (d.len() == 2).then(|| d.parse().ok()).flatten()?;
+        let n: i32 = (d.len() == 2).then(|| decimal(d)).flatten()?;
         return (1..=99).contains(&n).then_some(n);
     }
     stored_i32(token)
@@ -156,7 +170,7 @@ pub fn read_effect(token: &str) -> Option<(i32, u8)> {
     }
     if let Some(rest) = token.strip_prefix('!') {
         let (code, param) = rest.split_once(':')?;
-        return Some((code.parse().ok()?, param.parse().ok()?));
+        return Some((decimal(code)?, decimal(param)?));
     }
     if token.len() != 3 || !token.bytes().all(|b| b.is_ascii_hexdigit()) {
         return None;

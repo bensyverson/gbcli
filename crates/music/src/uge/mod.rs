@@ -20,6 +20,10 @@
 //!   than the orders the song plays, and hUGETracker never reads the extra
 //!   entry (song.pas, `OptimizeSong` and the v3 upgrade both stop one short;
 //!   GB Studio's loader drops it). The writer stores 0 there.
+//! - **Uneven orders and missing patterns.** The reader normalizes a song
+//!   the way hUGETracker loads it ([`Song::normalize`]): shorter channels'
+//!   orders padded with pattern 0 and a blank pattern for each key an order
+//!   names that the file lacks. hUGETracker itself saves them that way.
 //!
 //! Everything else, including fields an instrument's bank doesn't use, the
 //! unused volume column of pattern cells and the pattern storage order,

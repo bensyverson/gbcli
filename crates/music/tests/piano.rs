@@ -3,7 +3,10 @@
 mod common;
 
 use common::{assert_golden, samples};
-use gbcli_music::{EXAMPLE, SongError, SongFormat, parse_text, piano_roll, read_song};
+use gbcli_music::{
+    BLANK_ROWS, Cell, EXAMPLE, Pattern, Song, SongError, SongFormat, parse_text, piano_roll,
+    read_song, write_uge,
+};
 use gbcli_view::LabelKey;
 
 #[test]
@@ -81,4 +84,102 @@ fn read_song_tells_the_two_forms_apart() {
         Err(SongError::Text(e)) => assert_eq!((e.line, e.column), (1, 1)),
         other => panic!("{other:?}"),
     }
+}
+
+/// A one-order song at `ticks` per row whose channel 1 plays `rows` as
+/// (row, note, effect code, parameter); channels 2-4 play a blank P1.
+fn one_order(ticks: i32, rows: &[(usize, i32, i32, u8)]) -> Song {
+    let mut p0 = Pattern {
+        key: 0,
+        rows: BLANK_ROWS,
+    };
+    for &(row, note, effect_code, effect_param) in rows {
+        p0.rows[row] = Cell {
+            note,
+            instrument: 1,
+            volume: 0,
+            effect_code,
+            effect_param,
+        };
+    }
+    Song {
+        ticks_per_row: ticks,
+        patterns: vec![
+            p0,
+            Pattern {
+                key: 1,
+                rows: BLANK_ROWS,
+            },
+        ],
+        orders: [vec![0], vec![1], vec![1], vec![1]],
+        ..Song::default()
+    }
+}
+
+#[test]
+fn note_delay_700_never_plays_the_note() {
+    // hUGEDriver.asm fx_note_delay: "0 never plays the note".
+    let song = one_order(6, &[(0, 24, 7, 0x00)]);
+    assert_eq!(piano_roll(&song).unwrap().notes, 0);
+}
+
+#[test]
+fn a_note_delay_as_long_as_the_row_never_plays_the_note() {
+    // fx_note_delay plays when the row's tick counter equals the delay, and
+    // the counter only reaches ticks_per_row - 1.
+    for delay in [6, 9] {
+        let song = one_order(6, &[(0, 24, 7, delay)]);
+        assert_eq!(
+            piano_roll(&song).unwrap().notes,
+            0,
+            "7{delay:02X} at speed 6"
+        );
+    }
+    let song = one_order(6, &[(0, 24, 7, 5)]);
+    assert_eq!(piano_roll(&song).unwrap().notes, 1, "705 at speed 6 plays");
+}
+
+#[test]
+fn a_skipped_delayed_note_leaves_the_previous_note_sounding() {
+    let delayed = piano_roll(&one_order(6, &[(0, 24, 0, 0), (1, 28, 7, 0)])).unwrap();
+    let plain = piano_roll(&one_order(6, &[(0, 24, 0, 0)])).unwrap();
+    assert_eq!(delayed.notes, 1);
+    assert!(
+        delayed.image == plain.image,
+        "the skipped note cut the first"
+    );
+}
+
+#[test]
+fn a_note_cut_as_late_as_the_row_never_fires() {
+    // fx_note_cut cuts when the row's tick counter equals the parameter, so
+    // E06 and E09 at speed 6 never fire and the note plays to the song's end.
+    let plain = piano_roll(&one_order(6, &[(0, 24, 0, 0)])).unwrap();
+    for cut in [6, 9] {
+        let made = piano_roll(&one_order(6, &[(0, 24, 0xE, cut)])).unwrap();
+        assert_eq!(made.notes, 1);
+        assert!(
+            made.image == plain.image,
+            "E{cut:02X} at speed 6 cut the note"
+        );
+    }
+    let cut = piano_roll(&one_order(6, &[(0, 24, 0xE, 5)])).unwrap();
+    assert!(cut.image != plain.image, "E05 at speed 6 cuts");
+}
+
+#[test]
+fn the_walk_plays_to_the_longest_channels_orders() {
+    // hUGETracker shows a shorter channel's missing orders as pattern 0
+    // (tracker.pas CopyOrderMatrixToOrderGrid).
+    let mut song = one_order(6, &[(0, 24, 0, 0)]);
+    song.orders = [vec![0, 0], vec![1], vec![1], vec![1]];
+    assert_eq!(piano_roll(&song).unwrap().rows, 128);
+}
+
+#[test]
+fn an_instrument_of_i32_min_draws_without_overflow() {
+    let mut song = one_order(6, &[(0, 24, 0, 0)]);
+    song.patterns[0].rows[0].instrument = i32::MIN;
+    let song = read_song(&write_uge(&song)).unwrap().song;
+    assert_eq!(piano_roll(&song).unwrap().notes, 1);
 }

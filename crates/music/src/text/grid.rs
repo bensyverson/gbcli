@@ -12,7 +12,7 @@ use crate::error::ParseError;
 use crate::model::{BLANK_ROWS, Cell, Pattern, ROWS, Rows};
 
 /// A pattern named in the text, and where.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Named {
     key: i32,
     line: u32,
@@ -27,7 +27,7 @@ fn name(line: u32, token: &Token) -> Result<Option<Named>, ParseError> {
     let key = token
         .text
         .strip_prefix('P')
-        .and_then(|k| k.parse::<i32>().ok())
+        .and_then(spell::decimal::<i32>)
         .ok_or_else(|| {
             at(
                 line,
@@ -46,14 +46,14 @@ fn name(line: u32, token: &Token) -> Result<Option<Named>, ParseError> {
 /// Each order row's four patterns.
 #[derive(Default)]
 pub struct Orders {
-    rows: Vec<[Option<Named>; 4]>,
+    rows: Vec<[Named; 4]>,
 }
 
 impl Orders {
     /// `NN P0 P1 P2 P3`.
     pub fn line(&mut self, line: u32, tokens: &[Token]) -> Result<(), ParseError> {
         let next = self.rows.len();
-        if tokens[0].text.parse::<usize>().ok() != Some(next) {
+        if spell::decimal::<usize>(&tokens[0].text) != Some(next) {
             return Err(at(
                 line,
                 &tokens[0],
@@ -70,21 +70,24 @@ impl Orders {
             4,
             "NN P0 P1 P2 P3: the order's number, then the pattern each channel plays",
         )?;
-        let mut entry = [None; 4];
-        for (c, t) in a.iter().enumerate() {
-            entry[c] = name(line, t)?;
-            let ended = self.rows.last().is_some_and(|r| r[c].is_none());
-            if entry[c].is_some() && ended {
-                return Err(at(
-                    line,
-                    t,
-                    format!("channel {}'s orders ended with - on the row above", c + 1),
-                    "- marks the end of a channel's (shorter) orders; give the channel a \
-                     pattern on every row up to here",
-                ));
-            }
-        }
-        self.rows.push(entry);
+        let entry = a
+            .iter()
+            .enumerate()
+            .map(|(c, t)| {
+                name(line, t)?.ok_or_else(|| {
+                    at(
+                        line,
+                        t,
+                        format!("order {next:02} gives channel {} no pattern (-)", c + 1),
+                        "every channel needs the same number of orders: name a pattern for \
+                         each channel on every order line (hUGETracker plays P0 where a \
+                         channel's orders run short)",
+                    )
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        self.rows
+            .push(entry.try_into().expect("args gave four patterns"));
         Ok(())
     }
 }
@@ -302,7 +305,6 @@ impl Blocks {
         let mut out: [Vec<i32>; 4] = Default::default();
         for (i, entry) in orders.rows.iter().enumerate() {
             for (c, named) in entry.iter().enumerate() {
-                let Some(named) = named else { continue };
                 if !all_keys.contains(&named.key) {
                     return Err(missing(named, format!("order {i:02} plays")));
                 }

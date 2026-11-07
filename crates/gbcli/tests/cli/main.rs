@@ -11,6 +11,7 @@ mod filmstrip;
 mod help;
 mod honesty;
 mod images;
+mod music;
 mod opcode;
 mod profile;
 mod raster;

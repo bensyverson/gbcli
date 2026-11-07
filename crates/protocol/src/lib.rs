@@ -70,7 +70,7 @@ pub use stop::{
 };
 pub use toolchain::{
     BuildArgs, BuildMade, CheckMade, CheckName, CheckStatus, Diagnostic, DoctorMade, NewArgs,
-    NewMade, OutputKind, OutputMade, Severity, SourceLine, Tool,
+    NewMade, OutputKind, OutputMade, Severity, SongBuilt, SourceLine, Tool,
 };
 pub use video::{
     AddressingView, ImageMade, ImageOut, MapAreaView, MapSel, OamView, TileView, VideoData,

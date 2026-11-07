@@ -37,6 +37,10 @@ Does my art fit the hardware, and how will it look?
 Read or write music (hUGETracker songs)
   gbcli song theme.uge --text theme.song (a grid an agent can edit; gbcli help
   music), then gbcli song theme.song --uge theme.uge --piano theme.png
+Put a song in the game and hear it
+  edit assets/music/theme.song (gbcli new makes it; every .song or .uge there is
+  built), gbcli build, then gbcli run --frames 600 --audio-log --piano roll.png
+  (and --wav music.wav --channels each for one file per channel)
 Run until something is true
   gbcli run --until 'u16[wFrame] >= 60'
 Run to a routine

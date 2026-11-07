@@ -5,7 +5,8 @@
 include "hardware.inc"
 
 ; ---------------------------------------------------------------------------
-; Interrupt vector. Only VBlank is enabled (IE_VBLANK below).
+; Interrupt vector. VBlank is enabled below; music.asm adds the timer when
+; its song wants it.
 
 SECTION "VBlank vector", ROM0[INT_HANDLER_VBLANK]
 VBlankVector:
@@ -97,22 +98,32 @@ Start:
 	ld a, LCDC_ON | LCDC_BG_ON | LCDC_OBJ_ON | LCDC_BLOCK01 | LCDC_BG_9800
 	ldh [rLCDC], a
 
-	; Enable only the VBlank interrupt, dropping any request already pending.
+	; Enable the VBlank interrupt, dropping any request already pending.
 	ld a, IE_VBLANK
 	ldh [rIE], a
 	xor a
 	ldh [rIF], a
+	call MusicInit              ; music.asm: start the song (and the timer, if it wants it)
 	ei
 
 MainLoop:
-	halt                        ; sleep until the next interrupt
+	; Sleep until the VBlank handler has counted a frame. Other interrupts
+	; (the music's timer) wake the halt too, so check the count.
+	ld a, [wFrame]
+	ld b, a
+.wait
+	halt
 	nop
+	ld a, [wFrame]
+	cp b
+	jr z, .wait
 	; Game logic goes here: it runs once per frame, after the VBlank
 	; handler, and moves sprites by writing wShadowOAM, never OAM.
 	jr MainLoop
 
 ; ---------------------------------------------------------------------------
-; Runs at the start of every VBlank: copy shadow OAM to OAM, count the frame.
+; Runs at the start of every VBlank: copy shadow OAM to OAM, count the frame,
+; tick the music.
 
 VBlank:
 	push af
@@ -125,6 +136,7 @@ VBlank:
 	inc hl
 	inc [hl]
 .done
+	call MusicVBlank            ; music.asm: one tick of the song
 	pop hl
 	pop af
 	reti

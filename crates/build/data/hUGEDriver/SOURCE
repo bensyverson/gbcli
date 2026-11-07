@@ -1,0 +1,34 @@
+hUGEDriver is SuperDisk's music driver for hUGETracker songs, in RGBDS assembly:
+
+  repository: https://github.com/SuperDisk/hUGEDriver
+  commit:     a3cbd0cea48e6784d7f625066d0300f7cb075926 (2024-07-14, "Allow force run
+              of build"), the driver hUGETracker 1.0.11 ships (its src/hUGEDriver
+              submodule at v1.0.11, 0623f3f7; the release's
+              hUGETracker.app/Contents/Resources/hUGEDriver/hUGEDriver.asm has the
+              same sha256)
+  files:      hUGEDriver.asm, include/hUGE.inc, include/hUGE_note_table.inc
+  sha256:     hUGEDriver.asm        16870fd80f764e9d64aa098d5a7ebdc5d5d48033ca080a121a7d11c3e2e01d56
+              hUGE.inc              fc9c768337328ffaf518beaa7cee0e212db6fcd12bfe2fca7df254213a6e77cd
+              hUGE_note_table.inc   624d1364facea8e5deea26b15eff3f625ed19f22a3bae322790dc2bdac55099c
+  fetched:    2026-11-07, the GitHub tarball of the commit (gh api .../tarball/<commit>)
+  license:    public domain. The repository has no LICENSE file; its README.md ends
+              "## License / hUGETracker and hUGEDriver are dedicated to the public
+              domain."
+
+Why this commit and not 727ab8eb (hUGETracker's default branch head, 3fedced3,
+moved its submodule there on 2026-08-15): 727ab8eb reads a new song descriptor
+(four tick bytes for grooves, then the order count as a byte), but hUGETracker's
+RGBDS export at 3fedced3 still writes the old one (one tick byte, then a pointer
+to the order count), so that commit's own export doesn't play on it. a3cbd0ce is
+the newest driver the export (codegen.pas `RenderSongToRGBDSAsm`, which
+crates/music/src/asm.rs ports) is written for. See
+project/2026-11-07-music-build.md.
+
+The files are committed unmodified. `gbcli new` writes hUGEDriver.asm to a new
+project's src/ and the two .inc files to its include/ (crates/build/src/scaffold.rs
+embeds them with include_str!); the driver's own `include "include/hardware.inc"`
+finds the project's gbdev hardware.inc, which defines every name it uses.
+crates/build/tests/scaffold.rs checks the embedded bytes against the sha256s
+above. To update: fetch the files at a newer commit the same way, check that
+hUGETracker's export at the matching tracker commit still writes the descriptor
+the driver reads, update this file and the emitter, and re-run the build tests.

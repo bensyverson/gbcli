@@ -91,7 +91,10 @@ dependencies = [
 name = "gbcli-build"
 version = "0.1.0"
 dependencies = [
+ "gbcli-audio",
+ "gbcli-core",
  "gbcli-engine",
+ "gbcli-music",
  "gbcli-protocol",
  "gbcli-view",
  "png",

@@ -290,5 +290,14 @@ fn a_symlink_loop_under_src_is_followed_once() {
     let (temp, options) = starter("symlink-loop");
     std::os::unix::fs::symlink(".", temp.path("demo/src/again")).unwrap();
     let made = build(&rgbds(), &options).unwrap();
-    assert_eq!(made.sources, ["demo/src/main.asm", "demo/src/oam_dma.asm"]);
+    assert_eq!(
+        made.sources,
+        [
+            "demo/src/hUGEDriver.asm",
+            "demo/src/main.asm",
+            "demo/src/music.asm",
+            "demo/src/oam_dma.asm",
+            "demo/build/music/theme.asm",
+        ]
+    );
 }

@@ -80,6 +80,23 @@ pub fn starter(name: &str) -> (Temp, BuildOptions) {
     (temp, options)
 }
 
+/// Takes the music out of a starter at `project`: the song, the player,
+/// hUGEDriver and main.asm's calls into the player.
+pub fn without_music(project: &Path) {
+    fs::remove_dir_all(project.join("assets")).unwrap();
+    for file in ["src/music.asm", "src/hUGEDriver.asm"] {
+        fs::remove_file(project.join(file)).unwrap();
+    }
+    let main = project.join("src/main.asm");
+    let text: String = fs::read_to_string(&main)
+        .unwrap()
+        .lines()
+        .filter(|l| !l.contains("call Music"))
+        .map(|l| format!("{l}\n"))
+        .collect();
+    fs::write(&main, text).unwrap();
+}
+
 pub fn failed(result: Result<BuildMade, BuildError>) -> BuildMade {
     match result {
         Err(BuildError::Failed { made, .. }) => *made,

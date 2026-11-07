@@ -74,9 +74,13 @@ fn a_background_becomes_tiles_a_tilemap_and_an_include_with_a_preview() {
     ] {
         assert!(asm.contains(line), "{line} in\n{asm}");
     }
-    assert_eq!(
-        made.sources.last().map(String::as_str),
-        Some("demo/build/images/images.asm")
+    // Assembled with the sources (the starter's songs may follow it).
+    assert!(
+        made.sources
+            .iter()
+            .any(|s| s == "demo/build/images/images.asm"),
+        "{:?}",
+        made.sources
     );
     let sym = fs::read_to_string(temp.path("demo/build/demo.sym")).unwrap();
     assert!(sym.lines().any(|l| l.ends_with(" SignTilemap")), "{sym}");
@@ -101,7 +105,11 @@ fn a_project_without_images_reports_none_and_builds_as_before() {
     let (_temp, options) = starter("bg-none");
     let made = build(&rgbds(), &options).unwrap();
     assert_eq!(made.images, None);
-    assert_eq!(made.sources.len(), 2);
+    assert!(
+        !made.sources.iter().any(|s| s.contains("build/images/")),
+        "{:?}",
+        made.sources
+    );
 }
 
 #[test]

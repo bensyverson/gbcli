@@ -11,6 +11,23 @@ use crate::paths::{display, normalize, quote};
 /// gbdev's hardware.inc, pinned (`data/hardware.inc/SOURCE`).
 pub const HARDWARE_INC: &str = include_str!("../data/hardware.inc/hardware.inc");
 
+/// hUGEDriver, pinned (`data/hUGEDriver/SOURCE`): each file's path in a new
+/// project, then its text.
+pub const HUGEDRIVER: [(&str, &str); 3] = [
+    (
+        "include/hUGE.inc",
+        include_str!("../data/hUGEDriver/hUGE.inc"),
+    ),
+    (
+        "include/hUGE_note_table.inc",
+        include_str!("../data/hUGEDriver/hUGE_note_table.inc"),
+    ),
+    (
+        "src/hUGEDriver.asm",
+        include_str!("../data/hUGEDriver/hUGEDriver.asm"),
+    ),
+];
+
 /// Why `new` wrote nothing.
 #[derive(Debug)]
 pub enum NewError {
@@ -33,6 +50,11 @@ const FILES: &[(&str, &str)] = &[
     ("include/hardware.inc", HARDWARE_INC),
     ("src/main.asm", include_str!("../templates/main.asm")),
     ("src/oam_dma.asm", include_str!("../templates/oam_dma.asm")),
+    HUGEDRIVER[0],
+    HUGEDRIVER[1],
+    HUGEDRIVER[2],
+    ("src/music.asm", include_str!("../templates/music.asm")),
+    ("assets/music/theme.song", gbcli_music::EXAMPLE),
 ];
 
 impl NewError {

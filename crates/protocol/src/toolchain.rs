@@ -156,6 +156,26 @@ pub struct BuildMade {
     /// limits they break.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub images: Option<ImagesMade>,
+    /// The songs under `assets/music` converted to hUGEDriver data and
+    /// assembled with the sources.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub songs: Vec<SongBuilt>,
+}
+
+/// A song file `build` converted: hUGETracker's `.uge` or gbcli's song text,
+/// written as RGBDS assembly for hUGEDriver.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SongBuilt {
+    /// The song file, relative to the working directory when inside it.
+    pub path: String,
+    /// The `.asm` written from it and assembled.
+    pub asm: String,
+    /// The label to load into `hl` before `call hUGE_init`.
+    pub descriptor: String,
+    /// The timer modulo (TMA) when the song wants `hUGE_dosound` called from
+    /// the timer interrupt at 4096 / (256 − TMA) Hz; none when once per frame.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timer: Option<u8>,
 }
 
 /// What `doctor` checks.

@@ -5,6 +5,7 @@
 //! The text form is specified in design §12 (the 2026-11-07 music update)
 //! and taught by `gbcli help music`; [`EXAMPLE`] is a complete song in it.
 
+mod asm;
 mod error;
 mod example;
 mod model;
@@ -14,6 +15,7 @@ mod playable;
 mod text;
 mod uge;
 
+pub use asm::{descriptor_for, rgbds_asm};
 pub use error::{ParseError, SongError, UgeError};
 pub use example::EXAMPLE;
 pub use model::{

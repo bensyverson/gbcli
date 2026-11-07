@@ -7,11 +7,14 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+gbcli-music.workspace = true
 gbcli-protocol.workspace = true
 gbcli-view.workspace = true
 png.workspace = true
 
 [dev-dependencies]
+gbcli-audio.workspace = true
+gbcli-core.workspace = true
 gbcli-engine.workspace = true
 
 [lints]

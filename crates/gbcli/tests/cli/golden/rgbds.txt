@@ -5,28 +5,35 @@ created path=game/README.md
 created path=game/include/hardware.inc
 created path=game/src/main.asm
 created path=game/src/oam_dma.asm
+created path=game/include/hUGE.inc
+created path=game/include/hUGE_note_table.inc
+created path=game/src/hUGEDriver.asm
+created path=game/src/music.asm
+created path=game/assets/music/theme.song
 new name=game dir=game
 next command="gbcli build game"
 next command="gbcli run game/build/game.gb --session game --frames 120 --shot first.png"
 $ gbcli build game
 exit 0
+song path=game/assets/music/theme.song asm=game/build/music/theme.asm descriptor=song_theme
 output kind=rom path=game/build/game.gb bytes=32768
-output kind=sym path=game/build/game.sym bytes=422
-output kind=map path=game/build/game.map bytes=1350
-build rgbds=1.0.4 sources=2 errors=0 warnings=0
+output kind=sym path=game/build/game.sym bytes=7357
+output kind=map path=game/build/game.map bytes=11150
+build rgbds=1.0.4 sources=5 errors=0 warnings=0
 $ gbcli build game --json
 exit 0
-{"id":"cli","ok":true,"result":{"build":{"rgbds":"1.0.4","sources":["game/src/main.asm","game/src/oam_dma.asm"],"outputs":[{"kind":"rom","path":"game/build/game.gb","bytes":32768},{"kind":"sym","path":"game/build/game.sym","bytes":422},{"kind":"map","path":"game/build/game.map","bytes":1350}],"diagnostics":[]}},"warnings":[]}
+{"id":"cli","ok":true,"result":{"build":{"rgbds":"1.0.4","sources":["game/src/hUGEDriver.asm","game/src/main.asm","game/src/music.asm","game/src/oam_dma.asm","game/build/music/theme.asm"],"outputs":[{"kind":"rom","path":"game/build/game.gb","bytes":32768},{"kind":"sym","path":"game/build/game.sym","bytes":7357},{"kind":"map","path":"game/build/game.map","bytes":11150}],"diagnostics":[],"songs":[{"path":"game/assets/music/theme.song","asm":"game/build/music/theme.asm","descriptor":"song_theme"}]}},"warnings":[]}
 $ gbcli build game
 exit 4
-diagnostic severity=error tool=rgbasm file=game/src/main.asm line=29 message="syntax error, unexpected end of line"
-build rgbds=1.0.4 sources=2 errors=1 warnings=0
+diagnostic severity=error tool=rgbasm file=game/src/main.asm line=30 message="syntax error, unexpected end of line"
+song path=game/assets/music/theme.song asm=game/build/music/theme.asm descriptor=song_theme
+build rgbds=1.0.4 sources=5 errors=1 warnings=0
 --- stderr
-gbcli: build_failed: the build failed with 1 error: game/src/main.asm:29: syntax error, unexpected end of line (rgbasm)
+gbcli: build_failed: the build failed with 1 error: game/src/main.asm:30: syntax error, unexpected end of line (rgbasm)
 remedy: fix the first error at its file and line, then `gbcli build game` again
 $ gbcli build game --json
 exit 4
-{"id":"cli","ok":false,"error":{"code":"build_failed","exit":4,"message":"the build failed with 1 error: game/src/main.asm:29: syntax error, unexpected end of line (rgbasm)","remedy":"fix the first error at its file and line, then `gbcli build game` again","result":{"build":{"rgbds":"1.0.4","sources":["game/src/main.asm","game/src/oam_dma.asm"],"outputs":[],"diagnostics":[{"tool":"rgbasm","severity":"error","file":"game/src/main.asm","line":29,"message":"syntax error, unexpected end of line"}]}}},"warnings":[]}
+{"id":"cli","ok":false,"error":{"code":"build_failed","exit":4,"message":"the build failed with 1 error: game/src/main.asm:30: syntax error, unexpected end of line (rgbasm)","remedy":"fix the first error at its file and line, then `gbcli build game` again","result":{"build":{"rgbds":"1.0.4","sources":["game/src/hUGEDriver.asm","game/src/main.asm","game/src/music.asm","game/src/oam_dma.asm","game/build/music/theme.asm"],"outputs":[],"diagnostics":[{"tool":"rgbasm","severity":"error","file":"game/src/main.asm","line":30,"message":"syntax error, unexpected end of line"}],"songs":[{"path":"game/assets/music/theme.song","asm":"game/build/music/theme.asm","descriptor":"song_theme"}]}}},"warnings":[]}
 --- stderr
-gbcli: build_failed: the build failed with 1 error: game/src/main.asm:29: syntax error, unexpected end of line (rgbasm)
+gbcli: build_failed: the build failed with 1 error: game/src/main.asm:30: syntax error, unexpected end of line (rgbasm)
 remedy: fix the first error at its file and line, then `gbcli build game` again

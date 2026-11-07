@@ -21,7 +21,16 @@ fn the_starter_builds_a_fixed_rom_with_its_sym_and_map() {
     let (temp, options) = starter("starter");
     let made = build(&rgbds(), &options).unwrap();
     assert_eq!(made.rgbds, "1.0.4");
-    assert_eq!(made.sources, ["demo/src/main.asm", "demo/src/oam_dma.asm"]);
+    assert_eq!(
+        made.sources,
+        [
+            "demo/src/hUGEDriver.asm",
+            "demo/src/main.asm",
+            "demo/src/music.asm",
+            "demo/src/oam_dma.asm",
+            "demo/build/music/theme.asm",
+        ]
+    );
     assert!(made.diagnostics.is_empty(), "{:?}", made.diagnostics);
     let kinds: Vec<_> = made.outputs.iter().map(|o| o.kind).collect();
     assert_eq!(kinds, [OutputKind::Rom, OutputKind::Sym, OutputKind::Map]);
@@ -171,6 +180,9 @@ fn a_warning_rides_in_a_successful_build() {
 fn the_layout_can_be_overridden_and_sources_are_found_in_subdirectories() {
     let temp = Temp::new("layout");
     new_project(&temp.path("demo"), &temp.0).unwrap();
+    // hUGEDriver includes `include/hardware.inc` by that path, so the
+    // driver needs the conventional include directory; this test moves it.
+    common::without_music(&temp.path("demo"));
     fs::rename(temp.path("demo/src"), temp.path("demo/code")).unwrap();
     fs::create_dir(temp.path("demo/code/sub")).unwrap();
     fs::rename(
@@ -210,7 +222,10 @@ fn a_source_directory_outside_the_project_keeps_its_objects_in_the_project() {
         }
     }
     found.sort();
-    assert_eq!(found, ["main.o", "oam_dma.o"]);
+    assert_eq!(
+        found,
+        ["hUGEDriver.o", "main.o", "music.o", "oam_dma.o", "theme.o"]
+    );
 }
 
 #[test]
@@ -307,8 +322,8 @@ fn a_tool_that_fails_without_a_diagnostic_still_reports_one() {
     );
     let fake = Toolchain::discover(Some(&path), &temp.0).unwrap();
     let made = failed(build(&fake, &options));
-    assert_eq!(made.diagnostics.len(), 2, "one per source");
-    let error = &made.diagnostics[0];
+    assert_eq!(made.diagnostics.len(), 5, "one per source");
+    let error = &made.diagnostics[1];
     assert_eq!(error.tool, Tool::Rgbasm);
     assert_eq!(error.file.as_deref(), Some("demo/src/main.asm"));
     assert!(error.message.contains("status 3"), "{}", error.message);

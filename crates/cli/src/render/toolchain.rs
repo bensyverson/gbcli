@@ -1,5 +1,5 @@
-//! Rows for the RGBDS loop: `build`'s diagnostics and outputs, `doctor`'s
-//! checks and `new`'s files.
+//! Rows for the RGBDS loop: `build`'s diagnostics, songs and outputs,
+//! `doctor`'s checks and `new`'s files.
 
 use gbcli_protocol::{ResultBody, Severity, SourceLine};
 
@@ -39,6 +39,14 @@ pub fn rows(r: &ResultBody) -> String {
         }
         if let Some(images) = &b.images {
             out += &super::images::rows(images);
+        }
+        for s in &b.songs {
+            out += &Row::new("song")
+                .field("path", &s.path)
+                .field("asm", &s.asm)
+                .field("descriptor", &s.descriptor)
+                .opt("tma", s.timer)
+                .line();
         }
         for o in &b.outputs {
             let json = serde_json::to_value(o).expect("serializes");

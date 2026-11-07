@@ -79,6 +79,11 @@ pub enum BuildError {
     },
     /// The project has images and rgbgfx can't be used.
     Toolchain(ToolchainError),
+    /// A song under `assets/music` doesn't read (`crate::music`).
+    Song {
+        path: String,
+        error: gbcli_music::SongError,
+    },
 }
 
 impl BuildError {
@@ -145,6 +150,7 @@ impl BuildError {
                 ErrorBody::plain(ErrorCode::IoFailed, format!("{}: {error}", path.display()))
             }
             BuildError::Toolchain(e) => e.body(),
+            BuildError::Song { path, error } => crate::music::song_problem(path, error),
         }
     }
 }
@@ -164,6 +170,8 @@ pub fn build(tools: &Toolchain, options: &BuildOptions) -> Result<BuildMade, Bui
         layout.sources.push(generated.source.clone());
         layout.include.push(generated.include_dir.clone());
     }
+    let songs = crate::music::convert(&project, &layout.include, &shown)?;
+    layout.sources.extend(songs.sources);
     let mut run = Run {
         tools,
         project: &project,
@@ -176,6 +184,7 @@ pub fn build(tools: &Toolchain, options: &BuildOptions) -> Result<BuildMade, Bui
             outputs: Vec::new(),
             diagnostics: Vec::new(),
             images: None,
+            songs: songs.made,
         },
     };
     if let Some(images) = images {

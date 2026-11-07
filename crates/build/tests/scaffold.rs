@@ -4,7 +4,7 @@ mod common;
 
 use std::fs;
 
-use gbcli_build::{HARDWARE_INC, new_project};
+use gbcli_build::{HARDWARE_INC, HUGEDRIVER, new_project};
 use gbcli_protocol::ErrorCode;
 
 use common::Temp;
@@ -26,6 +26,45 @@ fn the_embedded_hardware_inc_is_the_pinned_release() {
     assert!(license.starts_with("CC0 1.0 Universal"));
 }
 
+/// hUGEDriver as `data/hUGEDriver/SOURCE` pins it, each file by its sha256.
+#[test]
+fn the_embedded_hugedriver_is_the_pinned_commit() {
+    let source = include_str!("../data/hUGEDriver/SOURCE");
+    assert!(source.contains("a3cbd0cea48e6784d7f625066d0300f7cb075926"));
+    assert!(source.contains("dedicated to the public"));
+    for (name, text) in HUGEDRIVER {
+        let file = name.rsplit('/').next().unwrap();
+        let pinned = source
+            .lines()
+            .find_map(|l| {
+                let l = l.trim().strip_prefix("sha256:").unwrap_or(l).trim();
+                l.strip_prefix(file)
+                    .filter(|rest| rest.starts_with(' '))
+                    .map(str::trim)
+            })
+            .unwrap_or_else(|| panic!("SOURCE records no sha256 for {file}"));
+        assert_eq!(
+            gbcli_engine::sha256(text.as_bytes()).to_string(),
+            pinned,
+            "{file}"
+        );
+    }
+    assert_eq!(HUGEDRIVER.len(), 3);
+}
+
+#[test]
+fn the_starter_song_is_the_help_topics_example() {
+    let temp = Temp::new("new-song");
+    new_project(&temp.path("demo"), &temp.0).unwrap();
+    assert_eq!(
+        fs::read_to_string(temp.path("demo/assets/music/theme.song")).unwrap(),
+        gbcli_music::EXAMPLE
+    );
+    let player = fs::read_to_string(temp.path("demo/src/music.asm")).unwrap();
+    assert!(player.contains("call hUGE_dosound"), "{player}");
+    assert!(player.contains("song_theme"), "{player}");
+}
+
 #[test]
 fn new_writes_the_starter_and_says_what_to_run_next() {
     let temp = Temp::new("new-writes");
@@ -40,6 +79,11 @@ fn new_writes_the_starter_and_says_what_to_run_next() {
             "demo/include/hardware.inc",
             "demo/src/main.asm",
             "demo/src/oam_dma.asm",
+            "demo/include/hUGE.inc",
+            "demo/include/hUGE_note_table.inc",
+            "demo/src/hUGEDriver.asm",
+            "demo/src/music.asm",
+            "demo/assets/music/theme.song",
         ]
     );
     for file in &made.files {

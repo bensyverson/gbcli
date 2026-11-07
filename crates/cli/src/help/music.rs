@@ -11,6 +11,11 @@ Music — hUGETracker songs as text an agent can read and edit.
   gbcli song theme.song --piano theme.png   its notes as a piano roll, with
                                             no build; `gbcli song FILE` checks
 
+In a project, `gbcli build` converts every .song or .uge in assets/music to
+hUGEDriver data (build/music/NAME.asm, label song_NAME); `gbcli new` makes
+assets/music/theme.song (the example below) and src/music.asm, which plays
+it. Then `gbcli run --frames 600 --audio-log --piano roll.png` to hear it.
+
 Each line's first word says what it is; # starts a comment line.
 
   format gbcli-song 1           the first line

@@ -10,7 +10,7 @@ pub enum SavClock {
     /// stamp is ignored, so no host time passes on import.
     Restored,
     /// The cart has a clock but the file has no clock footer (a RAM-only
-    /// `.sav`): the clock keeps its value and gets its day-counter carry bit,
-    /// the hint SameBoy gives a game that its clock needs setting.
+    /// `.sav`): the clock is the fresh core's, zero, with its day-counter carry
+    /// bit set, the hint SameBoy gives a game that its clock needs setting.
     FooterMissing,
 }

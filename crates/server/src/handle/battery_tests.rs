@@ -1,8 +1,8 @@
 //! `power_cycle`, `sav` and the ROM header warning through the handler.
 
 use gbcli_protocol::{
-    BatteryFrom, ErrorCode, Op, PowerCycleArgs, ReadArgs, Response, ResultBody, SavArgs,
-    SavClockState, WriteArg, WriteArgs, WriteKind,
+    BatteryFrom, BreakArgs, ErrorCode, Op, PowerCycleArgs, ReadArgs, Response, ResultBody, SavArgs,
+    SavClockState, WatchAccess, WatchArgs, WriteArg, WriteArgs, WriteKind,
 };
 
 use super::Handler;
@@ -222,4 +222,35 @@ fn a_bad_rtc_advance_is_refused_before_anything_changes() {
         },
     );
     assert_eq!(response.outcome.unwrap_err().code, ErrorCode::BadRequest);
+}
+
+/// Breakpoints and watches are the session's tooling, not machine state: a
+/// power cycle keeps them (review of a066271, finding 1).
+#[test]
+fn a_power_cycle_keeps_the_sessions_breakpoints_and_watches() {
+    let f = Fixture::with_rom("keep-debugger", V1);
+    let mut h = handler(&f);
+    run_frames(&mut h, 5).outcome.unwrap();
+    h.handle(&request(Op::Break(BreakArgs {
+        at: "$0150".into(),
+        condition: None,
+    })))
+    .outcome
+    .unwrap();
+    h.handle(&request(Op::Watch(WatchArgs {
+        access: WatchAccess::Write,
+        at: "$C000".into(),
+        condition: None,
+        once: false,
+    })))
+    .outcome
+    .unwrap();
+    let store = f.bundle.session("demo").unwrap();
+    let before = store.read_meta().unwrap().debugger;
+    assert_eq!((before.breakpoints.len(), before.watches.len()), (1, 1));
+
+    h.handle(&request(Op::PowerCycle(PowerCycleArgs::default())))
+        .outcome
+        .unwrap();
+    assert_eq!(store.read_meta().unwrap().debugger, before);
 }

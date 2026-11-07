@@ -42,6 +42,9 @@ impl Handler {
         self.forget_warm(store.name());
         let stored = |e| Failure::from_store(&e);
         let mut machine = store.machine(meta).map_err(stored)?;
+        // Breakpoints and watches are the session's, not the machine's, and
+        // save_head writes back whatever the machine holds.
+        *machine.debugger_config_mut() = meta.debugger.clone();
         let head = store.read_head(meta.rev).map_err(stored)?;
         let rom_rebuilt = head
             .as_ref()

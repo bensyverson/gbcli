@@ -46,7 +46,7 @@ pub enum SavClockState {
     NotClocked,
     /// The clock is the save's, with no host time added.
     Restored,
-    /// The save had no clock footer: the clock kept its value, with the day
+    /// The save had no clock footer: the clock starts at zero, with the day
     /// counter's carry bit set to tell the game to set it.
     FooterMissing,
 }

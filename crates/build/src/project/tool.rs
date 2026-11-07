@@ -18,14 +18,14 @@ const GRACE: Duration = Duration::from_millis(500);
 
 /// What one run did: its exit status, or `None` when the time limit
 /// stopped it, and what it printed to stderr.
-pub(super) struct Ran {
+pub(crate) struct Ran {
     pub status: Option<ExitStatus>,
     pub stderr: String,
 }
 
 /// Runs `tool` with `args` in `dir`, stopping it, and everything in its
 /// process group, past `timeout`.
-pub(super) fn run(
+pub(crate) fn run(
     tool: &Path,
     args: &[String],
     dir: &Path,

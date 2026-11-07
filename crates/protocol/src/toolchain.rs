@@ -5,6 +5,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::images::ImagesMade;
+
 /// `op: "build"`: a project built by convention (design §12). Paths are
 /// relative to the server's working directory; `src`, `include` and `out`
 /// to the project.
@@ -44,6 +46,9 @@ pub enum Tool {
     Rgbasm,
     Rgblink,
     Rgbfix,
+    /// The image converter: needed only when `assets/` holds images, so not
+    /// among [`Tool::ALL`].
+    Rgbgfx,
 }
 
 impl Tool {
@@ -56,6 +61,7 @@ impl Tool {
             Tool::Rgbasm => "rgbasm",
             Tool::Rgblink => "rgblink",
             Tool::Rgbfix => "rgbfix",
+            Tool::Rgbgfx => "rgbgfx",
         }
     }
 }
@@ -146,6 +152,10 @@ pub struct BuildMade {
     pub sources: Vec<String>,
     pub outputs: Vec<OutputMade>,
     pub diagnostics: Vec<Diagnostic>,
+    /// The images under `assets/`, when there are any: converted, or the
+    /// limits they break.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub images: Option<ImagesMade>,
 }
 
 /// What `doctor` checks.
@@ -159,6 +169,7 @@ pub enum CheckName {
     Gitignore,
     Writable,
     CoreSupport,
+    Rgbgfx,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

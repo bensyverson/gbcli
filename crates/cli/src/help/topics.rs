@@ -16,10 +16,11 @@ pub enum Topic {
     Optimize,
     Rgbds,
     Music,
+    Images,
 }
 
 impl Topic {
-    pub const ALL: [Topic; 12] = [
+    pub const ALL: [Topic; 13] = [
         Topic::Addresses,
         Topic::Expressions,
         Topic::Time,
@@ -32,6 +33,7 @@ impl Topic {
         Topic::Optimize,
         Topic::Rgbds,
         Topic::Music,
+        Topic::Images,
     ];
 
     pub fn name(self) -> &'static str {
@@ -48,6 +50,7 @@ impl Topic {
             Topic::Optimize => "optimize",
             Topic::Rgbds => "rgbds",
             Topic::Music => "music",
+            Topic::Images => "images",
         }
     }
 
@@ -69,6 +72,7 @@ impl Topic {
             Topic::Optimize => OPTIMIZE,
             Topic::Rgbds => RGBDS,
             Topic::Music => super::music::text(),
+            Topic::Images => super::images::IMAGES,
         }
     }
 }
@@ -218,7 +222,8 @@ RGBDS — the loop: edit, build, restore, measure, with RGBDS from PATH.
   gbcli build game             rgbasm every src/**/*.asm (include/ on the
                                path), rgblink to build/game.gb + .sym + .map,
                                rgbfix -v -p 0xFF. No build file: the layout
-                               is the build; --src, --include, --out change it
+                               is the build; --src, --include, --out change it;
+                               PNGs in assets/ too (gbcli help images)
   The loop, from inside game/:
     gbcli run build/game.gb --session game --frames 60 --checkpoint start
     (edit src/)
@@ -265,6 +270,39 @@ mod tests {
             }
         }
         assert_eq!(seen, 26, "every code in the closed set");
+    }
+
+    #[test]
+    fn the_images_topic_names_the_convention_every_limit_and_what_the_program_gets() {
+        use gbcli_protocol::ImageLimit::*;
+        let text = Topic::from_name("images").expect("an images topic").text();
+        for limit in [
+            BgTilesMap,
+            VramTiles,
+            ObjTiles,
+            DmgPalette,
+            SizeMultiple8,
+            ObjPair8x16,
+            ObjNoTransparency,
+            ObjPerLine,
+            ObjTotal,
+            Alpha,
+        ] {
+            assert!(text.contains(limit.name()), "{} missing", limit.name());
+        }
+        for needle in [
+            "assets/bg/",
+            "assets/sprites/",
+            "hero.16x16.png",
+            "INCLUDE \"images.inc\"",
+            "TownTiles",
+            "TOWN_WIDTH",
+            "HeroFrames",
+            ".preview.png",
+        ] {
+            assert!(text.contains(needle), "{needle} missing");
+        }
+        assert!(text.lines().all(|l| l.chars().count() <= 80), "{text}");
     }
 
     #[test]

@@ -24,7 +24,10 @@ const ALWAYS: &[&str] = &["help", "version"];
 /// Another program's flags that a file passes to it, which no message
 /// names: (file, flag). RGBDS's `--color never` keeps its diagnostics
 /// parseable.
-const PASSED_ON: &[(&str, &str)] = &[("build/src/project.rs", "color")];
+const PASSED_ON: &[(&str, &str)] = &[
+    ("build/src/project.rs", "color"),
+    ("build/src/images/run.rs", "color"),
+];
 
 fn sources(dir: &Path, out: &mut Vec<PathBuf>) {
     for entry in fs::read_dir(dir).unwrap() {

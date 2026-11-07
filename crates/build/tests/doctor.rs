@@ -41,13 +41,19 @@ fn with_the_pinned_rgbds_every_check_passes_or_says_why_it_was_skipped() {
             CheckName::Rgbasm,
             CheckName::Rgblink,
             CheckName::Rgbfix,
+            CheckName::Rgbgfx,
             CheckName::BootRoms,
             CheckName::Gitignore,
             CheckName::Writable,
             CheckName::CoreSupport,
         ]
     );
-    for name in [CheckName::Rgbasm, CheckName::Rgblink, CheckName::Rgbfix] {
+    for name in [
+        CheckName::Rgbasm,
+        CheckName::Rgblink,
+        CheckName::Rgbfix,
+        CheckName::Rgbgfx,
+    ] {
         let c = check(&made, name);
         assert_eq!(c.status, CheckStatus::Ok, "{c:?}");
         assert!(c.detail.contains("1.0.4"), "{c:?}");
@@ -62,6 +68,26 @@ fn with_the_pinned_rgbds_every_check_passes_or_says_why_it_was_skipped() {
         fs::read_dir(&temp.0).unwrap().next().is_none(),
         "the writability probe leaves nothing behind"
     );
+}
+
+/// rgbgfx converts images only, so a machine without it can still build
+/// code: doctor warns, naming what needs it, and passes.
+#[test]
+fn missing_rgbgfx_alone_is_a_warning_that_names_the_images() {
+    let temp = Temp::new("doctor-no-rgbgfx");
+    let tools = common::fake_tools(
+        &temp,
+        &[
+            ("rgbasm", "exit 0"),
+            ("rgblink", "exit 0"),
+            ("rgbfix", "exit 0"),
+        ],
+    );
+    let made = run(&temp.0, Some(&tools)).unwrap();
+    let gfx = check(&made, CheckName::Rgbgfx);
+    assert_eq!(gfx.status, CheckStatus::Warn, "{gfx:?}");
+    assert!(gfx.detail.contains("assets/"), "{gfx:?}");
+    assert!(gfx.remedy.as_deref().unwrap().contains("rgbgfx"), "{gfx:?}");
 }
 
 #[test]

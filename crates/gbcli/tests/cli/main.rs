@@ -10,6 +10,7 @@ mod errors;
 mod filmstrip;
 mod help;
 mod honesty;
+mod images;
 mod opcode;
 mod profile;
 mod raster;

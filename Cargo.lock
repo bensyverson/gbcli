@@ -93,6 +93,8 @@ version = "0.1.0"
 dependencies = [
  "gbcli-engine",
  "gbcli-protocol",
+ "gbcli-view",
+ "png",
 ]
 
 [[package]]

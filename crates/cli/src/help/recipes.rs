@@ -31,6 +31,9 @@ Does the save survive turning the Game Boy off? (or a rebuild?)
   off), then gbcli run --frames 300 --shot loaded.png
 Hand the save to an emulator or flash cart, or load one
   gbcli sav game.sav; gbcli power-cycle --sav game.sav
+Does my art fit the hardware, and how will it look?
+  put the PNG in assets/bg/ or assets/sprites/, then gbcli build: a problem row
+  per limit broken, with a remedy, else a .preview.png (gbcli help images)
 Read or write music (hUGETracker songs)
   gbcli song theme.uge --text theme.song (a grid an agent can edit; gbcli help
   music), then gbcli song theme.song --uge theme.uge --piano theme.png

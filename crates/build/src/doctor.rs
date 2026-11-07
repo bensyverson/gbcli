@@ -62,6 +62,7 @@ pub fn doctor(input: &DoctorInput) -> Result<DoctorMade, Box<ErrorBody>> {
         };
         checks.push(check);
     }
+    checks.push(rgbgfx(input.path_var, input.cwd));
     for check in [
         boot_roms(input.boot_roms),
         gitignore(input.project, input.path_var, input.cwd),
@@ -100,11 +101,39 @@ pub fn doctor(input: &DoctorInput) -> Result<DoctorMade, Box<ErrorBody>> {
     }
 }
 
+/// rgbgfx: only images under `assets/` need it, so a problem warns.
+fn rgbgfx(path_var: Option<&OsStr>, cwd: &Path) -> CheckMade {
+    match probe(Tool::Rgbgfx, path_var, cwd) {
+        Ok(found) => CheckMade {
+            name: CheckName::Rgbgfx,
+            status: match found.version.against_pin() {
+                PinMatch::Exact => CheckStatus::Ok,
+                _ => CheckStatus::Warn,
+            },
+            detail: format!("{} at {}", found.version, found.path.display()),
+            remedy: found.warning().map(|_| install_remedy()),
+        },
+        Err(problem) => CheckMade {
+            name: CheckName::Rgbgfx,
+            status: CheckStatus::Warn,
+            detail: format!(
+                "{}; only images under assets/ need it, so code still builds",
+                problem.message()
+            ),
+            remedy: Some(format!(
+                "rgbgfx ships with RGBDS: {}",
+                install_remedy().replace("rgbasm, rgblink and rgbfix", "rgbgfx")
+            )),
+        },
+    }
+}
+
 fn tool_check(tool: Tool) -> CheckName {
     match tool {
         Tool::Rgbasm => CheckName::Rgbasm,
         Tool::Rgblink => CheckName::Rgblink,
         Tool::Rgbfix => CheckName::Rgbfix,
+        Tool::Rgbgfx => CheckName::Rgbgfx,
     }
 }
 

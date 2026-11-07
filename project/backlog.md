@@ -53,3 +53,16 @@ What: a `Core` accessor (and a stop-record or `read` field) for whether an MBC5 
 ## 2026-11-07 — HuC3 and TPP1 clocks in `.sav` import
 
 What: read SameBoy's HuC3 and TPP1 clock footers on `power-cycle --sav` without host time, as the MBC3 footer is read (`crates/sameboy-sys/shim/gbcli_battery.c`); today those carts' imports are refused as `unsupported` (`battery_save`), while export works. Why parked: neither is a must-have mapper (the cart research in the evaluation doc), and each footer is SameBoy's own struct, so the work is a parser per format. Un-park when: a homebrew project targets HuC3 or TPP1 and wants a save carried in from a file.
+
+## 2026-11-07 — CGB images
+
+What: `build` converting images for a CGB target: rgbgfx `-m -a -p -N 256,256` (flip dedup, attribute map, palettes, both VRAM banks), the `cgb_palettes` check (8 BG + 8 OBJ palettes of 4, naming the tiles that force the ninth) and 768 VRAM tiles (research doc, Recommendations (a)). Why parked: `build` has no CGB target (rgbfix runs `-v -p 0xFF`, no `-C`), so nothing would choose these flags; the image leaf (WdnjHI) built the DMG checks. Un-park when the build gains a CGB switch, or an agent eval targets the CGB.
+
+## 2026-11-07 — 8x8 objects and an engine-budget reserve for images
+
+What: sprite sheets of 8x8 objects (today `assets/sprites/` is 8x16 only, as the leaf specified), and a configurable reserve of tiles for an engine's font or HUD in the `vram_tiles` and `bg_tiles_map` checks. Why parked: both need a per-project setting, and `build` has no build file by design; neither has been asked for. Un-park when a user or the agent eval needs 8x8 sprites, or a starter grows a font that the image budget must leave room for (then decide where the setting lives: a directory such as `assets/sprites8/`, a name suffix, or a flag).
+
+## 2026-11-07 — Image checks at runtime and a preview of a failing image
+
+What: the objects-per-line check from OAM during a run ("frame 120, line 64: 12 objects; 2 will not draw", research doc, `obj_per_line`), and a preview drawn from gbcli's own analysis when an image fails its checks (today only converted images get one; a problem names its tiles instead). Why parked: the build-time checks answer the asset question; the runtime one belongs with the OAM views, and a failing image's tiles are already listed. Un-park when an agent misses a flicker the build-time check can't see (sprites from several sheets on one line), or asks to see a failing image.
+

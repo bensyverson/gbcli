@@ -4,6 +4,7 @@
 mod audio;
 mod battery;
 mod equiv;
+mod images;
 mod opcode;
 mod profile;
 mod row;

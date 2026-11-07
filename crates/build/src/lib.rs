@@ -9,6 +9,7 @@
 
 mod diagnostics;
 mod doctor;
+mod images;
 mod paths;
 mod project;
 mod scaffold;

@@ -20,6 +20,9 @@ There is no build file: the layout is the build.
 - rgblink links the objects into `build/{{name}}.gb`, with symbols in
   `build/{{name}}.sym` and the memory map in `build/{{name}}.map`.
 - rgbfix fixes the header: logo, checksums, padding with `$FF`.
+- PNGs in `assets/bg/` and `assets/sprites/` are checked against the
+  hardware's limits and converted by rgbgfx into `build/images/`, with
+  labels for the program in `images.inc`: `gbcli help images`.
 
 Errors come back with their file and line. `gbcli build --help` lists the
 flags that change the layout (`--src`, `--include`, `--out`).

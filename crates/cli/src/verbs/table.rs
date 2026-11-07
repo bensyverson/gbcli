@@ -398,8 +398,8 @@ pub const VERBS: &[VerbSpec] = &[
         flags: &[],
         groups: &[],
         about: "Topics: addresses, expressions, time, checkpointing, writes, budgets, \
-                exit-codes, hardware, traps, optimize, rgbds, music. No topic shares a verb's \
-                name: `gbcli help VERB` is `gbcli VERB --help`.",
+                exit-codes, hardware, traps, optimize, rgbds, music, images. No topic shares a \
+                verb's name: `gbcli help VERB` is `gbcli VERB --help`.",
         example: ("gbcli help addresses", "explains the address forms"),
     },
     VerbSpec {

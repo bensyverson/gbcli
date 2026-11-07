@@ -37,6 +37,9 @@ pub fn rows(r: &ResultBody) -> String {
                 }
             }
         }
+        if let Some(images) = &b.images {
+            out += &super::images::rows(images);
+        }
         for o in &b.outputs {
             let json = serde_json::to_value(o).expect("serializes");
             out += &Row::new("output")

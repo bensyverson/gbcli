@@ -10,7 +10,7 @@
 
 mod layout;
 mod staging;
-mod tool;
+pub(crate) mod tool;
 
 use std::fs;
 use std::path::{Component, Path, PathBuf};
@@ -22,7 +22,7 @@ use gbcli_protocol::{
 
 use crate::diagnostics;
 use crate::paths::{display, quote};
-use crate::toolchain::Toolchain;
+use crate::toolchain::{Toolchain, ToolchainError};
 use layout::Layout;
 use staging::Staging;
 
@@ -77,6 +77,8 @@ pub enum BuildError {
         path: PathBuf,
         error: std::io::Error,
     },
+    /// The project has images and rgbgfx can't be used.
+    Toolchain(ToolchainError),
 }
 
 impl BuildError {
@@ -86,6 +88,28 @@ impl BuildError {
                 ErrorBody::new(ErrorCode::BadRequest, message, remedy)
             }
             BuildError::Failed { made, again } => {
+                if let Some(p) = made.images.as_ref().and_then(|i| i.first_error()) {
+                    let image = p
+                        .image
+                        .as_deref()
+                        .map_or(String::new(), |i| format!("{i}: "));
+                    let mut body = ErrorBody::new(
+                        ErrorCode::BuildFailed,
+                        format!(
+                            "the build failed: {image}{} ({} of {}): {}",
+                            p.limit.name(),
+                            p.count,
+                            p.max,
+                            p.message
+                        ),
+                        p.remedy.clone(),
+                    );
+                    body.result = Some(Box::new(ResultBody {
+                        build: Some((**made).clone()),
+                        ..ResultBody::default()
+                    }));
+                    return body;
+                }
                 let errors: Vec<&Diagnostic> = made
                     .diagnostics
                     .iter()
@@ -120,6 +144,7 @@ impl BuildError {
             BuildError::Io { path, error } => {
                 ErrorBody::plain(ErrorCode::IoFailed, format!("{}: {error}", path.display()))
             }
+            BuildError::Toolchain(e) => e.body(),
         }
     }
 }
@@ -132,7 +157,13 @@ pub fn build(tools: &Toolchain, options: &BuildOptions) -> Result<BuildMade, Bui
         message: format!("no project directory at {}", shown(&options.project)),
         remedy: "pass the project directory, or make one with `gbcli new DIR`".into(),
     })?;
-    let layout = Layout::of(&project, options, &shown)?;
+    let mut layout = Layout::of(&project, options, &shown)?;
+    // Images first: the program includes what they become.
+    let images = crate::images::convert(tools, &project, &shown, options.tool_timeout)?;
+    if let Some(generated) = images.as_ref().and_then(|i| i.generated.as_ref()) {
+        layout.sources.push(generated.source.clone());
+        layout.include.push(generated.include_dir.clone());
+    }
     let mut run = Run {
         tools,
         project: &project,
@@ -144,8 +175,16 @@ pub fn build(tools: &Toolchain, options: &BuildOptions) -> Result<BuildMade, Bui
             sources: layout.sources.iter().map(|s| shown(s)).collect(),
             outputs: Vec::new(),
             diagnostics: Vec::new(),
+            images: None,
         },
     };
+    if let Some(images) = images {
+        run.made.diagnostics.extend(images.diagnostics);
+        run.made.images = Some(images.made);
+        if images.generated.is_none() {
+            return Err(run.failed());
+        }
+    }
 
     let mut objects = Vec::new();
     let mut ok = true;

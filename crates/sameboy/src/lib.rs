@@ -4,6 +4,7 @@
 //! RTC, the illegal-opcode lock, and side effects of SameBoy's own reads.
 
 mod audio;
+mod battery;
 mod blob;
 mod display;
 mod hooks;
@@ -20,7 +21,8 @@ use gbcli_core::{
     ApuState, ApuWrite, AudioCapture, AudioSamples, BootRom, Budget, BudgetKind, ColorMode, Core,
     CoreConfig, CoreError, CoreInfo, Feature, FrameRef, HaltWake, IoReg, JoypadBounce, Keys,
     LayerMap, LiveFrame, Model, PpuMode, PpuStatus, Region, RegionView, Registers, Rendering,
-    RtcMode, RunRequest, StepUnit, Stop, StopReason, Support, Ticks, WriteTracking, WrittenView,
+    RtcMode, RunRequest, SavClock, StepUnit, Stop, StopReason, Support, Ticks, WriteTracking,
+    WrittenView,
 };
 use sameboy_sys as sb;
 
@@ -425,6 +427,18 @@ impl Core for SameBoy {
             .as_mut()
             .map(std::mem::take)
             .unwrap_or_default())
+    }
+
+    fn battery_sav(&mut self) -> Result<Option<Vec<u8>>, CoreError> {
+        self.export_battery()
+    }
+
+    fn load_battery_sav(&mut self, sav: &[u8]) -> Result<SavClock, CoreError> {
+        self.import_battery(sav)
+    }
+
+    fn advance_rtc(&mut self, seconds: u64) -> Result<(), CoreError> {
+        self.advance_clock(seconds)
     }
 
     fn written(&self, region: Region) -> Result<WrittenView<'_>, CoreError> {

@@ -61,3 +61,7 @@ A `git merge --squash` that conflicted in two files was resolved in one (crates/
 ## 2026-11-07 — a worktree has no corpus, and `GBCLI_TEST_ROMS` doesn't reach every test
 
 `tests/corpus/fetched/` is gitignored, so a fresh worktree's `cargo test --workspace` fails on missing corpus files. `GBCLI_TEST_ROMS=/Users/ben/git/gbcli/tests/corpus/fetched` fixes the CLI's song tests, but `crates/corpus/tests/docboy_boot.rs` reads `<repo>/tests/corpus/fetched` directly and ignores the variable. A symlink from the worktree's `tests/corpus/fetched` to the main checkout's (remove it afterwards) makes the whole suite run (leaf 3KQ8fO).
+
+## 2026-11-07 — `sram:10` is $10 to `poke` and 10 to `read`
+
+A region offset is hex, prefixed or not, in the address grammar (`poke sram:10=$AB` writes cart RAM offset $10, design §7), but a condition reads the same text as decimal (`read '[sram:10]'` read offset $0A, with an uninitialized-read warning), so a poke-then-read test saw $FF. Write region offsets with `$` in both until the grammars agree (leaf OU9rOL; reported for a ruling, like the name-offset radix in §7).

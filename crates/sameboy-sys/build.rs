@@ -20,6 +20,8 @@ const PATCHES: &str = "patches";
 const SHIM: &str = "shim/gbcli_shim.c";
 /// The layer-tag encoding, exported for the test of its Rust mirror.
 const SHIM_LAYERS: &str = "shim/gbcli_layers.c";
+/// Battery saves without host time.
+const SHIM_BATTERY: &str = "shim/gbcli_battery.c";
 
 /// Sources left out because their features are compiled out below
 /// (the same files SameBoy's Makefile filters for these switches).
@@ -59,6 +61,7 @@ fn main() {
     println!("cargo::rerun-if-changed={SAMEBOY}");
     println!("cargo::rerun-if-changed={SHIM}");
     println!("cargo::rerun-if-changed={SHIM_LAYERS}");
+    println!("cargo::rerun-if-changed={SHIM_BATTERY}");
     println!("cargo::rerun-if-changed={PATCHES}");
     println!("cargo::rerun-if-changed=patch_set.rs");
 
@@ -86,6 +89,7 @@ fn main() {
     }
     build.file(SHIM);
     build.file(SHIM_LAYERS);
+    build.file(SHIM_BATTERY);
     build
         .include(root)
         .std("gnu11")

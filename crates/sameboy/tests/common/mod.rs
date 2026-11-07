@@ -3,6 +3,8 @@
 
 #![allow(dead_code)] // each test binary uses a different subset
 
+pub mod cart;
+
 use std::path::PathBuf;
 
 use gbcli_core::{BootRom, Budget, Core, CoreConfig, Model, RunRequest, Stop};

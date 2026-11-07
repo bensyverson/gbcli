@@ -286,6 +286,37 @@ unsafe extern "C" {
     pub fn gbcli_pre_run(gb: *mut GB_gameboy_t, opcode: *mut u8) -> c_int;
 }
 
+/// What a battery save holds on a cart (`gbcli_battery_kind`).
+pub const GBCLI_BATTERY_NONE: c_int = 0;
+pub const GBCLI_BATTERY_RAM: c_int = 1;
+pub const GBCLI_BATTERY_RAM_AND_MBC3_CLOCK: c_int = 2;
+pub const GBCLI_BATTERY_OTHER_CLOCK: c_int = 3;
+
+// Battery saves (gb.h), and gbcli's loader without host time
+// (`shim/gbcli_battery.c`).
+unsafe extern "C" {
+    /// 0 for a cart with nothing to save.
+    pub fn GB_save_battery_size(gb: *mut GB_gameboy_t) -> c_int;
+    /// Cart RAM then the clock footer, its stamp `time(NULL)`. Returns 0 on
+    /// success.
+    pub fn GB_save_battery_to_buffer(gb: *mut GB_gameboy_t, buffer: *mut u8, size: usize) -> c_int;
+    /// The same bytes to a file. Returns 0 on success.
+    pub fn GB_save_battery(gb: *mut GB_gameboy_t, path: *const c_char) -> c_int;
+    /// One of the `GBCLI_BATTERY_*` codes.
+    pub fn gbcli_battery_kind(gb: *mut GB_gameboy_t) -> c_int;
+    pub fn gbcli_has_clock(gb: *mut GB_gameboy_t) -> bool;
+    pub fn gbcli_cart_ram_size(gb: *mut GB_gameboy_t) -> u32;
+    /// `real` and `latched` are five registers each, or both null.
+    pub fn gbcli_load_battery(
+        gb: *mut GB_gameboy_t,
+        ram: *const u8,
+        ram_len: usize,
+        real: *const u8,
+        latched: *const u8,
+    );
+    pub fn gbcli_advance_rtc(gb: *mut GB_gameboy_t, seconds: u64);
+}
+
 /// A per-pixel layer tag (`GBCLI_LAYER_*`, the patched `display.h`): what
 /// SameBoy writes to the buffer `gbcli_set_layer_buffer` attaches.
 pub const GBCLI_LAYER_BACKGROUND: u8 = 0;

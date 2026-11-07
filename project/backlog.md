@@ -45,3 +45,11 @@ What: a watch or breakpoint on cart RAM smaller than a bank also catching the in
 **Why parked:** it needs a nightly toolchain and a second build of SameBoy, and nothing has yet pointed at memory corruption. The cheap guards come first: `unsafe_code = "forbid"` in the crates without FFI and a required `SAFETY` comment on every `unsafe` block (user discussion, 2026-11-06).
 
 **Un-park when:** a crash, a nondeterministic test or a state divergence we can't explain; before a first release (as part of the pre-release suite); or when the FFI surface grows substantially (a new shim family, a second backend).
+
+## 2026-11-07 — The rumble motor's state through the core
+
+What: a `Core` accessor (and a stop-record or `read` field) for whether an MBC5 rumble cart's motor is on, which SameBoy tracks as `rumble_strength`. Leaf OU9rOL tested the rumble bit only as far as the core interface reaches: bit 3 of $4000–$5FFF drives the motor and selects no RAM bank (`crates/sameboy/tests/mappers.rs`). Why parked: a game's motor writes are already visible to a watch on $4000–$5FFF, and no agent task has asked whether the motor is on. Un-park when: a rumble game's behavior needs asserting by state rather than by its writes, or a frontend wants to show it.
+
+## 2026-11-07 — HuC3 and TPP1 clocks in `.sav` import
+
+What: read SameBoy's HuC3 and TPP1 clock footers on `power-cycle --sav` without host time, as the MBC3 footer is read (`crates/sameboy-sys/shim/gbcli_battery.c`); today those carts' imports are refused as `unsupported` (`battery_save`), while export works. Why parked: neither is a must-have mapper (the cart research in the evaluation doc), and each footer is SameBoy's own struct, so the work is a parser per format. Un-park when: a homebrew project targets HuC3 or TPP1 and wants a save carried in from a file.

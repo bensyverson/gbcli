@@ -5,6 +5,7 @@ pub mod addr;
 pub mod disasm;
 pub mod inspect;
 
+pub mod cart;
 mod checkpoint;
 mod checkpoint_error;
 pub mod cond;
@@ -24,7 +25,7 @@ pub use debug::{
     CallFrame, DebugError, EventTap, FrameSink, Outcome, RunOptions, Since, core_code, eval_code,
     expr_code, unapplied_keys,
 };
-pub use machine::{Backend, Machine, SetupError};
+pub use machine::{Backend, Battery, Machine, PowerCycled, SetupError};
 pub use session::{MachineId, Session};
 pub use sha256::sha256;
 pub use sym::{Area, MappedSymbols, SymError, Symbol, Symbols};

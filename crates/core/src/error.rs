@@ -51,6 +51,9 @@ pub enum Feature {
     /// What ends the CPU's HALT, telling the CGB speed switch's self-ending
     /// pause from a wait for an interrupt (`Core::halt_wake`).
     HaltWake,
+    /// The cart's battery-backed RAM and clock as a `.sav`, both ways
+    /// (`Core::battery_sav`, `Core::load_battery_sav`, `Core::advance_rtc`).
+    BatterySave,
 }
 
 impl Feature {
@@ -77,6 +80,7 @@ impl Feature {
             Feature::LiveFrame => "live_frame",
             Feature::DisplayColors => "display_colors",
             Feature::HaltWake => "halt_wake",
+            Feature::BatterySave => "battery_save",
         }
     }
 }

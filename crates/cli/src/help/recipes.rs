@@ -26,6 +26,11 @@ Why won't it build?
 Rebuild after an edit and carry on where you were
   gbcli build --session dx --restore start (the checkpoint, in the new ROM;
   refused with what moved if its routine or variables moved; gbcli help rgbds)
+Does the save survive turning the Game Boy off? (or a rebuild?)
+  gbcli power-cycle (keeps battery RAM and clock; --rtc-advance 8h for time
+  off), then gbcli run --frames 300 --shot loaded.png
+Hand the save to an emulator or flash cart, or load one
+  gbcli sav game.sav; gbcli power-cycle --sav game.sav
 Read or write music (hUGETracker songs)
   gbcli song theme.uge --text theme.song (a grid an agent can edit; gbcli help
   music), then gbcli song theme.song --uge theme.uge --piano theme.png

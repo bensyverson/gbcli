@@ -4,6 +4,7 @@
 
 mod flags;
 mod table;
+mod table_battery;
 mod table_build;
 mod table_opcode;
 mod table_read;
@@ -102,6 +103,8 @@ pub enum Verb {
     Doctor,
     Opcode,
     Version,
+    PowerCycle,
+    Sav,
 }
 
 /// One flag. `value` names its argument; `None` makes it a switch.

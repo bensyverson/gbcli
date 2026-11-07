@@ -2,6 +2,7 @@
 //! save the head atomically, log. The handler keeps the machine warm between
 //! requests and reloads it when another writer moved the session's head.
 
+mod battery;
 mod build;
 mod bundle_ops;
 mod config;
@@ -239,6 +240,8 @@ impl Handler {
             Op::Checkpoints => self.checkpoints(store, meta),
             Op::Measure(args) => self.measure(store, meta, args, warnings),
             Op::Equiv(args) => self.equiv(store, meta, args, warnings),
+            Op::PowerCycle(args) => self.power_cycle(store, meta, args, actor, warnings),
+            Op::Sav(args) => self.sav(store, meta, args, warnings),
             Op::Sessions
             | Op::Gaps
             | Op::Prune(_)
@@ -299,6 +302,9 @@ impl Handler {
             exact: warnings.is_empty(),
         });
         *machine.debugger_config_mut() = meta.debugger.clone();
+        // On every request, warm or cold: the ROM is the same file either way.
+        let mut warnings = warnings;
+        warnings.extend(battery::header_warnings(&machine));
         Ok((machine, warnings))
     }
 
@@ -336,6 +342,9 @@ impl Handler {
 
 #[cfg(test)]
 mod test_support;
+
+#[cfg(test)]
+mod battery_tests;
 
 #[cfg(test)]
 mod state_tests;

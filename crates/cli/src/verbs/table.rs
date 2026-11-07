@@ -4,6 +4,7 @@ use super::flags::{
     BATCH, BREAK, CHANGE, CREATE, EVENTS, OUTPUT, PRUNE, READ, RM, RUN, SERVE, SESSION,
     SHOT_OPTIONS, WATCH,
 };
+use super::table_battery::{POWER_CYCLE_VERB, SAV_VERB};
 use super::table_build::{BUILD_VERB, DOCTOR_VERB, NEW_VERB};
 use super::table_opcode::OPCODE_VERB;
 use super::table_read::{
@@ -137,6 +138,7 @@ pub const VERBS: &[VerbSpec] = &[
             "puts back the head from before the last run, step, write or restore",
         ),
     },
+    POWER_CYCLE_VERB,
     VerbSpec {
         verb: Verb::Write,
         name: "write",
@@ -223,6 +225,7 @@ pub const VERBS: &[VerbSpec] = &[
     VIEW_VERB,
     SYM_VERB,
     CHECKPOINTS_VERB,
+    SAV_VERB,
     VerbSpec {
         verb: Verb::Events,
         name: "events",

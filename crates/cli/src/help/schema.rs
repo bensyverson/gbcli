@@ -52,6 +52,9 @@ new     dir: PATH
 opcode  query: TEXT  ("$20", "$CB37", "jr nz", "ld a, [hl+]")
         (build, doctor, new and opcode need no session; paths are relative
         to the server's working directory)
+power_cycle  sav?: PATH  rtc_advance?: "45s"|"30m"|"12h"|"7d"
+        (a new head at power-on, keeping the cart's battery RAM and clock)
+sav     path: PATH   (writes the head's battery save; changes nothing)
 
 Response, one line per request:
   {"id", "ok": true, "rev"?: "sN", "result": {…}, "warnings": [TEXT]}
@@ -61,7 +64,7 @@ result holds only the fields the op fills: stop, reads, shot, measure, profile,
 frame_budget, raster, equiv, view, symbols,
 checkpoints, keys_unapplied, writes, checkpoint, restored, breakpoint, watch,
 deleted, registers, ppu, sessions, events, gaps, pruned, kept, busy, removed,
-build, doctor, created, song, song_problem, opcodes.
+build, doctor, created, song, song_problem, opcodes, power_cycle, sav.
 `gbcli VERB --json` prints the whole response line, as serve writes it.
 
 Examples:
@@ -95,6 +98,8 @@ Examples:
   {"id":"28","op":"doctor"}
   {"id":"29","op":"new","args":{"dir":"game"}}
   {"id":"30","op":"opcode","args":{"query":"jr nz"}}
+  {"id":"31","op":"power_cycle","args":{"sav":"game.sav","rtc_advance":"8h"}}
+  {"id":"32","op":"sav","args":{"path":"game.sav"}}
 "#;
 
 #[cfg(test)]
@@ -116,6 +121,6 @@ mod tests {
         }
         ops.sort();
         ops.dedup();
-        assert_eq!(ops.len(), 26, "one example per op: {ops:?}");
+        assert_eq!(ops.len(), 28, "one example per op: {ops:?}");
     }
 }

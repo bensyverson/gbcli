@@ -17,6 +17,9 @@ use crate::romcheck;
 use crate::sha256::sha256;
 use crate::sym::{SymError, Symbols};
 
+mod power;
+pub use power::{Battery, PowerCycled};
+
 /// How to build cores of one backend.
 #[derive(Clone, Copy)]
 pub struct Backend {
@@ -155,6 +158,16 @@ impl Machine {
     /// records; use [`Machine::patch`] and [`Machine::set_keys`].
     pub fn core_mut(&mut self) -> &mut dyn Core {
         self.core.as_mut()
+    }
+
+    /// The hash of the unpatched ROM file the machine was built from.
+    pub fn rom_sha256(&self) -> Sha256 {
+        self.rom_sha256
+    }
+
+    /// Every way the ROM's header disagrees with the file it heads.
+    pub fn header_mismatches(&self) -> Vec<crate::cart::HeaderMismatch> {
+        crate::cart::check_header(&self.rom)
     }
 
     pub fn symbols(&self) -> Option<&Symbols> {

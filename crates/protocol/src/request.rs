@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::audio::AudioArgs;
+use crate::battery::{PowerCycleArgs, SavArgs};
 use crate::checkpoint::WatchAccess;
 use crate::equiv::EquivArgs;
 use crate::keys::KeyEvent;
@@ -73,6 +74,10 @@ pub enum Op {
     New(NewArgs),
     /// An instruction's size, cycles and flags; needs no session.
     Opcode(OpcodeArgs),
+    /// Battery saves (design §6): power-on again keeping the battery, and
+    /// the battery written out as a `.sav`.
+    PowerCycle(PowerCycleArgs),
+    Sav(SavArgs),
 }
 
 impl Op {
@@ -105,6 +110,8 @@ impl Op {
             Op::Doctor => "doctor",
             Op::New(_) => "new",
             Op::Opcode(_) => "opcode",
+            Op::PowerCycle(_) => "power_cycle",
+            Op::Sav(_) => "sav",
         }
     }
 
@@ -114,7 +121,12 @@ impl Op {
             Op::Build(args) => args.restore.is_some(),
             op => matches!(
                 op,
-                Op::Run(_) | Op::Step(_) | Op::Restore(_) | Op::Undo | Op::Write(_)
+                Op::Run(_)
+                    | Op::Step(_)
+                    | Op::Restore(_)
+                    | Op::Undo
+                    | Op::Write(_)
+                    | Op::PowerCycle(_)
             ),
         }
     }

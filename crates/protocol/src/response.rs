@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::audio::AudioMade;
+use crate::battery::{PowerCycleMade, SavMade};
 use crate::checkpoint::{Location, WatchAccess};
 use crate::equiv::EquivMade;
 use crate::error::ErrorBody;
@@ -220,6 +221,12 @@ pub struct ResultBody {
     /// `song`: why the song file didn't load (with `song_unreadable`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub song_problem: Option<SongProblem>,
+    /// `power_cycle`: what the cycle carried across.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power_cycle: Option<PowerCycleMade>,
+    /// `sav`: the battery save written.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sav: Option<SavMade>,
 }
 
 /// One `--read` result.

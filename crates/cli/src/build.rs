@@ -9,6 +9,7 @@ use gbcli_protocol::{
     RestoreArgs, Rev, RmArgs, RunArgs, ShotReadArgs, StepArgs, StepKind, SymArgs, WatchAccess,
     WatchArgs, WriteArgs, WriteKind, model_from_name,
 };
+use gbcli_protocol::{PowerCycleArgs, SavArgs};
 
 use crate::Env;
 use crate::argv::Invocation;
@@ -107,6 +108,11 @@ pub fn build(inv: Invocation, env: &Env) -> Result<Command, Usage> {
         Verb::View => Op::View(video::view(&inv)?),
         Verb::Sym => Op::Sym(SymArgs { pattern: pos(0) }),
         Verb::Checkpoints => Op::Checkpoints,
+        Verb::Sav => Op::Sav(SavArgs { path: pos(0) }),
+        Verb::PowerCycle => Op::PowerCycle(PowerCycleArgs {
+            sav: inv.one("sav").map(str::to_string),
+            rtc_advance: inv.one("rtc-advance").map(str::to_string),
+        }),
         Verb::Measure => Op::Measure(profile::measure(&inv, &pos(0))?),
         Verb::Equiv => Op::Equiv(Box::new(equiv::equiv(&inv, env)?)),
         Verb::Step => Op::Step(StepArgs {

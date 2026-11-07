@@ -45,6 +45,8 @@ pub(crate) fn support(feature: Feature) -> Support {
         // The color mode always; CGB colors only where frames are RGB.
         Feature::DisplayColors => return Support::Yes,
         Feature::HaltWake => return Support::Yes,
+        // MBC3 clocks and plain RAM; HuC3 and TPP1 clocks are refused per cart.
+        Feature::BatterySave => return Support::Yes,
         Feature::DotStep => "SameBoy's finest public step is one CPU step (GB_run)",
         Feature::MCycleStep => "SameBoy's finest public step is one CPU step (GB_run)",
         Feature::PpuDot => {

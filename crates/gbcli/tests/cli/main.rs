@@ -3,6 +3,7 @@
 //! Each test drives the built binary in its own temporary project.
 
 mod audio;
+mod battery;
 mod common;
 mod equiv;
 mod errors;

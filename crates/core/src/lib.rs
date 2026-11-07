@@ -5,6 +5,7 @@
 
 mod apu;
 mod audio;
+mod battery;
 mod display;
 mod error;
 mod filter;
@@ -19,6 +20,7 @@ pub use audio::{
     ApuWrite, ApuWriteEffect, AudioCapture, AudioSamples, SOUND_REGISTERS, StereoSample, WAVE_RAM,
     is_sound_addr,
 };
+pub use battery::SavClock;
 pub use display::{ColorMode, LiveFrame, PixelBuf};
 pub use error::{CoreError, Feature, Gap, Support};
 pub use filter::{AddrFilter, BankSel, StoreFilter, canonical_addr};
@@ -165,6 +167,37 @@ pub trait Core {
         Err(CoreError::Unsupported {
             feature: Feature::AudioSamples,
             reason: "this core doesn't render audio samples",
+        })
+    }
+    /// The cart's battery-backed state as a `.sav`: the cart RAM, then a
+    /// clock footer on a clocked cart (MBC3: BGB's and VBA's 48 bytes, the
+    /// real and latched clocks and a host-time stamp). `None` when the cart
+    /// has no battery ([`Feature::BatterySave`]). The default is for a core
+    /// without it, so adding this method broke no backend.
+    fn battery_sav(&mut self) -> Result<Option<Vec<u8>>, CoreError> {
+        Err(CoreError::Unsupported {
+            feature: Feature::BatterySave,
+            reason: "this core doesn't export battery saves",
+        })
+    }
+    /// Loads a `.sav` in [`battery_sav`](Core::battery_sav)'s format into the
+    /// cart's RAM and clock. The footer's stamp is never compared with host
+    /// time, so no time passes on import; [`advance_rtc`](Core::advance_rtc)
+    /// does that explicitly. A size that fits no layout of this cart is
+    /// refused, naming the sizes that do.
+    fn load_battery_sav(&mut self, _sav: &[u8]) -> Result<SavClock, CoreError> {
+        Err(CoreError::Unsupported {
+            feature: Feature::BatterySave,
+            reason: "this core doesn't import battery saves",
+        })
+    }
+    /// Moves the cart's clock on by whole seconds at once, as if the machine
+    /// had been off that long; a halted clock stays put, as on hardware.
+    /// `InvalidState` on a cart without a clock.
+    fn advance_rtc(&mut self, _seconds: u64) -> Result<(), CoreError> {
+        Err(CoreError::Unsupported {
+            feature: Feature::BatterySave,
+            reason: "this core doesn't advance the cart clock",
         })
     }
     /// Never-written tracking for WRAM, HRAM or cart RAM (design §9).

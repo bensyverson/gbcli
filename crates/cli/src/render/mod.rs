@@ -2,6 +2,7 @@
 //! writes (`--json`). stdout carries the answer; warnings and errors go to stderr.
 
 mod audio;
+mod battery;
 mod equiv;
 mod opcode;
 mod profile;
@@ -148,6 +149,7 @@ pub fn rows(r: &ResultBody) -> String {
     out += &toolchain::rows(r);
     out += &song::rows(r);
     out += &opcode::rows(r);
+    out += &battery::rows(r);
     if let Some(cp) = &r.checkpoint {
         out += &Row::new("checkpoint")
             .field("name", &cp.name)

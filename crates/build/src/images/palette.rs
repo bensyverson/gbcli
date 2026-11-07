@@ -1,8 +1,9 @@
 //! `assets/palette.txt`: the project's declared shades (Ben's ruling,
 //! 2026-11-07), the first rule of `shades::choose`. Four `#rrggbb` lines,
-//! shade 0 (lightest on the DMG) first; a line that starts `# ` (or is `#`
-//! alone) is a comment, as is anything after a color and a space-`#`.
-//! Blank lines are skipped.
+//! shade 0 (lightest on the DMG) first; a line that starts `#` and
+//! whitespace (or is `#` alone) is a comment, as is anything after a color
+//! and a space-`#`. Blank lines are skipped, and so is a leading UTF-8 byte
+//! order mark.
 
 use std::fs;
 use std::path::Path;
@@ -16,7 +17,7 @@ use super::pixels::{Rgba, hex};
 pub(crate) const PATH: &str = "assets/palette.txt";
 
 const REMEDY: &str = "write four colors, one #rrggbb a line, shade 0 (white on the DMG) first; \
-                      a line starting with '# ' is a comment";
+                      a line starting with '#' and a space or tab is a comment";
 
 /// Why a palette file was refused.
 #[derive(Debug, PartialEq, Eq)]
@@ -32,18 +33,26 @@ pub(crate) struct Bad {
 /// colors or the problem with it. `shown` is the file's name in messages.
 pub(crate) fn read(project: &Path, shown: &str) -> Result<Option<[Rgba; 4]>, ImageProblem> {
     let path = project.join(PATH);
-    let Ok(text) = fs::read_to_string(&path) else {
-        if !path.exists() {
-            return Ok(None);
-        }
-        return Err(problem(
+    let whole = |message: &str| {
+        problem(
             shown,
             Bad {
                 line: None,
                 count: 0,
-                message: "isn't readable UTF-8 text".into(),
+                message: message.into(),
             },
-        ));
+        )
+    };
+    if path.is_dir() {
+        return Err(whole("is a directory, not a text file"));
+    }
+    let bytes = match fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(whole(&format!("can't be read: {e}"))),
+    };
+    let Ok(text) = String::from_utf8(bytes) else {
+        return Err(whole("isn't UTF-8 text"));
     };
     parse(&text).map(Some).map_err(|bad| problem(shown, bad))
 }
@@ -65,6 +74,7 @@ fn problem(shown: &str, bad: Bad) -> ImageProblem {
 
 /// The four colors of a palette file's text.
 pub(crate) fn parse(text: &str) -> Result<[Rgba; 4], Bad> {
+    let text = text.strip_prefix('\u{FEFF}').unwrap_or(text);
     let mut colors: Vec<(Rgba, u32)> = Vec::new();
     for (i, raw) in text.lines().enumerate() {
         let line = i as u32 + 1;
@@ -74,7 +84,10 @@ pub(crate) fn parse(text: &str) -> Result<[Rgba; 4], Bad> {
             message,
         };
         let trimmed = raw.trim();
-        if trimmed.is_empty() || trimmed == "#" || trimmed.starts_with("# ") {
+        let comment = trimmed
+            .strip_prefix('#')
+            .is_some_and(|r| r.is_empty() || r.starts_with(char::is_whitespace));
+        if trimmed.is_empty() || comment {
             continue;
         }
         let (word, rest) = trimmed
@@ -83,7 +96,7 @@ pub(crate) fn parse(text: &str) -> Result<[Rgba; 4], Bad> {
         let rest = rest.trim_start();
         let Some(c) = color(word) else {
             return Err(bad(format!(
-                "{word:?} is neither a #rrggbb color nor a comment ('# ' then text)"
+                "{word:?} is neither a #rrggbb color nor a comment ('#', a space or tab, then text)"
             )));
         };
         if !rest.is_empty() && !rest.starts_with('#') {
@@ -178,5 +191,19 @@ mod tests {
         let bad = parse("#ffffff\n#000000\n#555555\n#040404\n").unwrap_err();
         assert_eq!(bad.line, Some(4));
         assert!(bad.message.contains("#000000"), "{}", bad.message);
+    }
+
+    /// A UTF-8 BOM (Notepad's habit) isn't part of the first line.
+    #[test]
+    fn a_leading_byte_order_mark_is_skipped() {
+        let text = "\u{FEFF}#ffffff\n#aaaaaa\n#555555\n#000000\n";
+        assert_eq!(parse(text).map(|c| c[0]), Ok([0xFF, 0xFF, 0xFF, 0xFF]));
+    }
+
+    /// `#` then any whitespace is a comment: a tab as well as a space.
+    #[test]
+    fn a_hash_then_any_whitespace_is_a_comment() {
+        let text = "#\tshade 0 first\n#ffffff\n#aaaaaa\n#555555\n#000000\n";
+        assert!(parse(text).is_ok(), "{:?}", parse(text));
     }
 }

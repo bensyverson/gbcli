@@ -180,7 +180,11 @@ impl Rgbgfx<'_> {
                 error,
             }
         })?;
-        let mut found = diagnostics::parse(Tool::Rgbgfx, &ran.stderr);
+        // rgbgfx names the file it read, which may be the transient merged
+        // copy (`shared`); the user drew, and should hear of, the source.
+        let given = source.display().to_string();
+        let stderr = ran.stderr.replace(&given, image);
+        let mut found = diagnostics::parse(Tool::Rgbgfx, &stderr);
         for d in &mut found {
             d.file.get_or_insert_with(|| image.to_string());
         }
@@ -190,7 +194,7 @@ impl Rgbgfx<'_> {
             Some(status) if status.success() => Ok(true),
             Some(status) => {
                 if !reported {
-                    let said = ran.stderr.trim();
+                    let said = stderr.trim();
                     self.error(image, format!("rgbgfx exited with {status}: {said}"));
                 }
                 Ok(false)

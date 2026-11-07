@@ -7,7 +7,8 @@
 //! 2. known: every color belongs to one known palette, which maps exactly;
 //! 3. otherwise lightness is stretched over the project's colors (lightest
 //!    shade 0, darkest shade 3), then each takes the nearest shade; with one
-//!    lightness, nothing to stretch, the plain nearest shade.
+//!    lightness (or no colors at all), nothing to stretch, the plain
+//!    nearest shade.
 //!
 //! Two colors may take one shade: BGP and OBP map indices to shades, so the
 //! hardware shows them alike, and the build warns (`shared`).
@@ -92,6 +93,11 @@ pub(crate) fn choose(declared: Option<&[Rgba; 4]>, colors: &[Rgba]) -> Shading {
     };
     if let Some(entries) = declared {
         return shading(ShadeRule::Declared, None, &|c| nearest_entry(entries, c));
+    }
+    // Without colors no palette holds them: the plain nearest rule, rather
+    // than a known palette by vacuous truth.
+    if colors.is_empty() {
+        return shading(ShadeRule::Nearest, None, &nearest);
     }
     for p in KnownPalette::ALL {
         let keys = known_colors(p).map(|hex| key(rgba(hex)));
@@ -274,5 +280,12 @@ mod tests {
             chosen(None, &[rgb(0x606060)]),
             (rule(ShadeRule::Nearest), vec![2])
         );
+    }
+
+    /// No colors (every pixel transparent): no palette holds them, so no
+    /// known palette is claimed.
+    #[test]
+    fn no_colors_keep_the_plain_nearest_rule() {
+        assert_eq!(chosen(None, &[]), (rule(ShadeRule::Nearest), vec![]));
     }
 }

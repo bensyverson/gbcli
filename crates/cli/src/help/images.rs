@@ -10,8 +10,9 @@ Images — PNGs under assets/, converted by `gbcli build` with rgbgfx (RGBDS).
 Draw each image in up to 4 colors (sprites: 3 + transparent, alpha 0).
 Shades 0-3 (white to black) are chosen once for the whole project, so a
 color is one shade in every image, by the first rule that applies:
-  1. declared   assets/palette.txt: 4 lines of #rrggbb, shade 0 first ('# '
-                starts a comment); each color takes its nearest line's shade
+  1. declared   assets/palette.txt: 4 lines of #rrggbb, shade 0 first ('#'
+                then a space or tab starts a comment); each color takes its
+                nearest line's shade
   2. known      every color is in one palette: the DMG grays (#ffffff
                 #aaaaaa #555555 #000000), the DMG-01 pea greens (#9bbc0f
                 #8bac0f #306230 #0f380f), GB Studio's greens (#e0f8cf
@@ -22,8 +23,10 @@ color is one shade in every image, by the first rule that applies:
                 one lightness only, so nothing to stretch)
 The images row says which: shades=declared|known|stretched|nearest, and
 palette= for a known one. Colors in one shade draw alike, with a
-shared_shade warning. Colors equal in RGB555 (5 bits a channel, as rgbgfx
-reads them) are one color.
+shared_shade warning: one per image for colors that image holds together,
+and one for the project (no image=) for colors in one shade only across
+images, naming the images each is in. Colors equal in RGB555 (5 bits a
+channel, as rgbgfx reads them) are one color.
 
 Every hardware limit is a `problem` row: limit, count, max, tiles=x,y (in
 the image's 8x8 grid; --json lists them all), message and remedy.
@@ -39,7 +42,8 @@ the image's 8x8 grid; --json lists them all), message and remedy.
   frame_span          a frame at most 256 pixels each way (OAM's bytes)
   romx_bank           one image's data and frame lists in a 16 KiB bank
   obj_no_transparency a warning: no transparent pixel, every object a block
-  shared_shade        a warning: colors drawn in one shade (names them)
+  shared_shade        a warning: colors drawn in one shade (names them), in
+                      one image or across images
   palette_file        assets/palette.txt isn't 4 #rrggbb lines (line=N)
   shade_stretched     a warning: the stretch put a color 2+ shades from its
                       nearest (e.g. #101010 beside only black, drawn white)

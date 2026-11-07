@@ -2,7 +2,9 @@
 //! the shade the project's rule gives it (`shades::choose`), so they draw
 //! alike, and the build warns (`shared_shade`), naming them, the shade, the
 //! rule and the tiles of all but the most used, in case the artist meant
-//! the difference.
+//! the difference. Colors that share a shade only across images (none of
+//! the images holds both) get one project-level warning instead, naming
+//! the images each is in (`across`).
 //!
 //! rgbgfx's `-c` gives each palette slot one color, so two colors can't be
 //! asked to share an index. An image with a shared shade therefore reaches
@@ -16,9 +18,13 @@ use std::path::Path;
 
 use gbcli_protocol::{ImageLimit, ImageProblem, Severity, ShadeChoice, ShadeRule};
 
-use super::census::{Key, error, key, tiles_where};
+use super::census::{self, Key, error, key, tiles_where};
 use super::pixels::{Pixels, Rgba, hex};
 use super::shades::{Moved, Shading, name};
+
+const REMEDY: &str = "make them distinct if the difference matters: recolor one, or declare \
+                      each shade's color in assets/palette.txt (gbcli help images); if it \
+                      doesn't, draw them in one color";
 
 /// What sharing means for one image.
 #[derive(Debug, Default)]
@@ -97,9 +103,7 @@ pub(crate) fn find(
                 group.len(),
                 1,
                 message,
-                "make them distinct if the difference matters: recolor one, or declare each \
-                 shade's color in assets/palette.txt (gbcli help images); if it doesn't, draw \
-                 them in one color",
+                REMEDY,
             )
         });
     }
@@ -145,6 +149,72 @@ pub(crate) fn stretched(
             })
         })
         .collect()
+}
+
+/// One project-level `shared_shade` warning (no image) a shade whose colors
+/// share it only across images (leaf GTXXyr): two colors in one shade that
+/// no single image holds together draw alike on screen, yet no image's own
+/// warning (`find`) names them. The warning names each such color with the
+/// images it is in. `images` are every image read with its name, `colors`
+/// the project's colors as `shades::choose` was given them.
+pub(crate) fn across(
+    images: &[(&str, &Pixels)],
+    colors: &[Rgba],
+    shading: &Shading,
+) -> Vec<ImageProblem> {
+    let held: Vec<Vec<Key>> = images
+        .iter()
+        .map(|(_, p)| census::colors(p).iter().map(|&(c, _)| key(c)).collect())
+        .collect();
+    let together = |a: Key, b: Key| held.iter().any(|k| k.contains(&a) && k.contains(&b));
+    let shade_of = shading.shades(colors);
+    let mut warnings = Vec::new();
+    for shade in 0..4u8 {
+        let group: Vec<Rgba> = colors
+            .iter()
+            .zip(&shade_of)
+            .filter(|&(_, &s)| s == shade)
+            .map(|(&c, _)| c)
+            .collect();
+        let apart: Vec<Rgba> = group
+            .iter()
+            .copied()
+            .filter(|&c| {
+                group
+                    .iter()
+                    .any(|&d| key(d) != key(c) && !together(key(c), key(d)))
+            })
+            .collect();
+        if apart.is_empty() {
+            continue;
+        }
+        let listed: Vec<String> = apart
+            .iter()
+            .map(|&c| {
+                let names: Vec<String> = images
+                    .iter()
+                    .zip(&held)
+                    .filter(|(_, k)| k.contains(&key(c)))
+                    .map(|((name, _), _)| name.to_string())
+                    .collect();
+                format!("{} ({})", hex(c), names.join(", "))
+            })
+            .collect();
+        let message = format!(
+            "the project draws {} in one shade, shade {shade} ({}), by its shade rule, {}, so \
+             they look alike on screen; they are in different images, so no image's own \
+             shared_shade warning names them together",
+            and(&listed),
+            name(shade),
+            rule(shading.choice),
+        );
+        warnings.push(ImageProblem {
+            image: None,
+            severity: Severity::Warning,
+            ..error("", ImageLimit::SharedShade, apart.len(), 1, message, REMEDY)
+        });
+    }
+    warnings
 }
 
 /// "a", "a and b", "a, b and c".
@@ -243,5 +313,29 @@ mod tests {
         assert_eq!(and(&s(&["a"])), "a");
         assert_eq!(and(&s(&["a", "b"])), "a and b");
         assert_eq!(and(&s(&["a", "b", "c"])), "a, b and c");
+    }
+
+    /// Black in one image, near-black in another, both black: one warning
+    /// for the project naming each with its image; black and near-black in
+    /// one image are that image's warning, not the project's.
+    #[test]
+    fn colors_in_one_shade_only_across_images_are_one_project_warning() {
+        let colors = [W, B, NEAR_B];
+        let shading = super::super::shades::choose(None, &colors);
+        let sky = pixels(vec![W, B], 2);
+        let bug = pixels(vec![NEAR_B, NEAR_B], 2);
+        let [w] = &across(&[("sky.png", &sky), ("bug.png", &bug)], &colors, &shading)[..] else {
+            panic!("one warning")
+        };
+        assert_eq!((w.image.as_deref(), w.count, w.max), (None, 2, 1));
+        assert_eq!(w.severity, Severity::Warning);
+        assert!(
+            w.message
+                .contains("#000000 (sky.png) and #101010 (bug.png)"),
+            "{}",
+            w.message
+        );
+        let cave = pixels(vec![B, NEAR_B], 2);
+        assert!(across(&[("cave.png", &cave), ("bug.png", &bug)], &colors, &shading).is_empty());
     }
 }

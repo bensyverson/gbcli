@@ -92,15 +92,24 @@ pub(crate) fn convert(
     timeout: Duration,
 ) -> Result<Option<Converted>, BuildError> {
     let sources = find::sources(project, shown)?;
-    if sources.is_empty() {
-        return Ok(None);
-    }
     let mut made = ImagesMade::default();
     let stopped = Converted {
         made: ImagesMade::default(),
         diagnostics: Vec::new(),
         generated: None,
     };
+    let palette_shown = shown(&project.join(palette::PATH));
+    if sources.is_empty() {
+        // No images to shade, but a malformed palette file is still the
+        // project's mistake to hear about.
+        return match palette::read(project, &palette_shown) {
+            Ok(_) => Ok(None),
+            Err(p) => {
+                made.problems.push(p);
+                Ok(Some(Converted { made, ..stopped }))
+            }
+        };
+    }
     let mut all = Vec::with_capacity(sources.len());
     for s in &sources {
         let image = shown(&s.path);
@@ -112,7 +121,7 @@ pub(crate) fn convert(
     }
     // One color, one shade, in every image: the shades are chosen from the
     // whole project's colors before any image is planned.
-    let declared = match palette::read(project, &shown(&project.join(palette::PATH))) {
+    let declared = match palette::read(project, &palette_shown) {
         Ok(declared) => declared,
         Err(p) => {
             made.problems.push(p);
@@ -122,6 +131,8 @@ pub(crate) fn convert(
     let colors = project_colors(all.iter().map(|(_, _, p)| p));
     let shading = shades::choose(declared.as_ref(), &colors);
     made.shades = Some(shading.choice);
+    let named: Vec<(&str, &Pixels)> = all.iter().map(|(_, i, p)| (i.as_str(), p)).collect();
+    let across = shared::across(&named, &colors, &shading);
 
     let mut plans: Vec<(&Source, String, Plan)> = Vec::new();
     // Each plan's pixels, for the merged copy rgbgfx reads (`shared`).
@@ -142,6 +153,7 @@ pub(crate) fn convert(
             Err(problems) => made.problems.extend(problems),
         }
     }
+    made.problems.extend(across);
     made.problems.extend(vram(&plans));
     if made.first_error().is_some() {
         return Ok(Some(Converted { made, ..stopped }));
@@ -169,9 +181,11 @@ pub(crate) fn convert(
         let transient = if plan.merges().is_empty() {
             None
         } else {
-            let path = project.join(&merged);
-            shared::write(pixels, plan.merges(), &path).map_err(io(path.clone()))?;
-            Some(Removed(path))
+            // Guarded before it is written, so a failed write leaves no
+            // partial file behind.
+            let removed = Removed(project.join(&merged));
+            shared::write(pixels, plan.merges(), &removed.0).map_err(io(removed.0.clone()))?;
+            Some(removed)
         };
         let rel = if transient.is_some() {
             merged.as_path()

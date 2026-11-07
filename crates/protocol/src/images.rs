@@ -73,9 +73,11 @@ pub enum ImageLimit {
     /// checked) for every tile. A disagreement is gbcli's bug, not the
     /// image's; the build stops rather than ship unchecked shades.
     RgbgfxAgrees,
-    /// Two or more colors take one DMG shade, the one nearest each's
-    /// lightness, and draw alike. A warning: BGP and OBP map indices to
-    /// shades, and the hardware is content to show two colors as one.
+    /// Two or more colors take one DMG shade, by the project's shade rule
+    /// (`ShadeChoice`), and draw alike. A warning: BGP and OBP map indices
+    /// to shades, and the hardware is content to show two colors as one.
+    /// With `image`, the colors are in that image; without, they share the
+    /// shade only across images, and `message` names the images each is in.
     SharedShade,
     /// `assets/palette.txt`, the declared shades, isn't four `#rrggbb`
     /// lines; `line` names the line when one is at fault.
@@ -123,7 +125,8 @@ pub struct TileAt {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ImageProblem {
     /// The source PNG; none when the images break a limit together
-    /// (`vram_tiles`, `obj_tiles`), which `message` then itemizes.
+    /// (`vram_tiles`, `obj_tiles`) or share a shade across images
+    /// (`shared_shade`), which `message` then itemizes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
     pub limit: ImageLimit,

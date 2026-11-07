@@ -324,6 +324,10 @@ mod tests {
             "shades=",
             "shared_shade",
             "RGB555",
+            // Shared only across images: one warning without an image
+            // (leaf GTXXyr); and a comment is '#' then a space or a tab.
+            "across images",
+            "space or tab",
         ] {
             assert!(text.contains(needle), "{needle} missing");
         }

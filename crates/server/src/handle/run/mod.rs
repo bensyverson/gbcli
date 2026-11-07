@@ -6,16 +6,16 @@ mod budget;
 
 use gbcli_bundle::{SessionStore, Start, validate_checkpoint_name};
 use gbcli_core::Budget;
-use gbcli_engine::{DebugError, Machine, Outcome, RunOptions};
+use gbcli_engine::{DebugError, Machine, Outcome, RunOptions, unapplied_keys};
 use gbcli_protocol::{
-    ErrorBody, ErrorCode, Location, ResultBody, RunArgs, SessionFile, StepArgs, StepKind,
+    ErrorBody, ErrorCode, KeyEvent, Location, ResultBody, RunArgs, SessionFile, StepArgs, StepKind,
     StopReason, StopRecord,
 };
 
 use super::history::write_checkpoint;
 use super::reads::{CompiledRead, compile_reads, eval_reads, warning_text};
 use super::writes::{apply_writes, parse_location};
-use super::{Failure, Handler, HeadChange, Need, save_head};
+use super::{Failure, Handler, HeadChange, Need, save_head, shot};
 use crate::convert;
 use budget::{DEFAULT_FRAMES, budget_of, unanswered, wall_guard_error};
 
@@ -57,6 +57,9 @@ impl Handler {
         if let Some(name) = &args.checkpoint {
             validate_checkpoint_name(name).map_err(|e| Failure::from_store(&e))?;
         }
+        if let Some(shot) = &args.shot {
+            shot::check(shot)?;
+        }
 
         // What needs the machine's symbols and sizes. A refusal here hands
         // the machine back untouched.
@@ -81,6 +84,7 @@ impl Handler {
         opts.since = since.clone();
         opts.allow_uninit = args.allow_uninit;
         opts.interrupt = Some(&interrupt);
+        opts.keys = &args.keys;
         let outcome = match plan.target {
             Target::Until(text) => machine.run_until(&text, &opts),
             Target::To(at) => machine.run_to(at, &opts),
@@ -89,6 +93,9 @@ impl Handler {
         let mut outcome = match outcome {
             Ok(outcome) => outcome,
             Err(error) => {
+                if let Some(stop) = stop_of(&error) {
+                    unapplied(&args.keys, stop, warnings);
+                }
                 let parent = args.at.clone();
                 return Err(self.after_run_error(store, meta, machine, &error, actor, parent));
             }
@@ -99,6 +106,7 @@ impl Handler {
         warnings.extend(outcome.warnings.iter().map(warning_text));
 
         let stop = outcome.stop;
+        let keys_unapplied = unapplied(&args.keys, &stop, warnings);
         let change = HeadChange {
             actor: actor.clone(),
             parent: args.at.clone(),
@@ -113,12 +121,15 @@ impl Handler {
         }
         .transpose();
         let reads = eval_reads(&machine, &plan.reads, &since, args.allow_uninit, warnings);
+        // After the reads (design §11 step 6); capturing only reads the core.
+        let shot = args.shot.as_ref().map(|s| shot::take(&machine, s, &since));
         self.keep_warm(store, meta, machine);
 
         // The run is saved; anything that failed after it rides with its stop.
         let with_stop = |f: Failure| f.with_stop(stop.clone());
         let checkpoint = checkpoint.map_err(with_stop)?;
         let reads = reads.map_err(with_stop)?;
+        let shot = shot.transpose().map_err(with_stop)?;
         if guarded {
             return Err(Failure::new(wall_guard_error(self.wall_guard, stop)));
         }
@@ -128,6 +139,8 @@ impl Handler {
         Ok(ResultBody {
             stop: Some(stop),
             reads: Some(reads),
+            shot,
+            keys_unapplied,
             checkpoint,
             writes: (!writes.is_empty()).then_some(writes),
             ..ResultBody::default()
@@ -245,6 +258,27 @@ fn plan_of(machine: &Machine, args: &RunArgs) -> Result<Plan, Failure> {
         (None, None) => Target::Budget,
     };
     Ok(Plan { reads, target })
+}
+
+/// The key events past the stop, as a warning and for the result: never
+/// silently dropped (design §11 step 3).
+fn unapplied(
+    keys: &[KeyEvent],
+    stop: &StopRecord,
+    warnings: &mut Vec<String>,
+) -> Option<Vec<KeyEvent>> {
+    let late = unapplied_keys(keys, stop.budget.frames);
+    if late.is_empty() {
+        return None;
+    }
+    let tokens: Vec<String> = late.iter().map(KeyEvent::to_string).collect();
+    warnings.push(format!(
+        "the run stopped after {} frames, before {} key event(s): {}",
+        stop.budget.frames,
+        late.len(),
+        tokens.join(" ")
+    ));
+    Some(late)
 }
 
 fn stop_of(error: &DebugError) -> Option<&StopRecord> {

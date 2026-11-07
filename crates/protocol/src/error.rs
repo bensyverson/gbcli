@@ -13,6 +13,9 @@ use crate::stop::StopRecord;
 pub enum ErrorCode {
     /// An assertion verb's condition stayed false: `check`, `measure --max`.
     PredicateFalse,
+    /// The last complete frame wasn't a normal one (LCD off, boot), so a
+    /// screenshot of it was refused (design §9): pass `--any-frame`.
+    FrameNotNormal,
     BadRequest,
     BadAddress,
     BadExpression,
@@ -46,7 +49,7 @@ impl ErrorCode {
     /// The process exit code. One code, one exit code (design §5).
     pub fn exit_code(self) -> u8 {
         match self {
-            ErrorCode::PredicateFalse => 1,
+            ErrorCode::PredicateFalse | ErrorCode::FrameNotNormal => 1,
             ErrorCode::BadRequest
             | ErrorCode::BadAddress
             | ErrorCode::BadExpression
@@ -76,6 +79,9 @@ impl ErrorCode {
     pub fn default_remedy(self) -> &'static str {
         match self {
             ErrorCode::PredicateFalse => "the predicate stayed false; relax it or raise the budget",
+            ErrorCode::FrameNotNormal => {
+                "pass --any-frame to take it anyway, or run until the LCD shows a frame"
+            }
             ErrorCode::BadRequest => "see `gbcli help schema` for the request shape",
             ErrorCode::BadAddress => "addresses are $C000, 0xC000, 03:4123 or a .sym name",
             ErrorCode::BadExpression => "see `gbcli help expressions`",
@@ -123,6 +129,7 @@ impl fmt::Display for ErrorCode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match self {
             ErrorCode::PredicateFalse => "predicate_false",
+            ErrorCode::FrameNotNormal => "frame_not_normal",
             ErrorCode::BadRequest => "bad_request",
             ErrorCode::BadAddress => "bad_address",
             ErrorCode::BadExpression => "bad_expression",
@@ -192,6 +199,7 @@ mod tests {
     /// Every code, so a new one can't be added without a test seeing it.
     const EVERY: &[ErrorCode] = &[
         ErrorCode::PredicateFalse,
+        ErrorCode::FrameNotNormal,
         ErrorCode::BadRequest,
         ErrorCode::BadAddress,
         ErrorCode::BadExpression,
@@ -220,6 +228,7 @@ mod tests {
     fn listed(code: ErrorCode) -> bool {
         match code {
             ErrorCode::PredicateFalse
+            | ErrorCode::FrameNotNormal
             | ErrorCode::BadRequest
             | ErrorCode::BadAddress
             | ErrorCode::BadExpression
@@ -275,6 +284,7 @@ mod tests {
     fn exit_codes_match_the_design_table() {
         let exits = [
             (ErrorCode::PredicateFalse, 1),
+            (ErrorCode::FrameNotNormal, 1),
             (ErrorCode::BadRequest, 2),
             (ErrorCode::UnknownSymbol, 2),
             (ErrorCode::Refused, 2),

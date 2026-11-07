@@ -37,3 +37,11 @@ What: fsync each written file before its rename and the directory after it, so a
 ## 2026-11-06 — Watches on cart RAM mirrors within a bank
 
 What: a watch or breakpoint on cart RAM smaller than a bank also catching the in-bank mirrors of its byte — 2 KiB RAM repeats every $800, MBC2's 512 bytes every $200 — so a write watch on `$A000` sees a write at `$A800` (found by leaf fenCqJ; design §2.3, the fenCqJ update, "Still a gap"). Options: arm every in-bank alias (at most 16, for MBC2) and decide by backing byte in `debug/decide.rs`, or have the core report cart RAM hits at a canonical address. Why parked: Pan Docs lists the 2 KiB RAM size code ($01) as unused, MBC2 is rare in homebrew, and `--until` predicates already match by backing byte, so they are unaffected. Un-park when: a user's watch misses a mirrored write, or MBC2 support becomes a goal of the mapper leaf (`OU9rOL`).
+
+## 2026-11-06 — AddressSanitizer over the test suite
+
+**What:** run `cargo test --workspace` under AddressSanitizer (nightly: `RUSTFLAGS=-Zsanitizer=address`, with SameBoy's C built `-fsanitize=address` through the `cc` crate) to catch use-after-free and out-of-bounds accesses on both sides of the FFI boundary. All of the workspace's `unsafe` sits in `crates/sameboy` and `crates/sameboy-sys`; Miri can't follow calls into C, so this is the one check that covers it.
+
+**Why parked:** it needs a nightly toolchain and a second build of SameBoy, and nothing has yet pointed at memory corruption. The cheap guards come first: `unsafe_code = "forbid"` in the crates without FFI and a required `SAFETY` comment on every `unsafe` block (user discussion, 2026-11-06).
+
+**Un-park when:** a crash, a nondeterministic test or a state divergence we can't explain; before a first release (as part of the pre-release suite); or when the FFI surface grows substantially (a new shim family, a second backend).

@@ -122,6 +122,15 @@ pub struct FrameShown {
     pub vblank: VblankKind,
 }
 
+/// A vblank kind's wire spelling.
+pub fn vblank_name(kind: VblankKind) -> &'static str {
+    match kind {
+        VblankKind::Normal => "normal",
+        VblankKind::LcdOff => "lcd_off",
+        VblankKind::Artificial => "artificial",
+    }
+}
+
 /// The limits a run was given, whichever ends first (design §3). `None` for a
 /// unit the caller left uncapped.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

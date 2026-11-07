@@ -114,7 +114,7 @@ impl SessionStore {
     }
 
     /// Revisions with a stored entry, oldest first.
-    fn history_revs(&self) -> Vec<u64> {
+    pub(crate) fn history_revs(&self) -> Vec<u64> {
         let Ok(entries) = fs::read_dir(self.history_dir()) else {
             return Vec::new();
         };

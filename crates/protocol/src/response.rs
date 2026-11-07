@@ -5,10 +5,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::checkpoint::{Location, WatchAccess};
 use crate::error::ErrorBody;
+use crate::keys::KeyEvent;
+use crate::listing::{CheckpointRow, SymbolRow};
 use crate::request::WriteKind;
 use crate::rev::Rev;
 use crate::session::{EventLogLine, GapCount, SessionRow};
+use crate::shot::ShotMade;
 use crate::stop::StopRecord;
+use crate::video::ViewMade;
 use crate::views::{PpuView, RegistersView};
 
 /// The answer to one request, echoed with its id: a result or an error,
@@ -135,6 +139,17 @@ pub struct ResultBody {
     pub stop: Option<StopRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reads: Option<Vec<ReadValue>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shot: Option<ShotMade>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view: Option<ViewMade>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub symbols: Option<Vec<SymbolRow>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checkpoints: Option<Vec<CheckpointRow>>,
+    /// Key events the run stopped before reaching (design §11 step 3).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keys_unapplied: Option<Vec<KeyEvent>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checkpoint: Option<CheckpointMade>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -7,6 +7,7 @@ use std::fmt;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
+use crate::keys::{KEY_ERROR, KEY_GRAMMAR};
 use crate::request::{Op, Request};
 use crate::rev::Rev;
 use crate::strict::Strict;
@@ -105,6 +106,9 @@ pub fn parse_request(line: &str) -> Result<Request, RequestError> {
                 Some(near) => format!("did you mean `{near}`? known here: {}", known.join(", ")),
                 None => format!("`{field}` isn't a field here; known: {}", known.join(", ")),
             },
+            None if message.contains(KEY_ERROR) => {
+                format!("write each key event as {KEY_GRAMMAR}")
+            }
             None => SCHEMA_REMEDY.into(),
         };
         RequestError {

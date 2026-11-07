@@ -1,0 +1,208 @@
+//! Screenshots on the wire (design §9, §11 step 6): what a run or the `shot`
+//! verb asks for, and which frame the PNG shows, counted from the request's
+//! time base as the stop record's `frame_shown` is.
+
+use serde::{Deserialize, Serialize};
+
+use crate::request::is_false;
+use crate::stop::{FrameShown, TimeBase, vblank_name};
+use crate::views::PpuView;
+
+/// A screenshot to write after the run (or now, for the `shot` verb).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ShotArgs {
+    /// Where to write the PNG, relative to the server's working directory.
+    pub path: String,
+    /// The integer scale; the view's default (4) when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scale: Option<u32>,
+    /// A crop in native pixels, applied before the scale.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crop: Option<Crop>,
+    /// The partly drawn framebuffer as it is now, labeled partial.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub live: bool,
+    /// Take the last complete frame even when its vblank wasn't normal
+    /// (LCD off, artificial), which is otherwise refused (design §9).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub any_frame: bool,
+}
+
+/// A rectangle in the frame's native pixels.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Crop {
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+}
+
+/// The `shot` verb's args: the shot, and what its frame number counts from.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ShotReadArgs {
+    pub shot: ShotArgs,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "crate::request::since_word"
+    )]
+    pub since: Option<TimeBase>,
+}
+
+/// Which frame a PNG shows.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ShotFrame {
+    /// A frame a vblank completed: the same numbers as `frame_shown`.
+    Complete(FrameShown),
+    /// The framebuffer mid-frame: lines above `ppu.ly` are the frame in
+    /// progress, the rest still hold the frame before.
+    LivePartial {
+        ppu: PpuView,
+        /// Since power-on, in 2^23 Hz ticks.
+        ticks: u64,
+        /// The number of the complete frame this one follows, since the base.
+        after: Option<i64>,
+    },
+}
+
+/// A screenshot that was written.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShotMade {
+    /// The path as the request gave it.
+    pub path: String,
+    /// The PNG's size in pixels, after the crop and the scale.
+    pub width: u32,
+    pub height: u32,
+    pub scale: u32,
+    /// What `frame` counts from.
+    pub since: TimeBase,
+    pub frame: ShotFrame,
+}
+
+impl ShotMade {
+    /// The label the PNG carries (`gbcli:frame`): what the result says, in words.
+    pub fn frame_label(&self) -> String {
+        self.frame.label(&self.since)
+    }
+}
+
+impl ShotFrame {
+    /// The frame in words, counted from `since`.
+    pub fn label(&self, since: &TimeBase) -> String {
+        let base = match since {
+            TimeBase::PowerOn => "since power-on".to_string(),
+            TimeBase::Boot => "since boot".to_string(),
+            TimeBase::Checkpoint(name) => format!("since checkpoint {name}"),
+        };
+        match self {
+            ShotFrame::Complete(shown) => format!(
+                "complete frame {} {base} (vblank {})",
+                shown.n,
+                vblank_name(shown.vblank)
+            ),
+            ShotFrame::LivePartial { ppu, after, .. } => {
+                let lcd = if ppu.lcd_on { "" } else { ", LCD off" };
+                let after = match after {
+                    Some(n) => format!("after complete frame {n} {base}"),
+                    None => "before any complete frame".to_string(),
+                };
+                format!(
+                    "live partial frame: LY {} ({}){lcd}, {after}",
+                    ppu.ly,
+                    ppu.mode.name()
+                )
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use gbcli_core::VblankKind;
+
+    use super::*;
+    use crate::parse::parse_request;
+    use crate::request::{Op, RunArgs};
+    use crate::views::PpuModeView;
+
+    #[test]
+    fn a_run_carries_a_shot_and_refuses_strangers_inside_it() {
+        let line = r#"{"id":"1","op":"run","args":{"frames":3,"shot":{"path":"a.png","scale":2,"crop":{"x":0,"y":0,"width":8,"height":8},"any_frame":true}}}"#;
+        let request = parse_request(line).expect("parses");
+        let Op::Run(RunArgs {
+            shot: Some(shot), ..
+        }) = &request.op
+        else {
+            panic!("{request:?}")
+        };
+        assert_eq!(shot.path, "a.png");
+        assert_eq!(shot.scale, Some(2));
+        assert_eq!(shot.crop.map(|c| c.width), Some(8));
+        assert!(shot.any_frame && !shot.live);
+        assert_eq!(serde_json::to_string(&request).unwrap(), line);
+
+        let typo = r#"{"id":"1","op":"run","args":{"shot":{"path":"a.png","scael":2}}}"#;
+        let err = parse_request(typo).unwrap_err();
+        assert!(err.remedy.contains("`scale`"), "{}", err.remedy);
+    }
+
+    #[test]
+    fn the_shot_verb_takes_a_shot_and_a_time_base() {
+        let line = r#"{"id":"1","op":"shot","args":{"shot":{"path":"b.png"},"since":"power-on"}}"#;
+        let request = parse_request(line).expect("parses");
+        let Op::Shot(args) = &request.op else {
+            panic!("{request:?}")
+        };
+        assert_eq!(args.since, Some(TimeBase::PowerOn));
+        assert!(!request.op.mutates_head(), "a read verb");
+        assert_eq!(request.op.name(), "shot");
+    }
+
+    #[test]
+    fn a_complete_frame_is_labeled_with_its_base_and_a_live_one_as_partial() {
+        let made = ShotMade {
+            path: "a.png".into(),
+            width: 640,
+            height: 576,
+            scale: 4,
+            since: TimeBase::Boot,
+            frame: ShotFrame::Complete(FrameShown {
+                n: 3,
+                vblank: VblankKind::Normal,
+            }),
+        };
+        let json = serde_json::to_string(&made).unwrap();
+        assert!(
+            json.contains(r#""frame":{"kind":"complete","n":3,"vblank":"normal"}"#),
+            "{json}"
+        );
+        assert_eq!(
+            made.frame_label(),
+            "complete frame 3 since boot (vblank normal)"
+        );
+
+        let live = ShotMade {
+            frame: ShotFrame::LivePartial {
+                ppu: PpuView {
+                    ly: 67,
+                    mode: PpuModeView::OamScan,
+                    lcd_on: true,
+                    dot: None,
+                },
+                ticks: 1000,
+                after: Some(6),
+            },
+            ..made
+        };
+        let json = serde_json::to_string(&live).unwrap();
+        assert!(json.contains(r#""kind":"live_partial""#), "{json}");
+        assert_eq!(
+            live.frame_label(),
+            "live partial frame: LY 67 (oam_scan), after complete frame 6 since boot"
+        );
+    }
+}

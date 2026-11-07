@@ -22,4 +22,4 @@ pub use error::ViewError;
 pub use frame::{Frame, FrameChoice, FrameSource, capture};
 pub use image::{DEFAULT_SCALE, Image, LabelKey, MAX_SCALE, Rect};
 pub use sheet::{DiffSummary, diff, filmstrip, sheet};
-pub use tiles::{MapChoice, oam_sheet, tilemap, tileset};
+pub use tiles::{MapChoice, MapLayout, map_layout, oam_sheet, object_height, tilemap, tileset};

@@ -83,6 +83,18 @@ pub enum PpuModeView {
     Drawing,
 }
 
+impl PpuModeView {
+    /// The wire spelling.
+    pub fn name(self) -> &'static str {
+        match self {
+            PpuModeView::Hblank => "hblank",
+            PpuModeView::Vblank => "vblank",
+            PpuModeView::OamScan => "oam_scan",
+            PpuModeView::Drawing => "drawing",
+        }
+    }
+}
+
 impl PpuView {
     pub fn of(p: &gbcli_core::PpuStatus) -> Self {
         PpuView {

@@ -6,6 +6,7 @@ mod backtrace;
 mod code;
 mod decide;
 mod drive;
+mod keys;
 mod record;
 mod until;
 
@@ -14,7 +15,8 @@ use std::sync::atomic::AtomicBool;
 
 use gbcli_core::{Budget, CoreError, canonical_addr};
 use gbcli_protocol::{
-    BreakpointSpec, Location, StepKind, StopRecord, TimeMark, WatchAccess, WatchSpec,
+    BreakpointSpec, KeyEvent, Location, StepKind, StopRecord, TimeBase, TimeMark, WatchAccess,
+    WatchSpec,
 };
 
 use crate::cond::{Condition, EvalError, EvalWarning, ExprError};
@@ -23,6 +25,7 @@ use crate::machine::Machine;
 pub use backtrace::CallFrame;
 pub use code::{core_code, eval_code, expr_code};
 use drive::Goal;
+pub use keys::unapplied_keys;
 
 /// What frame and cycle counts count from (design §9). The default is the
 /// boot handoff; before it has been seen, records count from power-on and
@@ -48,6 +51,8 @@ pub struct RunOptions<'a> {
     pub allow_uninit: bool,
     /// Set from elsewhere to stop the run: a user break.
     pub interrupt: Option<&'a AtomicBool>,
+    /// Key presses and releases at frame offsets from the run's start.
+    pub keys: &'a [KeyEvent],
 }
 
 impl RunOptions<'_> {
@@ -57,6 +62,7 @@ impl RunOptions<'_> {
             since: Since::Boot,
             allow_uninit: false,
             interrupt: None,
+            keys: &[],
         }
     }
 }
@@ -206,6 +212,12 @@ impl Machine {
     /// Runs until PC reaches `at` (a temporary breakpoint).
     pub fn run_to(&mut self, at: Location, opts: &RunOptions<'_>) -> Result<Outcome, DebugError> {
         drive::drive(self, opts, Goal::To(canonical(at)))
+    }
+
+    /// What `since` counts from on this machine, and its mark, as a stop
+    /// record names them: `Boot` before the handoff falls back to power-on.
+    pub fn named_base(&self, since: &Since) -> (TimeBase, TimeMark) {
+        record::base(self, since)
     }
 
     /// Return addresses found on the stack, innermost first.

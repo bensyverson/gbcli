@@ -7,9 +7,12 @@ mod config;
 mod failure;
 mod head;
 mod history;
+mod listing;
 mod log;
 mod reads;
 mod run;
+mod shot;
+mod view;
 mod writes;
 
 use std::sync::Arc;
@@ -210,6 +213,10 @@ impl Handler {
             Op::Undo => self.undo(store, meta, actor, warnings),
             Op::Write(args) => self.write(store, meta, args, actor, warnings),
             Op::Events(args) => self.events(store, args),
+            Op::Shot(args) => self.shot(store, meta, args, warnings),
+            Op::View(args) => self.view(store, meta, args, warnings),
+            Op::Sym(args) => self.sym(store, meta, args, warnings),
+            Op::Checkpoints => self.checkpoints(store, meta),
             Op::Sessions | Op::Gaps | Op::Prune(_) | Op::Rm(_) => {
                 Err(Failure::new(ErrorBody::new(
                     ErrorCode::BadRequest,
@@ -314,6 +321,18 @@ mod review_tests;
 
 #[cfg(test)]
 mod rom_change_tests;
+
+#[cfg(test)]
+mod shot_tests;
+
+#[cfg(test)]
+mod keys_tests;
+
+#[cfg(test)]
+mod view_tests;
+
+#[cfg(test)]
+mod listing_tests;
 
 #[cfg(test)]
 mod tests {

@@ -10,6 +10,7 @@ mod error;
 mod events;
 mod history;
 mod io;
+mod listing;
 mod lock;
 mod log;
 mod prune;

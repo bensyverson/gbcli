@@ -37,3 +37,7 @@ SameBoy randomizes RAM at power-on (seeded, so it is the same every run), and `q
 ## 2026-11-06 — in an isolated worktree, a path containing `git` reads as a git command
 
 The worktree guard refused plain commands that only *mentioned* a path under `/Users/ben/git/...` inside a pipe, redirect or heredoc ("names git in a form too complex to verify"), including the session scratchpad (`/private/tmp/claude-501/-Users-ben-git-gbcli/...`), and `/usr/bin/time -p cargo test` ("cannot be shown not to be git"). Keep scratch files under the worktree's `target/` (gitignored), run scripts as `python3 -I <file>` rather than heredocs, and keep each call to one plain command (leaf 5ewkYZ).
+
+## 2026-11-06 — a `--frames` run stops at the vblank, before the ROM has seen it
+
+`run --frames N` ends on the core's vblank stop, which comes before the game's own vblank code runs. So anything a ROM does "at vblank" (sampling JOYP, logging a frame counter) for the stop's vblank happens at the start of the *next* run, as that run's frame 0. A test that assumed the next run's first sample was its first full frame was off by one (leaf bHJhLp, `crates/server/src/handle/keys_tests.rs`).

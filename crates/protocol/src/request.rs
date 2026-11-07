@@ -4,9 +4,13 @@
 use serde::{Deserialize, Serialize};
 
 use crate::checkpoint::WatchAccess;
+use crate::keys::KeyEvent;
+use crate::listing::SymArgs;
 use crate::parse::WireRequest;
 use crate::rev::Rev;
+use crate::shot::{ShotArgs, ShotReadArgs};
 use crate::stop::{StepKind, TimeBase};
+use crate::video::ViewArgs;
 
 /// A request: who asks, which session and revision it saw, and what to do.
 /// Reading one refuses fields it doesn't know, at the top level and in the
@@ -52,6 +56,10 @@ pub enum Op {
     Rm(RmArgs),
     Events(EventsArgs),
     Gaps,
+    Shot(ShotReadArgs),
+    View(ViewArgs),
+    Sym(SymArgs),
+    Checkpoints,
 }
 
 impl Op {
@@ -74,6 +82,10 @@ impl Op {
             Op::Rm(_) => "rm",
             Op::Events(_) => "events",
             Op::Gaps => "gaps",
+            Op::Shot(_) => "shot",
+            Op::View(_) => "view",
+            Op::Sym(_) => "sym",
+            Op::Checkpoints => "checkpoints",
         }
     }
 
@@ -114,9 +126,17 @@ pub struct RunArgs {
     /// Applied in order, before the run (design §11 step 2).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub writes: Vec<WriteArg>,
+    /// Key presses and releases at frame offsets from the run's start
+    /// (design §11 step 3), in the order given.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keys: Vec<KeyEvent>,
     /// Conditions evaluated at the stop (design §11 step 6).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub read: Vec<String>,
+    /// A screenshot of the stop, after the reads (design §11 step 6). Boxed
+    /// to keep `Op` small.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shot: Option<Box<ShotArgs>>,
     /// Save the stop state under this name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checkpoint: Option<String>,
@@ -136,12 +156,15 @@ pub enum Start {
 
 /// `--since` on the wire is one word: `boot`, `power-on`, or a checkpoint
 /// name. A checkpoint can't be named `boot` or `power-on` and be meant here.
-mod since_word {
+pub(crate) mod since_word {
     use serde::{Deserialize, Deserializer, Serializer};
 
     use crate::stop::TimeBase;
 
-    pub fn serialize<S: Serializer>(base: &Option<TimeBase>, s: S) -> Result<S::Ok, S::Error> {
+    pub(crate) fn serialize<S: Serializer>(
+        base: &Option<TimeBase>,
+        s: S,
+    ) -> Result<S::Ok, S::Error> {
         match base {
             None => s.serialize_none(),
             Some(TimeBase::Boot) => s.serialize_str("boot"),
@@ -150,7 +173,9 @@ mod since_word {
         }
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<TimeBase>, D::Error> {
+    pub(crate) fn deserialize<'de, D: Deserializer<'de>>(
+        d: D,
+    ) -> Result<Option<TimeBase>, D::Error> {
         Ok(
             Option::<String>::deserialize(d)?.map(|word| match word.as_str() {
                 "boot" => TimeBase::Boot,

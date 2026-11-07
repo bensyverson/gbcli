@@ -10,6 +10,7 @@ use gbcli_core::{
 use gbcli_protocol::{Location, StepKind, StopReason, WatchAccess};
 
 use super::decide::{Notes, compile, decide, exec_breakpoint, exec_hit, reached, remove_once};
+use super::keys::Schedule;
 use super::record::record;
 use super::until::Until;
 use super::{DebugError, Outcome, RunOptions};
@@ -136,6 +137,10 @@ fn run(
         write.insert(BOOT_OFF, BankSel::Any);
     }
 
+    // Input before the run (design §11 step 3): the events at frame 0 first.
+    let mut keys = Schedule::new(opts.keys);
+    keys.apply_due(m, 0);
+
     let until = condition.map(|c| Until::new(c, m.core()));
     let no_stores = StoreFilter::new();
     let stores = until.as_ref().map_or(&no_stores, |u| &u.triggers.stores);
@@ -201,10 +206,12 @@ fn run(
         req.read = &read;
         req.write = &write;
         req.stores = stores;
-        req.stop_at_frame =
-            goal == Goal::Frame || until.as_ref().is_some_and(|u| u.triggers.vblank);
+        req.stop_at_frame = goal == Goal::Frame
+            || until.as_ref().is_some_and(|u| u.triggers.vblank)
+            || keys.pending();
         let stop = m.core_mut().run(&mut req)?;
         used += stop.used;
+        keys.apply_due(m, used.frames);
         let fired = until
             .as_ref()
             .is_some_and(|u| u.fired(&stop, ly_before, m.core()));

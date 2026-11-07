@@ -82,11 +82,18 @@ pub fn tileset(core: &dyn Core, palette: TilePalette) -> Result<Image, ViewError
         ))
 }
 
-/// The whole 32×32 map as LCDC addresses its tiles, colored as the PPU colors
-/// it, with the 160×144 viewport outlined at (SCX, SCY) when the map shown is
-/// the background's.
-pub fn tilemap(core: &dyn Core, choice: MapChoice) -> Result<Image, ViewError> {
-    let colors = Colors::read(core)?;
+/// Which map a [`MapChoice`] shows and how its tile IDs address tiles, as
+/// LCDC says now: what [`tilemap`] draws, for a caller that wants the data
+/// (`gbcli_engine::inspect::video::tilemap`) instead.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MapLayout {
+    pub area: MapArea,
+    pub addressing: TileAddressing,
+    /// Whether `area` is the map the background shows (LCDC bit 3).
+    pub background: bool,
+}
+
+pub fn map_layout(core: &dyn Core, choice: MapChoice) -> Result<MapLayout, ViewError> {
     let lcdc = display_register(core, IoReg::LCDC)?;
     let pick = |bit: u8| {
         if lcdc & bit != 0 {
@@ -106,6 +113,33 @@ pub fn tilemap(core: &dyn Core, choice: MapChoice) -> Result<Image, ViewError> {
     } else {
         TileAddressing::Signed8800
     };
+    Ok(MapLayout {
+        area,
+        addressing,
+        background: area == bg_area,
+    })
+}
+
+/// The object height LCDC bit 2 selects, read as the other display registers
+/// are (so at any instant, unlike `inspect::video::object_height`).
+pub fn object_height(core: &dyn Core) -> Result<ObjectHeight, ViewError> {
+    Ok(if display_register(core, IoReg::LCDC)? & 0x04 != 0 {
+        ObjectHeight::Sixteen
+    } else {
+        ObjectHeight::Eight
+    })
+}
+
+/// The whole 32×32 map as LCDC addresses its tiles, colored as the PPU colors
+/// it, with the 160×144 viewport outlined at (SCX, SCY) when the map shown is
+/// the background's.
+pub fn tilemap(core: &dyn Core, choice: MapChoice) -> Result<Image, ViewError> {
+    let colors = Colors::read(core)?;
+    let MapLayout {
+        area,
+        addressing,
+        background,
+    } = map_layout(core, choice)?;
     let map = map_data(core, area, addressing)?;
     let mut image = Image::filled(256, 256, GAP);
     for (i, entry) in map.entries.iter().enumerate() {
@@ -132,7 +166,7 @@ pub fn tilemap(core: &dyn Core, choice: MapChoice) -> Result<Image, ViewError> {
             TileAddressing::Signed8800 => "8800 signed",
         }
     );
-    if area == bg_area {
+    if background {
         let scx = u32::from(display_register(core, IoReg::SCX)?);
         let scy = u32::from(display_register(core, IoReg::SCY)?);
         image.outline_wrapped(scx, scy, SCREEN.0, SCREEN.1, VIEWPORT);
@@ -148,12 +182,7 @@ pub fn tilemap(core: &dyn Core, choice: MapChoice) -> Result<Image, ViewError> {
 /// it (its tile or tile pair, flips, palette) with color 0 as [`TRANSPARENT`].
 pub fn oam_sheet(core: &dyn Core) -> Result<Image, ViewError> {
     let colors = Colors::read(core)?;
-    // LCDC bit 2, read as the other display registers are.
-    let height = if display_register(core, IoReg::LCDC)? & 0x04 != 0 {
-        ObjectHeight::Sixteen
-    } else {
-        ObjectHeight::Eight
-    };
+    let height = object_height(core)?;
     let cell_h = match height {
         ObjectHeight::Eight => 8,
         ObjectHeight::Sixteen => 16,

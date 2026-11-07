@@ -5,13 +5,17 @@
 mod checkpoint;
 mod error;
 mod hex;
+mod keys;
+mod listing;
 mod parse;
 mod request;
 mod response;
 mod rev;
 mod session;
+mod shot;
 mod stop;
 mod strict;
+mod video;
 mod views;
 
 pub use checkpoint::{
@@ -20,6 +24,8 @@ pub use checkpoint::{
     model_name,
 };
 pub use error::{ErrorBody, ErrorCode};
+pub use keys::{Button, KEY_GRAMMAR, KeyAction, KeyError, KeyEvent, parse_keys};
+pub use listing::{CheckpointRow, SymArgs, SymbolArea, SymbolRow};
 pub use parse::{RequestError, parse_request};
 pub use request::{
     BreakArgs, CheckpointArgs, DeleteArgs, EventsArgs, Op, PruneArgs, ReadArgs, Request,
@@ -33,8 +39,13 @@ pub use rev::Rev;
 pub use session::{
     EventLogLine, GapCount, GapLine, SessionFile, SessionRow, StopSummary, UndoWalk,
 };
+pub use shot::{Crop, ShotArgs, ShotFrame, ShotMade, ShotReadArgs};
 pub use stop::{
     BudgetLimits, BudgetUse, Cadence, FrameShown, StepKind, StopReason, StopRecord, StopTime,
-    TimeBase,
+    TimeBase, vblank_name,
+};
+pub use video::{
+    AddressingView, ImageMade, ImageOut, MapAreaView, MapSel, OamView, TileView, VideoData,
+    ViewArgs, ViewKind, ViewMade,
 };
 pub use views::{FlagsView, PpuModeView, PpuView, RegistersView};

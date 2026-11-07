@@ -142,6 +142,7 @@ dependencies = [
  "gbcli-core",
  "gbcli-engine",
  "gbcli-protocol",
+ "gbcli-view",
  "serde",
  "serde_json",
 ]

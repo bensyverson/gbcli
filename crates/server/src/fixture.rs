@@ -20,6 +20,8 @@ pub const V2_SYM: &[u8] = include_bytes!("../../engine/tests/roms/rebuild_v2.sym
 /// V1 with a routine appended, so no live symbol moves.
 pub const V3: &[u8] = include_bytes!("../../engine/tests/roms/rebuild_v3.gb");
 pub const V3_SYM: &[u8] = include_bytes!("../../engine/tests/roms/rebuild_v3.sym");
+/// Logs the held buttons at every vblank (`joypad.asm`).
+pub const JOYPAD: &[u8] = include_bytes!("../../engine/tests/roms/joypad.gb");
 
 impl Fixture {
     /// A project directory with `demo.gb` and a `demo` session created.
@@ -32,11 +34,20 @@ impl Fixture {
         Fixture::make(name, true)
     }
 
+    /// As [`Fixture::new`], over `rom` instead of V1.
+    pub fn with_rom(name: &str, rom: &[u8]) -> Fixture {
+        Fixture::build(name, rom, false)
+    }
+
     fn make(name: &str, sym: bool) -> Fixture {
+        Fixture::build(name, V1, sym)
+    }
+
+    fn build(name: &str, rom: &[u8], sym: bool) -> Fixture {
         let dir = std::env::temp_dir().join(format!("gbcli-server-{}-{name}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).expect("temp project");
-        fs::write(dir.join("demo.gb"), V1).expect("rom");
+        fs::write(dir.join("demo.gb"), rom).expect("rom");
         if sym {
             fs::write(dir.join("demo.sym"), V1_SYM).expect("sym");
         }

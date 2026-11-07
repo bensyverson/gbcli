@@ -8,6 +8,7 @@ mod blob;
 mod display;
 mod hooks;
 mod memory;
+mod raster;
 mod run;
 mod support;
 mod watch;

@@ -6,6 +6,8 @@
 
 > **Updated 2026-11-06 (leaf `Jwo9sg`):** the STOP-wake bug in gbcli-sameboy is fixed, and the baseline was rewritten by the same command (`cargo run --release -p gbcli-corpus -- --write tests/corpus/baseline-sameboy.json`): **4,491 runs: 4,126 pass, 317 fail, 48 skip**, docboy 2,772 / 166 / 11. The only status changes are 7 docboy STOP cases, fail → pass; the other 12 of the 19 now wake and fail their own check. Details in [2026-11-06-docboy-baseline.md](2026-11-06-docboy-baseline.md).
 
+> **Updated 2026-11-06 (leaf `34Nx7n`):** emulated time now passes in STOP (design §2), and the runner lets it pass while a scheduled input is pending. `--check` changed one row, docboy's `mbc3_rtc_gb_stopped_recover` on dmg-B, fail → pass; rewritten with `--write` (72.9 s on 8 threads): **4,491 runs: 4,127 pass, 316 fail, 48 skip**, docboy 2,773 / 165 / 11.
+
 ## Re-running it
 
 ```

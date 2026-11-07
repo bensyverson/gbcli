@@ -1,23 +1,27 @@
 #!/bin/zsh
-# What the cycle profiler costs (leaf 6eLWSu): crates/engine/examples/profile_bench.rs
+# What the cycle profiler costs (leaves 6eLWSu, fWZwxe): crates/engine/examples/profile_bench.rs
 # in modes plain (a run with no sink), profile (execution events and the shadow
-# stack, Machine::profile) and frames (the per-frame budget, Machine::frame_budget),
-# run in interleaved rounds so load on a shared machine hits every mode alike.
+# stack, Machine::profile), frames (the per-frame budget, Machine::frame_budget) and
+# raster (line starts and IO writes, Machine::raster), run in interleaved rounds so
+# load on a shared machine hits every mode alike.
 # Prints every run, then each mode's best and median speed and its cost against
 # plain's best.
 #
 # Usage (from anywhere):
-#   scripts/bench/profile-overhead/run.sh ROM [rounds (default 5)] [frames (default 3600)]
+#   scripts/bench/profile-overhead/run.sh ROM [rounds (default 5)] [frames (default 3600)] [modes (default "plain profile frames raster")]
 # e.g.
 #   scripts/bench/profile-overhead/run.sh tests/corpus/fetched/blargg/cpu_instrs/cpu_instrs.gb 5 3600
+#   scripts/bench/profile-overhead/run.sh tests/corpus/fetched/blargg/cpu_instrs/cpu_instrs.gb 5 3600 "plain raster"
+# plain is always measured, since every cost is against it.
 set -euo pipefail
 
 repo_root=${0:A:h:h:h:h}
-rom=${1:?usage: run.sh ROM [rounds] [frames]}
+rom=${1:?usage: run.sh ROM [rounds] [frames] [modes]}
 rom=${rom:A}
 rounds=${2:-5}
 frames=${3:-3600}
-modes=(plain profile frames)
+requested=(${(z)${4:-profile frames raster}})
+modes=(plain ${requested:#plain})
 
 cd "$repo_root"
 cargo build --release -q -p gbcli-engine --example profile_bench

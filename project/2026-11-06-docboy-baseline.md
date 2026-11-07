@@ -6,6 +6,8 @@
 
 > **Update 2026-11-06 (leaf `RU4MNT`): the 12 "after STOP" cases are classified; 1 is ours, 11 are disputed.** Measured by letting SameBoy step through STOP itself (`gbcli_pre_run` never returning `GBCLI_PRE_STOPPED`, so emulated time passes until the key, as in SameBoy's own frontend) and re-running `--suite docboy --id stop`: `mbc3_rtc_gb_stopped_recover` passes, and the other 11 fail exactly as before. So one case is a runner artifact (no emulated time, hence no RTC time, passes in STOP) and the clock skip plays no part in the other 11, which disagree with docboy under SameBoy's own STOP behavior. Details under "Harness: no time passes in STOP" and "Disputed: docboy after STOP" below. Not fixed: letting time pass in STOP needs the core to run through it, a `Core` contract change queued for a decision. Counts: runner artifacts are 8 of the 166 (6 power-on OAM seed, 1 STOP unexplained, 1 no time in STOP); disputed are 147.
 
+> **Update 2026-11-06 (leaf `34Nx7n`): 165 fail now, not 166; runner artifacts are 7.** The core contract changed so emulated time passes in STOP (design §2, `InStop::PassTime`), and the runner passes time in STOP while a scheduled input is pending instead of skipping its clock (`Driver::idle_until` is gone). `mbc3_rtc_gb_stopped_recover` passes, as the RU4MNT measurement predicted. `cargo run --release -p gbcli-corpus -- --check tests/corpus/baseline-sameboy.json` (97.8 s on 8 threads) changed exactly that row, fail → pass, and the baseline was rewritten with `--write`. The other 11 STOP cases still fail as classified below; the clock skip played no part in them.
+
 ## Re-running it
 
 ```
@@ -60,7 +62,7 @@ Only docboy rows use it. `judge::run` boots every other row with the model's bui
 |---|---|---|
 | ~~Harness: STOP wake bug~~ | ~~19~~ 0 | fixed, job `Jwo9sg`: 7 now pass, 12 moved to the next row |
 | ~~Unexplained: after STOP~~ | ~~12~~ 0 | classified, job `RU4MNT`: split into the next two rows |
-| Harness: no time passes in STOP | 1 | below |
+| ~~Harness: no time passes in STOP~~ | ~~1~~ 0 | fixed, job `34Nx7n`: passes |
 | Disputed: docboy after STOP | 11 | below |
 | Harness: STOP, unexplained | 1 | below |
 | Harness: power-on OAM seed | 6 | below |

@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use gbcli_core::{BootRom, FrameRef, Keys, Pixels, Region, VblankKind};
+use gbcli_core::{BootRom, FrameRef, InStop, Keys, Pixels, Region, VblankKind};
 use serde::Deserialize;
 
 use crate::drive::{Driver, Event};
@@ -306,16 +306,17 @@ fn judge(d: &mut Driver, case: &Case, reference: Option<&[u16]>) -> Result<Verdi
         if !at_instruction {
             until = until.min(forced_at.unwrap_or(u64::MAX)).min(next_check);
         }
+        // While a key is coming, STOP passes time until it, as on hardware.
+        d.in_stop = if inputs.peek().is_some() {
+            InStop::PassTime
+        } else {
+            InStop::End
+        };
         match d.advance(until, at_instruction)? {
             Event::Serial => continue,
             Event::Locked(op) => return Ok(Verdict::fail(format!("the CPU locked on {op:#04x}"))),
-            Event::Stopped if inputs.peek().is_none() => {
-                return Ok(Verdict::fail("the CPU stopped with no wake source"));
-            }
             Event::Stopped => {
-                // Waiting in STOP for a scheduled input: skip ahead to it.
-                d.idle_until(inputs.peek().map_or(max, |i| i.0));
-                continue;
+                return Ok(Verdict::fail("the CPU stopped with no wake source"));
             }
             Event::LdBB => {
                 if let Some(v) = check(d, case, reference)? {

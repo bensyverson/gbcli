@@ -306,3 +306,21 @@ pub const GBCLI_PRE_RUN: c_int = 0;
 pub const GBCLI_PRE_ILLEGAL: c_int = 1;
 /// `gbcli_pre_run`: in STOP mode with nothing to wake it.
 pub const GBCLI_PRE_STOPPED: c_int = 2;
+
+/// `GB_lcd_line_callback_t` (gb.h): the display started line `line`.
+pub type GB_lcd_line_callback_t = Option<unsafe extern "C" fn(gb: *mut GB_gameboy_t, line: u8)>;
+/// `GB_lcd_status_callback_t` (gb.h): the LCD was turned on or off.
+pub type GB_lcd_status_callback_t = Option<unsafe extern "C" fn(gb: *mut GB_gameboy_t, on: bool)>;
+
+unsafe extern "C" {
+    /// SameBoy calls this at the start of every line but 153 and the first
+    /// line after the LCD is turned on, and with line 0 as the LCD turns off.
+    pub fn GB_set_lcd_line_callback(gb: *mut GB_gameboy_t, callback: GB_lcd_line_callback_t);
+    /// Called from the LCDC write, before SameBoy applies it.
+    pub fn GB_set_lcd_status_callback(gb: *mut GB_gameboy_t, callback: GB_lcd_status_callback_t);
+    /// The display's own line, or -1 with the LCD off.
+    pub fn gbcli_ppu_line(gb: *mut GB_gameboy_t) -> c_int;
+    /// Ticks the display has been handed but not run, from inside a display
+    /// callback: the display is that far behind `gbcli_cycles_since_run`.
+    pub fn gbcli_display_unrun(gb: *mut GB_gameboy_t) -> c_uint;
+}

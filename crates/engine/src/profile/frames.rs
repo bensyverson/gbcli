@@ -31,6 +31,7 @@ impl EventSink for Split {
         EventKinds {
             exec: true,
             raster: false,
+            ppu_modes: false,
         }
     }
 

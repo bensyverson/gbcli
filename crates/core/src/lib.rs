@@ -20,13 +20,14 @@ pub use audio::{
     is_sound_addr,
 };
 pub use display::{ColorMode, LiveFrame, PixelBuf};
-pub use error::{CoreError, Feature, Support};
+pub use error::{CoreError, Feature, Gap, Support};
 pub use filter::{AddrFilter, BankSel, StoreFilter, canonical_addr};
 pub use region::{
     FrameRef, FrameTag, Layer, LayerMap, Pixels, Region, RegionView, VblankKind, WrittenView,
 };
 pub use run::{
-    Budget, BudgetKind, CpuStep, Event, EventKinds, EventSink, PpuMode, RunRequest, StepUnit, Usage,
+    Budget, BudgetKind, CpuStep, Event, EventKinds, EventSink, InStop, PpuMode, RunRequest,
+    StepUnit, Usage,
 };
 pub use state::{
     BootRom, CoreConfig, CoreInfo, IoReg, JoypadBounce, Keys, Model, PpuStatus, Registers,

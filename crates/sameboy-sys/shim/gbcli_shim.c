@@ -406,3 +406,19 @@ void gbcli_audio_restart(GB_gameboy_t *gb)
     out->sample_fraction = 0;
     out->sample_cycles = 0;
 }
+
+// The raster timeline (leaf fWZwxe). The line the display state machine is
+// on, or -1 with the LCD off. This is SameBoy's own line counter, which
+// reaches 153 (LY reads 0 for most of that line) and changes exactly where
+// the LCD line callback fires.
+int gbcli_ppu_line(GB_gameboy_t *gb)
+{
+    if (!(gb->io_registers[GB_IO_LCDC] & GB_LCDC_ENABLE)) return -1;
+    return gb->current_line;
+}
+
+// Ticks (8 MHz) the display has been handed but has not run yet, read from
+// inside a display callback: GB_display_run adds a whole chunk of cycles
+// before running the state machine through it, so the state machine is at
+// the chunk's end minus these.
+unsigned gbcli_display_unrun(GB_gameboy_t *gb) { return gb->display_cycles > 0 ? gb->display_cycles : 0; }

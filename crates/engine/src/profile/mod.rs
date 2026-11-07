@@ -1,12 +1,15 @@
 //! The cycle profiler: exact emulated cycle costs between two points
-//! (`measure`), and per routine by `.sym` (`profile`). Design §11.
+//! (`measure`), per routine by `.sym` (`profile`), per frame, and the raster
+//! timeline (`raster`). Design §11.
 
 mod frames;
 mod measure;
+mod raster;
 mod routines;
 
 pub use frames::FrameBudget;
 pub use measure::{Leg, MeasureError, MeasureSpec, Measurement, Stats};
+pub use raster::{ModeChange, Raster, RasterLine, RasterTimeline, RasterWrite};
 pub use routines::{Entry, Profile, RoutineCost, Routines, ShadowStats};
 
 use gbcli_core::{Core, Ticks};

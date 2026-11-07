@@ -6,7 +6,7 @@
 //! after the SC write is too late: the first bit may already have shifted.)
 
 use gbcli_core::{
-    Access, AddrFilter, BankSel, Budget, Core, Region, RunRequest, StopReason, Ticks,
+    Access, AddrFilter, BankSel, Budget, Core, InStop, Region, RunRequest, StopReason, Ticks,
 };
 
 /// Ticks per emulated second (2^23 Hz).
@@ -46,8 +46,10 @@ pub struct Driver {
     pub serial: Vec<u8>,
     /// Ticks at hand-over to the cartridge; exits and timeouts count from here.
     pub start: u64,
-    /// Ticks the runner skipped while the core was in STOP (see `idle_until`).
-    idle: u64,
+    /// What runs do in STOP: `End` (the default) when no input is coming,
+    /// so a STOP nothing can wake ends the case at once; `PassTime` while
+    /// one is, so the core runs to it with emulated time passing.
+    pub in_stop: InStop,
     /// SB and SC.
     sc: AddrFilter,
     /// The last byte the CPU wrote to SB.
@@ -69,7 +71,7 @@ impl Driver {
             core,
             serial: Vec::new(),
             start: 0,
-            idle: 0,
+            in_stop: InStop::End,
             sc,
             sb: 0,
             rom_ld_b_b: ld_b_b_candidates(rom),
@@ -91,15 +93,9 @@ impl Driver {
         Ok(driver)
     }
 
-    /// Emulated ticks since hand-over, plus any time spent idling in STOP.
+    /// Emulated ticks since hand-over.
     pub fn elapsed(&self) -> u64 {
-        self.core.now().0 - self.start + self.idle
-    }
-
-    /// Lets the clock the runner judges by jump to `at` while the core sits in
-    /// STOP, which a core can't run through (it stops before the instruction).
-    pub fn idle_until(&mut self, at: u64) {
-        self.idle += at.saturating_sub(self.elapsed());
+        self.core.now().0 - self.start
     }
 
     /// Runs until `until` ticks after hand-over, returning early on LD B,B
@@ -119,6 +115,7 @@ impl Driver {
             };
             static NONE: AddrFilter = AddrFilter::EMPTY;
             let mut req = RunRequest::new(Budget::ticks(budget));
+            req.in_stop = self.in_stop;
             req.write = &self.sc;
             req.exec = if watch_ld_b_b { &self.ld_b_b } else { &NONE };
             let stop = self.core.run(&mut req).map_err(|e| e.to_string())?;

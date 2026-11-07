@@ -4,7 +4,7 @@
 use std::fmt;
 
 use gbcli_core::{
-    AddrFilter, BankSel, Budget, Core, CoreError, RunRequest, StopReason, Ticks, Usage,
+    AddrFilter, BankSel, Budget, Core, CoreError, InStop, RunRequest, StopReason, Ticks, Usage,
 };
 use gbcli_protocol::Location;
 
@@ -233,6 +233,9 @@ impl Runner<'_> {
         let completed = iteration;
         loop {
             let mut req = RunRequest::new(self.budget.remaining_after(&self.used));
+            // No key comes during a measurement, so a STOP nothing can wake
+            // ends it rather than spending the budget.
+            req.in_stop = InStop::End;
             req.exec = filter;
             req.write = self.key1;
             let stop = self.core.run(&mut req)?;

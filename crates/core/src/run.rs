@@ -116,6 +116,20 @@ pub enum StepUnit {
     Dot,
 }
 
+/// What a run does while the CPU is in STOP.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum InStop {
+    /// Step through STOP as the hardware does: emulated time passes (a
+    /// cartridge RTC counts; on CGB the PPU runs) until a key in a selected
+    /// joypad row wakes the CPU, or the run ends on its budget or a filter.
+    #[default]
+    PassTime,
+    /// End the run with [`StopReason::Stopped`](crate::StopReason::Stopped)
+    /// as soon as the CPU is in STOP with nothing to wake it, before any time
+    /// passes, for callers that can't make use of the time (no key is coming).
+    End,
+}
+
 /// One run: a budget, the candidate filters, and optional event taps.
 ///
 /// The core only filters; the engine decides (design §2.1). A filter hit ends
@@ -136,6 +150,8 @@ pub struct RunRequest<'a> {
     pub stores: &'a StoreFilter,
     /// Stop after the next vblank.
     pub stop_at_frame: bool,
+    /// What to do while the CPU is in STOP.
+    pub in_stop: InStop,
     /// Taps and the profiler; pure data push, no core access.
     pub sink: Option<&'a mut dyn EventSink>,
 }
@@ -144,7 +160,8 @@ static EMPTY: AddrFilter = AddrFilter::EMPTY;
 static NO_STORES: StoreFilter = StoreFilter::new();
 
 impl<'a> RunRequest<'a> {
-    /// A request with no filters, no frame stop and no sink.
+    /// A request with no filters, no frame stop and no sink, that lets time
+    /// pass in STOP.
     pub fn new(budget: Budget) -> Self {
         RunRequest {
             budget,
@@ -154,6 +171,7 @@ impl<'a> RunRequest<'a> {
             veto: &EMPTY,
             stores: &NO_STORES,
             stop_at_frame: false,
+            in_stop: InStop::PassTime,
             sink: None,
         }
     }
@@ -184,20 +202,26 @@ pub enum CpuStep {
 /// Something a tap or the profiler receives during a run.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Event {
+    /// A write to an IO register (FF00-FF7F), sent as it lands.
     IoWrite {
+        /// The register's low address byte.
         reg: u8,
         value: u8,
         at: Ticks,
+        /// The PC of the instruction that wrote it.
+        pc: u16,
+        /// The PPU's line when the write landed; `None` while the LCD is off.
+        line: Option<u8>,
+        /// The dot within that line, if the core can place it
+        /// ([`Feature::PpuDot`](crate::Feature::PpuDot)).
+        dot: Option<u16>,
     },
-    PpuMode {
-        mode: PpuMode,
-        ly: u8,
-        at: Ticks,
-    },
-    Scanline {
-        ly: u8,
-        at: Ticks,
-    },
+    /// The PPU changed mode
+    /// ([`Feature::PpuModeEvents`](crate::Feature::PpuModeEvents)).
+    PpuMode { mode: PpuMode, ly: u8, at: Ticks },
+    /// The PPU started a line. A core may miss some line starts; a write
+    /// still carries its line.
+    Scanline { ly: u8, at: Ticks },
     /// One CPU step, sent after it completes.
     Exec {
         /// PC and its bank before the step.
@@ -221,9 +245,11 @@ pub enum Event {
 pub struct EventKinds {
     /// [`Event::Exec`] ([`Feature::EventSinks`](crate::Feature::EventSinks)).
     pub exec: bool,
-    /// [`Event::IoWrite`], [`Event::PpuMode`] and [`Event::Scanline`]
+    /// [`Event::IoWrite`] and [`Event::Scanline`]
     /// ([`Feature::RasterEvents`](crate::Feature::RasterEvents)).
     pub raster: bool,
+    /// [`Event::PpuMode`] ([`Feature::PpuModeEvents`](crate::Feature::PpuModeEvents)).
+    pub ppu_modes: bool,
 }
 
 /// Receives events during a run. Must not call back into the core.

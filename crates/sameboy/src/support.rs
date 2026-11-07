@@ -64,8 +64,10 @@ pub(crate) fn support(feature: Feature) -> Support {
         }
         Feature::Mmm01RomPatch => "MMM01 rotates its ROM in memory, so file offsets don't map",
         Feature::EventSinks => return Support::Yes,
-        Feature::RasterEvents => {
-            "PPU mode, scanline and IO-write events are not implemented in the SameBoy backend"
+        Feature::RasterEvents => return Support::Yes,
+        Feature::PpuModeEvents => {
+            "SameBoy has no PPU mode callback, and STAT's mode bits lag while mode-3 cycles \
+             are batched, so a transition can't be timed"
         }
     };
     Support::No { reason }

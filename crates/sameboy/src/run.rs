@@ -1,5 +1,9 @@
 //! The run loop: budgets, filters, frame stops, the illegal-opcode and STOP checks.
 //!
+//! In STOP, a run either steps through it, so emulated time passes as on
+//! hardware (`InStop::PassTime`), or ends before the step when no key can
+//! wake the CPU (`InStop::End`).
+//!
 //! SameBoy locks the CPU on an illegal opcode (IE=0, halted) without telling
 //! anyone, so the loop checks the opcode the next step will execute before
 //! running it (`gbcli_pre_run` in the shim). Execution filters are checked the
@@ -8,12 +12,13 @@
 //! after the instruction that made the access.
 
 use gbcli_core::{
-    Access, CoreError, CpuStep, Event, Feature, FrameTag, Hit, Hits, RunRequest, Stop, StopReason,
-    Ticks, Usage,
+    Access, CoreError, CpuStep, Event, EventKinds, EventSink, Feature, FrameTag, Hit, Hits, InStop,
+    RunRequest, Stop, StopReason, Ticks, Usage,
 };
 use sameboy_sys as sb;
 
 use crate::hooks::{Hooks, on_exec, vblank_kind};
+use crate::raster;
 use crate::watch::{self, Armed};
 use crate::{SameBoy, unsupported_err};
 
@@ -25,15 +30,21 @@ struct Arming {
     read: bool,
     write: bool,
     exec: bool,
+    raster: bool,
 }
 
 impl Arming {
-    fn new(core: &mut SameBoy, req: &RunRequest<'_>, exec: bool) -> Arming {
+    fn new(core: &mut SameBoy, req: &RunRequest<'_>, kinds: EventKinds) -> Arming {
+        let (exec, raster) = (kinds.exec, kinds.raster);
         let gb = core.raw();
         let read = !req.read.is_empty();
         let write = !(req.write.is_empty() && req.veto.is_empty() && req.stores.is_empty());
         let hooks = core.hooks_mut();
         hooks.in_run = true;
+        if raster {
+            hooks.raster = Some(Vec::new());
+            hooks.lcd_turning_off = false;
+        }
         if read || write {
             hooks.armed = Some(Armed {
                 read: req.read,
@@ -47,8 +58,12 @@ impl Arming {
             if read {
                 sb::GB_set_read_memory_callback(gb, Some(watch::on_read));
             }
-            if write {
+            if write || raster {
                 sb::GB_set_write_memory_callback(gb, Some(watch::on_write));
+            }
+            if raster {
+                sb::GB_set_lcd_line_callback(gb, Some(raster::on_line));
+                sb::GB_set_lcd_status_callback(gb, Some(raster::on_lcd_status));
             }
             if exec {
                 sb::GB_set_execution_callback(gb, Some(on_exec));
@@ -60,6 +75,7 @@ impl Arming {
             read,
             write,
             exec,
+            raster,
         }
     }
 
@@ -79,12 +95,17 @@ impl Drop for Arming {
             if self.read {
                 sb::GB_set_read_memory_callback(self.gb, None);
             }
-            if self.write && !hooks.write_hook_wanted() {
+            if (self.write || self.raster) && !hooks.write_hook_wanted() {
                 sb::GB_set_write_memory_callback(self.gb, None);
             }
             if self.exec {
                 hooks.executed = None;
                 sb::GB_set_execution_callback(self.gb, None);
+            }
+            if self.raster {
+                hooks.raster = None;
+                sb::GB_set_lcd_line_callback(self.gb, None);
+                sb::GB_set_lcd_status_callback(self.gb, None);
             }
         }
     }
@@ -96,13 +117,13 @@ pub(crate) fn run(core: &mut SameBoy, req: &mut RunRequest<'_>) -> Result<Stop, 
         .as_ref()
         .map(|sink| sink.kinds())
         .unwrap_or_default();
-    if kinds.raster {
-        return Err(unsupported_err(Feature::RasterEvents));
+    if kinds.ppu_modes {
+        return Err(unsupported_err(Feature::PpuModeEvents));
     }
     let exec_events = kinds.exec;
-    let arming = Arming::new(core, req, exec_events);
+    let arming = Arming::new(core, req, kinds);
     let check_exec = !req.exec.is_empty();
-    let tapping = core.hooks().apu_log.is_some() || core.hooks().audio.is_some();
+    let tapping = kinds.raster || core.hooks().apu_log.is_some() || core.hooks().audio.is_some();
     let gb = core.raw();
     let regs = core.regs;
     let mut used = Usage::default();
@@ -116,14 +137,25 @@ pub(crate) fn run(core: &mut SameBoy, req: &mut RunRequest<'_>) -> Result<Stop, 
             sb::GBCLI_PRE_ILLEGAL => {
                 return Ok(stop(core, StopReason::Locked { opcode }, used));
             }
-            sb::GBCLI_PRE_STOPPED => return Ok(stop(core, StopReason::Stopped, used)),
+            // Passing time, GB_run takes a STOP step (four T-cycles), as
+            // SameBoy's own frontend does.
+            sb::GBCLI_PRE_STOPPED if req.in_stop == InStop::End => {
+                return Ok(stop(core, StopReason::Stopped, used));
+            }
             _ => {}
         }
         // SAFETY: `regs` points into the live instance.
         let pc = unsafe { (*regs).pc };
         // A run never stops on an execution hit before its first step, so
-        // resuming from a breakpoint makes progress.
-        if check_exec && used.instructions > 0 && req.exec.may_match(pc) {
+        // resuming from a breakpoint makes progress. In HALT or STOP, PC
+        // already points past it, but the next step is an idle tick (or a
+        // wake, which SameBoy never folds into running that instruction).
+        if check_exec
+            && used.instructions > 0
+            && req.exec.may_match(pc)
+            // SAFETY: plain reads of a live instance outside GB_run.
+            && !unsafe { sb::gbcli_halted(gb) || sb::gbcli_stopped(gb) }
+        {
             // SAFETY: side-effect-free accessors.
             let bank = unsafe { sb::gbcli_bank_for(gb, pc) };
             if req.exec.matches(pc, bank) {
@@ -156,6 +188,11 @@ pub(crate) fn run(core: &mut SameBoy, req: &mut RunRequest<'_>) -> Result<Stop, 
 
         // SAFETY: no reference into the hooks is alive across this call.
         let ticks = u64::from(unsafe { sb::GB_run(gb) });
+        if kinds.raster
+            && let Some(sink) = req.sink.as_mut()
+        {
+            pass_raster(core.hooks_mut(), &mut **sink);
+        }
         if let (Some((sp_before, bank)), Some(sink)) = (before, req.sink.as_mut()) {
             // SAFETY: plain reads of a live instance outside GB_run.
             let (sp_after, next_pc, double_speed) =
@@ -209,6 +246,15 @@ pub(crate) fn run(core: &mut SameBoy, req: &mut RunRequest<'_>) -> Result<Stop, 
         }
         if frame_ended && req.stop_at_frame {
             return Ok(stop(core, StopReason::Frame, used));
+        }
+    }
+}
+
+/// Hands the step's raster events to the sink, keeping the buffer.
+fn pass_raster(hooks: &mut Hooks, sink: &mut dyn EventSink) {
+    if let Some(events) = &mut hooks.raster {
+        for event in events.drain(..) {
+            sink.event(event);
         }
     }
 }

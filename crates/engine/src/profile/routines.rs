@@ -115,6 +115,7 @@ impl EventSink for Routines {
         EventKinds {
             exec: true,
             raster: false,
+            ppu_modes: false,
         }
     }
 

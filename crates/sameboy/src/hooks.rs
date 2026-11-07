@@ -101,6 +101,11 @@ pub(crate) struct Hooks {
     /// The opcode SameBoy's execution callback saw this step, while a run's
     /// sink wants execution events; `None` when the step ran no instruction.
     pub executed: Option<u8>,
+    /// The raster events of the current step, while a run's sink wants them.
+    pub raster: Option<Vec<gbcli_core::Event>>,
+    /// Set as the LCD turns off, so the line callback SameBoy then fires is
+    /// not taken for a line start.
+    pub lcd_turning_off: bool,
 }
 
 impl Hooks {
@@ -126,6 +131,8 @@ impl Hooks {
             step_ticks: 0,
             in_run: false,
             executed: None,
+            raster: None,
+            lcd_turning_off: false,
         }
     }
 

@@ -356,12 +356,21 @@ fn halt_with_interrupts_off_stops() {
     assert!(m.core().registers().halted);
 }
 
+// Changed with the STOP contract (design §2, leaf 34Nx7n): this run ended at
+// once with `stopped`; time now passes in STOP, as on hardware, so a run
+// spends its budget there (a cartridge RTC counts) and a key can still wake it.
 #[test]
-fn stop_with_no_wake_source_stops() {
+fn a_run_in_stop_spends_its_budget_there() {
     let mut m = machine(STOP, None);
     let stop = run(&mut m, &opts());
-    assert_eq!(stop.reason, StopReason::Stopped);
+    assert_eq!(
+        stop.reason,
+        StopReason::BudgetExhausted {
+            kind: BudgetKind::Frames
+        }
+    );
     let pc = m.core().registers().pc;
+    assert_eq!(pc, 0x015D, "the PC after STOP");
     check_place(&m, &stop, pc);
 }
 

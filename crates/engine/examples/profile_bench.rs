@@ -7,7 +7,8 @@
 //! ```
 //!
 //! Modes: `plain` (a run with no sink), `profile` (`Machine::profile`: the
-//! execution events and the shadow stack), `frames` (`Machine::frame_budget`).
+//! execution events and the shadow stack), `frames` (`Machine::frame_budget`),
+//! `raster` (`Machine::raster`: line starts and IO writes, the raster timeline).
 //! The ROM boots on the built-in DMG boot ROM, then runs 100 frames before
 //! timing starts. Prints `MODE SECONDS SPEED` where SPEED is times realtime.
 
@@ -21,7 +22,7 @@ const WARMUP_FRAMES: u64 = 100;
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let [_, rom, frames, mode] = args.as_slice() else {
-        eprintln!("usage: profile_bench ROM FRAMES plain|profile|frames");
+        eprintln!("usage: profile_bench ROM FRAMES plain|profile|frames|raster");
         std::process::exit(2);
     };
     let rom = std::fs::read(rom).expect("read ROM");
@@ -49,6 +50,10 @@ fn main() {
         "frames" => {
             let budget = m.frame_budget(frames).expect("frame budget");
             std::hint::black_box(budget);
+        }
+        "raster" => {
+            let timeline = m.raster(frames).expect("raster");
+            std::hint::black_box(timeline);
         }
         other => panic!("unknown mode {other}"),
     }

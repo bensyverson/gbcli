@@ -23,7 +23,7 @@ pub(crate) const SGB_AUDIO_REASON: &str =
 
 /// When a callback fired: the start of the current step plus how far SameBoy
 /// got into it, or the step's start outside a run (a bus write).
-fn tap_time(gb: *mut sb::GB_gameboy_t, hooks: &Hooks) -> Ticks {
+pub(crate) fn tap_time(gb: *mut sb::GB_gameboy_t, hooks: &Hooks) -> Ticks {
     let into = if hooks.in_run {
         // SAFETY: a plain read of the live instance, inside its callback.
         u64::from(unsafe { sb::gbcli_cycles_since_run(gb) })

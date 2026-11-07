@@ -4,8 +4,8 @@ mod common;
 
 use common::*;
 use gbcli_core::{
-    Budget, BudgetKind, Core, CoreConfig, CoreError, Feature, IoReg, JoypadBounce, Keys, Model,
-    Region, RunRequest, StepUnit, Stop, StopReason, Support, Ticks,
+    AddrFilter, BankSel, Budget, BudgetKind, Core, CoreConfig, CoreError, Feature, InStop, IoReg,
+    JoypadBounce, Keys, Model, Region, RunRequest, StepUnit, Stop, StopReason, Support, Ticks,
 };
 use gbcli_sameboy::SameBoy;
 
@@ -113,7 +113,7 @@ fn unsupported_features_say_no_with_a_reason() {
         Feature::ExtraOam,
         Feature::ApuInternals,
         Feature::Mmm01RomPatch,
-        Feature::RasterEvents,
+        Feature::PpuModeEvents,
     ] {
         assert!(
             matches!(core.supports(feature), Support::No { reason } if !reason.is_empty()),
@@ -182,10 +182,39 @@ fn an_illegal_opcode_stops_before_the_cpu_locks() {
     assert_eq!(again.used.instructions, 0);
 }
 
+/// Runs with `in_stop` set.
+fn run_in_stop(core: &mut dyn Core, budget: Budget, in_stop: InStop) -> Stop {
+    let mut req = RunRequest::new(budget);
+    req.in_stop = in_stop;
+    core.run(&mut req).expect("run")
+}
+
+// The STOP contract changed (design §2, leaf 34Nx7n): a run now lets time
+// pass in STOP, as the hardware and SameBoy's own frontend do, so a cartridge
+// RTC counts through it. Ending at once with `Stopped` is kept as
+// `InStop::End`. The tests that pinned "no time passes in STOP" now ask for
+// `End` explicitly.
+
 #[test]
-fn stop_with_no_wake_source_ends_the_run() {
+fn time_passes_in_stop_until_the_budget_ends() {
     let mut core = quick_dmg(STOP);
     let stop = run(&mut core, Budget::frames(10));
+    assert_eq!(stop.reason, StopReason::Budget(BudgetKind::Frames));
+    assert_eq!(stop.used.frames, 10);
+    let frames = stop.used.ticks as f64 / Ticks::PER_FRAME as f64;
+    assert!((9.0..11.0).contains(&frames), "{frames} frames of ticks");
+    // The CPU never left STOP.
+    assert_eq!(core.region(Region::Wram).unwrap().bytes[0], 0x00);
+    let again = run(&mut core, Budget::ticks(1_000));
+    assert_eq!(again.reason, StopReason::Budget(BudgetKind::Ticks));
+    assert!(again.used.ticks >= 1_000);
+    assert_eq!(again.pc, stop.pc);
+}
+
+#[test]
+fn ending_in_stop_stops_with_no_wake_source() {
+    let mut core = quick_dmg(STOP);
+    let stop = run_in_stop(&mut core, Budget::frames(10), InStop::End);
     assert_eq!(stop.reason, StopReason::Stopped);
     assert!(stop.used.frames < 10);
     assert_eq!(core.region(Region::Wram).unwrap().bytes[0], 0x00);
@@ -193,11 +222,11 @@ fn stop_with_no_wake_source_ends_the_run() {
 
 /// Runs `stop_wake.gb` into STOP, presses `keys`, and runs again.
 fn press_while_stopped(mut core: SameBoy, keys: Keys) -> (SameBoy, Stop) {
-    let stop = run(&mut core, Budget::frames(10));
+    let stop = run_in_stop(&mut core, Budget::frames(10), InStop::End);
     assert_eq!(stop.reason, StopReason::Stopped);
     assert_eq!(core.region(Region::Wram).unwrap().bytes[0], 0x00);
     core.set_keys(keys);
-    let woke = run(&mut core, Budget::frames(2));
+    let woke = run_in_stop(&mut core, Budget::frames(2), InStop::End);
     (core, woke)
 }
 
@@ -205,6 +234,17 @@ fn press_while_stopped(mut core: SameBoy, keys: Keys) -> (SameBoy, Stop) {
 fn a_key_in_the_selected_row_wakes_a_stopped_core() {
     let (core, woke) = press_while_stopped(quick_dmg(STOP_WAKE), Keys::UP);
     assert_eq!(woke.reason, StopReason::Budget(BudgetKind::Frames));
+    assert_eq!(core.region(Region::Wram).unwrap().bytes[0], 0x99);
+}
+
+#[test]
+fn a_key_pressed_while_time_passes_in_stop_wakes_the_core() {
+    let mut core = quick_dmg(STOP_WAKE);
+    let parked = run(&mut core, Budget::frames(3));
+    assert_eq!(parked.reason, StopReason::Budget(BudgetKind::Frames));
+    assert_eq!(core.region(Region::Wram).unwrap().bytes[0], 0x00);
+    core.set_keys(Keys::UP);
+    run(&mut core, Budget::frames(1));
     assert_eq!(core.region(Region::Wram).unwrap().bytes[0], 0x99);
 }
 
@@ -224,8 +264,56 @@ fn a_key_outside_the_selected_row_lets_time_pass_but_stays_stopped() {
     // The CPU steps once in STOP to see the new keys, as on hardware.
     assert!(still.used.ticks > 0);
     assert_eq!(core.region(Region::Wram).unwrap().bytes[0], 0x00);
-    // With the keys settled, nothing can wake it and no time passes.
-    let again = run(&mut core, Budget::frames(2));
+    // With the keys settled, nothing can wake it: ending in STOP takes no
+    // time, and passing time leaves it stopped.
+    let again = run_in_stop(&mut core, Budget::frames(2), InStop::End);
     assert_eq!(again.reason, StopReason::Stopped);
     assert_eq!(again.used.ticks, 0);
+    let passed = run(&mut core, Budget::frames(2));
+    assert_eq!(passed.reason, StopReason::Budget(BudgetKind::Frames));
+    assert_eq!(core.region(Region::Wram).unwrap().bytes[0], 0x00);
+}
+
+/// An execution filter on the instruction after STOP, which SameBoy's PC
+/// already points at while the CPU sits in STOP.
+fn after_stop() -> AddrFilter {
+    let mut filter = AddrFilter::new();
+    filter.insert(0x015D, BankSel::Any);
+    filter
+}
+
+#[test]
+fn a_breakpoint_after_stop_waits_while_time_passes_in_stop() {
+    let mut core = quick_dmg(STOP_WAKE);
+    let filter = after_stop();
+    let mut req = RunRequest::new(Budget::frames(2));
+    req.exec = &filter;
+    let parked = core.run(&mut req).unwrap();
+    assert_eq!(parked.reason, StopReason::Budget(BudgetKind::Frames));
+    core.set_keys(Keys::UP);
+    let mut req = RunRequest::new(Budget::frames(2));
+    req.exec = &filter;
+    let woke = core.run(&mut req).unwrap();
+    assert!(
+        matches!(woke.reason, StopReason::Candidate(_)),
+        "{:?}",
+        woke.reason
+    );
+    assert_eq!(woke.pc, 0x015D);
+    // It stopped before the instruction ran.
+    assert_eq!(core.region(Region::Wram).unwrap().bytes[0], 0x00);
+}
+
+#[test]
+fn a_breakpoint_after_halt_waits_while_the_cpu_is_halted() {
+    // halt.gb: HALT at $0154 with IE = 0, so nothing wakes it; SameBoy's PC
+    // already points at the NOP after it.
+    let mut core = quick_dmg(include_bytes!("../../engine/tests/roms/halt.gb"));
+    let mut filter = AddrFilter::new();
+    filter.insert(0x0155, BankSel::Any);
+    let mut req = RunRequest::new(Budget::frames(2));
+    req.exec = &filter;
+    let stop = core.run(&mut req).unwrap();
+    assert_eq!(stop.reason, StopReason::Budget(BudgetKind::Frames));
+    assert!(core.registers().halted);
 }

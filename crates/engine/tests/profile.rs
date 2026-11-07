@@ -5,7 +5,7 @@
 mod common;
 
 use common::{cgb_machine, machine, step_to};
-use gbcli_core::{Budget, Registers};
+use gbcli_core::{Budget, Registers, StopReason};
 use gbcli_engine::disasm::{NoSymbols, decode};
 use gbcli_engine::profile::{CpuSpeed, Leg, MeasureError, MeasureSpec, Profile, RoutineCost};
 use gbcli_engine::{Machine, Symbols};
@@ -286,4 +286,31 @@ fn a_frame_that_halts_is_not_a_lag_frame_and_a_busy_one_is() {
     let mut busy = at_main_loop();
     let frames = busy.frame_budget(2).unwrap();
     assert!(frames.iter().all(|f| f.lag && f.idle_t == 0), "{frames:?}");
+}
+
+#[test]
+fn measure_ends_at_a_stop_nothing_can_wake() {
+    // stop.gb: STOP at $015B with neither joypad row selected; no key comes
+    // during a measurement, so waiting there would only spend the budget.
+    let m = common::machine(include_bytes!("../../sameboy/tests/roms/stop.gb"), None);
+    let place = |addr| Location {
+        addr,
+        bank: None,
+        symbol: None,
+    };
+    let spec = MeasureSpec {
+        from: place(0x0150),
+        to: place(0x015D),
+        iterations: 1,
+        budget: Budget::frames(30),
+    };
+    let err = m.measure(&spec).unwrap_err();
+    assert_eq!(
+        err,
+        MeasureError::Halted {
+            completed: 0,
+            leg: Leg::ToEnd,
+            reason: StopReason::Stopped
+        }
+    );
 }

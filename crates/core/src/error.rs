@@ -39,8 +39,10 @@ pub enum Feature {
     /// Event sinks on a run, with [`Event::Exec`](crate::Event::Exec) for
     /// every CPU step (the profiler).
     EventSinks,
-    /// PPU mode, scanline and IO-write events on a run (the raster timeline).
+    /// Scanline and IO-write events on a run (the raster timeline).
     RasterEvents,
+    /// PPU mode transitions as events on a run, each at the time it happened.
+    PpuModeEvents,
     /// The live, partly drawn framebuffer (`Core::live_frame`).
     LiveFrame,
     /// The core's color mode and its RGB output for a CGB color
@@ -68,6 +70,7 @@ impl Feature {
             Feature::Mmm01RomPatch => "mmm01_rom_patch",
             Feature::EventSinks => "event_sinks",
             Feature::RasterEvents => "raster_events",
+            Feature::PpuModeEvents => "ppu_mode_events",
             Feature::LiveFrame => "live_frame",
             Feature::DisplayColors => "display_colors",
         }
@@ -79,6 +82,13 @@ impl Feature {
 pub enum Support {
     Yes,
     No { reason: &'static str },
+}
+
+/// A feature a core can't provide, and why: one gap-ledger entry.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Gap {
+    pub feature: Feature,
+    pub reason: &'static str,
 }
 
 /// Everything a core call can fail with.

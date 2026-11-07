@@ -20,7 +20,7 @@ fn filter(entries: &[(u16, BankSel)]) -> AddrFilter {
 }
 
 fn hit(stop: &Stop) -> Hit {
-    match stop.reason {
+    match &stop.reason {
         StopReason::Candidate(hits) => hits.first(),
         other => panic!("expected a filter hit, got {other:?}"),
     }
@@ -245,7 +245,6 @@ fn every_hit_of_one_instruction_is_reported_in_access_order() {
     };
     let seen: Vec<(Access, u16)> = hits.iter().map(|h| (h.access, h.addr)).collect();
     assert_eq!(seen, [(Access::Read, 0xC000), (Access::Write, 0xC000)]);
-    assert!(!hits.overflowed());
 }
 
 #[test]

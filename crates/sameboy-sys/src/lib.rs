@@ -235,6 +235,10 @@ unsafe extern "C" {
     pub fn gbcli_bank_for(gb: *mut GB_gameboy_t, addr: u16) -> u16;
     pub fn gbcli_cart_ram_mirrored(gb: *mut GB_gameboy_t) -> bool;
     pub fn gbcli_cart_ram_offset(gb: *mut GB_gameboy_t, addr: u16) -> i32;
+    /// The address a CPU write at `addr` lands at, from inside the write
+    /// callback (before OAM DMA's bus-conflict redirect), or -1 when the
+    /// write reaches no memory but OAM.
+    pub fn gbcli_write_target(gb: *mut GB_gameboy_t, addr: u16) -> i32;
     pub fn gbcli_apu_synced(gb: *mut GB_gameboy_t) -> bool;
     pub fn gbcli_io_peek(gb: *mut GB_gameboy_t, reg: u8) -> c_int;
     pub fn gbcli_peek(gb: *mut GB_gameboy_t, addr: u16) -> c_int;

@@ -416,6 +416,26 @@ fn a_bank_qualified_address_may_start_with_a_hex_letter() {
 }
 
 #[test]
+fn a_bank_head_that_is_all_hex_letters_is_a_bank_as_in_the_address_grammar() {
+    // `ff:4000` and `A:4000` are banks $FF and $0A to `addr::parse`; a head
+    // that isn't hex names a region there, and must here too.
+    for (text, grammar) in [("[ff:4000]", "ff:4000"), ("[A:4000]", "A:4000")] {
+        let at = crate::addr::parse(grammar, None).expect("the grammar reads it");
+        assert_eq!(
+            parse(text),
+            Expr::Read {
+                width: Width::U8,
+                place: Place::Banked {
+                    bank: at.bank.expect("a bank"),
+                    addr: at.addr,
+                },
+            },
+            "{text}"
+        );
+    }
+}
+
+#[test]
 fn region_names_match_the_address_grammar() {
     let region = |text: &str| match parse(text) {
         Expr::Read {

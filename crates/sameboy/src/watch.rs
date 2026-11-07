@@ -1,9 +1,10 @@
 //! Address filters and never-written tracking on SameBoy's memory hooks.
 //!
 //! Known gaps, documented rather than papered over (`Feature` table):
-//! - the write callback misses OAM DMA and HDMA destination writes, and fires
-//!   before SameBoy's DMA bus-conflict redirect, so a CPU write during OAM DMA
-//!   is reported at the address the CPU named;
+//! - the write callback misses OAM DMA and HDMA destination writes. It fires
+//!   before SameBoy's OAM DMA bus-conflict redirect, so the shim's
+//!   `gbcli_write_target` names where a CPU write will land, and hits, store
+//!   hits and tracking all use that byte (a write the conflict drops is none);
 //! - the read callback also fires for SameBoy's own "safe" reads (we never
 //!   make any: inspection uses direct access and the shim's peeks);
 //! - execution filters are checked by the run loop, not the execution
@@ -209,6 +210,12 @@ pub(crate) unsafe extern "C" fn on_read(gb: *mut sb::GB_gameboy_t, addr: u16, da
 
 pub(crate) unsafe extern "C" fn on_write(gb: *mut sb::GB_gameboy_t, addr: u16, data: u8) -> bool {
     guard(gb, true, |hooks| {
+        // Hits, stores and tracking all name the byte the write lands in,
+        // which OAM DMA's bus conflict can move after this callback returns.
+        // SAFETY: a side-effect-free accessor on the live instance.
+        let Ok(addr) = u16::try_from(unsafe { sb::gbcli_write_target(gb, addr) }) else {
+            return true; // it changes no memory we watch or track
+        };
         let addr = canonical_addr(addr);
         // Computed at most once per write, and only when something needs it.
         let mut store = None;

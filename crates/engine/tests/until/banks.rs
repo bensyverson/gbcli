@@ -1,25 +1,7 @@
 //! Predicates over memory in switchable banks: each must stop exactly where
 //! the per-instruction oracle does, whatever bank the write was made through.
 
-use gbcli_core::{BootRom, CoreConfig, Model};
-use gbcli_engine::Backend;
-
 use super::*;
-
-/// A CGB-mode machine on `rom`, handed over by the quick boot ROM (which,
-/// unlike the real one, never switches a CGB to DMG mode).
-fn cgb_machine(rom: &[u8], sym: Option<&str>) -> Machine {
-    let mut config = CoreConfig::new(Model::CgbE, rom.to_vec());
-    config.boot_rom = BootRom::Custom(QUICK_BOOT.to_vec());
-    let mut m = Machine::new(Backend::sameboy(), config, sym).expect("machine");
-    steps(&mut m, 4);
-    assert_eq!(
-        m.core().registers().pc,
-        0x0100,
-        "quick boot didn't hand over"
-    );
-    m
-}
 
 /// Counts up at $D000 forever: `ld hl, $D000; xor a; ld [hl], a; .loop:
 /// inc [hl]; jr .loop`.
@@ -118,6 +100,17 @@ fn a_write_through_an_aliased_ram_bank_reaches_bank_0() {
     step_to(&mut m, 0x015F);
     check(&mut m, "[sram:0] == 5", &lenient(), 100, Cadence::Writes);
     check(&mut m, "[$00:$A000] == 9", &lenient(), 100, Cadence::Writes);
+}
+
+#[test]
+fn a_cpu_write_that_cgb_oam_dma_moves_stops_where_it_lands() {
+    // On CGB, while OAM DMA reads ROM, a CPU write to WRAM lands in the
+    // other 4 KiB half: ld [$D123] writes $C123 (SameBoy memory.c).
+    let (rom, call_at) = dma_conflict_rom(true);
+    let mut m = cgb_machine(&rom, None);
+    step_to(&mut m, call_at);
+    check(&mut m, "[$C123] == $77", &lenient(), 200, Cadence::Writes);
+    assert_eq!(m.core().region(Region::Wram).unwrap().bytes[0x1123], 0);
 }
 
 #[test]

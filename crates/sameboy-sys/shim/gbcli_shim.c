@@ -94,6 +94,50 @@ int32_t gbcli_cart_ram_offset(GB_gameboy_t *gb, uint16_t addr)
     return ((addr & 0x1FFF) + bank * 0x2000) & (gb->mbc_ram_size - 1);
 }
 
+// SameBoy's bus_for_addr and is_addr_in_dma_use (memory.c), which are static.
+enum { BUS_MAIN, BUS_RAM, BUS_VRAM };
+
+static int bus_for_addr(GB_gameboy_t *gb, uint16_t addr)
+{
+    if (addr < 0x8000) return BUS_MAIN;
+    if (addr < 0xA000) return BUS_VRAM;
+    if (addr < 0xC000) return BUS_MAIN;
+    return GB_is_cgb(gb) ? BUS_RAM : BUS_MAIN;
+}
+
+static bool addr_in_dma_use(GB_gameboy_t *gb, uint16_t addr)
+{
+    if (!GB_is_dma_active(gb) || addr >= 0xFE00 || gb->hdma_in_progress) return false;
+    if (gb->dma_current_dest == 0xFF || gb->dma_current_dest == 0x0) return false;
+    if (gb->dma_current_src == addr) return false;
+    if (gb->dma_current_src >= 0xE000 && (gb->dma_current_src & ~0x2000) == addr) return false;
+    if (GB_is_cgb(gb)) {
+        if (addr >= 0xC000) return bus_for_addr(gb, gb->dma_current_src) != BUS_VRAM;
+        if (gb->dma_current_src >= 0xE000) return bus_for_addr(gb, addr) != BUS_VRAM;
+    }
+    return bus_for_addr(gb, addr) == bus_for_addr(gb, gb->dma_current_src);
+}
+
+// The address a CPU write at addr lands at, or -1 when it changes no memory
+// but OAM: GB_write_memory's OAM DMA bus-conflict redirect, which runs after
+// the write callback, so the callback is told the address the CPU named. On
+// CGB a write to WRAM moves to the 4 KiB half the DMA is reading from; on DMG
+// it goes to the DMA's source address. Called from the write callback, it
+// sees the state the redirect will.
+int32_t gbcli_write_target(GB_gameboy_t *gb, uint16_t addr)
+{
+    if (likely(!addr_in_dma_use(gb, addr))) return addr;
+    uint16_t src = gb->dma_current_src;
+    bool cgb = GB_is_cgb(gb);
+    if (cgb && bus_for_addr(gb, addr) == BUS_MAIN && src >= 0xE000) return -1;
+    if (cgb && (src < 0xC000 || src >= 0xE000) && addr >= 0xC000) {
+        return ((src - 1) & 0x1000) | (addr & 0xFFF) | 0xC000;
+    }
+    uint16_t to = src - 1;
+    if ((cgb || to >= 0xA000) && (gb->model < GB_MODEL_CGB_E || to >= 0xA000)) return -1;
+    return to;
+}
+
 // Whether the APU has run every cycle that has passed. SameBoy batches APU
 // cycles (apu.apu_cycles) and catches up on any APU register access.
 bool gbcli_apu_synced(GB_gameboy_t *gb) { return gb->apu.apu_cycles == 0; }

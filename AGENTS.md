@@ -23,7 +23,7 @@ gbcli is an agent-friendly Game Boy development tool for homebrew developers wor
 - [scripts/bench/](scripts/bench/) — re-runnable benchmarks behind the evaluation's figures and the build-cost figures above
 - [scripts/corpus/](scripts/corpus/) — fetch the pinned test-ROM corpus (`python3 -I scripts/corpus/fetch.py`), rebuild its manifest, parse the shootout
 - [scripts/disasm/gen_opcodes.py](scripts/disasm/gen_opcodes.py) — regenerates the disassembler's table from [crates/engine/data/gb-opcodes/](crates/engine/data/gb-opcodes/SOURCE) (gbdev opcode JSON, CC0); `--check` fails if the table is stale
-- [scripts/vendor-sameboy.sh](scripts/vendor-sameboy.sh) and [scripts/build-roms.sh](scripts/build-roms.sh) — re-vendor SameBoy at a commit; rebuild the committed boot ROMs and test ROMs (needs RGBDS)
+- [scripts/vendor-sameboy.sh](scripts/vendor-sameboy.sh) and [scripts/build-roms.sh](scripts/build-roms.sh) — re-vendor SameBoy at a commit; rebuild the committed boot ROMs and test ROMs (needs RGBDS); [scripts/sameboy-core-hash.sh](scripts/sameboy-core-hash.sh) hashes a `Core/` tree for the check that the vendored one is upstream's plus `patches/`
 
 <!-- agents:begin core@3cc73e -->
 ## Working rules

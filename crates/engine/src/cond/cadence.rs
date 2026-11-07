@@ -5,8 +5,9 @@
 //! with the LCD off is not a scanline change, so a predicate reading `frame`
 //! and `ly` needs both. Memory reads arm the backing bytes the evaluator
 //! reads ([`mem::fixed_target`], [`mem::target_in_bank`] or the region form):
-//! the write hook matches a write by the byte it lands in, so the two sides
-//! share one identity and a bank number or mirror cannot make them disagree.
+//! the write hook matches a write by the byte it lands in (after the bank,
+//! a mirror, or OAM DMA's bus conflict moving it), so the two sides share
+//! one identity and cannot disagree.
 //! Anything that can change without a CPU write to its byte needs the
 //! per-instruction baseline.
 

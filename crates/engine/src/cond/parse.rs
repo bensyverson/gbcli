@@ -178,7 +178,9 @@ impl Parser<'_> {
     fn read(&mut self, width: Width) -> Result<Expr, ExprError> {
         let colon_next = matches!(self.toks.get(self.pos + 1), Some((_, Tok::Colon)));
         let place = match (self.peek().cloned(), colon_next) {
-            (Some(Tok::Ident(name)), true) => {
+            // A head that is hex is a bank, as in the address grammar, even
+            // one that lexes as a name (`ff:4000`); any other names a region.
+            (Some(Tok::Ident(name)), true) if !name.bytes().all(|b| b.is_ascii_hexdigit()) => {
                 let at = self.at();
                 let region = parse_region(&name).ok_or_else(|| {
                     ExprError::syntax(
@@ -194,7 +196,7 @@ impl Parser<'_> {
                     offset: Box::new(self.expr(0)?),
                 }
             }
-            (Some(bank @ Tok::Num { .. }), true) => {
+            (Some(bank @ (Tok::Num { .. } | Tok::Ident(_))), true) => {
                 let bank_at = self.at();
                 self.pos += 2;
                 let (addr_at, addr) = self.next()?;

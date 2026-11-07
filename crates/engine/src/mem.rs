@@ -104,12 +104,14 @@ impl CartSizes {
 }
 
 /// The bank a location names, as `core`'s hardware reaches it: a ROM or cart
-/// RAM bank past the memory's size is the bank it aliases to (the bank of
-/// [`target_in_bank`]'s byte). Other areas are unchanged.
+/// RAM bank past the memory's size is the bank it aliases to, and WRAMX bank
+/// 0 is bank 1, which SVBK 0 maps (the bank of [`target_in_bank`]'s byte).
+/// VRAM banks are unchanged: every bank a location can name exists.
 pub fn effective_bank(core: &dyn Core, bank: u16, addr: u16) -> u16 {
     let size = match Area::of(canonical_addr(addr)) {
         Area::Rom0 | Area::RomX => 0x4000,
         Area::Sram => 0x2000,
+        Area::WramX => 0x1000,
         _ => return bank,
     };
     match target_in_bank(core, bank, addr) {

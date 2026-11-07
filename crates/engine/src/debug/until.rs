@@ -48,7 +48,7 @@ impl<'a> Until<'a> {
     pub fn fired(&self, stop: &Stop, ly_before: u8, core: &dyn Core) -> bool {
         let t = &self.triggers;
         let wrote = matches!(&stop.reason, CoreReason::Candidate(hits)
-            if hits.overflowed() || hits.iter().any(|h| h.access == Access::Write));
+            if hits.iter().any(|h| h.access == Access::Write));
         wrote
             || (t.every_instruction && stop.used.instructions > 0)
             || (t.vblank && stop.used.frames > 0)

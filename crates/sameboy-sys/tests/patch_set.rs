@@ -1,11 +1,15 @@
 //! The patch-set hash folded into the core identity: it changes whenever any
 //! file in `patches/` does, and the build reports the hash of the real directory.
+//! The identity hashes `patches/`, not the compiled tree, so the vendored
+//! `Core/` must be upstream's plus exactly those patches: an edit made in
+//! `Core/` alone would change the layout without changing the identity.
 
 #[path = "../patch_set.rs"]
 mod patch_set;
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 /// A scratch directory, removed on drop.
 struct Dir(PathBuf);
@@ -97,5 +101,64 @@ fn the_build_reports_the_hash_of_the_vendored_patches() {
             sameboy_sys::SAMEBOY_COMMIT,
             sameboy_sys::PATCH_SET
         )
+    );
+}
+
+/// Copies `from` into `to`, recursively.
+fn copy_tree(from: &Path, to: &Path) {
+    fs::create_dir_all(to).unwrap();
+    for entry in fs::read_dir(from).unwrap() {
+        let path = entry.unwrap().path();
+        let dest = to.join(path.file_name().unwrap());
+        if path.is_dir() {
+            copy_tree(&path, &dest);
+        } else {
+            fs::copy(&path, &dest).unwrap();
+        }
+    }
+}
+
+fn run(command: &mut Command) -> String {
+    let out = command
+        .output()
+        .unwrap_or_else(|e| panic!("{command:?}: {e}"));
+    assert!(
+        out.status.success(),
+        "{command:?}: {}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8(out.stdout).unwrap()
+}
+
+#[test]
+fn the_vendored_core_is_upstream_plus_exactly_the_patch_set() {
+    let sys = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let script = sys.join("../../scripts/sameboy-core-hash.sh");
+    let recorded = fs::read_to_string(sys.join("SameBoy/CORE_SHA256"))
+        .expect("SameBoy/CORE_SHA256, written by scripts/vendor-sameboy.sh");
+    let core = Dir::new("core");
+    copy_tree(&sys.join("SameBoy/Core"), &core.0);
+    let mut patches: Vec<PathBuf> = fs::read_dir(sys.join("patches"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|x| x == "patch"))
+        .collect();
+    patches.sort();
+    for patch in patches.iter().rev() {
+        // a/crates/sameboy-sys/SameBoy/Core/<file>: five components.
+        run(Command::new("patch")
+            .args(["-R", "-s", "-p5", "-d"])
+            .arg(&core.0)
+            .arg("-i")
+            .arg(patch));
+    }
+    let upstream = run(Command::new(&script).arg(&core.0));
+    assert_eq!(
+        upstream.trim(),
+        recorded.trim(),
+        "SameBoy/Core with every patch undone isn't upstream's Core: an edit in \
+         Core/ needs a patch in patches/ (which changes the core identity), \
+         or a re-vendor (project/2026-11-06-sameboy-vendoring.md)"
     );
 }

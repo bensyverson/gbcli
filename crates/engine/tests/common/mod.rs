@@ -115,6 +115,43 @@ pub fn step_to(m: &mut Machine, pc: u16) {
     panic!("PC never reached {pc:#06x}");
 }
 
+/// A CGB-mode machine on `rom`, handed over by the quick boot ROM (which,
+/// unlike the real one, never switches a CGB to DMG mode).
+pub fn cgb_machine(rom: &[u8], sym: Option<&str>) -> Machine {
+    let mut config = CoreConfig::new(Model::CgbE, rom.to_vec());
+    config.boot_rom = BootRom::Custom(QUICK_BOOT.to_vec());
+    let mut m = Machine::new(Backend::sameboy(), config, sym).expect("machine");
+    steps(&mut m, 4);
+    assert_eq!(
+        m.core().registers().pc,
+        0x0100,
+        "quick boot didn't hand over"
+    );
+    m
+}
+
+/// Copies `ld a,$40; ldh [rDMA],a; ld a,$77; ld [$D123],a; ld a,40;
+/// .w: dec a; jr nz,.w; ret` to $FF80 and calls it: OAM DMA from ROM at
+/// $4000, with a CPU write to WRAMX while it runs. Clears $C123 and $D123
+/// first when `clear`. Returns the ROM and the address of the call.
+pub fn dma_conflict_rom(clear: bool) -> (Vec<u8>, u16) {
+    #[rustfmt::skip]
+    let routine: [u8; 15] = [
+        0x3E, 0x40, 0xE0, 0x46, 0x3E, 0x77, 0xEA, 0x23, 0xD1, 0x3E, 0x28, 0x3D, 0x20, 0xFD, 0xC9,
+    ];
+    let mut code = Vec::new();
+    if clear {
+        code.extend_from_slice(&[0xAF, 0xEA, 0x23, 0xC1, 0xEA, 0x23, 0xD1]); // xor a; ld [$C123],a; ld [$D123],a
+    }
+    code.extend_from_slice(&[0x0E, 0x80]); // ld c,$80
+    for b in routine {
+        code.extend_from_slice(&[0x3E, b, 0xE2, 0x0C]); // ld a,b; ldh [c],a; inc c
+    }
+    let call_at = 0x150 + code.len() as u16;
+    code.extend_from_slice(&[0xCD, 0x80, 0xFF, 0x18, 0xFE]); // call $FF80; jr @
+    (program(&code), call_at)
+}
+
 /// busy.gb with `code` at $0150, where its entry point jumps.
 pub fn program(code: &[u8]) -> Vec<u8> {
     let mut rom = BUSY.to_vec();

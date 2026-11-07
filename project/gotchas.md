@@ -65,3 +65,7 @@ A `git merge --squash` that conflicted in two files was resolved in one (crates/
 ## 2026-11-07 — the permission check refuses to run uge2source until Ben approves it
 
 `scripts/music/export-reference.sh` builds hUGETracker's `uge2source` from its source. Claude Code's auto-mode check refused the first run of that binary as "code from external" until Ben approved it in the session; a later agent ran the script without a prompt. If it is refused, ask Ben, and don't work around it. Two more traps on the same path. The sandbox refuses to extract a tarball's `.gitmodules` ("Operation not permitted"), so the script extracts only `src/`. And parallel agents share `$TMPDIR`: a reviewer's scratch folder replaced the hand-built binary, so build through the script, which keeps its build under `target/uge2source`.
+
+## 2026-11-07 — this checkout has no toolchain and no hook, and commits still pass
+
+In the eleventh session, `git config core.hooksPath` was unset and the machine had no `cargo`, `rustc` or `rgbasm` (no `~/.cargo`, `~/.rustup`, or Homebrew rust), no `tests/corpus/fetched` and no `local/`. So `git commit` ran no hook and succeeded silently (36a03b3 went in untested), and agents briefed "cargo needs the sandbox off" found no cargo at all. Before committing or dispatching, check `command -v cargo rgbasm` and `git config core.hooksPath`; set up with rustup, `brew install rgbds`, `git config core.hooksPath scripts/hooks` and the corpus fetch in AGENTS.md.

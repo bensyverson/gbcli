@@ -70,7 +70,7 @@ Each question gives the recommended answer first and names the leaf that waits o
 
 ```yaml
 tasks:
-  - title: 'Stage 7: GBC images in dual mode (build --gbc)'
+  - title: 'Stage 10: GBC images in dual mode (build --gbc)'
     desc: |
       Color art in, a dual-mode ROM out (rgbfix -c, header $80, still runs on DMG). Design, rulings and Ben's answers: project/2026-11-07-gbc-images-plan.md. Evidence: project/2026-11-07-gbc-images-research.md.
     children:

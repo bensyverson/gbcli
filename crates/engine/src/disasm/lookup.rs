@@ -8,7 +8,7 @@
 use std::fmt;
 
 use super::Opcode;
-use super::expr;
+use super::expr::{self, MAX_DEPTH, Refused};
 use super::table;
 use super::types::{Cycles, Mnemonic, OpInfo, OperandKind};
 
@@ -48,6 +48,11 @@ pub enum LookupError {
         /// A spelling rgbasm takes, when one is near enough to name.
         fix: Option<Fix>,
     },
+    /// An operand's parentheses, unary operators, exponents and functions
+    /// nest deeper than the evaluator follows (rgbasm takes deeper).
+    TooDeep {
+        mnemonic: String,
+    },
 }
 
 /// How to write a refused line so rgbasm takes it.
@@ -80,6 +85,10 @@ impl fmt::Display for LookupError {
             } => write!(
                 f,
                 "no form of `{mnemonic}` matches `{query}` as rgbasm writes it"
+            ),
+            LookupError::TooDeep { mnemonic } => write!(
+                f,
+                "an operand of `{mnemonic}` nests deeper than {MAX_DEPTH} levels"
             ),
         }
     }
@@ -123,6 +132,10 @@ impl LookupError {
                 ),
                 None => format!("`gbcli opcode {mnemonic}` lists its {forms} forms"),
             },
+            LookupError::TooDeep { .. } => format!(
+                "nest parentheses, unary operators, `**` and HIGH()/LOW() at most {MAX_DEPTH} \
+                 deep: work the inner part out first"
+            ),
         }
     }
 }
@@ -146,7 +159,7 @@ pub fn form(opcode: Opcode) -> Form {
 /// finds `ld a, n8` and `ld [wFoo], a` finds `ld [a16], a`.
 pub fn lookup(query: &str) -> Result<Vec<Form>, LookupError> {
     // A pasted line may carry its comment.
-    let query = query.split(';').next().unwrap_or_default().trim();
+    let query = without_comment(query).trim();
     if query.is_empty() {
         return Err(LookupError::Empty);
     }
@@ -159,16 +172,14 @@ pub fn lookup(query: &str) -> Result<Vec<Form>, LookupError> {
             .map(|op| vec![form(op)])
             .ok_or_else(|| LookupError::BadByte { text: query.into() });
     }
-    let lower = query.to_ascii_lowercase();
-    let (word, rest) = lower
-        .split_once(char::is_whitespace)
-        .unwrap_or((&lower, ""));
-    let written: Vec<String> = if rest.trim().is_empty() {
+    let lower = lowercase_outside_quotes(query);
+    let (word, rest) = query.split_once(char::is_whitespace).unwrap_or((query, ""));
+    let word = word.to_ascii_lowercase();
+    let word = word.as_str();
+    let written: Vec<Operand> = if rest.trim().is_empty() {
         Vec::new()
     } else {
-        rest.split(',')
-            .map(|t| t.chars().filter(|c| !c.is_whitespace()).collect())
-            .collect()
+        operands(rest).into_iter().map(Operand::written).collect()
     };
     let spelled = spell(query, word, &written);
     if let Some(gaps) = missing_commas(query) {
@@ -186,6 +197,14 @@ pub fn lookup(query: &str) -> Result<Vec<Form>, LookupError> {
         });
     }
     let (mnemonic, tokens) = spelled?;
+    if tokens
+        .iter()
+        .any(|t| expr::eval(&t.raw) == Err(Refused::TooDeep))
+    {
+        return Err(LookupError::TooDeep {
+            mnemonic: mnemonic_name(mnemonic),
+        });
+    }
     let of_mnemonic: Vec<Opcode> = all().filter(|&op| info(op).mnemonic == mnemonic).collect();
     let found: Vec<Form> = of_mnemonic
         .iter()
@@ -204,14 +223,14 @@ pub fn lookup(query: &str) -> Result<Vec<Form>, LookupError> {
 }
 
 /// The mnemonic and operands as the table writes them, from a line's word
-/// and its operands (whitespace removed): rgbasm's other spellings of the
-/// same instruction (`ldi`/`ldd`, `[hli]`, `[$ff00+c]`, the ALU ops'
-/// implied `a`, `cpl a`) mapped to the table's.
+/// and its operands: rgbasm's other spellings of the same instruction
+/// (`ldi`/`ldd`, `[hli]`, `[$ff00+c]`, the ALU ops' implied `a`, `cpl a`)
+/// mapped to the table's.
 fn spell(
     query: &str,
     word: &str,
-    written: &[String],
-) -> Result<(Mnemonic, Vec<String>), LookupError> {
+    written: &[Operand],
+) -> Result<(Mnemonic, Vec<Operand>), LookupError> {
     let refuse = |mnemonic: Mnemonic, fix: Option<Fix>| LookupError::NoForm {
         query: query.into(),
         mnemonic: mnemonic_name(mnemonic),
@@ -225,21 +244,21 @@ fn spell(
         _ => None,
     } {
         let marked = format!("[hl{step}]");
-        let tokens: Vec<String> = written
+        let tokens: Vec<Operand> = written
             .iter()
             .map(|t| {
-                if t == "[hl]" {
-                    marked.clone()
+                if t.norm == "[hl]" {
+                    Operand::implied(&marked)
                 } else {
                     t.clone()
                 }
             })
             .collect();
         return match written {
-            [a, hl] | [hl, a] if a == "a" && hl == "[hl]" => Ok((Mnemonic::Ld, tokens)),
+            [a, hl] | [hl, a] if a.norm == "a" && hl.norm == "[hl]" => Ok((Mnemonic::Ld, tokens)),
             _ => {
                 // `ldi a, [hli]` means `ld a, [hli]`; otherwise show the form.
-                let as_ld = format!("ld {}", tokens.join(", "));
+                let as_ld = format!("ld {}", norms(&tokens).join(", "));
                 let fix = if lookup(&as_ld).is_ok() {
                     as_ld
                 } else {
@@ -255,32 +274,141 @@ fn spell(
             near: near(word),
         });
     };
-    if written.iter().any(String::is_empty) {
+    if written.iter().any(|t| t.norm.is_empty()) {
         return Err(refuse(mnemonic, None));
     }
     if mnemonic == Mnemonic::Ld {
         // $FF00+C is `ldh [c]`, or `[$ff00+c]` with either mnemonic; rgbasm
         // has no `ld [c]`.
-        if written.iter().any(|t| t == "[c]") {
-            let fixed = written
-                .iter()
-                .map(String::as_str)
-                .collect::<Vec<_>>()
-                .join(", ");
+        if written.iter().any(|t| t.norm == "[c]") {
+            let fixed = norms(written).join(", ");
             return Err(refuse(mnemonic, Some(Fix::Write(format!("ldh {fixed}")))));
         }
-        if written.iter().any(|t| is_high_c(t)) {
+        if written.iter().any(|t| is_high_c(&t.norm)) {
             mnemonic = Mnemonic::Ldh;
         }
     }
-    let mut tokens: Vec<String> = written.iter().map(|t| token(t)).collect();
+    let mut tokens: Vec<Operand> = written
+        .iter()
+        .map(|t| Operand {
+            norm: token(&t.norm),
+            raw: t.raw.clone(),
+        })
+        .collect();
     if is_alu8(mnemonic) && tokens.len() == 1 {
-        tokens.insert(0, "a".into());
+        tokens.insert(0, Operand::implied("a"));
     }
-    if mnemonic == Mnemonic::Cpl && tokens == ["a"] {
+    if mnemonic == Mnemonic::Cpl && norms(&tokens) == ["a"] {
         tokens.clear();
     }
     Ok((mnemonic, tokens))
+}
+
+/// One operand of a line.
+#[derive(Clone, Debug)]
+struct Operand {
+    /// Lowercase with whitespace removed, rgbasm's other spellings mapped
+    /// to the table's: what registers and placeholders are matched against.
+    norm: String,
+    /// As written, trimmed: what a constant expression is evaluated from,
+    /// since case matters inside a character constant (`'C'`) and
+    /// whitespace separates operators (`& &` is not `&&`).
+    raw: String,
+}
+
+impl Operand {
+    fn written(raw: &str) -> Operand {
+        Operand {
+            norm: raw
+                .chars()
+                .filter(|c| !c.is_whitespace())
+                .collect::<String>()
+                .to_ascii_lowercase(),
+            raw: raw.trim().into(),
+        }
+    }
+
+    /// One the line leaves out, or rgbasm's spelling implies.
+    fn implied(norm: &str) -> Operand {
+        Operand {
+            norm: norm.into(),
+            raw: norm.into(),
+        }
+    }
+}
+
+fn norms(tokens: &[Operand]) -> Vec<&str> {
+    tokens.iter().map(|t| t.norm.as_str()).collect()
+}
+
+/// Where the string or character literal opening at `s[i]` ends: just past
+/// its closing quote (a backslash escapes the next byte), or the end of `s`.
+fn quote_end(s: &[u8], i: usize) -> usize {
+    let quote = s[i];
+    let mut j = i + 1;
+    while j < s.len() {
+        match s[j] {
+            b'\\' => j += 2,
+            c if c == quote => return j + 1,
+            _ => j += 1,
+        }
+    }
+    s.len()
+}
+
+/// `line` in lowercase, but for its string and character literals, whose
+/// case is part of their value.
+fn lowercase_outside_quotes(line: &str) -> String {
+    let s = line.as_bytes();
+    let (mut out, mut i) = (String::with_capacity(line.len()), 0);
+    while i < s.len() {
+        // Each step ends on an ASCII byte or the end: a character boundary.
+        let end = match s[i] {
+            b'"' | b'\'' => quote_end(s, i),
+            _ => i + 1 + s[i + 1..].iter().take_while(|b| !b.is_ascii()).count(),
+        };
+        let part = &line[i..end];
+        if s[i] == b'"' || s[i] == b'\'' {
+            out.push_str(part);
+        } else {
+            out.push_str(&part.to_ascii_lowercase());
+        }
+        i = end;
+    }
+    out
+}
+
+/// `line` up to its `;` comment, if any; a `;` inside quotes is not one.
+fn without_comment(line: &str) -> &str {
+    let s = line.as_bytes();
+    let mut i = 0;
+    while i < s.len() {
+        match s[i] {
+            b'"' | b'\'' => i = quote_end(s, i),
+            b';' => return &line[..i],
+            _ => i += 1,
+        }
+    }
+    line
+}
+
+/// The operands of `rest`, split at commas outside quotes.
+fn operands(rest: &str) -> Vec<&str> {
+    let s = rest.as_bytes();
+    let (mut out, mut start, mut i) = (Vec::new(), 0, 0);
+    while i < s.len() {
+        match s[i] {
+            b'"' | b'\'' => i = quote_end(s, i),
+            b',' => {
+                out.push(&rest[start..i]);
+                i += 1;
+                start = i;
+            }
+            _ => i += 1,
+        }
+    }
+    out.push(&rest[start..]);
+    out
 }
 
 /// `query` with a comma where whitespace separates two operands
@@ -291,23 +419,16 @@ fn missing_commas(query: &str) -> Option<String> {
     let ends = |c: u8| c.is_ascii_alphanumeric() || b"_.#@'\")]".contains(&c);
     let starts = |c: u8| c.is_ascii_alphanumeric() || b"_.#@$'\"[`".contains(&c);
     let mut found = false;
-    let operands: Vec<String> = rest
-        .split(',')
+    let operands: Vec<String> = operands(rest)
+        .into_iter()
         .map(|operand| {
-            let bytes = operand.trim().as_bytes();
+            let operand = operand.trim();
+            let bytes = operand.as_bytes();
             let mut out = String::new();
             let (mut i, mut last) = (0, None);
             while i < bytes.len() {
                 let c = bytes[i];
-                if c == b'"' || c == b'\'' {
-                    let end = bytes[i + 1..]
-                        .iter()
-                        .position(|&b| b == c)
-                        .map_or(bytes.len(), |p| i + 2 + p);
-                    out.push_str(&String::from_utf8_lossy(&bytes[i..end]));
-                    last = Some(c);
-                    i = end;
-                } else if c.is_ascii_whitespace() {
+                if c.is_ascii_whitespace() {
                     let next = i + bytes[i..]
                         .iter()
                         .take_while(|b| b.is_ascii_whitespace())
@@ -316,11 +437,18 @@ fn missing_commas(query: &str) -> Option<String> {
                     found |= gap;
                     out.push_str(if gap { ", " } else { " " });
                     i = next;
-                } else {
-                    out.push(char::from(c));
-                    last = Some(c);
-                    i += 1;
+                    continue;
                 }
+                // Each step ends on an ASCII byte or the end, so it slices
+                // on a character boundary.
+                let end = if c == b'"' || c == b'\'' {
+                    quote_end(bytes, i)
+                } else {
+                    i + 1 + bytes[i + 1..].iter().take_while(|b| !b.is_ascii()).count()
+                };
+                out.push_str(&operand[i..end]);
+                last = Some(c);
+                i = end;
             }
             out
         })
@@ -335,24 +463,25 @@ fn is_alu8(m: Mnemonic) -> bool {
 }
 
 /// Whether every operand matches its slot, and there are as many of each.
-fn exact(slots: &[Slot], tokens: &[String]) -> bool {
+fn exact(slots: &[Slot], tokens: &[Operand]) -> bool {
     tokens.len() == slots.len() && tokens.iter().zip(slots).all(|(t, s)| s.matches(t))
 }
 
 /// The spelling rgbasm takes that a refused line was nearest to.
-fn fix(lower: &str, mnemonic: Mnemonic, tokens: &[String], forms: &[Opcode]) -> Option<Fix> {
+fn fix(lower: &str, mnemonic: Mnemonic, tokens: &[Operand], forms: &[Opcode]) -> Option<Fix> {
     if lower.contains('(') {
         let bracketed = lower.replace('(', "[").replace(')', "]");
         if lookup(&bracketed).is_ok() {
             return Some(Fix::Write(bracketed));
         }
     }
-    if mnemonic == Mnemonic::Jp && tokens == ["[hl]"] {
+    if mnemonic == Mnemonic::Jp && norms(tokens) == ["[hl]"] {
         return Some(Fix::Write("jp hl".into()));
     }
     if mnemonic == Mnemonic::Ldh
         && tokens.iter().any(|t| {
-            t.strip_prefix('[')
+            t.norm
+                .strip_prefix('[')
                 .and_then(|t| t.strip_suffix(']'))
                 .and_then(literal)
                 .is_some_and(|v| !(0xFF00..=0xFFFF).contains(&v))
@@ -486,11 +615,12 @@ impl Slot {
         }
     }
 
-    fn matches(&self, token: &str) -> bool {
-        if token == self.text() {
-            return true;
-        }
+    fn matches(&self, operand: &Operand) -> bool {
+        let token = operand.norm.as_str();
         match self {
+            // From the text as written: `$ 38` is not `$38`.
+            Slot::Number { value, .. } => expr::eval(&operand.raw) == Ok(i32::from(*value)),
+            _ if token == self.text() => true,
             Slot::Fixed(_) => false,
             Slot::Value(_) => is_value(token),
             Slot::Address(p) => token
@@ -507,7 +637,6 @@ impl Slot {
                 });
                 offset.is_some_and(is_value)
             }
-            Slot::Number { value, .. } => expr::eval(token) == Some(i32::from(*value)),
         }
     }
 }
@@ -541,11 +670,7 @@ fn words(expr: &str) -> impl Iterator<Item = &str> {
             let c = bytes[i];
             let word = |c: u8| c.is_ascii_alphanumeric() || b"_.#@".contains(&c);
             if c == b'"' || c == b'\'' {
-                i += 1;
-                while i < bytes.len() && bytes[i] != c {
-                    i += 1;
-                }
-                i += 1;
+                i = quote_end(bytes, i);
             } else if c == b'$' || c == b'%' || c == b'&' || c.is_ascii_digit() {
                 i += 1;
                 while i < bytes.len() && bytes[i].is_ascii_alphanumeric() {

@@ -28,7 +28,13 @@ pub const OPCODE_VERB: VerbSpec = VerbSpec {
             'ld [$ff00+c], a'); words after the first are joined with spaces. A mnemonic \
             alone lists every form; an operand that isn't a register, condition or \
             placeholder is data or a label, so 'ld a, 5' finds ld a, n8 and \
-            'ld [wFoo], a' finds ld [a16], a. Quote anything with brackets, which the shell \
+            'ld [wFoo], a' finds ld [a16], a. An RST vector or bit number is a constant \
+            expression, read as rgbasm reads it ('rst 8*7', \"bit 'C' - 64, a\", \
+            'rst high($3800)'): numbers in every base with _ between digits, characters \
+            and one-character strings with rgbasm's escapes, parentheses, HIGH() and LOW(), \
+            and every operator with rgbasm's precedence; symbols, other functions, \
+            graphics and fixed-point constants, and nesting past 64 levels are refused, \
+            never guessed. Quote anything with brackets, which the shell \
             may expand. A line rgbasm refuses ('jr nz', 'ld a, (hl)', 'ld [c], a') is \
             bad_request (exit 2), with the spelling rgbasm takes, the nearest mnemonic or \
             how to list the forms.",

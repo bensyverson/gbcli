@@ -158,6 +158,7 @@ fn profile(name: &str) -> FlashProfile {
 }
 
 #[test]
+#[ignore = "pre-release: drives a GB Studio ROM ~3,000 frames (10-12 s) and needs a local export (Ben, 2026-11-07)"]
 fn a_gbstudio_save_survives_a_power_cycle_on_a_swapped_data_board() {
     let mut game = Game::new(profile("generic-wr-aaa-a9"));
     game.save_in_the_cave();
@@ -177,6 +178,7 @@ fn a_gbstudio_save_survives_a_power_cycle_on_a_swapped_data_board() {
 }
 
 #[test]
+#[ignore = "pre-release: drives a GB Studio ROM ~3,000 frames (10-12 s) and needs a local export (Ben, 2026-11-07)"]
 fn the_same_save_fails_on_a_straight_board_and_the_chip_says_why() {
     let mut game = Game::new(profile("generic-wr-aaa-aa"));
     game.save_in_the_cave();

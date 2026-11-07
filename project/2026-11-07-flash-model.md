@@ -18,9 +18,12 @@ Ben exported GB Studio's default project with MBC5 and "Save game data to ROM" (
 - **The save lands past the image.** gbvm erases and programs banks 12-15, but the file is 8 banks. SameBoy masks the bank by its buffer size, so on the bare image bank 12 is bank 4, which holds code (785 of its 16,384 bytes are $FF): the erase would wipe it. A real cart's chip is larger than the image. So the model pads SameBoy's buffer with $FF to the profile's chip size, and the mapper reaches all of it.
 - **How the project saves**: the cave's save point (actor at tile 14,11, `project/scenes/cave/actors/actor_6.gbsres`) offers "Save Game / Cancel" and runs `EVENT_SAVE_DATA`; the title screen's "Continue" runs `EVENT_LOAD_DATA` or says "No Save Data Found...". gbvm restores SRAM from flash at start-up (`load_save.c`), so the cart's battery-backed SRAM, which the power cycle keeps, is overwritten from flash and doesn't mask a failed save.
 - **The tests** (`crates/engine/tests/flash_save.rs`) drive that by key input: power-on, START, New Game, walk west around the pond, north up column 2, east along row 9 into the cave, up and right to (12,11), A, "Save Game", then a power cycle and "Continue". The player's tile is read from `_actors+2` (x) and `_actors+4` (y), found by walking the player with `gbcli run --keys ... --read`, not from gbvm's source. On `generic-wr-aaa-a9` (swapped, the sequence gbvm hard-codes) the save is programmed into banks 12-15, no notes are taken, and Continue puts the player back at (12,11). On `generic-wr-aaa-aa` nothing is programmed, the first note reads "$0AAA<-$A9 is not an unlock cycle on this board: the chip reads $A9 and expects $AA. $A9 is what a board with D0 and D1 swapped needs ...", and Continue doesn't reach the cave. Disabling the power cycle's flash carry makes the first test fail (checked by hand).
-- **Cost**: each test runs about 3,000 frames with the read callback on every access, about 10-12 s alone (`cargo test -p gbcli-engine --test flash_save`, dev profile, Apple M1 under load average 26-38). That is a large share of the 30 s warm budget; whether they belong in the pre-release suite is open (below).
+- **Cost**: each test runs about 3,000 frames with the read callback on every access, about 10-12 s alone (`cargo test -p gbcli-engine --test flash_save`, dev profile, Apple M1 under load average 26-38). That is a large share of the 30 s warm budget, so they are in the pre-release suite (`cargo test -p gbcli-engine --test flash_save -- --ignored`; Ben, 2026-11-07).
 
-## Open: how a session names its board
+## Decided: how a session names its board
+
+> **Ruled by Ben, 2026-11-07:** option 1 plus the hint of option 2. `--flash PROFILE` at session creation takes **named profiles only** (no CLI parameter overrides yet; the checkpoint header stores the name). On a flash session, **`sav` and `power-cycle --sav` export and import the flash save area** as well. The two GB Studio tests moved to the pre-release suite. The options as first written follow.
+
 
 The model is reachable only by building a `CoreConfig` in Rust. Neither the checkpoint header nor the session bundle records a profile, so `Machine::restore` keeps the machine's own and no request can choose one. Options:
 
@@ -33,6 +36,6 @@ Choices inside option 1 that also need a ruling: whether custom parameters are a
 
 ## Other loose ends
 
-- The GB Studio tests need the hand-built ROM; a fresh clone fails them with the build steps, as the corpus tests do. Whether to keep them in the warm suite (10-12 s each) or move them to the pre-release suite is for Ben.
+- The GB Studio tests need the hand-built ROM; run with `--ignored`, they fail with the build steps when it is missing, as the corpus tests do.
 - The server's rebuild path (`power_cycle` across a rebuilt ROM) carries the flash from a fresh core, so nothing; moot until a session can name a profile, then it should carry the head's contents as it carries its battery.
 - Not modeled: Intel command sets, CPLD multicarts (out of scope), CFI queries, erase suspend, read-while-write banks, the partial state an operation cut off by the power leaves (counted as done, with a note), and the DQ5 timeout a program that sets bits raises on hardware (here a note, and the AND of the bytes).

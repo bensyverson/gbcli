@@ -75,9 +75,35 @@ fn a_symbol_minus_an_offset_resolves() {
 }
 
 #[test]
+fn an_offset_after_a_name_is_decimal_unless_prefixed() {
+    let s = symbols();
+    assert_eq!(parse("Main+16", Some(&s)).unwrap().addr, 0x0160);
+    assert_eq!(parse("Main+10", Some(&s)).unwrap().addr, 0x015A);
+    assert_eq!(parse("Main+$10", Some(&s)).unwrap().addr, 0x0160);
+    assert_eq!(parse("Main+0x10", Some(&s)).unwrap().addr, 0x0160);
+    assert_eq!(parse("Main+%10000", Some(&s)).unwrap().addr, 0x0160);
+    let err = parse("Main+1F", Some(&s)).unwrap_err().remedy();
+    assert!(err.contains("$1F"), "the hint names the hex form: {err}");
+    // A label stored by a checkpoint before labels were written in hex
+    // (`Main+16`) reads back as the decimal it was.
+    assert_eq!(split_label("Main+16"), ("Main", 16));
+    assert_eq!(
+        parse("Main+16", Some(&s)).unwrap().symbol.as_deref(),
+        Some("Main+$10")
+    );
+}
+
+#[test]
 fn an_offset_symbol_keeps_a_label_the_grammar_reads_back() {
     let s = symbols();
-    for text in ["Main+$10", "Main-1", "Main+0x1F", "Banked+3"] {
+    for text in [
+        "Main+$10",
+        "Main-1",
+        "Main+0x1F",
+        "Banked+3",
+        "Main+31",
+        "Banked+%11",
+    ] {
         let at = parse(text, Some(&s)).unwrap();
         let label = at.symbol.clone().unwrap();
         let again = parse(&label, Some(&s)).unwrap();

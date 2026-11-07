@@ -87,7 +87,7 @@ exit 0
 {"id":"cli","ok":true,"result":{"gaps":[{"feature":"extra_oam","count":1}]},"warnings":[]}
 $ gbcli sessions --json
 exit 0
-{"id":"cli","ok":true,"result":{"sessions":[{"name":"demo","rom":"demo.gb","head_frame":88,"rev":"s12","size_bytes":*,"last_used":*,"checkpoints":1}]},"warnings":[]}
+{"id":"cli","ok":true,"result":{"sessions":[{"name":"demo","rom":"demo.gb","head_frame":4,"head_since":{"kind":"boot"},"rev":"s12","size_bytes":*,"last_used":*,"checkpoints":1}]},"warnings":[]}
 $ gbcli sessions prune --unused-for 7d --json
 exit 0
 {"id":"cli","ok":true,"result":{"pruned":[],"kept":[],"busy":[]},"warnings":[]}

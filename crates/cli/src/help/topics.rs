@@ -71,7 +71,8 @@ Addresses — one grammar for every verb and expression.
                        rom wram sram vram hram oam io ie bootrom bgpal objpal
   wFrame, Main.loop    a symbol from the ROM's .sym (found beside the ROM, or
                        --sym when the session is created)
-  Main.loop+$3         a symbol plus or minus a hex offset
+  Main.loop+$3         a symbol plus or minus an offset: decimal (Main+16), or
+                       hex with $ or 0x (Main+$10), as RGBDS reads it
   rLY, rLCDC, rDMA     hardware registers by their hardware.inc names; no .sym
                        needed
 

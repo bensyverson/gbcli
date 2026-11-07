@@ -80,6 +80,19 @@ mod tests {
     use gbcli_protocol::{CheckpointArgs, ErrorCode, Op, Rev};
 
     #[test]
+    fn a_session_row_counts_its_head_frame_since_boot_as_stop_records_do() {
+        let f = Fixture::new("sessions-frame");
+        let mut h = handler(&f);
+        let ran = crate::handle::test_support::run_frames(&mut h, 3);
+        let stop = ran.outcome.unwrap().stop.unwrap();
+        let listed = h.handle(&request(Op::Sessions));
+        let row = &listed.outcome.unwrap().sessions.unwrap()[0];
+        assert_eq!(row.head_frame, Some(stop.time.frame));
+        assert_eq!(row.head_frame, Some(3));
+        assert_eq!(row.head_since, Some(gbcli_protocol::TimeBase::Boot));
+    }
+
+    #[test]
     fn sessions_lists_the_row_and_removal_waits_for_named_checkpoints() {
         let f = Fixture::new("sessions");
         let mut h = handler(&f);

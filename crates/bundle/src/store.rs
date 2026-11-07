@@ -7,7 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use gbcli_protocol::{SessionFile, SessionRow};
+use gbcli_protocol::{SessionFile, SessionRow, TimeBase};
 
 use crate::bundle::{Bundle, now_secs, validate_name};
 use crate::error::StoreError;
@@ -140,15 +140,21 @@ impl SessionStore {
     }
 
     pub fn row(&self, meta: &SessionFile) -> Result<SessionRow, StoreError> {
-        let head_frame = self
-            .read_head(meta.rev)
-            .ok()
-            .flatten()
-            .map(|cp| cp.header.frame);
+        // As a stop record counts with the default base: from the boot
+        // handoff, or from power-on before it has been seen.
+        let head = self.read_head(meta.rev).ok().flatten().map(|cp| {
+            let h = cp.header;
+            match h.boot {
+                Some(boot) => (h.frame as i64 - boot.frame as i64, TimeBase::Boot),
+                None => (h.frame as i64, TimeBase::PowerOn),
+            }
+        });
+        let (head_frame, head_since) = head.unzip();
         Ok(SessionRow {
             name: self.name.clone(),
             rom: meta.rom.clone(),
             head_frame,
+            head_since,
             rev: meta.rev,
             size_bytes: dir_size(&self.dir(), &self.checkpoints_dir()),
             last_used: self.last_used().unwrap_or_else(now_secs),

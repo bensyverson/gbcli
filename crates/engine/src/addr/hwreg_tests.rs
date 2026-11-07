@@ -33,9 +33,10 @@ fn every_register_name_and_alias_parses_to_its_address() {
 fn a_register_takes_an_offset() {
     assert_eq!(parse("_AUD3WAVERAM+3", None), Ok(fixed(0xFF33)));
     assert_eq!(parse("rLCDC+1", None), Ok(fixed(0xFF41)));
-    // Offsets are hex, as for symbols; only the table's own names
-    // (`_AUD3WAVERAM+10`, FF3A) read as hardware.inc spells them.
-    assert_eq!(parse("rLCDC+10", None), Ok(fixed(0xFF50)));
+    // Offsets are decimal unless `$` or `0x` says hex, as for symbols and in
+    // conditions (ruling on leaf FwexpS).
+    assert_eq!(parse("rLCDC+10", None), Ok(fixed(0xFF4A)));
+    assert_eq!(parse("rLCDC+$10", None), Ok(fixed(0xFF50)));
     assert_eq!(parse("_AUD3WAVERAM+10", None), Ok(fixed(0xFF3A)));
 }
 

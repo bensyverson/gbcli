@@ -227,3 +227,34 @@ fn a_never_written_read_names_its_symbol_offset_in_hex() {
     };
     assert_eq!(read.symbol.as_deref(), Some("wStack+$10"));
 }
+
+/// The ruling on FwexpS: an offset after a name is decimal in both grammars,
+/// hex with `$` or `0x` (as RGBDS reads it). Every byte of WRAM here differs,
+/// so equal reads mean equal addresses.
+#[test]
+fn both_grammars_read_an_offset_after_a_name_in_the_same_radix() {
+    let mut m = running();
+    let bytes: Vec<u8> = (0..0x40u8).map(|i| i ^ 0xA5).collect();
+    m.core_mut().poke(Region::Wram, 0, &bytes).unwrap();
+    for (text, addr) in [
+        ("wFrame+10", 0xC00A),
+        ("wFrame+$10", 0xC010),
+        ("wFrame+0x1F", 0xC01F),
+        ("wFrame+%101", 0xC005),
+        ("wStackTop-16", 0xC014),
+        ("wStackTop-$10", 0xC014),
+        ("rLCDC+10", 0xFF4A),
+        ("rLCDC+$10", 0xFF50),
+    ] {
+        let at = gbcli_engine::addr::parse(text, m.symbols()).expect(text);
+        assert_eq!(at.addr, addr, "the address grammar reads {text}");
+        if addr < 0xFF00 {
+            let by_condition = eval(&m, &format!("[{text}]")).unwrap();
+            let by_address = eval(&m, &format!("[${addr:04X}]")).unwrap();
+            assert_eq!(by_condition, by_address, "a condition reads {text}");
+        } else {
+            let by_condition = eval(&m, &format!("[{text}] == [${addr:04X}]"));
+            assert_eq!(by_condition.unwrap(), 1, "a condition reads {text}");
+        }
+    }
+}

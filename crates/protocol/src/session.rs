@@ -10,7 +10,7 @@ use crate::checkpoint::{DebuggerConfig, ModelDef, RenderConfig};
 use crate::error::ErrorCode;
 use crate::request::Op;
 use crate::rev::Rev;
-use crate::stop::{StopReason, StopRecord};
+use crate::stop::{StopReason, StopRecord, TimeBase};
 
 /// `sessions/<name>/session.json`: everything a machine is rebuilt from, plus
 /// the revision counter (design §1).
@@ -59,9 +59,12 @@ pub struct UndoWalk {
 pub struct SessionRow {
     pub name: String,
     pub rom: String,
-    /// The frame the head holds, if there is one.
+    /// The head's frame, counted from `head_since` as a stop record counts
+    /// it: the boot handoff, or power-on before it. Absent with no head.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub head_frame: Option<u64>,
+    pub head_frame: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub head_since: Option<TimeBase>,
     pub rev: Rev,
     /// The session directory's size in bytes, excluding named checkpoints.
     pub size_bytes: u64,

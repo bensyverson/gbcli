@@ -62,8 +62,9 @@ pub fn store(e: StoreError) -> ErrorBody {
 }
 
 /// Answers `request` exactly as `gbcli serve` answers its line: the same
-/// parse, the same panic guard. The guard lives in [`serve`], so the request
-/// goes through it as one line.
+/// parse, the same panic guard. It goes through as a serialized line on
+/// purpose (not `gbcli_server::answer`): the strict parse then proves the
+/// CLI never sends what `serve` would refuse, for microseconds of JSON.
 pub fn answer(handler: &mut Handler, request: &Request) -> Response {
     let line = serde_json::to_string(request).expect("a request always serializes");
     answer_line(handler, &line)

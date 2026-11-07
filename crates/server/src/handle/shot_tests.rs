@@ -220,6 +220,27 @@ fn the_shot_verb_writes_the_head_without_advancing_it() {
 }
 
 #[test]
+fn a_cold_handler_can_shoot_the_head_as_a_stateless_cli_does() {
+    let f = Fixture::new("shot-cold");
+    let shown = run_frames(&mut handler(&f), 2)
+        .outcome
+        .expect("ran")
+        .stop
+        .unwrap()
+        .frame_shown;
+    let path = f.dir.join("cold.png");
+    let mut cold = handler(&f);
+    let response = cold.handle(&request(Op::Shot(ShotReadArgs {
+        shot: shot_at(&path),
+        since: None,
+    })));
+    assert_eq!(response.rev, Some(Rev(1)), "no new head");
+    let shot = response.outcome.expect("shot").shot.unwrap();
+    assert_eq!(shot.frame, ShotFrame::Complete(shown.unwrap()));
+    assert_eq!(png_size(&fs::read(&path).expect("written")), (640, 576));
+}
+
+#[test]
 fn a_bad_scale_or_a_missing_directory_is_refused_before_the_run_moves() {
     let f = Fixture::new("shot-bad");
     let mut h = handler(&f);

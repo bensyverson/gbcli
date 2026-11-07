@@ -12,4 +12,4 @@ mod watchdog;
 mod fixture;
 
 pub use handle::Handler;
-pub use serve::{Answer, serve};
+pub use serve::{Answer, answer, serve};

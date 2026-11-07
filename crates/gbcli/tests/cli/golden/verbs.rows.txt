@@ -438,7 +438,7 @@ exit 0
 gap feature=extra_oam count=1
 $ gbcli sessions
 exit 0
-session name=demo rom=demo.gb rev=s12 head_frame=88 checkpoints=1 size_bytes=* last_used=*
+session name=demo rom=demo.gb rev=s12 head_frame=4 checkpoints=1 size_bytes=* last_used=*
 $ gbcli sessions prune --unused-for 7d
 exit 0
 pruned none

@@ -38,7 +38,7 @@ pub fn serve<R: BufRead, W: Write, A: Answer>(
         let line = line?;
         let response = match std::str::from_utf8(&line) {
             Ok(text) if text.trim().is_empty() => continue,
-            Ok(text) => answer(handler, text.trim_end_matches('\r')),
+            Ok(text) => answer_line(handler, text.trim_end_matches('\r')),
             Err(e) => {
                 let body = ErrorBody::new(
                     ErrorCode::BadRequest,
@@ -55,7 +55,7 @@ pub fn serve<R: BufRead, W: Write, A: Answer>(
     Ok(())
 }
 
-fn answer<A: Answer>(handler: &mut A, line: &str) -> Response {
+fn answer_line<A: Answer>(handler: &mut A, line: &str) -> Response {
     let request = match parse_request(line) {
         Ok(request) => request,
         Err(e) => {
@@ -63,10 +63,17 @@ fn answer<A: Answer>(handler: &mut A, line: &str) -> Response {
             return Response::failed(e.id.unwrap_or_default(), None, body);
         }
     };
+    answer(handler, &request)
+}
+
+/// Answers one request as `serve` answers a line that parsed, under the same
+/// panic guard: for a client in the same process (the CLI), with no JSON
+/// round trip.
+pub fn answer<A: Answer>(handler: &mut A, request: &Request) -> Response {
     // A panic is a bug, not a reason to end the session: answer it, and let
     // the handler drop what it held, since the panic may have left it half
     // changed. What's on disk was written atomically, so it stays trusted.
-    match catch_unwind(AssertUnwindSafe(|| handler.answer(&request))) {
+    match catch_unwind(AssertUnwindSafe(|| handler.answer(request))) {
         Ok(response) => response,
         Err(payload) => {
             handler.after_panic();
@@ -221,6 +228,18 @@ mod tests {
         );
         assert!(responses[1].is_ok());
         assert_eq!(fragile.resets, 1, "the handler drops what it can't trust");
+    }
+
+    #[test]
+    fn a_request_answered_in_process_gets_the_same_panic_guard() {
+        let mut fragile = Fragile { resets: 0 };
+        let boom = gbcli_protocol::parse_request(r#"{"id":"boom","op":"show"}"#).unwrap();
+        let response = answer(&mut fragile, &boom);
+        assert_eq!(response.id, "boom");
+        assert_eq!(response.error().map(|e| e.code), Some(ErrorCode::Internal));
+        assert_eq!(fragile.resets, 1);
+        let fine = gbcli_protocol::parse_request(r#"{"id":"2","op":"show"}"#).unwrap();
+        assert!(answer(&mut fragile, &fine).is_ok());
     }
 
     #[test]

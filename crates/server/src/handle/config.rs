@@ -1,6 +1,7 @@
 use gbcli_bundle::SessionStore;
 use gbcli_protocol::{
-    BreakArgs, BreakpointMade, DeleteArgs, Deleted, ResultBody, SessionFile, WatchArgs, WatchMade,
+    BreakArgs, BreakpointMade, DebuggerConfig, DeleteArgs, Deleted, ErrorBody, ErrorCode, Location,
+    ResultBody, SessionFile, WatchAccess, WatchArgs, WatchMade,
 };
 
 use super::writes::parse_location;
@@ -88,6 +89,15 @@ impl Handler {
         let (mut machine, loaded) = self.machine_for(store, meta, Need::Head, None)?;
         warnings.extend(loaded);
         let found = machine.delete(args.id);
+        if !found {
+            let remedy = existing_ids(machine.debugger_config());
+            self.keep_warm(store, meta, machine);
+            return Err(Failure::new(ErrorBody::new(
+                ErrorCode::BadRequest,
+                format!("there is no breakpoint or watch #{}", args.id),
+                remedy,
+            )));
+        }
         meta.debugger = machine.debugger_config().clone();
         store
             .write_meta(meta)
@@ -100,12 +110,67 @@ impl Handler {
     }
 }
 
+/// The ids `delete` could take, as a remedy.
+fn existing_ids(config: &DebuggerConfig) -> String {
+    let place = |at: &Location| {
+        at.symbol.clone().unwrap_or_else(|| match at.bank {
+            Some(bank) => format!("{bank:02X}:{:04X}", at.addr),
+            None => format!("${:04X}", at.addr),
+        })
+    };
+    let mut ids: Vec<(u32, String)> = config
+        .breakpoints
+        .iter()
+        .map(|b| (b.id, format!("#{} break {}", b.id, place(&b.at))))
+        .chain(config.watches.iter().map(|w| {
+            let access = match w.access {
+                WatchAccess::Read => "read",
+                WatchAccess::Write => "write",
+                WatchAccess::Access => "access",
+            };
+            (w.id, format!("#{} watch {access} {}", w.id, place(&w.at)))
+        }))
+        .collect();
+    if ids.is_empty() {
+        return "none are set; `gbcli break <addr>` or `gbcli watch write <addr>` makes one".into();
+    }
+    ids.sort();
+    let listed: Vec<String> = ids.into_iter().map(|(_, text)| text).collect();
+    format!("delete one of: {}", listed.join(", "))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::fixture::Fixture;
     use crate::handle::test_support::{handler, request};
     use gbcli_protocol::{Op, RunArgs, StopReason};
+
+    #[test]
+    fn deleting_an_id_that_doesnt_exist_is_refused_listing_the_ids_that_do() {
+        let f = Fixture::new("delete-missing");
+        let mut h = handler(&f);
+        let none = h.handle(&request(Op::Delete(DeleteArgs { id: 7 })));
+        let error = none.outcome.expect_err("nothing to delete");
+        assert_eq!(error.code, gbcli_protocol::ErrorCode::BadRequest);
+        assert!(error.message.contains("#7"), "{}", error.message);
+        assert!(error.remedy.contains("none are set"), "{}", error.remedy);
+
+        let made = h.handle(&request(Op::Break(BreakArgs {
+            at: "$0170".into(),
+            condition: None,
+        })));
+        let id = made.outcome.unwrap().breakpoint.unwrap().id;
+        let missing = h.handle(&request(Op::Delete(DeleteArgs { id: id + 5 })));
+        let error = missing.outcome.expect_err("no such id");
+        assert!(error.remedy.contains(&format!("#{id}")), "{}", error.remedy);
+        assert!(error.remedy.contains("$0170"), "{}", error.remedy);
+        let meta = f.bundle.session("demo").unwrap().read_meta().unwrap();
+        assert_eq!(meta.debugger.breakpoints.len(), 1, "nothing deleted");
+
+        let deleted = h.handle(&request(Op::Delete(DeleteArgs { id })));
+        assert!(deleted.outcome.unwrap().deleted.unwrap().found);
+    }
 
     #[test]
     fn a_breakpoint_stops_the_run_where_it_is() {

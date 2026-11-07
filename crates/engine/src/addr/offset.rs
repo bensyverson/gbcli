@@ -25,8 +25,10 @@ pub(crate) fn bank_of(symbol: &Symbol) -> Option<u16> {
     banked_area(Area::of(symbol.addr)).map(|_| symbol.bank)
 }
 
-/// Splits `Name+3`, `Name+$3` and `Name-0x3` (offsets are hex, prefixed or
-/// not); a name with no sign comes back with offset 0.
+/// Splits `Name+3`, `Name+$3`, `Name-0x3` and `Name+%11`; a name with no
+/// sign comes back with offset 0. The offset is read as a condition reads a
+/// number (design §8) and as RGBDS reads one: decimal unless `$` or `0x`
+/// says hex or `%` binary, so `rLCDC+10` is $FF4A in both grammars.
 pub(crate) fn split_offset(text: &str) -> Result<(&str, i64), AddrError> {
     let Some(at) = text.rfind(['+', '-']) else {
         return Ok((text, 0));
@@ -40,11 +42,40 @@ pub(crate) fn split_offset(text: &str) -> Result<(&str, i64), AddrError> {
     if base.is_empty() {
         return Err(bad("a symbol before the offset, such as Main+$10".into()));
     }
-    let Some(n) = hex(&text[at + 1..]) else {
-        return Err(bad(format!("{base}+$10 (a hex offset)")));
+    let digits = text[at + 1..].trim();
+    let Some(n) = number(digits) else {
+        return Err(bad(format!(
+            "{base}+16 (decimal), {base}+${} or {base}+0x{} (hex)",
+            hex_hint(digits),
+            hex_hint(digits)
+        )));
     };
     let n = i64::try_from(n).unwrap_or(i64::MAX);
     Ok((base, if negative { -n } else { n }))
+}
+
+/// A number as a condition reads one: decimal, `$`/`0x` hex, `%` binary.
+fn number(text: &str) -> Option<u64> {
+    if text.starts_with('$') || text.starts_with("0x") || text.starts_with("0X") {
+        return hex(text);
+    }
+    let (digits, radix) = match text.strip_prefix('%') {
+        Some(bits) => (bits, 2),
+        None => (text, 10),
+    };
+    if digits.is_empty() || !digits.chars().all(|c| c.is_digit(radix)) {
+        return None;
+    }
+    u64::from_str_radix(digits, radix).ok()
+}
+
+/// The digits the caller probably meant as hex, for the hint.
+fn hex_hint(digits: &str) -> &str {
+    if !digits.is_empty() && digits.chars().all(|c| c.is_ascii_hexdigit()) {
+        digits
+    } else {
+        "10"
+    }
 }
 
 /// `name` moved by `delta`, written as the grammar reads it.
@@ -90,8 +121,8 @@ pub(crate) fn resolve(
 
 /// A hardware register name, alone or with an offset (`rLCDC+1`), from
 /// inspection's table; `None` when `text` names no register. The whole text
-/// is tried first: hardware.inc names wave RAM bytes `_AUD3WAVERAM+10` in
-/// decimal, where the grammar's offsets are hex. The hardware fixes the
+/// is tried first, for hardware.inc's `_AUD3WAVERAM+10` names (which the
+/// decimal offset reads the same way). The hardware fixes the
 /// address, not a `.sym`, so the location names no symbol for a checkpoint's
 /// ROM check to look up again.
 pub(crate) fn hardware(text: &str) -> Result<Option<Location>, AddrError> {

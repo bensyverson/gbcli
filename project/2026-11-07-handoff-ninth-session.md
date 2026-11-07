@@ -50,8 +50,7 @@ Ben was present at the start. He approved running hUGETracker's `uge2source` whe
 
 ## Needs Ben
 
-- **Shade spreading for images** (design §12, the JAzaVy update): when two colors would share a DMG shade, every color is spread lightest to darkest. So two near-whites become white and black, and a sprite drawn in black plus #101010 renders #101010 as white. Should the spreading be gentler, or only warn? The help now describes the current rule.
-- **Rosetta**, optionally: `softwareupdate --install-rosetta --agree-to-license` would let the official release binary serve as a second check. It isn't needed; the native build is hUGETracker's own code.
+- **Shade spreading for images:** ruled 2026-11-07 (after this handoff was written): nearest shade even when two colors share one, with a warning. That is a new leaf under Stage 6. Ben: no Rosetta; we work without it.
 
 ## Next, in order
 
@@ -62,8 +61,9 @@ Ben was present at the start. He approved running hUGETracker's `uge2source` whe
    - Stop printing `palette` in CGB rows.
 
    Probes are in this session's scratchpad. The leaf restates them.
-3. The agent eval, `k22J86`. Stage 6 is complete apart from `XJV3UL`.
-4. The flash-chip model, `L00RuF`.
+3. **GBC images in dual mode** (ruled by Ben after this handoff: a `--gbc` flag; dual mode; research GB Studio's approach to the gray version, then write a plan for Ben's review). The leaf is `k5Afkg`, under Stage 6, labeled `decision`. The images shade leaf (`ygc9bb`) goes before it.
+4. The agent eval, `k22J86`. Stage 6 has `XJV3UL`, `ygc9bb` and the GBC leaf (`k5Afkg`) open.
+5. The flash-chip model, `L00RuF`.
 
 ## Suite time
 

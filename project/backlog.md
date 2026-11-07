@@ -56,6 +56,8 @@ What: read SameBoy's HuC3 and TPP1 clock footers on `power-cycle --sav` without 
 
 ## 2026-11-07 — CGB images
 
+> **Un-parked, 2026-11-07 (Ben):** a `--gbc` flag picks the target and dual mode is the goal. Research and a plan come first; see the job leaf "GBC images in dual mode".
+
 What: `build` converting images for a CGB target: rgbgfx `-m -a -p -N 256,256` (flip dedup, attribute map, palettes, both VRAM banks), the `cgb_palettes` check (8 BG + 8 OBJ palettes of 4, naming the tiles that force the ninth) and 768 VRAM tiles (research doc, Recommendations (a)). Why parked: `build` has no CGB target (rgbfix runs `-v -p 0xFF`, no `-C`), so nothing would choose these flags; the image leaf (WdnjHI) built the DMG checks. Un-park when the build gains a CGB switch, or an agent eval targets the CGB.
 
 ## 2026-11-07 — 8x8 objects and an engine-budget reserve for images

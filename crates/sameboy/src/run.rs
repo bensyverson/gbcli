@@ -13,7 +13,7 @@
 
 use gbcli_core::{
     Access, CoreError, CpuStep, Event, EventKinds, EventSink, Feature, FirstStep, FrameTag, Hit,
-    Hits, InStop, RunRequest, Stop, StopReason, Ticks, Usage,
+    Hits, InStop, LcdOff, RunRequest, Stop, StopReason, Ticks, Usage,
 };
 use sameboy_sys as sb;
 
@@ -63,7 +63,6 @@ impl Arming {
             }
             if raster {
                 sb::GB_set_lcd_line_callback(gb, Some(raster::on_line));
-                sb::GB_set_lcd_status_callback(gb, Some(raster::on_lcd_status));
             }
             if exec {
                 sb::GB_set_execution_callback(gb, Some(on_exec));
@@ -106,7 +105,6 @@ impl Drop for Arming {
             if self.raster {
                 hooks.raster = None;
                 sb::GB_set_lcd_line_callback(self.gb, None);
-                sb::GB_set_lcd_status_callback(self.gb, None);
             }
         }
     }
@@ -225,6 +223,7 @@ pub(crate) fn run(core: &mut SameBoy, req: &mut RunRequest<'_>) -> Result<Stop, 
         if let (Some(before), Some(sink)) = (before, req.sink.as_mut()) {
             pass_exec(core, &mut **sink, pc, before, ticks as u32);
         }
+        log_lcd_off(core, pc);
         core.ticks += ticks;
         used.ticks += ticks;
         used.instructions += 1;
@@ -314,6 +313,20 @@ fn pass_exec(core: &mut SameBoy, sink: &mut dyn EventSink, pc: u16, before: Befo
         next_bank,
         double_speed: before.double_speed,
     });
+}
+
+/// Logs an LCD-off the step at `pc` made, stamped with the step's start.
+fn log_lcd_off(core: &mut SameBoy, pc: u16) {
+    let (at, vblanks) = (Ticks(core.ticks), core.vblanks);
+    let hooks = core.hooks_mut();
+    if let (Some(line), Some(log)) = (hooks.lcd_off_line.take(), &mut hooks.lcd_off_log) {
+        log.push(LcdOff {
+            pc,
+            line,
+            at,
+            vblanks,
+        });
+    }
 }
 
 /// Hands the step's raster events to the sink, keeping the buffer.

@@ -9,6 +9,7 @@ use gbcli_core::{Access, HaltWake, Hit, Usage};
 use gbcli_protocol::{Location, StepKind, StopReason, TimeMark, WatchAccess};
 
 use super::drive::{BOOT_OFF, Goal};
+use super::lcd::LcdOffOutsideVblank;
 use super::record::{base, record};
 use super::{DebugError, RunOptions};
 use crate::cond::eval::frame_number;
@@ -71,6 +72,8 @@ pub(super) struct Notes {
     pub warnings: Vec<EvalWarning>,
     /// Per breakpoint or watch, the byte its condition last waited on.
     waiting: BTreeMap<u32, UninitRead>,
+    /// The first LCD-off outside VBlank, with a count of the rest.
+    pub lcd_off: Option<LcdOffOutsideVblank>,
 }
 
 impl Notes {
@@ -88,11 +91,17 @@ impl Notes {
         }
     }
 
-    /// The warnings for the outcome: the run's own, then each condition
-    /// still waiting on a byte that is still unwritten, then STOP if the CPU
-    /// is in it. `until` is the predicate's own wait, if any.
+    /// The warnings for the outcome: the LCD turned off outside VBlank, the
+    /// run's own, then each condition still waiting on a byte that is still
+    /// unwritten, then STOP if the CPU is in it. `until` is the predicate's
+    /// own wait, if any.
     pub fn finish(self, m: &Machine, until: Option<UninitRead>) -> Vec<EvalWarning> {
-        let mut warnings = self.warnings;
+        let mut warnings: Vec<EvalWarning> = self
+            .lcd_off
+            .map(EvalWarning::LcdOffOutsideVblank)
+            .into_iter()
+            .collect();
+        warnings.extend(self.warnings);
         let waits = until.map(|read| (StopTrigger::Until, read)).into_iter();
         let points = self
             .waiting

@@ -199,7 +199,7 @@ fn bank_qualified_and_region_addresses() {
             width: Width::U16,
             place: Place::Region {
                 region: Region::Wram,
-                offset: num(0x1A0)
+                offset: 0x1A0
             }
         }
     );
@@ -431,6 +431,32 @@ fn a_bank_head_that_is_all_hex_letters_is_a_bank_as_in_the_address_grammar() {
                 },
             },
             "{text}"
+        );
+    }
+}
+
+/// Design §7: a region offset is hex, prefixed or not, as the address
+/// grammar reads it (`poke sram:10` writes offset $10).
+#[test]
+fn a_region_offset_is_hex_prefixed_or_not_as_in_the_address_grammar() {
+    let offset = |text: &str| match parse(text) {
+        Expr::Read {
+            place: Place::Region { offset, .. },
+            ..
+        } => offset,
+        other => panic!("{text}: {other:?}"),
+    };
+    assert_eq!(offset("[sram:10]"), 0x10);
+    assert_eq!(offset("[sram:$10]"), 0x10);
+    assert_eq!(offset("[sram:0x10]"), 0x10);
+    assert_eq!(offset("[wram:1A0]"), 0x1A0);
+    assert_eq!(offset("[wram:a0]"), 0xA0, "hex that lexes as a name");
+    assert_eq!(offset("[rom:14E]"), 0x14E);
+    assert_eq!(offset("[rom:$1FFFFF]"), 0x1F_FFFF, "past 16 bits");
+    for bad in ["[sram:1G]", "[wram:hl]", "[sram:-1]"] {
+        assert!(
+            Condition::compile(bad, None).is_err(),
+            "{bad}: an offset is one hex number"
         );
     }
 }

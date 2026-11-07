@@ -25,7 +25,7 @@ use super::{Failure, Handler, HeadChange, Need, save_head, shot};
 use crate::convert;
 #[cfg(test)]
 pub(super) use budget::WALL_GUARD_REMEDY;
-use budget::{DEFAULT_FRAMES, budget_of, unanswered, wall_guard_error};
+use budget::{DEFAULT_FRAMES, budget_of, short_of_target, unanswered, wall_guard_error};
 #[cfg(test)]
 pub(super) use equiv::equiv_failure;
 use probes::Probes;
@@ -196,6 +196,7 @@ impl Handler {
         // After the reads (design §11 step 6); capturing only reads the core.
         let shot = args.shot.as_ref().map(|s| shot::take(&machine, s, &since));
         let answered = self.answered(args, defaulted, guarded, &stop);
+        warnings.extend(short_of_target(args, &stop));
         // Step 5, on a copy of the stop; and what the run's sinks collected.
         let measured = plan
             .probes
@@ -472,5 +473,7 @@ fn stop_of(error: &DebugError) -> Option<&StopRecord> {
 
 #[cfg(test)]
 mod checkpoint_tests;
+#[cfg(test)]
+mod target_tests;
 #[cfg(test)]
 mod tests;

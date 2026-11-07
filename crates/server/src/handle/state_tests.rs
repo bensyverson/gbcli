@@ -265,6 +265,31 @@ fn a_bank_qualified_poke_writes_that_bank() {
     assert_ne!(wram.bytes[0x1000], 0x5A, "not the mapped bank 1");
 }
 
+/// Design §7: a region offset is hex in both grammars, so a poke and a read
+/// of the same text name the same byte.
+#[test]
+fn a_poke_and_a_read_of_the_same_region_offset_address_the_same_byte() {
+    const MBC5_RAM: u8 = 0x1A;
+    const RAM_8K: u8 = 0x02;
+    let mut rom = V2.to_vec();
+    rom[0x147] = MBC5_RAM;
+    rom[0x149] = RAM_8K;
+    rom[0x14D] = rom[0x134..0x14D]
+        .iter()
+        .fold(0u8, |x, b| x.wrapping_sub(*b).wrapping_sub(1));
+    let f = Fixture::with_rom("region-offset-radix", &rom);
+    let mut h = handler(&f);
+    for (target, byte) in [("sram:10", 0xAB), ("wram:10", 0xCD)] {
+        let written = h.handle(&request(poke(target, byte)));
+        assert!(written.is_ok(), "{:?}", written.error());
+        assert_eq!(
+            read_one(&mut h, &format!("[{target}]")),
+            i64::from(byte),
+            "{target}"
+        );
+    }
+}
+
 #[test]
 fn a_region_offset_past_this_models_size_is_refused() {
     let f = Fixture::new("poke-dmg-bounds");

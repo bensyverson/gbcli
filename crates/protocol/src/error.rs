@@ -26,6 +26,10 @@ pub enum ErrorCode {
     /// The verb needs a flag the caller didn't pass.
     Refused,
     BudgetExhausted,
+    /// A run with a target (`--to`, `--until`) ended without reaching it,
+    /// for a reason other than its budget: the CPU locked up (an illegal
+    /// opcode, HALT or STOP that nothing can wake). The stop rides along.
+    TargetNotReached,
     RevMismatch,
     SessionBusy,
     RomChanged,
@@ -65,6 +69,7 @@ impl ErrorCode {
             | ErrorCode::UnknownSymbol
             | ErrorCode::Refused => 2,
             ErrorCode::BudgetExhausted
+            | ErrorCode::TargetNotReached
             | ErrorCode::RevMismatch
             | ErrorCode::SessionBusy
             | ErrorCode::RomChanged
@@ -101,6 +106,9 @@ impl ErrorCode {
             }
             ErrorCode::Refused => "the remedy names the flag this verb needs",
             ErrorCode::BudgetExhausted => "raise --frames, --ticks or --instructions",
+            ErrorCode::TargetNotReached => {
+                "the stop record says where the CPU locked up; step toward the target from an earlier state"
+            }
             ErrorCode::RevMismatch => {
                 "re-read the session, then repeat the request with its current rev"
             }
@@ -157,6 +165,7 @@ impl fmt::Display for ErrorCode {
             ErrorCode::UnknownSymbol => "unknown_symbol",
             ErrorCode::Refused => "refused",
             ErrorCode::BudgetExhausted => "budget_exhausted",
+            ErrorCode::TargetNotReached => "target_not_reached",
             ErrorCode::RevMismatch => "rev_mismatch",
             ErrorCode::SessionBusy => "session_busy",
             ErrorCode::RomChanged => "rom_changed",
@@ -239,6 +248,7 @@ mod tests {
         ErrorCode::UnknownSymbol,
         ErrorCode::Refused,
         ErrorCode::BudgetExhausted,
+        ErrorCode::TargetNotReached,
         ErrorCode::RevMismatch,
         ErrorCode::SessionBusy,
         ErrorCode::RomChanged,
@@ -270,6 +280,7 @@ mod tests {
             | ErrorCode::UnknownSymbol
             | ErrorCode::Refused
             | ErrorCode::BudgetExhausted
+            | ErrorCode::TargetNotReached
             | ErrorCode::RevMismatch
             | ErrorCode::SessionBusy
             | ErrorCode::RomChanged
@@ -325,6 +336,7 @@ mod tests {
             (ErrorCode::UnknownSymbol, 2),
             (ErrorCode::Refused, 2),
             (ErrorCode::BudgetExhausted, 3),
+            (ErrorCode::TargetNotReached, 3),
             (ErrorCode::RevMismatch, 3),
             (ErrorCode::SessionBusy, 3),
             (ErrorCode::RomChanged, 3),

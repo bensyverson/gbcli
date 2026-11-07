@@ -20,15 +20,20 @@ pub fn base(m: &Machine, since: &Since) -> (TimeBase, TimeMark) {
     }
 }
 
+/// The symbol containing `pc` in the bank mapped there now, as `Name` or
+/// `Name+$3`.
+pub fn symbol_at(m: &Machine, pc: u16) -> Option<String> {
+    m.symbols()
+        .zip(mem::cart_bank_at(m.core(), pc))
+        .and_then(|(s, bank)| s.containing(bank, pc))
+        .map(|s| label(&s.name, i64::from(pc - s.addr)))
+}
+
 pub fn record(m: &Machine, reason: StopReason, used: Usage, since: &Since) -> StopRecord {
     let core = m.core();
     let regs = core.registers();
     let bank = mem::bank_at(core, regs.pc);
-    let symbol = m
-        .symbols()
-        .zip(mem::cart_bank_at(core, regs.pc))
-        .and_then(|(s, bank)| s.containing(bank, regs.pc))
-        .map(|s| label(&s.name, i64::from(regs.pc - s.addr)));
+    let symbol = symbol_at(m, regs.pc);
     let (since, mark) = base(m, since);
     let ticks = core.now().0;
     let per_t = if regs.double_speed { 1 } else { 2 };

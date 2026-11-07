@@ -11,6 +11,7 @@ use gbcli_protocol::{Location, StepKind, StopReason, WatchAccess};
 
 use super::decide::{Notes, compile, decide, exec_breakpoint, exec_hit, reached, remove_once};
 use super::keys::Schedule;
+use super::lcd;
 use super::record::record;
 use super::until::Until;
 use super::{DebugError, Outcome, RunOptions};
@@ -111,7 +112,20 @@ pub fn drive_until(
     run(m, opts, Goal::Run, Some(condition))
 }
 
+/// Runs with the core's LCD-off log on (`lcd`), and off again after.
 fn run(
+    m: &mut Machine,
+    opts: &RunOptions<'_>,
+    goal: Goal,
+    condition: Option<&Condition>,
+) -> Result<Outcome, DebugError> {
+    lcd::watch(m, true);
+    let outcome = run_watched(m, opts, goal, condition);
+    lcd::watch(m, false);
+    outcome
+}
+
+fn run_watched(
     m: &mut Machine,
     opts: &RunOptions<'_>,
     goal: Goal,
@@ -222,6 +236,7 @@ fn run(
         drop(tap);
         let stop = stop?;
         used += stop.used;
+        lcd::collect(m, &opts.since, &mut notes.lcd_off);
         keys.apply_due(m, used.frames);
         if let Some(sink) = opts.on_frame
             && stop.used.frames > 0

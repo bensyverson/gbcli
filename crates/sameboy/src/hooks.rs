@@ -120,6 +120,11 @@ pub(crate) struct Hooks {
     /// Set as the LCD turns off, so the line callback SameBoy then fires is
     /// not taken for a line start.
     pub lcd_turning_off: bool,
+    /// The LCD-off log, while it is on.
+    pub lcd_off_log: Option<Vec<gbcli_core::LcdOff>>,
+    /// The line the LCD turned off on during the current step, while the log
+    /// is on; the run loop logs it with the step's PC and time.
+    pub lcd_off_line: Option<u8>,
 }
 
 impl Hooks {
@@ -148,6 +153,8 @@ impl Hooks {
             wake: None,
             raster: None,
             lcd_turning_off: false,
+            lcd_off_log: None,
+            lcd_off_line: None,
         }
     }
 

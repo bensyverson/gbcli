@@ -274,6 +274,21 @@ pub struct EventKinds {
     pub ppu_modes: bool,
 }
 
+/// The LCD turned off (LCDC bit 7 from 1 to 0) during a run
+/// ([`Feature::LcdOffLog`](crate::Feature::LcdOffLog)).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LcdOff {
+    /// The PC of the instruction that wrote LCDC.
+    pub pc: u16,
+    /// The PPU's line when the write landed (144-153 is VBlank).
+    pub line: u8,
+    /// The start of the writing step.
+    pub at: Ticks,
+    /// Vblanks since power-on when it happened, as a
+    /// [`FrameTag`](crate::FrameTag) numbers frames.
+    pub vblanks: u64,
+}
+
 /// Receives events during a run. Must not call back into the core.
 pub trait EventSink {
     fn kinds(&self) -> EventKinds;

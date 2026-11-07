@@ -83,7 +83,8 @@ Addresses — one grammar for every verb and expression.
   $C0A0, 0xC0A0        as the CPU sees it, in the bank mapped now
   03:4123, $03:$4123   that address in that bank (RGBDS .sym style); use it
                        for breakpoints and patches in a switchable area
-  wram:0x1A0           an offset into a whole region, across banks; regions:
+  wram:0x1A0           an offset into a whole region, across banks, in hex
+                       with or without $ or 0x (sram:10 is offset $10); regions:
                        rom wram sram vram hram oam io ie bootrom bgpal objpal
   wFrame, Main.loop    a symbol from the ROM's .sym (found beside the ROM, or
                        --sym when the session is created)
@@ -171,9 +172,12 @@ Budgets — every run ends.
 
 A run with a target (--until, --to) that runs out of budget fails with
 budget_exhausted (exit 3) and still prints the stop it reached, which becomes
-the head; raise the budget or check the predicate. `run --frames N` alone
-succeeds when the frames are done. A 60 s wall-clock guard backs every request
-up; a stop it causes says wall_guard and is not reproducible.
+the head; raise the budget or check the predicate. If the CPU locks up first
+(illegal_opcode, halt_forever), it fails the same way, as target_not_reached.
+If a breakpoint or watch you set stops it first, it succeeds with a warning.
+`run --frames N` alone succeeds when the frames are done. A 60 s wall-clock
+guard backs every request up; a stop it causes says wall_guard and is not
+reproducible.
 ";
 
 const EXIT_CODES: &str = "\
@@ -186,7 +190,8 @@ Exit codes — one table for every command; errors print to stderr as
   2  usage: bad_request bad_address bad_expression ambiguous_symbol
      unknown_symbol refused (a flag is needed)
   3  budget or conflict: budget_exhausted rev_mismatch session_busy
-     rom_changed uninitialized_read
+     rom_changed uninitialized_read target_not_reached (a run's --to or
+     --until ended short: the CPU locked up first; the stop says how)
   4  something didn't load: rom_unreadable checkpoint_unreadable
      checkpoint_mismatch symbols_unreadable session_unreadable
      build_failed (RGBDS rejected the sources: see the diagnostic rows)
@@ -269,7 +274,7 @@ mod tests {
                 }
             }
         }
-        assert_eq!(seen, 26, "every code in the closed set");
+        assert_eq!(seen, 27, "every code in the closed set");
     }
 
     #[test]

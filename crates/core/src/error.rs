@@ -54,6 +54,9 @@ pub enum Feature {
     /// The cart's battery-backed RAM and clock as a `.sav`, both ways
     /// (`Core::battery_sav`, `Core::load_battery_sav`, `Core::advance_rtc`).
     BatterySave,
+    /// A log of the LCD being turned off during a run, with the line it was
+    /// on (`Core::set_lcd_off_log`).
+    LcdOffLog,
 }
 
 impl Feature {
@@ -69,6 +72,7 @@ impl Feature {
             Feature::ApuInternals => "apu_internals",
             Feature::ApuChannels => "apu_channels",
             Feature::ApuWriteLog => "apu_write_log",
+            Feature::LcdOffLog => "lcd_off_log",
             Feature::AudioSamples => "audio_samples",
             Feature::WriteHookCoversDma => "write_hook_covers_dma",
             Feature::CartRamWrites => "cart_ram_writes",

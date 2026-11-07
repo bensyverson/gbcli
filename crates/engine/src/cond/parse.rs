@@ -191,9 +191,10 @@ impl Parser<'_> {
                     )
                 })?;
                 self.pos += 2;
+                let (offset_at, offset) = self.next()?;
                 Place::Region {
                     region,
-                    offset: Box::new(self.expr(0)?),
+                    offset: region_offset(offset_at, &offset)?,
                 }
             }
             (Some(bank @ (Tok::Num { .. } | Tok::Ident(_))), true) => {
@@ -221,7 +222,29 @@ impl Parser<'_> {
 /// A bank-qualified part (`03`, `$4123`, `A000`): hex, with or without a
 /// prefix. Unprefixed hex that starts with a letter lexes as a name.
 fn hex(at: usize, tok: &Tok) -> Result<i64, ExprError> {
-    let value = match tok {
+    hex_value(tok)
+        .filter(|v| (0..=0xFFFF).contains(v))
+        .ok_or_else(|| {
+            ExprError::syntax(at, format!("expected a hex bank or address, got {tok:?}"))
+        })
+}
+
+/// A region offset (`sram:10`, `wram:$1A0`): one hex number, prefixed or
+/// not, as the address grammar reads it (design §7). Bounds against the
+/// region's size are checked when it is read.
+fn region_offset(at: usize, tok: &Tok) -> Result<u32, ExprError> {
+    hex_value(tok)
+        .and_then(|v| u32::try_from(v).ok())
+        .ok_or_else(|| {
+            ExprError::syntax(
+                at,
+                format!("expected a hex region offset (sram:10 is offset $10), got {tok:?}"),
+            )
+        })
+}
+
+fn hex_value(tok: &Tok) -> Option<i64> {
+    match tok {
         Tok::Num {
             value,
             prefixed: true,
@@ -232,10 +255,7 @@ fn hex(at: usize, tok: &Tok) -> Result<i64, ExprError> {
             i64::from_str_radix(raw, 16).ok()
         }
         _ => None,
-    };
-    value.filter(|v| (0..=0xFFFF).contains(v)).ok_or_else(|| {
-        ExprError::syntax(at, format!("expected a hex bank or address, got {tok:?}"))
-    })
+    }
 }
 
 /// A symbol (plus or minus a constant) in a switchable area reads in its own

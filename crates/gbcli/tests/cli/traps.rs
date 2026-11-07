@@ -38,8 +38,13 @@ const NEW_SYNTAX: &str = include_str!("../traps/rgbds/new_syntax.asm");
 
 /// A project holding demo `name`'s ROM and .sym.
 fn demo(name: &str) -> Project {
+    demo_in(name, &format!("trap-{name}"))
+}
+
+/// As [`demo`], in a project of its own name, for a second test of a demo.
+fn demo_in(name: &str, project: &str) -> Project {
     let (_, rom, sym) = DEMOS.iter().find(|d| d.0 == name).expect("a demo");
-    let p = Project::new(&format!("trap-{name}"));
+    let p = Project::new(project);
     fs::write(p.path(&format!("{name}.gb")), rom).unwrap();
     fs::write(p.path(&format!("{name}.sym")), sym).unwrap();
     p
@@ -136,6 +141,31 @@ fn raster_shows_the_lcd_turned_off_mid_frame_and_in_vblank() {
 }
 
 #[test]
+fn turning_the_lcd_off_mid_frame_warns_and_in_vblank_does_not() {
+    let p = demo_in("lcd_off", "trap-lcd_off-warning");
+    let run = p.gbcli(&["run", "lcd_off.gb", "--session", "t", "--frames", "4"]);
+    assert_eq!(run.code, 0, "a warning, not a failure: {}", run.stderr);
+    let warnings: Vec<&str> = run
+        .stderr
+        .lines()
+        .filter(|l| l.contains("turned off outside VBlank"))
+        .collect();
+    assert_eq!(warnings.len(), 1, "only the mid-frame one:\n{}", run.stderr);
+    for part in [
+        "warning: the LCD was turned off outside VBlank at $015C (OffMidFrame), line 60",
+        "wait for LY >= 144 or use the VBlank interrupt",
+    ] {
+        assert!(warnings[0].contains(part), "{part:?} in {}", warnings[0]);
+    }
+    // The topic quotes the warning as it reads.
+    let topic = p.gbcli(&["help", "traps"]).stdout;
+    assert!(
+        topic.contains("gbcli run warns: the LCD was turned off outside VBlank"),
+        "{topic}"
+    );
+}
+
+#[test]
 fn the_halt_bug_runs_the_next_byte_twice_and_a_nop_absorbs_it() {
     let p = demo("halt_bug");
     let r = json(
@@ -210,9 +240,16 @@ fn oam_dma_from_rom_runs_wild_and_from_hram_returns() {
             "--frames",
             "30",
         ],
-        0,
+        3,
     );
-    let stop = &rom["result"]["stop"];
+    // It never reached its target: a failure, with the stop attached.
+    let error = &rom["error"];
+    assert_eq!(error["code"], "target_not_reached", "{error}");
+    assert!(
+        error["remedy"].as_str().unwrap().contains("illegal_opcode"),
+        "{error}"
+    );
+    let stop = &error["stop"];
     assert_eq!(stop["reason"], "illegal_opcode", "{stop}");
     assert!(
         stop["pc"].as_u64().unwrap() >= 0x8000,

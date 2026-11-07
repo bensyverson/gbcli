@@ -28,7 +28,7 @@ pub use region::{
     FrameRef, FrameTag, Layer, LayerMap, Pixels, Region, RegionView, VblankKind, WrittenView,
 };
 pub use run::{
-    Budget, BudgetKind, CpuStep, Event, EventKinds, EventSink, FirstStep, InStop, PpuMode,
+    Budget, BudgetKind, CpuStep, Event, EventKinds, EventSink, FirstStep, InStop, LcdOff, PpuMode,
     RunRequest, StepUnit, Usage,
 };
 pub use state::{
@@ -148,6 +148,25 @@ pub trait Core {
         Err(CoreError::Unsupported {
             feature: Feature::ApuWriteLog,
             reason: "this core doesn't log sound-register writes",
+        })
+    }
+    /// Turns the LCD-off log on or off ([`Feature::LcdOffLog`]). While on,
+    /// every run records each time the program turns the LCD off, with the
+    /// line it was on. Off by default; turning it off drops what wasn't
+    /// taken. The default is for a core without it, so adding this method
+    /// broke no backend.
+    fn set_lcd_off_log(&mut self, _on: bool) -> Result<(), CoreError> {
+        Err(CoreError::Unsupported {
+            feature: Feature::LcdOffLog,
+            reason: "this core can't report the LCD turning off",
+        })
+    }
+    /// The LCD-offs logged since the log was turned on or last taken, oldest
+    /// first. A load drops them: they belong to the timeline it replaced.
+    fn take_lcd_offs(&mut self) -> Result<Vec<LcdOff>, CoreError> {
+        Err(CoreError::Unsupported {
+            feature: Feature::LcdOffLog,
+            reason: "this core can't report the LCD turning off",
         })
     }
     /// Starts rendering audio samples, at [`AudioCapture::SAMPLE_RATE`] with

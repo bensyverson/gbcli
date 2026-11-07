@@ -134,8 +134,9 @@ pub enum Place {
     Cpu(Box<Expr>),
     /// An address in a given bank, whatever is mapped (`03:4123`, a banked symbol).
     Banked { bank: u16, addr: u16 },
-    /// An offset into a region's whole backing store (`wram:0x1A0`).
-    Region { region: Region, offset: Box<Expr> },
+    /// An offset into a region's whole backing store (`wram:0x1A0`), hex
+    /// as the address grammar reads it (design §7).
+    Region { region: Region, offset: u32 },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

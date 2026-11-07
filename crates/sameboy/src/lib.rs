@@ -20,9 +20,9 @@ use std::sync::Mutex;
 use gbcli_core::{
     ApuState, ApuWrite, AudioCapture, AudioSamples, BootRom, Budget, BudgetKind, ColorMode, Core,
     CoreConfig, CoreError, CoreInfo, Feature, FrameRef, HaltWake, IoReg, JoypadBounce, Keys,
-    LayerMap, LiveFrame, Model, PpuMode, PpuStatus, Region, RegionView, Registers, Rendering,
-    RtcMode, RunRequest, SavClock, StepUnit, Stop, StopReason, Support, Ticks, WriteTracking,
-    WrittenView,
+    LayerMap, LcdOff, LiveFrame, Model, PpuMode, PpuStatus, Region, RegionView, Registers,
+    Rendering, RtcMode, RunRequest, SavClock, StepUnit, Stop, StopReason, Support, Ticks,
+    WriteTracking, WrittenView,
 };
 use sameboy_sys as sb;
 
@@ -103,6 +103,7 @@ impl SameBoy {
             sb::GB_set_rgb_encode_callback(raw, Some(hooks::encode_rgb));
             sb::GB_set_pixels_output(raw, (*hooks.as_ptr()).screen.as_mut_ptr());
             sb::GB_set_vblank_callback(raw, Some(hooks::on_vblank));
+            sb::GB_set_lcd_status_callback(raw, Some(raster::on_lcd_status));
             sb::GB_set_rendering_disabled(raw, !rendering);
             sb::GB_load_boot_rom_from_buffer(raw, boot_rom.as_ptr(), boot_rom.len());
             sb::GB_load_rom_from_buffer(raw, config.rom.as_ptr(), config.rom.len());
@@ -411,6 +412,22 @@ impl Core for SameBoy {
         Ok(self
             .hooks_mut()
             .apu_log
+            .as_mut()
+            .map(std::mem::take)
+            .unwrap_or_default())
+    }
+
+    fn set_lcd_off_log(&mut self, on: bool) -> Result<(), CoreError> {
+        let hooks = self.hooks_mut();
+        hooks.lcd_off_log = on.then(Vec::new);
+        hooks.lcd_off_line = None;
+        Ok(())
+    }
+
+    fn take_lcd_offs(&mut self) -> Result<Vec<LcdOff>, CoreError> {
+        Ok(self
+            .hooks_mut()
+            .lcd_off_log
             .as_mut()
             .map(std::mem::take)
             .unwrap_or_default())

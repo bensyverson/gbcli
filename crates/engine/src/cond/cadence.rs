@@ -118,13 +118,10 @@ fn target(place: &Place, i: usize, sizes: CartSizes) -> Option<Result<Target, ()
                 .map(|t| sizes.alias(t))
                 .map_err(drop),
         ),
-        Place::Region { region, offset } => {
-            let offset = usize::try_from(const_value(offset)?).ok()?;
-            Some(Ok(Target::Backing {
-                region: *region,
-                offset: offset + i,
-            }))
-        }
+        Place::Region { region, offset } => Some(Ok(Target::Backing {
+            region: *region,
+            offset: *offset as usize + i,
+        })),
     }
 }
 

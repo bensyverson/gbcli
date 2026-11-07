@@ -7,6 +7,7 @@ mod code;
 mod decide;
 mod drive;
 mod keys;
+mod lcd;
 mod record;
 mod until;
 
@@ -29,6 +30,7 @@ pub(crate) use drive::CHUNK;
 use drive::Goal;
 pub(crate) use keys::Schedule;
 pub use keys::unapplied_keys;
+pub use lcd::LcdOffOutsideVblank;
 
 /// What frame and cycle counts count from (design §9). The default is the
 /// boot handoff; before it has been seen, records count from power-on and

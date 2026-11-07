@@ -20,8 +20,9 @@ VRAM write during mode 3
 LCD turned off outside VBlank
   Symptom  none in an emulator: the screen just blanks. On a real DMG it can
            burn a line into the LCD
-  See it   gbcli run --frames 4 --raster: an rLCDC write with bit 7 clear
-           must sit under a line from 144 to 153. gbcli does not warn
+  See it   gbcli run warns: the LCD was turned off outside VBlank, with the
+           PC, line and frame. gbcli run --frames 4 --raster lists each rLCDC
+           write under its line; 144 to 153 is VBlank
   Fix      wait for VBlank (LY 144 or more, or the VBlank interrupt), then
            clear LCDC bit 7
   Docs     https://gbdev.io/pandocs/LCDC.html#lcdc7--lcd-enable
@@ -41,8 +42,9 @@ OAM DMA routine outside HRAM
   Symptom  the game locks up or runs wild just after starting OAM DMA: on DMG
            the CPU can read only HRAM during the copy, so a routine in ROM or
            WRAM executes the bytes being copied
-  See it   gbcli run --to AfterDma never arrives; the stop is often
-           illegal_opcode, with pc far from your code
+  See it   gbcli run --to AfterDma never arrives: it fails with
+           target_not_reached (exit 3), the stop often illegal_opcode with pc
+           far from your code
   Fix      copy the routine into HRAM (LOAD \"…\", HRAM … ENDL in RGBDS) and
            call it there; gbcli new does
   Docs     https://gbdev.io/pandocs/OAM_DMA_Transfer.html#oam-dma-bus-conflicts

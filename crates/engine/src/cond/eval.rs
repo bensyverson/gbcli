@@ -64,6 +64,8 @@ pub enum EvalWarning {
     /// The run ended with the CPU in STOP, where it stays however long a run
     /// goes: only a key in a selected joypad row wakes it.
     InStop,
+    /// The run turned the LCD off outside VBlank (leaf jXavVc).
+    LcdOffOutsideVblank(crate::debug::LcdOffOutsideVblank),
 }
 
 /// A condition that triggers a stop.
@@ -90,6 +92,7 @@ impl fmt::Display for EvalWarning {
                 "the CPU is in STOP, which only a key in a selected joypad row (JOYP, $FF00) \
                  ends; hold one with `run --keys`",
             ),
+            EvalWarning::LcdOffOutsideVblank(off) => off.fmt(f),
         }
     }
 }
@@ -309,18 +312,13 @@ fn read(
                 let addr = addr.wrapping_add(i as u16);
                 (mem::target_in_bank(ctx.core, *bank, addr)?, Some(addr))
             }
-            Place::Region { region, offset } => {
-                let value = eval(offset, ctx, warnings)?;
-                let offset =
-                    usize::try_from(value).map_err(|_| EvalError::AddressOutOfRange { value })? + i;
-                (
-                    Target::Backing {
-                        region: *region,
-                        offset,
-                    },
-                    None,
-                )
-            }
+            Place::Region { region, offset } => (
+                Target::Backing {
+                    region: *region,
+                    offset: *offset as usize + i,
+                },
+                None,
+            ),
         };
         if let Target::Backing { region, offset } = target {
             check_written(ctx, region, offset, addr, warnings)?;

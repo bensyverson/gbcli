@@ -85,6 +85,15 @@ pub(crate) unsafe extern "C" fn on_line(gb: *mut sb::GB_gameboy_t, line: u8) {
 
 /// SameBoy calls this from the LCDC write just before `GB_lcd_off` fires the
 /// line callback with line 0, so the flag marks that call as no line start.
+/// LCDC still has the LCD on at that point, so the display's line counter is
+/// the line the write landed on, which the LCD-off log keeps. Installed for
+/// the instance's lifetime: it fires only when the LCD turns on or off.
 pub(crate) unsafe extern "C" fn on_lcd_status(gb: *mut sb::GB_gameboy_t, on: bool) {
-    guard(gb, (), |hooks| hooks.lcd_turning_off = !on);
+    guard(gb, (), |hooks| {
+        hooks.lcd_turning_off = !on;
+        if !on && hooks.in_run && hooks.lcd_off_log.is_some() {
+            // SAFETY: a side-effect-free accessor on the live instance.
+            hooks.lcd_off_line = u8::try_from(unsafe { sb::gbcli_ppu_line(gb) }).ok();
+        }
+    });
 }

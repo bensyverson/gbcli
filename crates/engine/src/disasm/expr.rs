@@ -1,12 +1,17 @@
-//! rgbasm's constant numeric expressions, for the operands `lookup` needs a
-//! value of (an RST vector, a bit number), as rgbasm 1.0.4 reads them
+//! rgbasm's numeric expressions, for the operands `lookup` reads (data, an
+//! address, an RST vector, a bit number), as rgbasm 1.0.4 reads them
 //! (rgbasm(5), Numeric expressions): numbers in every base with `_`
 //! between digits; character constants and one-character strings in the
 //! default charmap (ASCII), with rgbasm's escapes; parentheses; `HIGH()`
 //! and `LOW()`; and every operator with rgbasm's precedence and 32-bit
-//! wrapping arithmetic. Not read, so refused: symbols, every other
-//! function, graphics constants (`` `0123 ``), fixed-point numbers, and
-//! nesting deeper than [`MAX_DEPTH`].
+//! wrapping arithmetic. Read but not valued ([`Value::Unknown`]): symbols
+//! (a label, `@`, an anonymous label), rgbasm's other functions that return
+//! a number, fixed-point numbers and graphics constants. Refused: a
+//! register or condition name inside an expression, interpolation (`{…}`),
+//! string expressions other than a string literal as a function's argument,
+//! and nesting deeper than [`MAX_DEPTH`].
+
+mod literal;
 
 /// How deep parentheses, unary operators, exponents and functions may
 /// nest. The parser recurses once for each level, so a line nested
@@ -17,17 +22,73 @@ pub(super) const MAX_DEPTH: usize = 64;
 /// Why a text has no value here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Refused {
-    /// Not a constant expression this reads, or one rgbasm refuses
-    /// (division by zero, a negative power).
+    /// Not an expression this reads, or one rgbasm refuses (division by
+    /// zero, a negative power).
     Invalid,
     /// Nested deeper than [`MAX_DEPTH`].
     TooDeep,
 }
 
+/// What an expression rgbasm takes is worth here.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Value {
+    Known(i32),
+    /// It names a symbol, or a function or literal whose value isn't
+    /// worked out here: rgbasm takes it, but its value is unknown.
+    Unknown,
+}
+
+use Value::{Known, Unknown};
+
+/// rgbasm's register and condition names, which can't be symbols: an
+/// expression naming one is refused (`hl+1`, `a+1`).
+const REGISTERS: &[&str] = &[
+    "a", "b", "c", "d", "e", "h", "l", "af", "bc", "de", "hl", "hli", "hld", "sp", "nz", "z", "nc",
+];
+
+/// rgbasm 1.0.4's functions that return a number (rgbasm(5)), besides
+/// `HIGH()` and `LOW()`. Their arguments are read as expressions or string
+/// literals; what kind and how many each takes is not checked.
+const FUNCTIONS: &[&str] = &[
+    "bitwidth",
+    "tzcount",
+    "div",
+    "mul",
+    "fmod",
+    "pow",
+    "log",
+    "round",
+    "ceil",
+    "floor",
+    "sin",
+    "cos",
+    "tan",
+    "asin",
+    "acos",
+    "atan",
+    "atan2",
+    "strlen",
+    "strcmp",
+    "strfind",
+    "strrfind",
+    "bytelen",
+    "strbyte",
+    "incharmap",
+    "charlen",
+    "charcmp",
+    "charsize",
+    "charval",
+    "def",
+    "isconst",
+    "bank",
+    "sizeof",
+    "startof",
+];
+
 /// The value of `text`, an operand as written (whitespace between tokens is
 /// allowed, and separates operator characters as it does in rgbasm: `& &`
 /// is not `&&`).
-pub(super) fn eval(text: &str) -> Result<i32, Refused> {
+pub(super) fn eval(text: &str) -> Result<Value, Refused> {
     let mut p = Parser {
         s: text.as_bytes(),
         i: 0,
@@ -41,6 +102,18 @@ pub(super) fn eval(text: &str) -> Result<i32, Refused> {
         Some(v) if p.i == p.s.len() => Ok(v),
         _ => Err(Refused::Invalid),
     }
+}
+
+/// `f` of two values when both are known; unknown when either is.
+fn both(l: Value, r: Value, f: impl FnOnce(i32, i32) -> i32) -> Value {
+    match (l, r) {
+        (Known(l), Known(r)) => Known(f(l, r)),
+        _ => Unknown,
+    }
+}
+
+fn truth(b: bool) -> i32 {
+    i32::from(b)
 }
 
 struct Parser<'a> {
@@ -72,17 +145,24 @@ impl Parser<'_> {
     }
 
     /// The first of `ops` here, longest first, unless it is the start of
-    /// one of `not` (so `&` isn't read from `&&`).
+    /// one of `not` (so `&` isn't read from `&&`) or of a number: rgbasm's
+    /// lexer reads `&` before an octal digit or `_`, and `%` before 0, 1 or
+    /// `_`, as a number's prefix, so `15&7` is two numbers.
     fn op(&mut self, ops: &[&'static str], not: &[&str]) -> Option<&'static str> {
         self.skip_space();
-        if not.iter().any(|n| self.rest().starts_with(n.as_bytes())) {
+        let rest = self.rest();
+        let number = matches!(
+            rest,
+            [b'&', b'0'..=b'7' | b'_', ..] | [b'%', b'0' | b'1' | b'_', ..]
+        );
+        if number || not.iter().any(|n| rest.starts_with(n.as_bytes())) {
             return None;
         }
         ops.iter().copied().find(|op| self.eat(op))
     }
 
     /// `f` one level deeper, or nothing past [`MAX_DEPTH`].
-    fn nested(&mut self, f: impl FnOnce(&mut Self) -> Option<i32>) -> Option<i32> {
+    fn nested(&mut self, f: impl FnOnce(&mut Self) -> Option<Value>) -> Option<Value> {
         if self.depth >= MAX_DEPTH {
             self.too_deep = true;
             return None;
@@ -93,117 +173,126 @@ impl Parser<'_> {
         v
     }
 
-    fn or(&mut self) -> Option<i32> {
+    fn or(&mut self) -> Option<Value> {
         let mut v = self.and()?;
         while self.eat("||") {
             let r = self.and()?;
-            v = i32::from(v != 0 || r != 0);
+            v = both(v, r, |l, r| truth(l != 0 || r != 0));
         }
         Some(v)
     }
 
-    fn and(&mut self) -> Option<i32> {
+    fn and(&mut self) -> Option<Value> {
         let mut v = self.compare()?;
         while self.eat("&&") {
             let r = self.compare()?;
-            v = i32::from(v != 0 && r != 0);
+            v = both(v, r, |l, r| truth(l != 0 && r != 0));
         }
         Some(v)
     }
 
-    fn compare(&mut self) -> Option<i32> {
+    fn compare(&mut self) -> Option<Value> {
         let mut v = self.sum()?;
         while let Some(op) = self.op(&["==", "!=", "<=", ">=", "<", ">"], &["<<", ">>"]) {
             let r = self.sum()?;
-            v = i32::from(match op {
-                "==" => v == r,
-                "!=" => v != r,
-                "<=" => v <= r,
-                ">=" => v >= r,
-                "<" => v < r,
-                _ => v > r,
+            v = both(v, r, |l, r| {
+                truth(match op {
+                    "==" => l == r,
+                    "!=" => l != r,
+                    "<=" => l <= r,
+                    ">=" => l >= r,
+                    "<" => l < r,
+                    _ => l > r,
+                })
             });
         }
         Some(v)
     }
 
-    fn sum(&mut self) -> Option<i32> {
+    fn sum(&mut self) -> Option<Value> {
         let mut v = self.bits()?;
         while let Some(op) = self.op(&["+", "-"], &[]) {
             let r = self.bits()?;
-            v = if op == "+" {
-                v.wrapping_add(r)
-            } else {
-                v.wrapping_sub(r)
-            };
+            v = both(v, r, |l, r| {
+                if op == "+" {
+                    l.wrapping_add(r)
+                } else {
+                    l.wrapping_sub(r)
+                }
+            });
         }
         Some(v)
     }
 
-    fn bits(&mut self) -> Option<i32> {
+    fn bits(&mut self) -> Option<Value> {
         let mut v = self.shift()?;
         while let Some(op) = self.op(&["&", "|", "^"], &["&&", "||"]) {
             let r = self.shift()?;
-            v = match op {
-                "&" => v & r,
-                "|" => v | r,
-                _ => v ^ r,
-            };
+            v = both(v, r, |l, r| match op {
+                "&" => l & r,
+                "|" => l | r,
+                _ => l ^ r,
+            });
         }
         Some(v)
     }
 
-    fn shift(&mut self) -> Option<i32> {
+    fn shift(&mut self) -> Option<Value> {
         let mut v = self.product()?;
         while let Some(op) = self.op(&[">>>", "<<", ">>"], &[]) {
             let r = self.product()?;
-            // A negative amount shifts the other way (rgbasm warns), and
-            // 32 or more shifts every bit out.
-            let by = r.unsigned_abs();
-            let left = (op == "<<") == (r >= 0);
-            v = if left {
-                v.checked_shl(by).unwrap_or(0)
-            } else if op == ">>>" {
-                (v as u32).checked_shr(by).unwrap_or(0) as i32
-            } else {
-                v.checked_shr(by).unwrap_or(if v < 0 { -1 } else { 0 })
-            };
+            v = both(v, r, |v, r| {
+                // A negative amount shifts the other way (rgbasm warns), and
+                // 32 or more shifts every bit out.
+                let by = r.unsigned_abs();
+                let left = (op == "<<") == (r >= 0);
+                if left {
+                    v.checked_shl(by).unwrap_or(0)
+                } else if op == ">>>" {
+                    (v as u32).checked_shr(by).unwrap_or(0) as i32
+                } else {
+                    v.checked_shr(by).unwrap_or(if v < 0 { -1 } else { 0 })
+                }
+            });
         }
         Some(v)
     }
 
-    fn product(&mut self) -> Option<i32> {
+    fn product(&mut self) -> Option<Value> {
         let mut v = self.unary()?;
         while let Some(op) = self.op(&["*", "/", "%"], &["**"]) {
             let r = self.unary()?;
-            if op == "*" {
-                v = v.wrapping_mul(r);
-                continue;
-            }
-            if r == 0 {
+            // By zero is refused, whatever is divided.
+            if op != "*" && r == Known(0) {
                 return None;
             }
-            // Division rounds down; the remainder takes the divisor's sign.
-            let rem = v.wrapping_rem(r);
-            let floored = rem != 0 && (rem < 0) != (r < 0);
-            v = if op == "/" {
-                v.wrapping_div(r) - i32::from(floored)
-            } else {
-                rem + if floored { r } else { 0 }
-            };
+            v = both(v, r, |v, r| {
+                if op == "*" {
+                    return v.wrapping_mul(r);
+                }
+                // Division rounds down; the remainder takes the divisor's sign.
+                let rem = v.wrapping_rem(r);
+                let floored = rem != 0 && (rem < 0) != (r < 0);
+                if op == "/" {
+                    v.wrapping_div(r) - i32::from(floored)
+                } else {
+                    rem + if floored { r } else { 0 }
+                }
+            });
         }
         Some(v)
     }
 
     /// A unary operator binds looser than `**`: `-2 ** 2` is -4.
-    fn unary(&mut self) -> Option<i32> {
+    fn unary(&mut self) -> Option<Value> {
         if let Some(op) = self.op(&["+", "-", "~", "!"], &["!="]) {
             let v = self.nested(Self::unary)?;
-            return Some(match op {
-                "+" => v,
-                "-" => v.wrapping_neg(),
-                "~" => !v,
-                _ => i32::from(v == 0),
+            return Some(match (op, v) {
+                (_, Unknown) => Unknown,
+                ("+", Known(v)) => Known(v),
+                ("-", Known(v)) => Known(v.wrapping_neg()),
+                ("~", Known(v)) => Known(!v),
+                (_, Known(v)) => Known(truth(v == 0)),
             });
         }
         self.power()
@@ -211,223 +300,113 @@ impl Parser<'_> {
 
     /// `**` binds to the right, and its exponent is any unary expression
     /// (`8 ** !0`, `2 ** -1 ** 2`); a negative one is refused.
-    fn power(&mut self) -> Option<i32> {
+    fn power(&mut self) -> Option<Value> {
         let base = self.primary()?;
         if !self.eat("**") {
             return Some(base);
         }
         let exp = self.nested(Self::unary)?;
-        Some(base.wrapping_pow(u32::try_from(exp).ok()?))
+        match (base, exp) {
+            (_, Known(e)) if e < 0 => None,
+            (Known(b), Known(e)) => Some(Known(b.wrapping_pow(e.unsigned_abs()))),
+            _ => Some(Unknown),
+        }
     }
 
-    fn primary(&mut self) -> Option<i32> {
+    fn primary(&mut self) -> Option<Value> {
         self.skip_space();
         let s = self.s;
         let rest = &s[self.i..];
-        match rest.first()? {
+        let (v, len) = match *rest.first()? {
             b'(' => {
                 self.i += 1;
                 let v = self.nested(Self::or)?;
-                self.eat(")").then_some(v)
+                return self.eat(")").then_some(v);
             }
-            &q @ (b'\'' | b'"') => {
-                let (v, len) = character(rest, q)?;
-                self.i += len;
-                Some(v)
+            b'\'' | b'"' => literal::character(rest)?,
+            b'`' => literal::graphics(rest)?,
+            // An anonymous label: `:+`, `:--`.
+            b':' => {
+                let run = |sign: u8| rest[1..].iter().take_while(|&&c| c == sign).count();
+                let len = 1 + run(b'+').max(run(b'-'));
+                (len > 1).then_some((Unknown, len))?
             }
-            c if c.is_ascii_alphabetic() => {
-                let len = rest
-                    .iter()
-                    .take_while(|c| c.is_ascii_alphanumeric())
-                    .count();
-                let name = std::str::from_utf8(&rest[..len]).ok()?.to_ascii_lowercase();
-                self.i += len;
-                let shift = match name.as_str() {
-                    "high" => 8,
-                    "low" => 0,
-                    _ => return None,
-                };
-                if !self.eat("(") {
-                    return None;
-                }
-                let v = self.nested(Self::or)?;
-                self.eat(")").then_some((v >> shift) & 0xFF)
-            }
-            _ => {
-                let len = number_len(rest);
-                let text = std::str::from_utf8(&rest[..len]).ok()?;
-                self.i += len;
-                number(text)
-            }
-        }
+            c if c.is_ascii_alphabetic() || b"_.@#".contains(&c) => return self.name(),
+            _ => literal::number(rest)?,
+        };
+        self.i += len;
+        Some(v)
     }
-}
 
-/// A character constant (`'x'`) or a one-character string (`"x"`, which
-/// rgbasm still reads as a number) at the start of `s`, quoted by `quote`:
-/// its value in the default charmap and its length in bytes. One ASCII
-/// character or escape; `{` starts an interpolation, which isn't read.
-fn character(s: &[u8], quote: u8) -> Option<(i32, usize)> {
-    let (value, len) = match *s.get(1)? {
-        b'\\' => {
-            let value = match *s.get(2)? {
-                c @ (b'\\' | b'"' | b'\'' | b'{' | b'}') => c,
-                b'n' => b'\n',
-                b'r' => b'\r',
-                b't' => b'\t',
-                b'0' => 0,
-                _ => return None,
-            };
-            (value, 2)
-        }
-        b'{' => return None,
-        c if c == quote || !c.is_ascii() => return None,
-        c => (c, 1),
-    };
-    (s.get(1 + len) == Some(&quote)).then_some((i32::from(value), len + 2))
-}
-
-/// How many bytes of `s` are one number literal.
-fn number_len(s: &[u8]) -> usize {
-    let prefix = match s {
-        [b'0', b'x' | b'X' | b'b' | b'B' | b'o' | b'O', ..] => 2,
-        [b'$' | b'%' | b'&', ..] => 1,
-        _ => 0,
-    };
-    prefix
-        + s[prefix..]
+    /// A symbol, or a function and its arguments.
+    fn name(&mut self) -> Option<Value> {
+        let s = self.s;
+        let rest = &s[self.i..];
+        let len = rest
             .iter()
-            .take_while(|c| c.is_ascii_alphanumeric() || **c == b'_')
-            .count()
-}
+            .take_while(|c| c.is_ascii_alphanumeric() || b"_.@#$".contains(c))
+            .count();
+        let word = &rest[..len];
+        self.i += len;
+        // `#name` is a symbol even where `name` is a keyword.
+        if word[0] == b'#' {
+            return (len > 1).then_some(Unknown);
+        }
+        let name = std::str::from_utf8(word).ok()?.to_ascii_lowercase();
+        if word.ends_with(b".") || REGISTERS.contains(&name.as_str()) {
+            return None;
+        }
+        let shift = match name.as_str() {
+            "high" => 8,
+            "low" => 0,
+            _ if FUNCTIONS.contains(&name.as_str()) => return self.arguments(),
+            _ => return Some(Unknown),
+        };
+        if !self.eat("(") {
+            return None;
+        }
+        let v = self.nested(Self::or)?;
+        if !self.eat(")") {
+            return None;
+        }
+        Some(match v {
+            Known(v) => Known((v >> shift) & 0xFF),
+            Unknown => Unknown,
+        })
+    }
 
-/// A number literal: rgbasm's bases, with single `_`s between digits or
-/// after a base prefix (`$_3`), never at the end.
-fn number(text: &str) -> Option<i32> {
-    let (digits, radix) = if let Some(d) = text
-        .strip_prefix('$')
-        .or_else(|| text.strip_prefix("0x"))
-        .or_else(|| text.strip_prefix("0X"))
-    {
-        (d, 16)
-    } else if let Some(d) = text
-        .strip_prefix('%')
-        .or_else(|| text.strip_prefix("0b"))
-        .or_else(|| text.strip_prefix("0B"))
-    {
-        (d, 2)
-    } else if let Some(d) = text
-        .strip_prefix('&')
-        .or_else(|| text.strip_prefix("0o"))
-        .or_else(|| text.strip_prefix("0O"))
-    {
-        (d, 8)
-    } else {
-        // A leading `_` makes a decimal an identifier.
-        (text.strip_prefix('_').map_or(text, |_| ""), 10)
-    };
-    if digits.ends_with('_') || digits.contains("__") {
-        return None;
+    /// A function's parenthesized arguments, at least one, each an
+    /// expression or a string literal: the call's value is unknown.
+    fn arguments(&mut self) -> Option<Value> {
+        if !self.eat("(") {
+            return None;
+        }
+        loop {
+            self.skip_space();
+            let string = (self.rest().first() == Some(&b'"'))
+                .then(|| literal::string_len(self.rest()))
+                .flatten();
+            let after = string.map(|len| {
+                let tail = &self.rest()[len..];
+                let pad = tail.iter().take_while(|c| c.is_ascii_whitespace()).count();
+                tail.get(pad).copied()
+            });
+            match (string, after) {
+                // A string of any length, when nothing but `,` or `)` follows.
+                (Some(len), Some(Some(b',' | b')'))) => self.i += len,
+                _ => {
+                    self.nested(Self::or)?;
+                }
+            }
+            if self.eat(")") {
+                return Some(Unknown);
+            }
+            if !self.eat(",") {
+                return None;
+            }
+        }
     }
-    let digits: String = digits.chars().filter(|&c| c != '_').collect();
-    if digits.is_empty() || !digits.chars().all(|c| c.is_digit(radix)) {
-        return None;
-    }
-    // rgbasm keeps 32 bits of a number that has more.
-    u64::from_str_radix(&digits, radix)
-        .ok()
-        .filter(|&v| v <= u64::from(u32::MAX))
-        .map(|v| v as u32 as i32)
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{MAX_DEPTH, Refused, eval};
-
-    fn value(text: &str) -> Option<i32> {
-        eval(text).ok()
-    }
-
-    #[test]
-    fn numbers_in_every_base_and_characters() {
-        for (text, v) in [
-            ("56", 56),
-            ("$38", 56),
-            ("0x38", 56),
-            ("%111000", 56),
-            ("0b111000", 56),
-            ("&70", 56),
-            ("0o70", 56),
-            ("5_6", 56),
-            ("$_38", 56),
-            ("'8'", 56),
-            ("'C'", 67),
-            ("\"8\"", 56),
-            ("' '", 32),
-            ("'\\n'", 10),
-            ("'\\''", 39),
-            ("'\\{'", 123),
-            ("'}'", 125),
-        ] {
-            assert_eq!(value(text), Some(v), "{text}");
-        }
-        for text in [
-            "", "_5", "$", "5x", "wFoo", "'ab'", "''", "'{'", "'\\x'", "\"ab\"", "5_", "5__6",
-            "$__3", "$ 3",
-        ] {
-            assert_eq!(value(text), None, "{text}");
-        }
-    }
-
-    #[test]
-    fn operators_take_rgbasms_precedence() {
-        for (text, v) in [
-            ("8*7", 56),
-            ("8*0", 0),
-            ("1+1*2", 3),
-            // `&` binds tighter than `+`, unlike C.
-            ("2+7&1", 3),
-            ("(2+7)&1", 1),
-            ("1<<3|1", 9),
-            // `**` binds tighter than unary minus, and to the right.
-            ("-2**2", -4),
-            ("2**3**2", 512),
-            ("8**!0", 8),
-            ("2**+3", 8),
-            ("0**0", 1),
-            ("-1%8", 7),
-            ("7%-3", -2),
-            ("-7/2", -4),
-            ("~0", -1),
-            ("!0", 1),
-            ("1==1&&2>1", 1),
-            ("-8>>1", -4),
-            ("-8>>>28", 15),
-            ("1>>-1", 2),
-            ("4<<-1", 2),
-            ("high($3812)", 0x38),
-            ("LOW ( $3812 )", 0x12),
-            ("2 ** $7FFFFFFF", 0),
-        ] {
-            assert_eq!(value(text), Some(v), "{text}");
-        }
-        for text in [
-            "8/0", "8%0", "2**-1", "(1", "1)", "1+", "7 & & 1", "3 * * 1", "high(5", "bank(5)",
-        ] {
-            assert_eq!(value(text), None, "{text}");
-        }
-    }
-
-    #[test]
-    fn nesting_past_the_cap_is_refused_as_too_deep() {
-        let at = format!("{}1{}", "(".repeat(MAX_DEPTH), ")".repeat(MAX_DEPTH));
-        assert_eq!(eval(&at), Ok(1));
-        let past = format!(
-            "{}1{}",
-            "(".repeat(MAX_DEPTH + 1),
-            ")".repeat(MAX_DEPTH + 1)
-        );
-        assert_eq!(eval(&past), Err(Refused::TooDeep));
-        assert_eq!(eval(&"-".repeat(100_000)), Err(Refused::TooDeep));
-    }
-}
+mod tests;

@@ -93,6 +93,26 @@ fn a_line_of_real_code_finds_its_form() {
     assert_eq!(call.cycles.not_taken, Some(12));
 }
 
+/// Labels the spellings table can't referee, since rgbasm needs them
+/// defined around the line: anonymous labels, a scoped local label, a raw
+/// identifier, `BANK(@)`. Data is read as an expression, and each of these
+/// is a symbol.
+#[test]
+fn every_kind_of_label_is_data() {
+    assert_eq!(one("jr :+").opcode, Opcode::Base(0x18));
+    assert_eq!(one("jr nz, :--").opcode, Opcode::Base(0x20));
+    assert_eq!(one("jp Top.loop").asm, "jp a16");
+    assert_eq!(one("ld hl, #ld").asm, "ld hl, n16");
+    assert_eq!(one("ld a, BANK(@)").asm, "ld a, n8");
+}
+
+/// An interpolation can expand to anything, a register included, so it is
+/// refused rather than guessed at.
+#[test]
+fn an_interpolation_is_refused() {
+    assert!(lookup("ld a, {wFoo}").is_err());
+}
+
 #[test]
 fn sp_plus_an_offset_is_one_operand() {
     let f = one("ld hl, sp+5");

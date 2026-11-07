@@ -17,7 +17,7 @@ gbcli is an agent-friendly Game Boy development tool for homebrew developers wor
 - [project/2026-11-06-sameboy-baseline.md](project/2026-11-06-sameboy-baseline.md) — the whole corpus through SameBoy: every difference from its published results explained, and the one command that re-checks the baseline
 - [project/2026-11-06-review-fixes.md](project/2026-11-06-review-fixes.md) — the review of the stage-3 commits, three rulings, and the fix plan (`job` container `jPKQX8`)
 - [project/2026-11-06-test-suite-speed.md](project/2026-11-06-test-suite-speed.md) — the 30 s warm-suite budget, opt-level 1 for dev builds, the pre-release suite convention
-- [project/2026-11-07-handoff-ninth-session.md](project/2026-11-07-handoff-ninth-session.md) — latest session handoff
+- [project/2026-11-07-handoff-tenth-session.md](project/2026-11-07-handoff-tenth-session.md) — latest session handoff
 - [project/backlog.md](project/backlog.md) — work decided against, with un-park conditions
 - [project/gotchas.md](project/gotchas.md) — project quirks that cost time
 - [scripts/bench/](scripts/bench/) — re-runnable benchmarks behind the evaluation's figures and the build-cost figures above

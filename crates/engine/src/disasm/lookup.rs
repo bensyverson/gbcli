@@ -3,12 +3,21 @@
 //! `ld a, [hl+]`, `ld [wFoo], a`): each form's size, cycles and flags, for
 //! `gbcli opcode`. A line rgbasm refuses is refused, with the spelling it
 //! takes where one is near (`crates/engine/tests/opcode_lookup_spellings.rs`
-//! checks the cases against rgbasm itself).
+//! checks the cases against rgbasm itself), except for what needs the
+//! source or the link: a symbol is taken as defined, a value as in range
+//! for its slot (only `ldh`'s address is checked), and the arguments of a
+//! function other than `HIGH()` and `LOW()` as the kind and number it
+//! takes; and rgbasm's keywords other than registers and conditions read as
+//! symbols. Every operand's expression is read by `expr` (data, an address,
+//! sp's offset, an RST vector, a bit number, $FF00+C's base).
 
 use std::fmt;
 
 use super::Opcode;
-use super::expr::{self, MAX_DEPTH, Refused};
+use super::expr::{MAX_DEPTH, Refused, Value};
+use super::operand::{
+    Operand, Shape, lowercase_outside_quotes, missing_commas, norms, operands, without_comment,
+};
 use super::table;
 use super::types::{Cycles, Mnemonic, OpInfo, OperandKind};
 
@@ -197,10 +206,7 @@ pub fn lookup(query: &str) -> Result<Vec<Form>, LookupError> {
         });
     }
     let (mnemonic, tokens) = spelled?;
-    if tokens
-        .iter()
-        .any(|t| expr::eval(&t.raw) == Err(Refused::TooDeep))
-    {
+    if tokens.iter().any(|t| t.data == Err(Refused::TooDeep)) {
         return Err(LookupError::TooDeep {
             mnemonic: mnemonic_name(mnemonic),
         });
@@ -284,15 +290,18 @@ fn spell(
             let fixed = norms(written).join(", ");
             return Err(refuse(mnemonic, Some(Fix::Write(format!("ldh {fixed}")))));
         }
-        if written.iter().any(|t| is_high_c(&t.norm)) {
+        if written.iter().any(|t| t.high_c) {
             mnemonic = Mnemonic::Ldh;
         }
     }
     let mut tokens: Vec<Operand> = written
         .iter()
-        .map(|t| Operand {
-            norm: token(&t.norm),
-            raw: t.raw.clone(),
+        .map(|t| {
+            t.renamed(if t.high_c {
+                "[c]".into()
+            } else {
+                token(&t.norm)
+            })
         })
         .collect();
     if is_alu8(mnemonic) && tokens.len() == 1 {
@@ -302,158 +311,6 @@ fn spell(
         tokens.clear();
     }
     Ok((mnemonic, tokens))
-}
-
-/// One operand of a line.
-#[derive(Clone, Debug)]
-struct Operand {
-    /// Lowercase with whitespace removed, rgbasm's other spellings mapped
-    /// to the table's: what registers and placeholders are matched against.
-    norm: String,
-    /// As written, trimmed: what a constant expression is evaluated from,
-    /// since case matters inside a character constant (`'C'`) and
-    /// whitespace separates operators (`& &` is not `&&`).
-    raw: String,
-}
-
-impl Operand {
-    fn written(raw: &str) -> Operand {
-        Operand {
-            norm: raw
-                .chars()
-                .filter(|c| !c.is_whitespace())
-                .collect::<String>()
-                .to_ascii_lowercase(),
-            raw: raw.trim().into(),
-        }
-    }
-
-    /// One the line leaves out, or rgbasm's spelling implies.
-    fn implied(norm: &str) -> Operand {
-        Operand {
-            norm: norm.into(),
-            raw: norm.into(),
-        }
-    }
-}
-
-fn norms(tokens: &[Operand]) -> Vec<&str> {
-    tokens.iter().map(|t| t.norm.as_str()).collect()
-}
-
-/// Where the string or character literal opening at `s[i]` ends: just past
-/// its closing quote (a backslash escapes the next byte), or the end of `s`.
-fn quote_end(s: &[u8], i: usize) -> usize {
-    let quote = s[i];
-    let mut j = i + 1;
-    while j < s.len() {
-        match s[j] {
-            b'\\' => j += 2,
-            c if c == quote => return j + 1,
-            _ => j += 1,
-        }
-    }
-    s.len()
-}
-
-/// `line` in lowercase, but for its string and character literals, whose
-/// case is part of their value.
-fn lowercase_outside_quotes(line: &str) -> String {
-    let s = line.as_bytes();
-    let (mut out, mut i) = (String::with_capacity(line.len()), 0);
-    while i < s.len() {
-        // Each step ends on an ASCII byte or the end: a character boundary.
-        let end = match s[i] {
-            b'"' | b'\'' => quote_end(s, i),
-            _ => i + 1 + s[i + 1..].iter().take_while(|b| !b.is_ascii()).count(),
-        };
-        let part = &line[i..end];
-        if s[i] == b'"' || s[i] == b'\'' {
-            out.push_str(part);
-        } else {
-            out.push_str(&part.to_ascii_lowercase());
-        }
-        i = end;
-    }
-    out
-}
-
-/// `line` up to its `;` comment, if any; a `;` inside quotes is not one.
-fn without_comment(line: &str) -> &str {
-    let s = line.as_bytes();
-    let mut i = 0;
-    while i < s.len() {
-        match s[i] {
-            b'"' | b'\'' => i = quote_end(s, i),
-            b';' => return &line[..i],
-            _ => i += 1,
-        }
-    }
-    line
-}
-
-/// The operands of `rest`, split at commas outside quotes.
-fn operands(rest: &str) -> Vec<&str> {
-    let s = rest.as_bytes();
-    let (mut out, mut start, mut i) = (Vec::new(), 0, 0);
-    while i < s.len() {
-        match s[i] {
-            b'"' | b'\'' => i = quote_end(s, i),
-            b',' => {
-                out.push(&rest[start..i]);
-                i += 1;
-                start = i;
-            }
-            _ => i += 1,
-        }
-    }
-    out.push(&rest[start..]);
-    out
-}
-
-/// `query` with a comma where whitespace separates two operands
-/// (`jr nz Top`), which rgbasm refuses: whitespace between two names or
-/// numbers, with no operator, outside a string. `None` when there is none.
-fn missing_commas(query: &str) -> Option<String> {
-    let (word, rest) = query.split_once(char::is_whitespace)?;
-    let ends = |c: u8| c.is_ascii_alphanumeric() || b"_.#@'\")]".contains(&c);
-    let starts = |c: u8| c.is_ascii_alphanumeric() || b"_.#@$'\"[`".contains(&c);
-    let mut found = false;
-    let operands: Vec<String> = operands(rest)
-        .into_iter()
-        .map(|operand| {
-            let operand = operand.trim();
-            let bytes = operand.as_bytes();
-            let mut out = String::new();
-            let (mut i, mut last) = (0, None);
-            while i < bytes.len() {
-                let c = bytes[i];
-                if c.is_ascii_whitespace() {
-                    let next = i + bytes[i..]
-                        .iter()
-                        .take_while(|b| b.is_ascii_whitespace())
-                        .count();
-                    let gap = last.is_some_and(ends) && bytes.get(next).is_some_and(|&n| starts(n));
-                    found |= gap;
-                    out.push_str(if gap { ", " } else { " " });
-                    i = next;
-                    continue;
-                }
-                // Each step ends on an ASCII byte or the end, so it slices
-                // on a character boundary.
-                let end = if c == b'"' || c == b'\'' {
-                    quote_end(bytes, i)
-                } else {
-                    i + 1 + bytes[i + 1..].iter().take_while(|b| !b.is_ascii()).count()
-                };
-                out.push_str(&operand[i..end]);
-                last = Some(c);
-                i = end;
-            }
-            out
-        })
-        .collect();
-    found.then(|| format!("{word} {}", operands.join(", ")))
 }
 
 /// The 8-bit ALU ops, whose `a,` rgbasm lets a line leave out.
@@ -480,11 +337,8 @@ fn fix(lower: &str, mnemonic: Mnemonic, tokens: &[Operand], forms: &[Opcode]) ->
     }
     if mnemonic == Mnemonic::Ldh
         && tokens.iter().any(|t| {
-            t.norm
-                .strip_prefix('[')
-                .and_then(|t| t.strip_suffix(']'))
-                .and_then(literal)
-                .is_some_and(|v| !(0xFF00..=0xFFFF).contains(&v))
+            t.shape == Shape::Memory
+                && matches!(t.data, Ok(Value::Known(v)) if !LDH_RANGE.contains(&v))
         })
     {
         return Some(Fix::LdhRange);
@@ -576,29 +430,21 @@ fn token(t: &str) -> String {
         "low(de)" => "e".into(),
         "high(hl)" => "h".into(),
         "low(hl)" => "l".into(),
-        _ if is_high_c(t) => "[c]".into(),
         _ => t.into(),
     }
-}
-
-/// `[$ff00+c]`, with $FF00 in any base rgbasm reads.
-fn is_high_c(t: &str) -> bool {
-    t.strip_prefix('[')
-        .and_then(|t| t.strip_suffix("+c]"))
-        .and_then(literal)
-        == Some(0xFF00)
 }
 
 /// An operand position of a form, and what a query may write there.
 enum Slot {
     /// A register, a condition or `[hl+]`: only its own spelling.
     Fixed(String),
-    /// Immediate data (`n8`, `n16`, `a16`, `e8`): any value or label.
+    /// Immediate data (`n8`, `n16`, `a16`, `e8`): any expression rgbasm
+    /// takes, its value unchecked.
     Value(&'static str),
-    /// `[a16]` or `[a8]`: any value or label in brackets; a number in
-    /// `[a8]` (ldh) must be $FF00-$FFFF.
+    /// `[a16]` or `[a8]`: any expression rgbasm takes, in brackets; a known
+    /// value in `[a8]` (ldh) must be $FF00-$FFFF.
     Address(&'static str),
-    /// `sp+e8`.
+    /// `sp+e8`: any expression after `sp+` or `sp-`.
     SpOffset,
     /// An RST vector or a bit number: a constant expression of that value.
     Number { text: &'static str, value: u8 },
@@ -617,26 +463,26 @@ impl Slot {
 
     fn matches(&self, operand: &Operand) -> bool {
         let token = operand.norm.as_str();
+        let data = |shape: Shape| operand.shape == shape && operand.data.is_ok();
         match self {
-            // From the text as written: `$ 38` is not `$38`.
-            Slot::Number { value, .. } => expr::eval(&operand.raw) == Ok(i32::from(*value)),
+            Slot::Number { value, .. } => {
+                operand.shape == Shape::Plain && operand.data == Ok(Value::Known(i32::from(*value)))
+            }
             _ if token == self.text() => true,
             Slot::Fixed(_) => false,
-            Slot::Value(_) => is_value(token),
-            Slot::Address(p) => token
-                .strip_prefix('[')
-                .and_then(|t| t.strip_suffix(']'))
-                .is_some_and(|t| {
-                    is_value(t)
-                        && (*p != "a8" || literal(t).is_none_or(|v| (0xFF00..=0xFFFF).contains(&v)))
-                }),
-            Slot::SpOffset => {
-                let offset = token.strip_prefix("sp+").or_else(|| {
-                    // `sp-2`: the sign belongs to the offset.
-                    token.strip_prefix("sp").filter(|t| t.starts_with('-'))
-                });
-                offset.is_some_and(is_value)
+            // A placeholder names its own slot: `n8` is not `n16`.
+            Slot::Value(_) => data(Shape::Plain) && !PLACEHOLDERS.contains(&token),
+            Slot::Address(p) => {
+                let inside = token
+                    .strip_prefix('[')
+                    .and_then(|t| t.strip_suffix(']'))
+                    .unwrap_or(token);
+                data(Shape::Memory)
+                    && !PLACEHOLDERS.contains(&inside)
+                    && (*p != "a8"
+                        || !matches!(operand.data, Ok(Value::Known(v)) if !LDH_RANGE.contains(&v)))
             }
+            Slot::SpOffset => data(Shape::SpOffset),
         }
     }
 }
@@ -644,68 +490,8 @@ impl Slot {
 /// The table's placeholders, which a query may write for themselves.
 const PLACEHOLDERS: &[&str] = &["n8", "n16", "a8", "a16", "e8"];
 
-/// rgbasm's register and condition names: an operand that names one is not
-/// data (`(hl)`, `hl+1`, `a+1`).
-const REGISTERS: &[&str] = &[
-    "a", "b", "c", "d", "e", "h", "l", "af", "bc", "de", "hl", "hli", "hld", "sp", "nz", "z", "nc",
-];
-
-/// Data or a label: an expression that names no register, condition or
-/// placeholder, and no memory.
-fn is_value(token: &str) -> bool {
-    !token.is_empty()
-        && !PLACEHOLDERS.contains(&token)
-        && !token.contains(['[', ']'])
-        && !words(token).any(|w| REGISTERS.contains(&w))
-}
-
-/// The identifiers in an expression: not numbers (`$c`, `0xc`, `%10`) or
-/// the insides of string and character literals.
-fn words(expr: &str) -> impl Iterator<Item = &str> {
-    let bytes = expr.as_bytes();
-    let mut i = 0;
-    std::iter::from_fn(move || {
-        while i < bytes.len() {
-            let start = i;
-            let c = bytes[i];
-            let word = |c: u8| c.is_ascii_alphanumeric() || b"_.#@".contains(&c);
-            if c == b'"' || c == b'\'' {
-                i = quote_end(bytes, i);
-            } else if c == b'$' || c == b'%' || c == b'&' || c.is_ascii_digit() {
-                i += 1;
-                while i < bytes.len() && bytes[i].is_ascii_alphanumeric() {
-                    i += 1;
-                }
-            } else if word(c) {
-                while i < bytes.len() && word(bytes[i]) {
-                    i += 1;
-                }
-                return Some(&expr[start..i]);
-            } else {
-                i += 1;
-            }
-        }
-        None
-    })
-}
-
-/// A number written as rgbasm writes one: `$FF00`, `0xFF00`, `%101`,
-/// `0b101`, `&17`, `0o17`, or decimal.
-fn literal(text: &str) -> Option<u32> {
-    let (digits, radix) = if let Some(d) = text.strip_prefix('$').or(text.strip_prefix("0x")) {
-        (d, 16)
-    } else if let Some(d) = text.strip_prefix('%').or(text.strip_prefix("0b")) {
-        (d, 2)
-    } else if let Some(d) = text.strip_prefix('&').or(text.strip_prefix("0o")) {
-        (d, 8)
-    } else {
-        (text, 10)
-    };
-    if digits.is_empty() || !digits.chars().all(|c| c.is_digit(radix)) {
-        return None;
-    }
-    u32::from_str_radix(digits, radix).ok()
-}
+/// The addresses `ldh` reaches.
+const LDH_RANGE: std::ops::RangeInclusive<i32> = 0xFF00..=0xFFFF;
 
 fn slots(info: &OpInfo) -> Vec<Slot> {
     let mut slots = Vec::new();

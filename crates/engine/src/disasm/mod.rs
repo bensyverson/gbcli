@@ -5,6 +5,7 @@
 
 mod expr;
 mod lookup;
+mod operand;
 mod table;
 mod types;
 

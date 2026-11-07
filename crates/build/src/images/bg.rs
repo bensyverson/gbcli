@@ -25,6 +25,11 @@ pub(crate) struct BgPlan {
     pub height: u32,
     /// Unique tiles: what rgbgfx `-u` keeps.
     pub tiles: u32,
+    /// Each unique tile's color indices, 8 a row, in order of first use.
+    pub unique: Vec<Vec<u8>>,
+    /// Each map cell's unique tile, row by row: what rgbgfx's data must
+    /// draw there (`agree`).
+    pub cells: Vec<usize>,
 }
 
 /// Checks a background; the plan when it fits, else every problem found.
@@ -63,11 +68,15 @@ pub(crate) fn check(image: &str, pixels: &Pixels) -> Result<BgPlan, Vec<ImagePro
     // Each unique tile's first place and how often it is used.
     let mut seen: HashMap<Vec<u8>, (TileAt, u32)> = HashMap::new();
     let mut order: Vec<Vec<u8>> = Vec::new();
+    let mut number: HashMap<Vec<u8>, usize> = HashMap::new();
+    let mut cells = Vec::with_capacity((width * height) as usize);
     for ty in 0..height {
         for tx in 0..width {
             let tile: Vec<u8> = (0..64)
                 .map(|i| shade[&key(pixels.at(tx * 8 + i % 8, ty * 8 + i / 8))])
                 .collect();
+            let next = number.len();
+            cells.push(*number.entry(tile.clone()).or_insert(next));
             let entry = seen.entry(tile.clone()).or_insert_with(|| {
                 order.push(tile);
                 (TileAt { x: tx, y: ty }, 0)
@@ -116,5 +125,7 @@ pub(crate) fn check(image: &str, pixels: &Pixels) -> Result<BgPlan, Vec<ImagePro
         width,
         height,
         tiles: unique as u32,
+        unique: order,
+        cells,
     })
 }

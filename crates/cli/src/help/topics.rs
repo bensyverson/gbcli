@@ -302,6 +302,7 @@ mod tests {
             FrameSpan,
             RomxBank,
             Alpha,
+            RgbgfxAgrees,
         ] {
             assert!(text.contains(limit.name()), "{} missing", limit.name());
         }

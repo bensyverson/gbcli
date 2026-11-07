@@ -271,3 +271,58 @@ fn an_rgbgfx_failure_is_its_diagnostic_on_the_image_and_stops_the_build() {
     assert!(made.images.unwrap().images.is_empty());
     assert!(!temp.path("demo/build/demo.gb").exists());
 }
+
+/// An rgbgfx that runs the real one, then sets the first byte of the tile
+/// data it wrote (`-o`) to $FF: row 0's low plane, every pixel's bit 0.
+fn tools_whose_rgbgfx_misdraws(temp: &common::Temp) -> gbcli_build::Toolchain {
+    let real = rgbds().rgbgfx().unwrap().display().to_string();
+    let body = format!(
+        "'{real}' \"$@\" || exit $?\n\
+         out=; prev=\n\
+         for a in \"$@\"; do [ \"$prev\" = -o ] && out=$a; prev=$a; done\n\
+         printf '\\377' | dd of=\"$out\" bs=1 count=1 conv=notrunc 2>/dev/null"
+    );
+    tools_with(temp, Some(&body))
+}
+
+#[test]
+fn a_background_rgbgfx_draws_otherwise_than_planned_stops_the_build() {
+    let (temp, options) = starter("bg-rgbgfx-disagrees");
+    write_png(&temp.path("demo/assets/bg/plain.png"), 16, 8, |_, _| WHITE);
+    let tools = tools_whose_rgbgfx_misdraws(&temp);
+    let made = match build(&tools, &options) {
+        Err(BuildError::Failed { made, .. }) => *made,
+        other => panic!("expected the disagreement to stop the build, got {other:?}"),
+    };
+    let p = problem(&made, ImageLimit::RgbgfxAgrees);
+    assert_eq!(p.image.as_deref(), Some("demo/assets/bg/plain.png"));
+    assert_eq!(p.severity, Severity::Error);
+    // Both cells use the one unique tile rgbgfx misdrew.
+    assert_eq!(p.tiles, [TileAt { x: 0, y: 0 }, TileAt { x: 1, y: 0 }]);
+    assert!(
+        p.message
+            .contains("pixel (0, 0), gbcli planned color index 0 and rgbgfx wrote index 1"),
+        "{}",
+        p.message
+    );
+    assert!(made.images.unwrap().images.is_empty());
+    assert!(!temp.path("demo/build/demo.gb").exists());
+}
+
+#[test]
+fn a_sheet_rgbgfx_draws_otherwise_than_planned_stops_the_build() {
+    let (temp, options) = starter("sheet-rgbgfx-disagrees");
+    write_png(&temp.path("demo/assets/sprites/dot.png"), 8, 16, |x, y| {
+        if (x, y) == (0, 8) { BLACK } else { CLEAR }
+    });
+    let tools = tools_whose_rgbgfx_misdraws(&temp);
+    let made = match build(&tools, &options) {
+        Err(BuildError::Failed { made, .. }) => *made,
+        other => panic!("expected the disagreement to stop the build, got {other:?}"),
+    };
+    let p = problem(&made, ImageLimit::RgbgfxAgrees);
+    assert_eq!(p.image.as_deref(), Some("demo/assets/sprites/dot.png"));
+    assert_eq!(p.tiles, [TileAt { x: 0, y: 0 }]);
+    assert!(p.message.contains("planned color index 0"), "{}", p.message);
+    assert!(made.images.unwrap().images.is_empty());
+}

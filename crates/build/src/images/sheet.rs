@@ -47,6 +47,9 @@ pub(crate) struct SheetPlan {
     /// The kept units by their top-left in sheet pixels, in order of first
     /// use, and each one's uses.
     pub kept: Vec<(u32, u32)>,
+    /// Each kept unit's color indices, 8 a row, 16 rows: what rgbgfx's
+    /// data must draw (`agree`).
+    pub drawn: Vec<Vec<u8>>,
     pub uses: Vec<u32>,
     pub frames: Vec<Vec<Object>>,
     /// Problems that don't stop the build.
@@ -134,6 +137,7 @@ pub(crate) fn check(
     };
 
     let mut kept: Vec<(u32, u32)> = Vec::new();
+    let mut drawn: Vec<Vec<u8>> = Vec::new();
     let mut uses: Vec<u32> = Vec::new();
     let mut known: HashMap<Vec<u8>, (usize, u8)> = HashMap::new();
     let mut frames = Vec::new();
@@ -153,6 +157,7 @@ pub(crate) fn check(
                     }
                     let (k, flip) = *known.entry(data.clone()).or_insert_with(|| {
                         kept.push((ux, uy));
+                        drawn.push(data.clone());
                         uses.push(0);
                         (kept.len() - 1, 0)
                     });
@@ -259,6 +264,7 @@ pub(crate) fn check(
         height: pixels.height / 8,
         frame: (fw, fh),
         kept,
+        drawn,
         uses,
         frames,
         warnings,

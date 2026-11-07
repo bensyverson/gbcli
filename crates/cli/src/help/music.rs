@@ -16,6 +16,11 @@ hUGEDriver data (build/music/NAME.asm, label song_NAME); `gbcli new` makes
 assets/music/theme.song (the example below) and src/music.asm, which plays
 it. Then `gbcli run --frames 600 --audio-log --piano roll.png` to hear it.
 
+The data's labels are the song's: song_NAME.P0 for a pattern, and for
+routine N song_NAME__hUGE_Routine_N and song_NAME__end_hUGE_Routine_N, not
+hUGETracker's __hUGE_Routine_N and __end_hUGE_Routine_N. Routine code that
+names hUGETracker's labels fails at link; name the song's instead.
+
 A song with `timer on` ticks the driver from the timer interrupt, about
 2,500-5,900 T a tick, and a tick that fires just before VBlank holds the
 VBlank handler back until it returns: with `timer on 192` in the starter,

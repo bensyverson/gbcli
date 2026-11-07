@@ -8,6 +8,7 @@
 use std::fmt;
 
 use super::Opcode;
+use super::expr;
 use super::table;
 use super::types::{Cycles, Mnemonic, OpInfo, OperandKind};
 
@@ -60,6 +61,9 @@ pub enum Fix {
     Complete(Vec<String>),
     /// An `ldh` address given as a number outside $FF00-$FFFF.
     LdhRange,
+    /// Operands separated by whitespace (`jr nz Top`): rgbasm separates
+    /// them with commas. The line with them, when it looks up.
+    Comma(Option<String>),
 }
 
 impl fmt::Display for LookupError {
@@ -110,6 +114,13 @@ impl LookupError {
                 Some(Fix::LdhRange) => "an `ldh` address is $FF00 to $FFFF, as in \
                      `ldh [$FF40], a`; any other address takes `ld`"
                     .into(),
+                Some(Fix::Comma(Some(text))) => {
+                    format!("rgbasm separates operands with a comma: `gbcli opcode '{text}'`")
+                }
+                Some(Fix::Comma(None)) => format!(
+                    "rgbasm separates operands with a comma; `gbcli opcode {mnemonic}` lists its \
+                     {forms} forms"
+                ),
                 None => format!("`gbcli opcode {mnemonic}` lists its {forms} forms"),
             },
         }
@@ -159,7 +170,22 @@ pub fn lookup(query: &str) -> Result<Vec<Form>, LookupError> {
             .map(|t| t.chars().filter(|c| !c.is_whitespace()).collect())
             .collect()
     };
-    let (mnemonic, tokens) = spell(query, word, &written)?;
+    let spelled = spell(query, word, &written);
+    if let Some(gaps) = missing_commas(query) {
+        if let Err(e @ LookupError::NoMnemonic { .. }) = spelled {
+            return Err(e);
+        }
+        // Only `ldi` and `ldd` aren't the table's names: both are `ld`.
+        let mnemonic = by_name(word).unwrap_or(Mnemonic::Ld);
+        let fixed = (lookup(&gaps).is_ok()).then_some(gaps);
+        return Err(LookupError::NoForm {
+            query: query.into(),
+            mnemonic: mnemonic_name(mnemonic),
+            forms: all().filter(|&op| info(op).mnemonic == mnemonic).count(),
+            fix: Some(Fix::Comma(fixed)),
+        });
+    }
+    let (mnemonic, tokens) = spelled?;
     let of_mnemonic: Vec<Opcode> = all().filter(|&op| info(op).mnemonic == mnemonic).collect();
     let found: Vec<Form> = of_mnemonic
         .iter()
@@ -255,6 +281,51 @@ fn spell(
         tokens.clear();
     }
     Ok((mnemonic, tokens))
+}
+
+/// `query` with a comma where whitespace separates two operands
+/// (`jr nz Top`), which rgbasm refuses: whitespace between two names or
+/// numbers, with no operator, outside a string. `None` when there is none.
+fn missing_commas(query: &str) -> Option<String> {
+    let (word, rest) = query.split_once(char::is_whitespace)?;
+    let ends = |c: u8| c.is_ascii_alphanumeric() || b"_.#@'\")]".contains(&c);
+    let starts = |c: u8| c.is_ascii_alphanumeric() || b"_.#@$'\"[`".contains(&c);
+    let mut found = false;
+    let operands: Vec<String> = rest
+        .split(',')
+        .map(|operand| {
+            let bytes = operand.trim().as_bytes();
+            let mut out = String::new();
+            let (mut i, mut last) = (0, None);
+            while i < bytes.len() {
+                let c = bytes[i];
+                if c == b'"' || c == b'\'' {
+                    let end = bytes[i + 1..]
+                        .iter()
+                        .position(|&b| b == c)
+                        .map_or(bytes.len(), |p| i + 2 + p);
+                    out.push_str(&String::from_utf8_lossy(&bytes[i..end]));
+                    last = Some(c);
+                    i = end;
+                } else if c.is_ascii_whitespace() {
+                    let next = i + bytes[i..]
+                        .iter()
+                        .take_while(|b| b.is_ascii_whitespace())
+                        .count();
+                    let gap = last.is_some_and(ends) && bytes.get(next).is_some_and(|&n| starts(n));
+                    found |= gap;
+                    out.push_str(if gap { ", " } else { " " });
+                    i = next;
+                } else {
+                    out.push(char::from(c));
+                    last = Some(c);
+                    i += 1;
+                }
+            }
+            out
+        })
+        .collect();
+    found.then(|| format!("{word} {}", operands.join(", ")))
 }
 
 /// The 8-bit ALU ops, whose `a,` rgbasm lets a line leave out.
@@ -368,6 +439,14 @@ fn token(t: &str) -> String {
     match t {
         "[hli]" => "[hl+]".into(),
         "[hld]" => "[hl-]".into(),
+        // rgbasm names a register pair's halves so.
+        "high(af)" => "a".into(),
+        "high(bc)" => "b".into(),
+        "low(bc)" => "c".into(),
+        "high(de)" => "d".into(),
+        "low(de)" => "e".into(),
+        "high(hl)" => "h".into(),
+        "low(hl)" => "l".into(),
         _ if is_high_c(t) => "[c]".into(),
         _ => t.into(),
     }
@@ -392,7 +471,7 @@ enum Slot {
     Address(&'static str),
     /// `sp+e8`.
     SpOffset,
-    /// An RST vector or a bit number: that number, in any base.
+    /// An RST vector or a bit number: a constant expression of that value.
     Number { text: &'static str, value: u8 },
 }
 
@@ -428,7 +507,7 @@ impl Slot {
                 });
                 offset.is_some_and(is_value)
             }
-            Slot::Number { value, .. } => literal(token) == Some(u32::from(*value)),
+            Slot::Number { value, .. } => expr::eval(token) == Some(i32::from(*value)),
         }
     }
 }

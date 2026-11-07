@@ -29,6 +29,8 @@ the image's 8x8 grid; --json lists them all), message and remedy.
   romx_bank           one image's data and frame lists in a 16 KiB bank
   obj_no_transparency a warning: no transparent pixel, every object a block
   alpha               a pixel half transparent, or any in a background
+  rgbgfx_agrees       not a limit: rgbgfx drew other indices than gbcli
+                      planned (a gbcli bug; re-save the PNG as 8-bit)
 
 What the program gets (build/images/, rewritten by every build):
   INCLUDE \"images.inc\"   constants: TOWN_WIDTH, TOWN_HEIGHT (tiles),

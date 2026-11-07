@@ -3,6 +3,7 @@
 //! by `scripts/disasm/gen_opcodes.py`). Symbols come from an injected
 //! [`SymbolLookup`], so this module never parses a `.sym` file.
 
+mod expr;
 mod lookup;
 mod table;
 mod types;

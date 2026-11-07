@@ -7,6 +7,7 @@
 //! and constants (see `emit`). Engine budgets (a font, a HUD) are the
 //! program's to keep; only the hardware's limits are checked.
 
+mod agree;
 mod bg;
 mod census;
 mod emit;
@@ -115,6 +116,7 @@ pub(crate) fn convert(
         project,
         timeout,
         diagnostics: Vec::new(),
+        problems: Vec::new(),
     };
     let io = |path: PathBuf| move |error| BuildError::Io { path, error };
     for kind in [ImageKind::Bg, ImageKind::Sprites] {
@@ -174,6 +176,7 @@ pub(crate) fn convert(
         data_paths.push(data);
     }
     let diagnostics = std::mem::take(&mut rgbgfx.diagnostics);
+    made.problems.append(&mut rgbgfx.problems);
     if !ok {
         made.images.clear();
         return Ok(Some(Converted {

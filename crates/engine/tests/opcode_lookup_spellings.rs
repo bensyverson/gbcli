@@ -128,6 +128,63 @@ const CASES: &[(&str, Option<Opcode>)] = &[
     // Not instructions in rgbasm 1.0.4.
     ("ldhl sp, 5", None),
     ("ldio a, [$ff00+c]", None),
+    // The second review (leaf FPQsnp). Operands are separated by commas:
+    // whitespace between two names doesn't make two operands.
+    ("jr nz Top", None),
+    ("call z Top", None),
+    ("jp c Top", None),
+    ("ld a b", None),
+    ("ld a, [hl -]", Some(Base(0x3A))),
+    // HIGH() and LOW() of a register pair name its halves.
+    ("ld a, high(bc)", Some(Base(0x78))),
+    ("ld a, low(hl)", Some(Base(0x7D))),
+    ("ld [hl], low(de)", Some(Base(0x73))),
+    ("ld a, high(af)", Some(Base(0x7F))),
+    ("ld a, low(af)", None),
+    ("ld a, HIGH( BC )", Some(Base(0x78))),
+    ("ld hl, high(bc)", None),
+    ("ld a, high(bc) + 1", None),
+    // RST vectors and bit numbers are constant expressions, with rgbasm's
+    // precedence (`&` binds tighter than `+`).
+    ("rst 8*7", Some(Base(0xFF))),
+    ("rst 8 * 7", Some(Base(0xFF))),
+    ("rst $0038", Some(Base(0xFF))),
+    ("rst (1 << 3)", Some(Base(0xCF))),
+    ("rst 7*8+1", None),
+    ("rst -1", None),
+    ("bit 3+4, a", Some(Cb(0x7F))),
+    ("set 2*3, [hl]", Some(Cb(0xF6))),
+    ("bit 1 + 1 * 2, b", Some(Cb(0x58))),
+    ("bit 2 + 7 & 1, a", Some(Cb(0x5F))),
+    ("res 15 & 7, a", Some(Cb(0xBF))),
+    ("bit 2 ** 2 - 1, a", Some(Cb(0x5F))),
+    ("bit -1 % 8, a", Some(Cb(0x7F))),
+    ("bit 1_0 / 3, a", Some(Cb(0x5F))),
+    ("bit 'x', a", None),
+    ("bit wFoo, a", None),
+    ("bit 8 / 0, a", None),
+    // The rest of that review's probe, which already agreed.
+    ("push AF", Some(Base(0xF5))),
+    ("stop $10", Some(Base(0x10))),
+    ("add sp, -2", Some(Base(0xE8))),
+    ("ld a,b", Some(Base(0x78))),
+    ("LD A,[HL]", Some(Base(0x7E))),
+    ("ldh a, [rLCDC + 1]", Some(Base(0xF0))),
+    ("ldh a, [$ff00 + 5]", Some(Base(0xF0))),
+    ("ld a, [$ff00+c+0]", None),
+    ("ldio a, [$ff40]", None),
+    ("ldio [c], a", None),
+    ("ld a, hli", None),
+    ("ld a, [hl], ", None),
+    ("jp z, hl", None),
+    ("ld [$c000], a", Some(Base(0xEA))),
+    ("ld a, 'x'", Some(Base(0x3E))),
+    ("ld a, \"x\"", Some(Base(0x3E))),
+    ("ld b, b", Some(Base(0x40))),
+    ("ld hl, sp+0", Some(Base(0xF8))),
+    ("ld a, [bc]", Some(Base(0x0A))),
+    ("ld a, [de]", Some(Base(0x1A))),
+    ("ld [bc], a", Some(Base(0x02))),
 ];
 
 #[test]
@@ -172,6 +229,8 @@ fn each_refusal_names_a_spelling_rgbasm_takes() {
         ("jr nz", "jr nz, e8"),
         ("ldi a, [hli]", "ld a, [hli]"),
         ("ldh [$40], a", "$FF00"),
+        ("jr nz Top", "jr nz, Top"),
+        ("call z Top", "comma"),
     ] {
         let remedy = refusal(query).remedy();
         assert!(remedy.contains(fix), "{query}: {remedy}");

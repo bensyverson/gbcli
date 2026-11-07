@@ -209,6 +209,7 @@ mod tests {
             height: 2,
             frame: (8, 16),
             kept: vec![(0, 0)],
+            drawn: vec![vec![0; 128]],
             uses: vec![2],
             frames: vec![Vec::new(), Vec::new()],
             warnings: Vec::new(),

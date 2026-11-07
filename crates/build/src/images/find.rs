@@ -112,6 +112,12 @@ fn source(
         Some((stem, size)) if kind == ImageKind::Sprites => match frame_size(size) {
             Some(frame) => (stem.to_string(), Some(frame)),
             None => {
+                // The size is checked first, so the stem may be no name either.
+                let stem = if is_name(stem) {
+                    stem.to_string()
+                } else {
+                    name_like(stem)
+                };
                 return Err(BuildError::Layout {
                     message: format!(
                         "{}: `{size}` is not a frame size; a sheet's name may end in its \
@@ -223,6 +229,8 @@ mod tests {
         assert_eq!((s.label.as_str(), s.frame), ("Hero", Some((16, 24))));
         let remedy = named(ImageKind::Sprites, "hero.big.png").unwrap_err();
         assert!(remedy.contains("hero.16x16.png"), "{remedy}");
+        let remedy = named(ImageKind::Sprites, "2 hero.big.png").unwrap_err();
+        assert!(remedy.contains(" hero.16x16.png"), "{remedy}");
         let remedy = named(ImageKind::Bg, "town.16x16.png").unwrap_err();
         assert!(remedy.contains("town_16x16.png"), "{remedy}");
     }

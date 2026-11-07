@@ -29,8 +29,9 @@ impl ImageKind {
 }
 
 /// A hardware limit an image can break (Pan Docs); or `alpha`, which would
-/// make the conversion guess, or `frame_grid`, a sheet its frames don't
-/// tile: the two checks that aren't limits.
+/// make the conversion guess, `frame_grid`, a sheet its frames don't
+/// tile, or `rgbgfx_agrees`, gbcli's own check on rgbgfx: the checks that
+/// aren't limits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ImageLimit {
@@ -68,6 +69,10 @@ pub enum ImageLimit {
     /// A pixel neither opaque nor fully transparent, or a transparent pixel
     /// in a background, which has none.
     Alpha,
+    /// rgbgfx's tile data draws the color indices gbcli planned (and
+    /// checked) for every tile. A disagreement is gbcli's bug, not the
+    /// image's; the build stops rather than ship unchecked shades.
+    RgbgfxAgrees,
 }
 
 impl ImageLimit {
@@ -87,6 +92,7 @@ impl ImageLimit {
             ImageLimit::FrameSpan => "frame_span",
             ImageLimit::RomxBank => "romx_bank",
             ImageLimit::Alpha => "alpha",
+            ImageLimit::RgbgfxAgrees => "rgbgfx_agrees",
         }
     }
 }
@@ -200,6 +206,7 @@ mod tests {
             FrameSpan,
             RomxBank,
             Alpha,
+            RgbgfxAgrees,
         ] {
             assert_eq!(serde_json::to_value(limit).unwrap(), limit.name());
         }

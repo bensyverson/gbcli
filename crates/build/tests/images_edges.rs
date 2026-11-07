@@ -318,3 +318,61 @@ fn a_frame_256_pixels_tall_builds_with_its_offsets() {
     let asm = fs::read_to_string(temp.path("demo/build/images/images.asm")).unwrap();
     assert!(asm.contains("\tdb 240, 0, 0, 0\n"), "{asm}");
 }
+
+/// A 16-bit gray PNG (second review, leaf FPQsnp). rgbgfx scales 16-bit
+/// samples to 8 bits with libpng's rounding: $07FF and $0800 both become
+/// $08, one color. gbcli once kept the high byte ($07 and $08, two RGB555
+/// colors), planned three shades where rgbgfx saw two and built the
+/// $07FF pixels a shade off. Read as rgbgfx reads it, the image is white
+/// and one dark color, drawn as shade 3 everywhere below the top row.
+#[test]
+fn a_16_bit_png_is_read_as_rgbgfx_rounds_it() {
+    let (temp, options) = starter("edges-16bit");
+    let path = temp.path("demo/assets/bg/deep.png");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let mut data = Vec::new();
+    for y in 0..8u32 {
+        for x in 0..8u32 {
+            let v: u16 = match (y, x) {
+                (0, _) => 0xFFFF,
+                (_, 0..4) => 0x07FF,
+                _ => 0x0800,
+            };
+            data.extend_from_slice(&v.to_be_bytes());
+        }
+    }
+    let file = fs::File::create(&path).unwrap();
+    let mut encoder = png::Encoder::new(file, 8, 8);
+    encoder.set_color(png::ColorType::Grayscale);
+    encoder.set_depth(png::BitDepth::Sixteen);
+    let mut writer = encoder.write_header().unwrap();
+    writer.write_image_data(&data).unwrap();
+    drop(writer);
+
+    let r = build(&rgbds(), &options);
+    assert!(r.is_ok(), "{}", describe(&r));
+    let tiles = fs::read(temp.path("demo/build/images/bg/deep.2bpp")).unwrap();
+    let (a, b) = (index_at(&tiles, 1, 0), index_at(&tiles, 1, 7));
+    assert_eq!(
+        (index_at(&tiles, 0, 0), a, b),
+        (0, 3, 3),
+        "white, then the $07FF and $0800 pixels"
+    );
+}
+
+/// A sheet whose name is no label and whose frame size is no size: the
+/// size is checked first, and its remedy must offer a name that is one
+/// (second review, leaf FPQsnp).
+#[test]
+fn a_bad_frame_size_remedy_offers_a_valid_name() {
+    let (temp, options) = starter("edges-badname");
+    write_png(
+        &temp.path("demo/assets/sprites/2hero.big.png"),
+        8,
+        16,
+        |_, _| BLACK,
+    );
+    let (_, remedy) = layout_error(build(&rgbds(), &options));
+    assert!(remedy.contains(" hero.16x16.png"), "{remedy}");
+    assert!(!remedy.contains("2hero"), "{remedy}");
+}

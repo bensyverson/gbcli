@@ -6,14 +6,16 @@
 //! warning; a sheet run doesn't, because without `-u` rgbgfx counts the
 //! sheet's raw tiles, blanks and repeats included, while the limit applies
 //! to the units gbcli keeps (`sheet::check`). Every run passes `-c` with the
-//! image's own colors at the indices of their shades.
+//! image's own colors at the indices of their shades. What rgbgfx wrote is
+//! then compared with gbcli's plan (`agree`); a difference stops the build.
 
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
-use gbcli_protocol::{Diagnostic, Severity, Tool};
+use gbcli_protocol::{Diagnostic, ImageProblem, Severity, TileAt, Tool};
 
+use super::agree::{self, Disagreement};
 use super::bg::{BgPlan, MAP_TILES};
 use super::sheet::SheetPlan;
 use crate::diagnostics;
@@ -26,6 +28,8 @@ pub(crate) struct Rgbgfx<'a> {
     pub project: &'a Path,
     pub timeout: Duration,
     pub diagnostics: Vec<Diagnostic>,
+    /// Conversions that disagree with gbcli's plan (`agree`).
+    pub problems: Vec<ImageProblem>,
 }
 
 /// A converted background: unique tiles (2bpp) and its tilemap.
@@ -83,6 +87,29 @@ impl Rgbgfx<'_> {
             );
             return Ok(None);
         }
+        let mut off = Vec::new();
+        for (i, &unique) in plan.cells.iter().enumerate() {
+            let tile = TileAt {
+                x: i as u32 % plan.width,
+                y: i as u32 / plan.width,
+            };
+            let id = usize::from(data.map[i]) * 16;
+            match data.tiles.get(id..id + 16) {
+                None => off.push(Disagreement { tile, pixel: None }),
+                Some(wrote) => {
+                    if let Some(d) = agree::first_difference(&plan.unique[unique], wrote) {
+                        off.push(Disagreement {
+                            tile,
+                            pixel: Some(d),
+                        });
+                    }
+                }
+            }
+        }
+        if !off.is_empty() {
+            self.problems.push(agree::problem(image, &off));
+            return Ok(None);
+        }
         Ok(Some(data))
     }
 
@@ -119,10 +146,25 @@ impl Rgbgfx<'_> {
             return Ok(None);
         }
         let mut kept = Vec::with_capacity(plan.kept.len() * 32);
-        for &(ux, uy) in &plan.kept {
+        let mut off = Vec::new();
+        for (&(ux, uy), planned) in plan.kept.iter().zip(&plan.drawn) {
             // Column-major: down each 8-pixel column, top to bottom.
             let index = (ux / 8) as usize * rows + (uy / 8) as usize;
-            kept.extend_from_slice(&raw[index * 16..index * 16 + 32]);
+            let unit = &raw[index * 16..index * 16 + 32];
+            if let Some(d) = agree::first_difference(planned, unit) {
+                off.push(Disagreement {
+                    tile: TileAt {
+                        x: ux / 8,
+                        y: (uy + d.y) / 8,
+                    },
+                    pixel: Some(agree::Difference { y: d.y % 8, ..d }),
+                });
+            }
+            kept.extend_from_slice(unit);
+        }
+        if !off.is_empty() {
+            self.problems.push(agree::problem(image, &off));
+            return Ok(None);
         }
         Ok(Some(kept))
     }

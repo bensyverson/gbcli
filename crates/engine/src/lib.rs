@@ -21,8 +21,8 @@ mod sym;
 pub use checkpoint::{Checkpoint, LoadOptions, MAGIC, SaveMeta, VERSION};
 pub use checkpoint_error::{CheckpointError, LoadWarning, Moved, MovedRole, SymbolAt, SymbolSide};
 pub use debug::{
-    CallFrame, DebugError, FrameSink, Outcome, RunOptions, Since, core_code, eval_code, expr_code,
-    unapplied_keys,
+    CallFrame, DebugError, EventTap, FrameSink, Outcome, RunOptions, Since, core_code, eval_code,
+    expr_code, unapplied_keys,
 };
 pub use machine::{Backend, Machine, SetupError};
 pub use session::{MachineId, Session};

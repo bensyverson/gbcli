@@ -1,6 +1,6 @@
 //! The read verbs for pictures, VRAM and the session's listings.
 
-use super::flags::{OUTPUT, SESSION, SHOT, SHOT_OPTIONS, VIEW};
+use super::flags::{CHANGE, EQUIV, MEASURE, OUTPUT, SESSION, SHOT, SHOT_OPTIONS, VIEW};
 use super::{Arity, Class, Verb, VerbSpec};
 
 pub const SHOT_VERB: VerbSpec = VerbSpec {
@@ -90,5 +90,58 @@ pub const CHECKPOINTS_VERB: VerbSpec = VerbSpec {
     example: (
         "gbcli checkpoints --session dx",
         "lists what you can restore",
+    ),
+};
+
+pub const MEASURE_VERB: VerbSpec = VerbSpec {
+    verb: Verb::Measure,
+    name: "measure",
+    class: Class::Read,
+    summary: "count the cycles from one address to another",
+    usage: "FROM..TO [--iterations N] [--max T] [--at NAME|~N] [flags]",
+    arity: Arity {
+        min: 1,
+        max: Some(1),
+        name: "FROM..TO",
+    },
+    flags: MEASURE,
+    groups: &[SESSION, OUTPUT],
+    about: "Runs a copy of the head (or --at) and counts the emulated cycles from the first \
+            arrival at FROM (the current PC counts) to the next arrival at TO, --iterations \
+            times. Prints n, the CPU speed, T- and M-cycles min/max/mean, and the share of a \
+            70,224 T frame. The head never moves and breakpoints are ignored. With --max T \
+            it is an assertion: exit 1 if any iteration took more than T T-cycles. A span \
+            across a CPU speed switch is refused (exit 1).",
+    example: (
+        "gbcli measure MainLoop+1..MainLoop --session dx --iterations 60 --max 40000",
+        "measures 60 passes of the main loop's work, and exits 1 if any took over 40,000 T",
+    ),
+};
+
+pub const EQUIV_VERB: VerbSpec = VerbSpec {
+    verb: Verb::Equiv,
+    name: "equiv",
+    class: Class::Read,
+    summary: "check that another build (or a patch) behaves frame for frame as this one",
+    usage: "[ROM_B] --frames N [--patch TARGET=BYTES]… [--ram ADDR[,LEN]]… [--keys TOKENS] \
+            [flags]",
+    arity: Arity {
+        min: 0,
+        max: Some(1),
+        name: "ROM_B",
+    },
+    flags: EQUIV,
+    groups: &[SESSION, CHANGE, OUTPUT],
+    about: "Runs the session's ROM (side A) and ROM_B, or the session's ROM with --patch \
+            (side B), from equivalent starts (each side's boot handoff, or --at one \
+            checkpoint) under one key timeline, and compares the screen, the --ram bytes \
+            and the sound writes at the end of every frame. Exit 0 when every frame \
+            matches; exit 1 (predicate_false) at the first frame that differs, with every \
+            difference, and both sides saved as checkpoints equiv-a and equiv-b to restore \
+            or run from. The head never moves.",
+    example: (
+        "gbcli equiv fast.gb --session dx --frames 600 --keys 'RIGHT@10' --ram wX",
+        "checks 600 frames of fast.gb against the session's ROM with RIGHT held from frame \
+         10, comparing wX each frame",
     ),
 };

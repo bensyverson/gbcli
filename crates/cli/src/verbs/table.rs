@@ -4,7 +4,9 @@ use super::flags::{
     BATCH, BREAK, CHANGE, CREATE, EVENTS, OUTPUT, PRUNE, READ, RM, RUN, SERVE, SESSION,
     SHOT_OPTIONS, WATCH,
 };
-use super::table_read::{CHECKPOINTS_VERB, SHOT_VERB, SYM_VERB, VIEW_VERB};
+use super::table_read::{
+    CHECKPOINTS_VERB, EQUIV_VERB, MEASURE_VERB, SHOT_VERB, SYM_VERB, VIEW_VERB,
+};
 use super::{Arity, Class, Verb, VerbSpec};
 
 const NONE: Arity = Arity {
@@ -41,7 +43,8 @@ pub const VERBS: &[VerbSpec] = &[
         class: Class::Act,
         summary: "advance the machine to a stop, then read and save",
         usage: "[ROM] [--frames N | --until EXPR | --to ADDR] [--keys TOKENS] [--read EXPR]… \
-                [--shot PATH] [--audio-log] [--wav PATH] [flags]",
+                [--shot PATH] [--audio-log] [--wav PATH] [--measure FROM..TO] [--profile] \
+                [flags]",
         arity: Arity {
             min: 0,
             max: Some(1),
@@ -52,7 +55,8 @@ pub const VERBS: &[VerbSpec] = &[
         about: "The experiment verb. In this order, whatever the order of the flags: start \
                 from --at, the head, or the boot handoff; apply --patch, --poke and --write \
                 in the order given; schedule --keys; run until --until holds, --to is reached, a breakpoint or \
-                watch fires, or the budget ends; evaluate --read; save --shot; save the audio \
+                watch fires, or the budget ends (--profile and --frame-budget collect during the \
+                run); --measure on a copy of the stop; evaluate --read; save --shot; save the audio \
                 (--audio-log, --wav, --piano, --spectrogram); save --checkpoint. The stop \
                 becomes the session's new head. A ROM argument is the same as --rom.",
         example: (
@@ -210,6 +214,8 @@ pub const VERBS: &[VerbSpec] = &[
             "prints the frame counter and the current scanline",
         ),
     },
+    MEASURE_VERB,
+    EQUIV_VERB,
     SHOT_VERB,
     VIEW_VERB,
     SYM_VERB,

@@ -102,7 +102,7 @@ fn tune_spans() -> (Vec<gbcli_audio::NoteSpan>, Ticks, Ticks) {
     let from = core.now();
     run(&mut core, Budget::frames(TUNE_FRAMES));
     let log = decode(&snapshot, &core.take_apu_writes().unwrap());
-    (note_spans(&log, core.now()), from, core.now())
+    (note_spans(&snapshot, &log, core.now()), from, core.now())
 }
 
 #[test]
@@ -186,4 +186,28 @@ fn the_mixed_wav_is_pinned() {
     let head = &takes.mixed.samples[..2048];
     assert_golden("tune_mixed_head.wav", &wav(head));
     let _ = AudioCapture::SAMPLE_RATE;
+}
+
+/// Review 2, finding 1: a log that begins after the instruments were set
+/// (here, five frames into the tune) must still show the notes triggered
+/// in it. Square 1 is retriggered at frame 15 with only NR10, NR13 and NR14
+/// written; its envelope (and so its DAC) was set at frame 0, before the log.
+#[test]
+fn a_log_that_starts_after_the_instruments_were_set_keeps_every_channel() {
+    let mut core = tune_core();
+    run(&mut core, Budget::frames(5));
+    let snapshot = gbcli_audio::ApuSnapshot::from_core(&core).unwrap();
+    core.set_apu_write_log(true).unwrap();
+    run(&mut core, Budget::frames(20));
+    let log = decode(&snapshot, &core.take_apu_writes().unwrap());
+    let spans = note_spans(&snapshot, &log, core.now());
+    let from_start = tune_spans().0;
+    let square1 = |spans: &[gbcli_audio::NoteSpan]| {
+        spans
+            .iter()
+            .filter(|s| s.channel == ApuChannel::Square1)
+            .count()
+    };
+    assert!(square1(&from_start) > 0, "square 1 plays in the tune");
+    assert!(square1(&spans) > 0, "square 1 is dropped");
 }

@@ -207,14 +207,16 @@ rest.
 const OPTIMIZE: &str = "\
 Optimize — measure, patch, measure again.
 
-  1. Save the state before the code:
-       gbcli run --session dx --to Work --checkpoint before
-  2. Measure: run from it to the end and read t (T-cycles since boot) from the
-     stop row, against the t the checkpoint's run printed:
-       gbcli run --session dx --at before --to Work.done
-  3. Try a change without rebuilding:
-       gbcli run --session dx --at before --patch 00:0165=0 --to Work.done
-  4. Compare the two t values, then rebuild with the winner.
+  1. Find where the time goes:
+       gbcli run --session dx --frames 60 --profile --top 10 --frame-budget
+  2. Measure the routine: cycles from each arrival at one address to the next
+     arrival at another (the head doesn't move):
+       gbcli measure Work..Work.done --session dx --iterations 60
+  3. Try a change without rebuilding, measured on a copy of the stop:
+       gbcli run --session dx --patch 00:0165=0 --frames 1 --measure Work..Work.done
+  4. Rebuild with the winner and hold the gain with an assertion that exits 1:
+       gbcli measure Work..Work.done --session dx --iterations 60 --max 90
+  5. Check the rebuild still behaves: gbcli equiv --rom fast.gb --frames 600
 
 A frame is 70,224 T-cycles; `gbcli help budgets` if a run never arrives.
 ";

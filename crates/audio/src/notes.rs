@@ -7,11 +7,14 @@
 //! span; overflow stops the channel). Those are timed from the trigger; the
 //! frame sequencer's phase isn't known, so they can be early or late by up to
 //! one of its steps (1/256 s for length, 1/128 s for the sweep, 1/64 s for the
-//! envelope). Notes triggered before the log began aren't shown.
+//! envelope). Each channel's settings (DAC, envelope, wave level, noise,
+//! period, length, NR10) start from the snapshot the log began at, so a log
+//! that starts after the instruments were set still shows their notes. Notes
+//! triggered before the log began aren't shown.
 
-use gbcli_core::{ApuChannel, ApuWriteEffect, Ticks};
+use gbcli_core::{ApuChannel, ApuWrite, ApuWriteEffect, Ticks};
 
-use crate::decode::{Change, DecodedWrite};
+use crate::decode::{ApuSnapshot, Change, DecodedWrite, decode};
 use crate::pitch::{Note, Pitch, nearest_note};
 use crate::reg::{Direction, Envelope, Sweep, WaveLevel};
 
@@ -59,12 +62,18 @@ struct Playing {
     sweep: Sweep,
 }
 
-/// The note spans in `log`, closing any still sounding at `end`.
-pub fn note_spans(log: &[DecodedWrite], end: Ticks) -> Vec<NoteSpan> {
+/// The note spans in `log`, which `decode` read from `start`, closing any
+/// still sounding at `end`.
+pub fn note_spans(start: &ApuSnapshot, log: &[DecodedWrite], end: Ticks) -> Vec<NoteSpan> {
     let mut channels = [Channel::default(); 4];
     let mut sweep = Sweep::from_bits(0);
     let mut spans = Vec::new();
-    for w in log {
+    // The snapshot's settings, as writes of what it holds with no trigger,
+    // read by the same decoder and the same rules as the log; they can't
+    // start a note, so they add no span.
+    let at = log.first().map_or(end, |w| w.write.at);
+    let seed = seeded(start, at);
+    for w in seed.iter().chain(log) {
         if w.write.effect != ApuWriteEffect::Applied {
             continue;
         }
@@ -152,6 +161,32 @@ pub fn note_spans(log: &[DecodedWrite], end: Ticks) -> Vec<NoteSpan> {
     }
     spans.sort_by_key(|s| (s.start, s.channel as usize));
     spans
+}
+
+/// The snapshot's NR10 to NR51 as writes at `at` to a powered APU, trigger
+/// bits cleared; nothing when the APU is off, where every channel is off.
+fn seeded(start: &ApuSnapshot, at: Ticks) -> Vec<DecodedWrite> {
+    if !start.powered {
+        return Vec::new();
+    }
+    let blank = ApuSnapshot {
+        regs: [0; 0x17],
+        powered: true,
+    };
+    let writes: Vec<ApuWrite> = (0xFF10u16..0xFF26)
+        .map(|addr| {
+            let value = start.regs[usize::from(addr - 0xFF10)];
+            let trigger_reg = matches!(addr, 0xFF14 | 0xFF19 | 0xFF1E | 0xFF23);
+            ApuWrite {
+                at,
+                pc: 0,
+                addr,
+                value: if trigger_reg { value & 0x7F } else { value },
+                effect: ApuWriteEffect::Applied,
+            }
+        })
+        .collect();
+    decode(&blank, &writes)
 }
 
 /// When length or the envelope stops a note triggered at `at`, if either does.

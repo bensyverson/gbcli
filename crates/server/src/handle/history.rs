@@ -103,7 +103,7 @@ impl Handler {
 
 /// A checkpoint's frame since the boot handoff when it has one, else since
 /// power-on: the number `checkpoint` and `restore` report (design §12).
-fn checkpoint_frame(cp: &gbcli_engine::Checkpoint) -> u64 {
+pub(super) fn checkpoint_frame(cp: &gbcli_engine::Checkpoint) -> u64 {
     let base = cp.header.boot.map_or(0, |boot| boot.frame);
     cp.header.frame.saturating_sub(base)
 }

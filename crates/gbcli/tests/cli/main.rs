@@ -4,8 +4,10 @@
 
 mod audio;
 mod common;
+mod equiv;
 mod errors;
 mod filmstrip;
 mod help;
 mod honesty;
+mod profile;
 mod verbs;

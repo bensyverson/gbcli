@@ -1,0 +1,43 @@
+$ gbcli run demo.gb --frames 2 --session demo
+exit 0
+stop budget_exhausted kind=frames pc=$0163 bank=0 symbol=Work frame=2 t=140288 since=boot ticks=12042792 ly=144 shown=2 vblank=normal
+budget frames=2/2 instructions=11276 ticks=280576
+rev s1
+$ gbcli equiv demo.gb --frames 30 --ram wFrame,2 --session demo
+exit 0
+equiv frames=30
+rev s1
+$ gbcli equiv --frames 30 --patch $016B=0 --ram wFrame,2 --session demo
+exit 1
+equiv frames=0 diverged_at=1 ticks=140096
+difference kind=ram range=wFrame offset=0 a=$70 b=$00 a_addr=$C000 b_addr=$C000 count=2
+side a checkpoint=equiv-a path=.gbcli/sessions/demo/checkpoints/equiv-a.gbck frame=1
+stop step_done unit=frame pc=$0166 bank=0 symbol=Work+$3 frame=1 t=70048 since=boot ticks=11902312 ly=144 shown=1 vblank=normal
+budget frames=1 instructions=5630 ticks=140096
+side b checkpoint=equiv-b path=.gbcli/sessions/demo/checkpoints/equiv-b.gbck frame=1
+stop step_done unit=frame pc=$015E bank=0 symbol=Main.loop frame=1 t=70048 since=boot ticks=11902312 ly=144 shown=1 vblank=normal
+budget frames=1 instructions=6421 ticks=140096
+--- stderr
+gbcli: predicate_false: the sides diverge at frame 1: wFrame+0; saved as equiv-a and equiv-b
+remedy: `gbcli restore equiv-b` to see side B where it went wrong
+$ gbcli equiv --frames 3 --patch $016B=0 --json --session demo
+exit 0
+{"id":"cli","ok":true,"rev":"s1","result":{"equiv":{"frames":3}},"warnings":[]}
+$ gbcli restore equiv-b --session demo
+exit 0
+restored name=equiv-b frame=1 rev=s2
+rev s2
+$ gbcli read [wFrame] --session demo
+exit 0
+read expr=[wFrame] value=0 hex=$00
+rev s2
+$ gbcli equiv --frames 3 --ram wNowhere --session demo
+exit 2
+--- stderr
+gbcli: unknown_symbol: --ram wNowhere on side A: unknown symbol "wNowhere"
+remedy: check the name against `gbcli sym <pattern>`, or load the ROM's .sym
+$ gbcli equiv --ram wFrame --session demo
+exit 2
+--- stderr
+gbcli: bad_request: equiv needs --frames N: how many frames to compare
+remedy: e.g. `gbcli equiv fast.gb --frames 600`

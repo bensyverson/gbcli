@@ -2,6 +2,8 @@
 //! writes (`--json`). stdout carries the answer; warnings and errors go to stderr.
 
 mod audio;
+mod equiv;
+mod profile;
 mod row;
 mod stop;
 mod video;
@@ -39,6 +41,10 @@ pub fn response(response: &Response, json: bool, out: &mut dyn Write, err: &mut 
             0
         }
         Err(body) => {
+            if let Some(result) = &body.result {
+                // An assertion's answer: what it read when it said no.
+                emit(out, &rows(result));
+            }
             if let Some(stop) = &body.stop {
                 // The state the failure left is still the answer's data.
                 emit(out, &stop::rows(stop));
@@ -116,6 +122,18 @@ pub fn rows(r: &ResultBody) -> String {
             .field("value", read.value)
             .opt("hex", hex(read.value))
             .line();
+    }
+    if let Some(m) = &r.measure {
+        out += &profile::measure(m);
+    }
+    if let Some(p) = &r.profile {
+        out += &profile::profile(p);
+    }
+    if let Some(b) = &r.frame_budget {
+        out += &profile::frame_budget(b);
+    }
+    if let Some(e) = &r.equiv {
+        out += &equiv::rows(e);
     }
     out += &video::rows(r);
     if let Some(sound) = &r.audio {

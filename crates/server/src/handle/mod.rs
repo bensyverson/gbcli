@@ -217,6 +217,8 @@ impl Handler {
             Op::View(args) => self.view(store, meta, args, warnings),
             Op::Sym(args) => self.sym(store, meta, args, warnings),
             Op::Checkpoints => self.checkpoints(store, meta),
+            Op::Measure(args) => self.measure(store, meta, args, warnings),
+            Op::Equiv(args) => self.equiv(store, meta, args, warnings),
             Op::Sessions | Op::Gaps | Op::Prune(_) | Op::Rm(_) => {
                 Err(Failure::new(ErrorBody::new(
                     ErrorCode::BadRequest,
@@ -338,7 +340,13 @@ mod keys_tests;
 mod view_tests;
 
 #[cfg(test)]
+mod equiv_tests;
+#[cfg(test)]
 mod listing_tests;
+#[cfg(test)]
+mod measure_tests;
+#[cfg(test)]
+mod profile_tests;
 
 #[cfg(test)]
 mod tests {

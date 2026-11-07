@@ -5,9 +5,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::audio::AudioMade;
 use crate::checkpoint::{Location, WatchAccess};
+use crate::equiv::EquivMade;
 use crate::error::ErrorBody;
 use crate::keys::KeyEvent;
 use crate::listing::{CheckpointRow, SymbolRow};
+use crate::profile::{FrameBudgetMade, MeasureMade, ProfileMade};
 use crate::request::WriteKind;
 use crate::rev::Rev;
 use crate::session::{EventLogLine, GapCount, SessionRow};
@@ -144,6 +146,14 @@ pub struct ResultBody {
     pub shot: Option<ShotMade>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub filmstrip: Option<FilmstripMade>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub measure: Option<MeasureMade>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<ProfileMade>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frame_budget: Option<FrameBudgetMade>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub equiv: Option<EquivMade>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audio: Option<AudioMade>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -27,10 +27,12 @@ pub fn primer() -> String {
             .filter(|s| s.class == class)
             .map(|s| s.name)
             .collect();
+        // Wrapped to the 80 columns the primer keeps, under the verb column.
+        let verbs = wrap(&names.join(", "), 80 - 13).replace('\n', &format!("\n{:13}", ""));
         out += &format!(
             "  {:<11}{}\n  {:<11}{}\n",
             class.name(),
-            names.join(", "),
+            verbs,
             "",
             title(class)
         );

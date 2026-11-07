@@ -47,7 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .collect();
     std::fs::write(out.join("log.txt"), text)?;
     let roll = piano_roll(
-        &note_spans(&log, core.now()),
+        &note_spans(&snapshot, &log, core.now()),
         from,
         core.now(),
         &PianoRoll::default(),

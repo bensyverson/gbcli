@@ -4,8 +4,8 @@
 use std::sync::atomic::Ordering;
 
 use gbcli_core::{
-    Access, AddrFilter, BankSel, Core, Region, RunRequest, StopReason as CoreReason, StoreFilter,
-    Usage,
+    Access, AddrFilter, BankSel, Core, EventSink, Region, RunRequest, StopReason as CoreReason,
+    StoreFilter, Usage,
 };
 use gbcli_protocol::{Location, StepKind, StopReason, WatchAccess};
 
@@ -210,7 +210,11 @@ fn run(
             || until.as_ref().is_some_and(|u| u.triggers.vblank)
             || keys.pending()
             || opts.on_frame.is_some();
-        let stop = m.core_mut().run(&mut req)?;
+        let mut tap = opts.on_event.map(|t| t.0.borrow_mut());
+        req.sink = tap.as_deref_mut().map(|s| s as &mut dyn EventSink);
+        let stop = m.core_mut().run(&mut req);
+        drop(tap);
+        let stop = stop?;
         used += stop.used;
         keys.apply_due(m, used.frames);
         if let Some(sink) = opts.on_frame

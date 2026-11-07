@@ -101,6 +101,8 @@ pub fn build(inv: Invocation, env: &Env) -> Result<Command, Usage> {
         Verb::View => Op::View(video::view(&inv)?),
         Verb::Sym => Op::Sym(SymArgs { pattern: pos(0) }),
         Verb::Checkpoints => Op::Checkpoints,
+        Verb::Measure => Op::Measure(profile::measure(&inv, &pos(0))?),
+        Verb::Equiv => Op::Equiv(Box::new(equiv::equiv(&inv, env)?)),
         Verb::Step => Op::Step(StepArgs {
             unit: match inv.positionals.first() {
                 Some(unit) => values::step_unit(unit)?,
@@ -242,6 +244,9 @@ fn run(inv: &Invocation, env: &Env) -> Result<RunArgs, Usage> {
         shot: video::run_shot(inv)?.map(Box::new),
         audio: audio::run_audio(inv)?.map(Box::new),
         filmstrip: video::run_filmstrip(inv)?.map(Box::new),
+        measure: profile::run_measure(inv)?.map(Box::new),
+        profile: profile::run_profile(inv)?,
+        frame_budget: inv.has("frame-budget"),
         keys: video::keys(inv, env)?,
     })
 }
@@ -318,6 +323,8 @@ fn target(inv: &Invocation, env: &Env, rom: Option<String>) -> Result<Target, Us
 }
 
 mod audio;
+mod equiv;
+mod profile;
 mod video;
 
 #[cfg(test)]

@@ -105,7 +105,7 @@ pub struct ApuWriteLine {
 
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "ApuWriteEffect", rename_all = "snake_case")]
-enum ApuWriteEffectDef {
+pub(crate) enum ApuWriteEffectDef {
     Applied,
     IgnoredApuOff,
     WaveRamWhilePlaying,

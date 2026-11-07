@@ -10,10 +10,11 @@ mod keys;
 mod record;
 mod until;
 
+use std::cell::RefCell;
 use std::fmt;
 use std::sync::atomic::AtomicBool;
 
-use gbcli_core::{Budget, CoreError, canonical_addr};
+use gbcli_core::{Budget, CoreError, EventSink, canonical_addr};
 use gbcli_protocol::{
     BreakpointSpec, KeyEvent, Location, StepKind, StopRecord, TimeBase, TimeMark, WatchAccess,
     WatchSpec,
@@ -56,6 +57,21 @@ pub struct RunOptions<'a> {
     pub keys: &'a [KeyEvent],
     /// Called at every vblank the run passes, after the key events due there.
     pub on_frame: Option<FrameSink<'a>>,
+    /// Given every event the core sends during the run (the profiler's
+    /// execution events), while breakpoints, budgets and keys still apply.
+    pub on_event: Option<EventTap<'a>>,
+}
+
+/// A caller's event sink for a run. It is borrowed for each core call and
+/// released between them, so a frame sink may read it at a vblank. The sink
+/// owns its data (`'static`), which keeps `RunOptions` covariant.
+#[derive(Clone, Copy)]
+pub struct EventTap<'a>(pub &'a RefCell<dyn EventSink>);
+
+impl std::fmt::Debug for EventTap<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("EventTap")
+    }
 }
 
 /// What a run calls at each vblank, with the frames it has completed: how a
@@ -78,6 +94,7 @@ impl RunOptions<'_> {
             interrupt: None,
             keys: &[],
             on_frame: None,
+            on_event: None,
         }
     }
 }

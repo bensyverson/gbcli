@@ -10,7 +10,17 @@ pub(super) const DEFAULT_FRAMES: u64 = 600;
 
 /// The budget a run gets, and whether the server supplied the default.
 pub(super) fn budget_of(args: &RunArgs) -> (Budget, BudgetLimits, bool) {
-    if args.frames.is_none() && args.instructions.is_none() && args.ticks.is_none() {
+    budget_from(args.frames, args.instructions, args.ticks)
+}
+
+/// The budget the three limits give, 600 frames when none is given, and
+/// whether that default applied.
+pub(super) fn budget_from(
+    frames: Option<u64>,
+    instructions: Option<u64>,
+    ticks: Option<u64>,
+) -> (Budget, BudgetLimits, bool) {
+    if frames.is_none() && instructions.is_none() && ticks.is_none() {
         let limits = BudgetLimits {
             frames: Some(DEFAULT_FRAMES),
             ..BudgetLimits::default()
@@ -18,13 +28,13 @@ pub(super) fn budget_of(args: &RunArgs) -> (Budget, BudgetLimits, bool) {
         return (Budget::frames(DEFAULT_FRAMES), limits, true);
     }
     let limits = BudgetLimits {
-        ticks: args.ticks,
-        instructions: args.instructions,
-        frames: args.frames,
+        ticks,
+        instructions,
+        frames,
     };
-    let budget = Budget::frames(args.frames.unwrap_or(u64::MAX))
-        .with_instructions(args.instructions.unwrap_or(u64::MAX))
-        .with_ticks(args.ticks.unwrap_or(u64::MAX));
+    let budget = Budget::frames(frames.unwrap_or(u64::MAX))
+        .with_instructions(instructions.unwrap_or(u64::MAX))
+        .with_ticks(ticks.unwrap_or(u64::MAX));
     (budget, limits, false)
 }
 

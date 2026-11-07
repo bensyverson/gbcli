@@ -163,7 +163,7 @@ pub(super) fn deliver(
     }
     let piano = match &args.piano {
         Some(out) => {
-            let spans = note_spans(&log, collected.to);
+            let spans = note_spans(&collected.snapshot, &log, collected.to);
             let roll = piano_roll(&spans, collected.from, collected.to, &PianoRoll::default());
             Some(write_image(out, roll.map_err(audio_failure)?)?)
         }

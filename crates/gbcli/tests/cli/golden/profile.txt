@@ -1,0 +1,50 @@
+$ gbcli run demo.gb --frames 2 --session demo
+exit 0
+stop budget_exhausted kind=frames pc=$0163 bank=0 symbol=Work frame=2 t=140288 since=boot ticks=12042792 ly=144 shown=2 vblank=normal
+budget frames=2/2 instructions=11276 ticks=280576
+rev s1
+$ gbcli measure Main.loop..Main.loop --iterations 3 --session demo
+exit 0
+measure from=Main.loop to=Main.loop n=3 speed=single
+t min=112 max=112 mean=112.0
+m min=28 max=28 mean=28.0
+frame_pct min=0.159 max=0.159 mean=0.159
+rev s1
+$ gbcli measure Main.loop..Main.loop --iterations 2 --json --session demo
+exit 0
+{"id":"cli","ok":true,"rev":"s1","result":{"measure":{"from":"Main.loop","to":"Main.loop","n":2,"speed":"single","t":{"min":112,"max":112,"mean":112.0},"m":{"min":28,"max":28,"mean":28.0},"frame_pct":{"min":0.1594896331738437,"max":0.1594896331738437,"mean":0.1594896331738437}}},"warnings":[]}
+$ gbcli measure Main.loop..Main.loop --max 100 --session demo
+exit 1
+measure from=Main.loop to=Main.loop n=1 speed=single max_t=100
+t min=112 max=112 mean=112.0
+m min=28 max=28 mean=28.0
+frame_pct min=0.159 max=0.159 mean=0.159
+--- stderr
+gbcli: predicate_false: the slowest of 1 iterations took 112 T, more than --max 100
+remedy: make the code from Main.loop to Main.loop faster, or raise --max
+$ gbcli measure Main.loop --max 100 --session demo
+exit 2
+--- stderr
+gbcli: bad_request: `Main.loop` is not FROM..TO
+remedy: give two addresses joined by `..`, e.g. MainLoop+1..MainLoop
+$ gbcli run --frames 3 --measure Main.loop..Work --profile --top 2 --frame-budget --session demo
+exit 0
+stop budget_exhausted kind=frames pc=$015E bank=0 symbol=Main.loop frame=5 t=350952 since=boot ticks=12464120 ly=144 shown=5 vblank=normal
+budget frames=3/3 instructions=16935 ticks=421328
+measure from=Main.loop to=Work n=1 speed=single
+t min=24 max=24 mean=24.0
+m min=6 max=6 mean=6.0
+frame_pct min=0.034 max=0.034 mean=0.034
+profile total_t=210664 idle_t=0 routines=2 unwound=0 mismatched=0 ret_jumps=0 open=0
+routine name=Work bank=0 addr=$0163 calls=1879 exclusive_t=143008 inclusive_t=143008
+routine name=Main.loop+$3 bank=0 addr=$0161 calls=0 exclusive_t=67656 inclusive_t=210664
+frame_budget frames=3 lag=3
+frame_cost index=0 active_t=70208 idle_t=0 lag=1
+frame_cost index=1 active_t=70224 idle_t=0 lag=1
+frame_cost index=2 active_t=70232 idle_t=0 lag=1
+rev s2
+$ gbcli run --frames 1 --top 2 --session demo
+exit 2
+--- stderr
+gbcli: bad_request: --top only applies with --profile
+remedy: add --profile, or drop it

@@ -1,0 +1,182 @@
+//! `measure` and `run --measure` through the handler (design §11). The V1
+//! test ROM's main loop calls Work and jumps back; by the opcode table a
+//! pass is `call` 24 + Work (`ld a,[a16]` 16, `add` 4, `ld b,a` 4,
+//! `ld hl,d16` 12, `inc [hl]` 12, `jr nz` taken 12, `ret` 16) + `jr` 12 =
+//! 112 T while wFrame's low byte doesn't wrap.
+
+use gbcli_protocol::{
+    CheckpointArgs, CpuSpeedName, ErrorCode, MeasureArgs, MeasureMade, Op, Response, RunArgs,
+    RunMeasure,
+};
+
+use super::Handler;
+use super::test_support::{handler, request, run_frames};
+use crate::fixture::Fixture;
+
+const PASS_T: u64 = 112;
+
+fn measure(h: &mut Handler, args: MeasureArgs) -> Response {
+    h.handle(&request(Op::Measure(args)))
+}
+
+fn main_loop(iterations: u32) -> MeasureArgs {
+    MeasureArgs {
+        from: "Main.loop".into(),
+        to: "Main.loop".into(),
+        iterations: Some(iterations),
+        ..MeasureArgs::default()
+    }
+}
+
+fn made(response: Response) -> MeasureMade {
+    response
+        .outcome
+        .expect("measured")
+        .measure
+        .expect("a measurement")
+}
+
+#[test]
+fn measure_counts_each_pass_of_the_main_loop_at_its_table_cost() {
+    let f = Fixture::with_sym("measure-loop");
+    let mut h = handler(&f);
+    run_frames(&mut h, 2);
+    let m = made(measure(&mut h, main_loop(3)));
+    assert_eq!(m.n, 3);
+    assert_eq!(m.speed, CpuSpeedName::Single);
+    assert_eq!(
+        (m.t.min, m.t.max, m.t.mean.0),
+        (PASS_T, PASS_T, PASS_T as f64)
+    );
+    assert_eq!((m.m.min, m.m.max), (PASS_T / 4, PASS_T / 4));
+    // 224 ticks of a 140,448-tick frame.
+    let pct = 224.0 * 100.0 / 140_448.0;
+    assert_eq!((m.frame_pct.min.0, m.frame_pct.max.0), (pct, pct));
+    assert_eq!((m.from.as_str(), m.to.as_str()), ("Main.loop", "Main.loop"));
+}
+
+#[test]
+fn measure_leaves_the_head_and_its_history_alone() {
+    let f = Fixture::with_sym("measure-head");
+    let mut h = handler(&f);
+    let ran = run_frames(&mut h, 2);
+    let before = h.handle(&request(Op::Show)).outcome.expect("show");
+    let measured = measure(&mut h, main_loop(5));
+    assert_eq!(measured.rev, ran.rev, "no new revision");
+    let after = h.handle(&request(Op::Show)).outcome.expect("show");
+    assert_eq!(before.registers, after.registers);
+    assert_eq!(before.stop, after.stop);
+}
+
+#[test]
+fn measure_at_a_checkpoint_measures_there_and_leaves_the_head() {
+    let f = Fixture::with_sym("measure-at");
+    let mut h = handler(&f);
+    run_frames(&mut h, 1);
+    h.handle(&request(Op::Checkpoint(CheckpointArgs {
+        name: "one".into(),
+    })))
+    .outcome
+    .expect("saved");
+    let ran = run_frames(&mut h, 3);
+    let before = h.handle(&request(Op::Show)).outcome.expect("show");
+    let mut args = main_loop(2);
+    args.at = Some("one".into());
+    let m = made(measure(&mut h, args));
+    assert_eq!(m.n, 2);
+    let after = measure(&mut h, main_loop(1));
+    assert_eq!(after.rev, ran.rev);
+    let shown = h.handle(&request(Op::Show)).outcome.expect("show");
+    assert_eq!(before.registers, shown.registers);
+}
+
+#[test]
+fn measure_max_exceeded_is_predicate_false_with_the_measurement() {
+    let f = Fixture::with_sym("measure-max");
+    let mut h = handler(&f);
+    let mut args = main_loop(2);
+    args.max_t = Some(PASS_T - 1);
+    let error = measure(&mut h, args).outcome.expect_err("exceeded");
+    assert_eq!(error.code, ErrorCode::PredicateFalse);
+    assert_eq!(error.exit, 1);
+    assert!(error.message.contains("112"), "{}", error.message);
+    let m = error
+        .result
+        .and_then(|r| r.measure)
+        .expect("the measurement rides along");
+    assert_eq!((m.t.max, m.max_t), (PASS_T, Some(PASS_T - 1)));
+}
+
+#[test]
+fn measure_max_met_succeeds() {
+    let f = Fixture::with_sym("measure-max-ok");
+    let mut h = handler(&f);
+    let mut args = main_loop(2);
+    args.max_t = Some(PASS_T);
+    assert_eq!(made(measure(&mut h, args)).max_t, Some(PASS_T));
+}
+
+#[test]
+fn measure_refuses_zero_iterations() {
+    let f = Fixture::with_sym("measure-zero");
+    let error = measure(&mut handler(&f), main_loop(0))
+        .outcome
+        .expect_err("refused");
+    assert_eq!(error.code, ErrorCode::BadRequest);
+    assert!(error.remedy.contains("--iterations"), "{}", error.remedy);
+}
+
+#[test]
+fn measure_out_of_budget_says_how_far_it_got() {
+    let f = Fixture::with_sym("measure-budget");
+    let mut args = main_loop(2);
+    args.to = "$0000".into();
+    args.frames = Some(1);
+    let error = measure(&mut handler(&f), args)
+        .outcome
+        .expect_err("out of budget");
+    assert_eq!(error.code, ErrorCode::BudgetExhausted);
+    assert!(
+        error
+            .message
+            .contains("before reaching --to after 0 iterations"),
+        "{}",
+        error.message
+    );
+    assert!(error.remedy.contains("--frames"), "{}", error.remedy);
+}
+
+#[test]
+fn measure_names_a_bad_address() {
+    let f = Fixture::with_sym("measure-addr");
+    let mut args = main_loop(1);
+    args.to = "Nowhere".into();
+    let error = measure(&mut handler(&f), args)
+        .outcome
+        .expect_err("refused");
+    assert_eq!(error.code, ErrorCode::UnknownSymbol);
+}
+
+#[test]
+fn run_measure_measures_one_pass_on_a_copy_of_the_stop() {
+    let plain = Fixture::with_sym("run-measure-plain");
+    let plain_stop = run_frames(&mut handler(&plain), 2)
+        .outcome
+        .expect("ran")
+        .stop;
+    let f = Fixture::with_sym("run-measure");
+    let result = handler(&f)
+        .handle(&request(Op::Run(RunArgs {
+            frames: Some(2),
+            measure: Some(Box::new(RunMeasure {
+                from: "Main.loop".into(),
+                to: "Main.loop".into(),
+            })),
+            ..RunArgs::default()
+        })))
+        .outcome
+        .expect("ran");
+    let m = result.measure.expect("a measurement");
+    assert_eq!((m.n, m.t.max), (1, PASS_T));
+    assert_eq!(result.stop, plain_stop, "the head is the run's stop");
+}

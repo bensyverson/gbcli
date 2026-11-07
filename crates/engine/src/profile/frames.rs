@@ -21,12 +21,24 @@ pub struct FrameBudget {
     pub lag: bool,
 }
 
+/// The sink behind [`Machine::frame_budget`]: it adds each step to the frame
+/// in progress until [`FrameSplit::cut`] ends it. Usable on any run whose
+/// request takes a sink, cut at each vblank.
 #[derive(Default)]
-struct Split {
+pub struct FrameSplit {
     frame: FrameBudget,
 }
 
-impl EventSink for Split {
+impl FrameSplit {
+    /// Ends the frame in progress and returns it, lag decided.
+    pub fn cut(&mut self) -> FrameBudget {
+        let mut frame = std::mem::take(&mut self.frame);
+        frame.lag = frame.idle_t == 0;
+        frame
+    }
+}
+
+impl EventSink for FrameSplit {
     fn kinds(&self) -> EventKinds {
         EventKinds {
             exec: true,
@@ -59,14 +71,12 @@ impl Machine {
     pub fn frame_budget(&mut self, frames: u32) -> Result<Vec<FrameBudget>, CoreError> {
         let mut out = Vec::new();
         while out.len() < frames as usize {
-            let mut split = Split::default();
+            let mut split = FrameSplit::default();
             let mut req = RunRequest::new(gbcli_core::Budget::frames(1));
             req.stop_at_frame = true;
             req.sink = Some(&mut split);
             let stop = self.core_mut().run(&mut req)?;
-            let mut frame = split.frame;
-            frame.lag = frame.idle_t == 0;
-            out.push(frame);
+            out.push(split.cut());
             if matches!(stop.reason, StopReason::Locked { .. } | StopReason::Stopped) {
                 break;
             }

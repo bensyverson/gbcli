@@ -5,9 +5,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::audio::AudioArgs;
 use crate::checkpoint::WatchAccess;
+use crate::equiv::EquivArgs;
 use crate::keys::KeyEvent;
 use crate::listing::SymArgs;
 use crate::parse::WireRequest;
+use crate::profile::{MeasureArgs, ProfileArgs, RunMeasure};
 use crate::rev::Rev;
 use crate::shot::{FilmstripArgs, ShotArgs, ShotReadArgs};
 use crate::stop::{StepKind, TimeBase};
@@ -61,6 +63,8 @@ pub enum Op {
     View(ViewArgs),
     Sym(SymArgs),
     Checkpoints,
+    Measure(MeasureArgs),
+    Equiv(Box<EquivArgs>),
 }
 
 impl Op {
@@ -87,6 +91,8 @@ impl Op {
             Op::View(_) => "view",
             Op::Sym(_) => "sym",
             Op::Checkpoints => "checkpoints",
+            Op::Measure(_) => "measure",
+            Op::Equiv(_) => "equiv",
         }
     }
 
@@ -104,7 +110,7 @@ impl Op {
         self.mutates_head()
             || matches!(
                 self,
-                Op::Checkpoint(_) | Op::Break(_) | Op::Watch(_) | Op::Delete(_)
+                Op::Checkpoint(_) | Op::Break(_) | Op::Watch(_) | Op::Delete(_) | Op::Equiv(_)
             )
     }
 }
@@ -155,6 +161,15 @@ pub struct RunArgs {
     /// Frames collected during the run, written after the shot (design §9).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub filmstrip: Option<Box<FilmstripArgs>>,
+    /// One measurement on a copy of the stop (design §11 step 5).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub measure: Option<Box<RunMeasure>>,
+    /// Cycles per routine over the run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<ProfileArgs>,
+    /// Active and idle cycles of each frame the run completed, and lag frames.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub frame_budget: bool,
     /// Save the stop state under this name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checkpoint: Option<String>,

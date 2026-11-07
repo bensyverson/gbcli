@@ -1,8 +1,8 @@
 //! Every error code a CLI invocation can reach, through the binary: its exit
 //! code, its name on stderr and the remedy it teaches (cli-design ▸ Errors
-//! that teach). `predicate_false`, `toolchain_missing` and `internal` have no
-//! verb that can produce them yet: no assertion verb, no build verb, and no
-//! way to make the handler panic on purpose.
+//! that teach). `toolchain_missing` and `internal` have no verb that can
+//! produce them yet: no build verb, and no way to make the handler panic on
+//! purpose.
 
 use std::fs;
 
@@ -18,8 +18,11 @@ fn usage_errors_name_near_misses_and_the_next_command() {
     let p = Project::new("usage");
     p.gbcli(&["rn"])
         .fails(2, "bad_request", "did you mean `run`?");
-    p.gbcli(&["run", "--frame", "2"])
-        .fails(2, "bad_request", "did you mean `--frames`?");
+    p.gbcli(&["run", "--frame", "2"]).fails(
+        2,
+        "bad_request",
+        "did you mean `--frames` or `--frame-budget`?",
+    );
     p.gbcli(&["run", "--frames"])
         .fails(2, "bad_request", "`--frames N`");
     p.gbcli(&["run", "--frames", "ten"])
@@ -129,6 +132,30 @@ fn budget_exhausted_prints_the_stop_it_reached() {
         run.stdout
     );
     assert!(run.stdout.ends_with("rev s1\n"), "{}", run.stdout);
+}
+
+#[test]
+fn predicate_false_prints_the_measurement_it_asserted_on() {
+    let p = Project::with_session("predicate");
+    let run = p.gbcli(&[
+        "measure",
+        "Main.loop..Main.loop",
+        "--max",
+        "100",
+        "--session",
+        "demo",
+    ]);
+    run.fails(1, "predicate_false", "raise --max");
+    assert!(
+        run.stdout.starts_with("measure from=Main.loop "),
+        "{}",
+        run.stdout
+    );
+    assert!(
+        run.stdout.contains("\nt min=112 max=112 "),
+        "{}",
+        run.stdout
+    );
 }
 
 #[test]

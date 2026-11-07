@@ -7,7 +7,8 @@ its machine, saves it and prints rows; --json prints the response line.
 
   act        run, step, checkpoint, restore, undo, write, poke, patch
              advance or change the machine; the stop becomes the head
-  read       show, read, shot, view, sym, checkpoints, events, gaps, sessions
+  read       show, read, measure, equiv, shot, view, sym, checkpoints, events,
+             gaps, sessions
              look without changing the head
   configure  sessions prune, sessions rm, break, watch, delete
              change the session's settings
@@ -30,13 +31,14 @@ exit 0
 gbcli run — advance the machine to a stop, then read and save
 
 USAGE
-  gbcli run [ROM] [--frames N | --until EXPR | --to ADDR] [--keys TOKENS] [--read EXPR]… [--shot PATH] [--audio-log] [--wav PATH] [flags]
+  gbcli run [ROM] [--frames N | --until EXPR | --to ADDR] [--keys TOKENS] [--read EXPR]… [--shot PATH] [--audio-log] [--wav PATH] [--measure FROM..TO] [--profile] [flags]
 
 The experiment verb. In this order, whatever the order of the flags: start
 from --at, the head, or the boot handoff; apply --patch, --poke and --write in
 the order given; schedule --keys; run until --until holds, --to is reached, a
-breakpoint or watch fires, or the budget ends; evaluate --read; save --shot;
-save the audio (--audio-log, --wav, --piano, --spectrogram); save
+breakpoint or watch fires, or the budget ends (--profile and --frame-budget
+collect during the run); --measure on a copy of the stop; evaluate --read;
+save --shot; save the audio (--audio-log, --wav, --piano, --spectrogram); save
 --checkpoint. The stop becomes the session's new head. A ROM argument is the
 same as --rom.
 
@@ -66,6 +68,10 @@ FLAGS
   --channels mixed|each   with --wav: each also saves every channel alone beside it (PATH's stem with -square1, -square2, -wave, -noise) by replaying the run muted
   --piano PATH            save a piano roll PNG of the notes the run's sound writes played
   --spectrogram PATH      save a spectrogram PNG of what the run played
+  --measure FROM..TO      after the stop, on a copy of it: cycles from the first arrival at FROM to the next arrival at TO (one iteration; `gbcli measure` for more)
+  --profile               cycles per routine over the run, by .sym, most exclusive cycles first
+  --top N                 with --profile: only the N routines with the most exclusive cycles
+  --frame-budget          each frame's active and idle (HALT) T-cycles over the run, and the lag frames: frames in which the CPU never halted
   --keys TOKENS           press and release buttons: 'A@0 -A@2 START@10' (frame offsets)
   --keys-file FILE        key tokens from a file, after --keys; # starts a comment
 

@@ -6,6 +6,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::keys::KeyEvent;
+use crate::response::ResultBody;
 use crate::stop::StopRecord;
 
 /// Every way a request can fail. The wire spelling is snake_case.
@@ -177,6 +178,10 @@ pub struct ErrorBody {
     /// them in `ResultBody::keys_unapplied`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub keys_unapplied: Option<Vec<KeyEvent>>,
+    /// An assertion's answer when it is no (`measure --max`, `equiv`): the
+    /// result it asserted on, as the op returns it on success.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result: Option<Box<ResultBody>>,
 }
 
 impl ErrorBody {
@@ -188,6 +193,7 @@ impl ErrorBody {
             remedy: remedy.into(),
             stop: None,
             keys_unapplied: None,
+            result: None,
         }
     }
 

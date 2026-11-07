@@ -4,11 +4,13 @@
 
 mod audio;
 mod checkpoint;
+mod equiv;
 mod error;
 mod hex;
 mod keys;
 mod listing;
 mod parse;
+mod profile;
 mod request;
 mod response;
 mod rev;
@@ -25,10 +27,18 @@ pub use checkpoint::{
     RenderConfig, Sha256, SymbolRole, TimeMark, WatchAccess, WatchSpec, model_from_name,
     model_name,
 };
+pub use equiv::{
+    ApuWriteMade, AudioCompareName, DifferenceMade, DivergenceMade, EquivArgs, EquivMade,
+    EquivSide, RamRangeArg, SideMade,
+};
 pub use error::{ErrorBody, ErrorCode};
 pub use keys::{Button, KEY_GRAMMAR, KeyAction, KeyError, KeyEvent, parse_keys};
 pub use listing::{CheckpointRow, SymArgs, SymbolArea, SymbolRow};
 pub use parse::{RequestError, parse_request};
+pub use profile::{
+    CpuSpeedName, CycleStats, FrameBudgetMade, FrameBudgetRow, MeasureArgs, MeasureMade,
+    PercentStats, ProfileArgs, ProfileMade, Real, RoutineRow, RunMeasure,
+};
 pub use request::{
     BreakArgs, CheckpointArgs, DeleteArgs, EventsArgs, Op, PruneArgs, ReadArgs, Request,
     RestoreArgs, RmArgs, RunArgs, Start, StepArgs, WatchArgs, WriteArg, WriteArgs, WriteKind,

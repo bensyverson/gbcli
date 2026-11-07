@@ -71,6 +71,8 @@ pub enum Verb {
     View,
     Sym,
     Checkpoints,
+    Measure,
+    Equiv,
     Events,
     Gaps,
     Sessions,

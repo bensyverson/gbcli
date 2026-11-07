@@ -4,11 +4,14 @@
 
 mod audio;
 mod budget;
+mod equiv;
 mod filmstrip;
+mod measure;
+mod probes;
 
 use gbcli_bundle::{SessionStore, Start, validate_checkpoint_name};
 use gbcli_core::Budget;
-use gbcli_engine::{DebugError, FrameSink, Machine, Outcome, RunOptions, unapplied_keys};
+use gbcli_engine::{DebugError, EventTap, FrameSink, Machine, Outcome, RunOptions, unapplied_keys};
 use gbcli_protocol::{
     ErrorBody, ErrorCode, KeyEvent, Location, ResultBody, RunArgs, SessionFile, StepArgs, StepKind,
     StopReason, StopRecord, WavChannels,
@@ -20,6 +23,9 @@ use super::writes::{apply_writes, parse_location};
 use super::{Failure, Handler, HeadChange, Need, save_head, shot};
 use crate::convert;
 use budget::{DEFAULT_FRAMES, budget_of, unanswered, wall_guard_error};
+#[cfg(test)]
+pub(super) use equiv::equiv_failure;
+use probes::Probes;
 
 /// Instructions a scanline step may take: far more than one line holds.
 const SCANLINE_STEP_INSTRUCTIONS: u64 = 100_000;
@@ -36,6 +42,7 @@ enum Target {
 struct Plan {
     reads: Vec<CompiledRead>,
     target: Target,
+    probes: Probes,
 }
 
 impl Handler {
@@ -132,9 +139,13 @@ impl Handler {
         let (budget, limits, defaulted) = budget_of(args);
         let interrupt = self.interrupt.clone();
         let collector = args.filmstrip.as_deref().map(filmstrip::Collector::new);
+        let sinks = plan.probes.sinks.as_ref();
         let sink = |m: &Machine, done: u64| {
             if let Some(c) = &collector {
                 c.on_frame(m, done);
+            }
+            if let Some(s) = sinks {
+                s.borrow_mut().cut();
             }
         };
         let mut opts = RunOptions::new(budget);
@@ -144,8 +155,11 @@ impl Handler {
         opts.keys = &args.keys;
         // The audio replays run the same request without collecting frames.
         let replay_opts = opts.clone();
-        if collector.is_some() {
+        if collector.is_some() || plan.probes.wants_frames() {
             opts.on_frame = Some(FrameSink(&sink));
+        }
+        if let Some(s) = sinks {
+            opts.on_event = Some(EventTap(s));
         }
         let outcome = run_target(&mut machine, &plan.target, &opts);
         // Whatever the outcome, so the machine kept warm stops collecting.
@@ -179,10 +193,16 @@ impl Handler {
         // After the reads (design §11 step 6); capturing only reads the core.
         let shot = args.shot.as_ref().map(|s| shot::take(&machine, s, &since));
         let answered = self.answered(args, defaulted, guarded, &stop);
+        // Step 5, on a copy of the stop; and what the run's sinks collected.
+        let measured = plan.probes.measure(&machine);
+        let (profile, frame_budget) = plan.probes.finish(&machine);
         // The files after the shot are written only when everything before
         // them succeeded: the filmstrip, then the audio, whose per-channel
         // replays run the request four more times.
-        let so_far = reads.is_ok() && shot.as_ref().is_none_or(Result::is_ok) && answered.is_ok();
+        let so_far = reads.is_ok()
+            && shot.as_ref().is_none_or(Result::is_ok)
+            && answered.is_ok()
+            && measured.as_ref().is_none_or(Result::is_ok);
         let strip = match &collector {
             Some(c) if so_far => Some(c.write(&machine, &since, warnings)),
             _ => None,
@@ -190,11 +210,8 @@ impl Handler {
         let so_far = so_far && strip.as_ref().is_none_or(Result::is_ok);
         let sound = match (sound, collected) {
             (Some(a), Some(collected)) if so_far => Some(collected.and_then(|c| {
-                let drive = |m: &mut Machine| {
-                    run_target(m, &plan.target, &replay_opts)
-                        .map(|_| ())
-                        .map_err(|e| Failure::from_debug(&e))
-                };
+                let guard = self.wall_guard;
+                let drive = |m: &mut Machine| replay(m, &plan.target, &replay_opts, guard);
                 audio::deliver(a, c, &machine, &since, || {
                     audio::takes(replay_from.as_ref(), drive)
                 })
@@ -216,6 +233,7 @@ impl Handler {
         let reads = reads.map_err(with_stop)?;
         let shot = shot.transpose().map_err(with_stop)?;
         answered?;
+        let measured = measured.transpose().map_err(with_stop)?;
         let strip = strip.transpose().map_err(with_stop)?;
         let sound = sound.transpose().map_err(with_stop)?;
         let checkpoint = checkpoint.map_err(with_stop)?;
@@ -225,6 +243,9 @@ impl Handler {
             reads: Some(reads),
             shot,
             filmstrip: strip,
+            measure: measured,
+            profile,
+            frame_budget,
             audio: sound,
             keys_unapplied,
             checkpoint,
@@ -362,12 +383,32 @@ fn run_target(
     }
 }
 
+/// One of the per-channel WAVs' replays of the run. They share the request's
+/// interrupt flag, so a replay the wall guard ended is the wall guard's error,
+/// not a replay that diverged from the run.
+fn replay(
+    machine: &mut Machine,
+    target: &Target,
+    opts: &RunOptions<'_>,
+    guard: std::time::Duration,
+) -> Result<(), Failure> {
+    let mut stop = run_target(machine, target, opts)
+        .map_err(|e| Failure::from_debug(&e))?
+        .stop;
+    if stop.reason == StopReason::UserBreak {
+        stop.reason = StopReason::WallGuard;
+        return Err(Failure::new(wall_guard_error(guard, stop)));
+    }
+    Ok(())
+}
+
 /// Compiles the reads and resolves the target on `machine`, before it moves.
 fn plan_of(machine: &Machine, args: &RunArgs) -> Result<Plan, Failure> {
     if let Some(sound) = &args.audio {
         audio::check_machine(machine, sound)?;
     }
     let reads = compile_reads(machine, &args.read)?;
+    let probes = Probes::plan(machine, args)?;
     let target = match (&args.until, &args.to) {
         (Some(text), _) => {
             // Compiled here only to refuse it before any write; the run
@@ -380,7 +421,11 @@ fn plan_of(machine: &Machine, args: &RunArgs) -> Result<Plan, Failure> {
         (None, Some(text)) => Target::To(parse_location(machine, text)?),
         (None, None) => Target::Budget,
     };
-    Ok(Plan { reads, target })
+    Ok(Plan {
+        reads,
+        target,
+        probes,
+    })
 }
 
 /// The key events past the stop, as a warning and for the result: never

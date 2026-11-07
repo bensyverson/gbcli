@@ -229,6 +229,26 @@ pub const RUN: &[FlagSpec] = &[
         "save a spectrogram PNG of what the run played",
     ),
     value(
+        "measure",
+        "FROM..TO",
+        "after the stop, on a copy of it: cycles from the first arrival at FROM to the next \
+         arrival at TO (one iteration; `gbcli measure` for more)",
+    ),
+    switch(
+        "profile",
+        "cycles per routine over the run, by .sym, most exclusive cycles first",
+    ),
+    value(
+        "top",
+        "N",
+        "with --profile: only the N routines with the most exclusive cycles",
+    ),
+    switch(
+        "frame-budget",
+        "each frame's active and idle (HALT) T-cycles over the run, and the lag frames: \
+         frames in which the CPU never halted",
+    ),
+    value(
         "keys",
         "TOKENS",
         "press and release buttons: 'A@0 -A@2 START@10' (frame offsets)",
@@ -241,6 +261,80 @@ pub const RUN: &[FlagSpec] = &[
 ];
 
 pub const SHOT: &[FlagSpec] = &[SINCE];
+
+pub const EQUIV: &[FlagSpec] = &[
+    value(
+        "frames",
+        "N",
+        "how many frames to compare, each ended by a vblank (required)",
+    ),
+    value(
+        "sym-b",
+        "FILE",
+        "side B's .sym (default: ROM_B's sibling .sym, else the session's)",
+    ),
+    repeated(
+        "patch",
+        "TARGET=BYTES",
+        "patch side B's ROM after its start state loads; repeat for more",
+    ),
+    value(
+        "at",
+        "NAME|~N",
+        "start both sides from this checkpoint (the rebuilt-ROM check applies to B)",
+    ),
+    value(
+        "from",
+        "boot|power-on",
+        "start each side at its own boot handoff (default) or at power-on; not with --at",
+    ),
+    repeated(
+        "ram",
+        "ADDR[,LEN]",
+        "compare these bytes after every frame, each side through its own .sym; repeat",
+    ),
+    value(
+        "audio",
+        "writes|timed|off",
+        "compare each frame's sound writes in order (writes, the default), also their \
+         times (timed), or not at all",
+    ),
+    value(
+        "keys",
+        "TOKENS",
+        "the input both sides get: 'A@0 -A@2 START@10' (frame offsets)",
+    ),
+    value(
+        "keys-file",
+        "FILE",
+        "key tokens from a file, after --keys; # starts a comment",
+    ),
+];
+
+pub const MEASURE: &[FlagSpec] = &[
+    value(
+        "at",
+        "NAME|~N",
+        "measure from a named checkpoint or the head N changes back (default: the head)",
+    ),
+    value(
+        "iterations",
+        "N",
+        "how many FROM-to-TO spans to measure (default 1)",
+    ),
+    value(
+        "max",
+        "T",
+        "fail with exit 1 (predicate_false) if any iteration takes more than T T-cycles",
+    ),
+    value(
+        "frames",
+        "N",
+        "frame budget for the whole measurement (default 600)",
+    ),
+    value("instructions", "N", "instruction budget"),
+    value("ticks", "N", "tick budget"),
+];
 
 pub const VIEW: &[FlagSpec] = &[
     value(

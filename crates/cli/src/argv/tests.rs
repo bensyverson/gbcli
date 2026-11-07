@@ -108,7 +108,7 @@ fn an_unknown_flag_names_near_misses_and_the_verbs_help() {
     assert_eq!(u.message, "`gbcli run` has no flag --frame");
     assert_eq!(
         u.remedy,
-        "did you mean `--frames`? `gbcli run --help` lists its flags"
+        "did you mean `--frames` or `--frame-budget`? `gbcli run --help` lists its flags"
     );
     let u = usage(&["show", "-x"]);
     assert_eq!(u.message, "`gbcli show` has no flag -x");

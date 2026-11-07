@@ -18,6 +18,12 @@ run     at? from?: "boot"|"power-on"  since?: "boot"|"power-on"|CHECKPOINT
         writes?: [{kind: "bus"|"poke"|"patch", target: ADDR, bytes: HEX}]
         read?: [EXPR]  checkpoint?: NAME  allow_uninit?: bool
         keys?: ["A@0", "-A@2", …]  shot?: SHOT
+        measure?: {from: ADDR, to: ADDR}  profile?: {top?: N}
+        frame_budget?: bool
+measure from: ADDR  to: ADDR  at?  iterations?: N  max_t?: N
+        frames? instructions? ticks?: N
+equiv   frames: N  b?: {rom?: PATH, sym?: PATH, writes?: [WRITE]}  at?  from?
+        keys?  ram?: [{at: ADDR, len: N}]  audio?: "writes"|"timed"|"off"
 shot    shot: SHOT  since?
         SHOT = {path: PATH, scale?: 1-8, crop?: {x, y, width, height},
                 live?: bool, any_frame?: bool}
@@ -43,8 +49,9 @@ rm      name: NAME  with_checkpoints?: bool
 Response, one line per request:
   {"id", "ok": true, "rev"?: "sN", "result": {…}, "warnings": [TEXT]}
   {"id", "ok": false, "rev"?, "error": {"code", "exit", "message", "remedy",
-   "stop"?}, "warnings"}
-result holds only the fields the op fills: stop, reads, shot, view, symbols,
+   "stop"?, "result"?}, "warnings"}
+result holds only the fields the op fills: stop, reads, shot, measure, profile,
+frame_budget, equiv, view, symbols,
 checkpoints, keys_unapplied, writes, checkpoint, restored, breakpoint, watch,
 deleted, registers, ppu, sessions, events, gaps, pruned, kept, busy, removed.
 `gbcli VERB --json` prints the whole response line, as serve writes it.
@@ -73,6 +80,9 @@ Examples:
   {"id":"21","op":"view","args":{"what":"map","map":"window","png":{"path":"m.png"}}}
   {"id":"22","op":"sym","args":{"pattern":"w*"}}
   {"id":"23","op":"checkpoints"}
+  {"id":"24","op":"measure","args":{"from":"Main.loop","to":"Main.loop","iterations":60,"max_t":40000}}
+  {"id":"25","op":"run","args":{"frames":60,"profile":{"top":10},"frame_budget":true}}
+  {"id":"26","op":"equiv","args":{"b":{"rom":"fast.gb"},"frames":600,"keys":["RIGHT@10"],"ram":[{"at":"wX","len":1}]}}
 "#;
 
 #[cfg(test)]
@@ -94,6 +104,6 @@ mod tests {
         }
         ops.sort();
         ops.dedup();
-        assert_eq!(ops.len(), 20, "one example per op: {ops:?}");
+        assert_eq!(ops.len(), 22, "one example per op: {ops:?}");
     }
 }

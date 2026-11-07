@@ -46,8 +46,15 @@ Undo the last run, step or write
   gbcli undo
 Step through code
   gbcli step, gbcli step over, gbcli step out
-How many cycles does code take?
-  gbcli help optimize
+How many cycles does X take?
+  gbcli measure Work..Work.done --iterations 60 (T, M and share of a frame;
+  --max T makes it an assertion that exits 1); gbcli help optimize for the loop
+Where does my frame time go?
+  gbcli run --frames 60 --profile --top 10 (cycles per routine), and
+  --frame-budget (each frame's busy and HALT time; lag frames never halted)
+Does my optimized build still behave?
+  gbcli equiv fast.gb --frames 600 --keys-file walk.txt --ram wX (exit 1 at the
+  first frame that differs, with both sides saved as equiv-a and equiv-b)
 Did my rebuilt ROM break a saved state?
   gbcli run --at before --frames 1 (refused with what moved, or loaded)
 Who changed the session?

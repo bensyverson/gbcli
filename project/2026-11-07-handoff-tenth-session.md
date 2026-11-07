@@ -42,7 +42,7 @@ Nothing. radJxi (the opcode lookup's second-review fixes) lands in the same comm
 
 ## Needs Ben
 
-1. **The GBC images plan:** [2026-11-07-gbc-images-plan.md](2026-11-07-gbc-images-plan.md). It has 9 questions, each with a recommendation; the research is in [2026-11-07-gbc-images-research.md](2026-11-07-gbc-images-research.md). The leaf k5Afkg stays open (`decision`) until he answers. Then import the plan under `9b5RBA` as Stage 10 and close k5Afkg.
+1. **The GBC images plan** (revise it first: the LoadHigh review, agreed by Ben and LoadHigh's agent, is a note on k5Afkg — indexed art with named palettes, one named-palette file replacing `assets/palette.txt`, protocol types and an `assets` op as the shared seam; then re-ask questions 4–5): [2026-11-07-gbc-images-plan.md](2026-11-07-gbc-images-plan.md). It has 9 questions, each with a recommendation; the research is in [2026-11-07-gbc-images-research.md](2026-11-07-gbc-images-research.md). The leaf k5Afkg stays open (`decision`) until he answers. Then import the plan under `9b5RBA` as Stage 10 and close k5Afkg.
 2. **How a session chooses a flash board:** [2026-11-07-flash-model.md](2026-11-07-flash-model.md). The agent recommends `--flash PROFILE` at session creation, like `--model`: stored in the bundle meta and an optional checkpoint-header field, checked on restore, and kept across `power-cycle`. Two smaller questions go with it: whether custom board settings are allowed on the CLI, and whether `sav` carries the flash save area.
 3. **The two GB Studio flash tests** (`crates/engine/tests/flash_save.rs`) take about 10–12 s each: keep them warm, or move them to the pre-release suite? Fresh clones fail them until the ROM exists, the same way the corpus tests fail.
 

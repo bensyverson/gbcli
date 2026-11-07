@@ -2,6 +2,7 @@
 //! save the head atomically, log. The handler keeps the machine warm between
 //! requests and reloads it when another writer moved the session's head.
 
+mod build;
 mod bundle_ops;
 mod config;
 mod failure;
@@ -25,6 +26,7 @@ use gbcli_protocol::{ErrorBody, ErrorCode, Op, Request, Response, ResultBody, Re
 
 use crate::convert;
 use crate::watchdog::{WALL_GUARD, Watchdog};
+pub use build::{Host, Tooling};
 use failure::Failure;
 use head::{HeadChange, save_head};
 
@@ -48,6 +50,8 @@ pub struct Handler {
     /// gap ledger whether the request succeeds or fails (a run's raster
     /// timeline names them without failing).
     gaps_found: Vec<gbcli_core::Gap>,
+    /// Where `build`, `doctor` and `new` resolve paths and find RGBDS.
+    host: Host,
 }
 
 /// The machine left by the last request, and which head it is: a session
@@ -107,7 +111,14 @@ impl Handler {
             wall_guard: WALL_GUARD,
             interrupt: Arc::new(AtomicBool::new(false)),
             gaps_found: Vec::new(),
+            host: Host::from_process(),
         }
+    }
+
+    /// Sets where `build`, `doctor` and `new` resolve paths and find RGBDS;
+    /// the default is this process's working directory and `PATH`.
+    pub fn set_host(&mut self, host: Host) {
+        self.host = host;
     }
 
     /// Sets the wall-clock guard (design §3) for the requests that follow.
@@ -125,6 +136,9 @@ impl Handler {
         // Armed for every request; only emulation polls the flag.
         let armed = self.watchdog.arm(self.wall_guard);
         self.interrupt = armed.flag().clone();
+        if let Some(response) = self.toolchain_op(request) {
+            return response;
+        }
         let id = request.id.clone();
         match &request.op {
             Op::Sessions => self.list_sessions(id),
@@ -224,13 +238,17 @@ impl Handler {
             Op::Checkpoints => self.checkpoints(store, meta),
             Op::Measure(args) => self.measure(store, meta, args, warnings),
             Op::Equiv(args) => self.equiv(store, meta, args, warnings),
-            Op::Sessions | Op::Gaps | Op::Prune(_) | Op::Rm(_) => {
-                Err(Failure::new(ErrorBody::new(
-                    ErrorCode::BadRequest,
-                    "that op doesn't name a session",
-                    ErrorCode::BadRequest.default_remedy(),
-                )))
-            }
+            Op::Sessions
+            | Op::Gaps
+            | Op::Prune(_)
+            | Op::Rm(_)
+            | Op::Build(_)
+            | Op::Doctor
+            | Op::New(_) => Err(Failure::new(ErrorBody::new(
+                ErrorCode::BadRequest,
+                "that op doesn't name a session",
+                ErrorCode::BadRequest.default_remedy(),
+            ))),
         }
     }
 

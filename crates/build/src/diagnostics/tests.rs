@@ -1,6 +1,6 @@
 //! The texts are RGBDS 1.0.4's own output, captured 2026-11-07.
 
-use gbcli_protocol::{Diagnostic, Severity, Tool};
+use gbcli_protocol::{Diagnostic, Severity, SourceLine, Tool};
 
 use super::parse;
 
@@ -12,11 +12,9 @@ fn diag(
     message: &str,
 ) -> Diagnostic {
     Diagnostic {
-        tool,
-        severity,
         file: file.map(str::to_string),
         line,
-        message: message.to_string(),
+        ..Diagnostic::new(tool, severity, message)
     }
 }
 
@@ -49,15 +47,73 @@ Assembly aborted with 2 errors
                 Some(5),
                 "Expression must be 8-bit; use `LOW()` to force 8-bit [-Wtruncation]"
             ),
-            diag(
-                Tool::Rgbasm,
-                Severity::Error,
-                Some("src/bad.asm"),
-                Some(7),
-                "syntax error, unexpected symbol"
-            ),
+            Diagnostic {
+                within: Some("m".into()),
+                chain: vec![at("src/bad.asm", 9, None)],
+                ..diag(
+                    Tool::Rgbasm,
+                    Severity::Error,
+                    Some("src/bad.asm"),
+                    Some(7),
+                    "syntax error, unexpected symbol"
+                )
+            },
         ]
     );
+}
+
+fn at(file: &str, line: u32, within: Option<&str>) -> SourceLine {
+    SourceLine {
+        file: file.into(),
+        line,
+        within: within.map(str::to_string),
+    }
+}
+
+#[test]
+fn a_macro_call_an_include_and_a_rept_are_the_chain_innermost_first() {
+    let text = "\
+error: Undefined macro `Bad2`
+    at inc/m.inc(4)
+    <- src/a.asm(1)
+error: Undefined symbol `Elsewhere`
+    at inc/m.inc::Bad(2)
+    <- src/a.asm::REPT~2(8)
+    <- src/a.asm(7)
+Linking failed with 2 errors
+";
+    let found = parse(Tool::Rgblink, text);
+    assert_eq!(found.len(), 2);
+    assert_eq!(found[0].file.as_deref(), Some("inc/m.inc"));
+    assert_eq!(found[0].line, Some(4));
+    assert_eq!(found[0].within, None);
+    assert_eq!(found[0].chain, [at("src/a.asm", 1, None)]);
+    assert_eq!(found[1].file.as_deref(), Some("inc/m.inc"));
+    assert_eq!(found[1].line, Some(2));
+    assert_eq!(found[1].within.as_deref(), Some("Bad"));
+    assert_eq!(
+        found[1].chain,
+        [at("src/a.asm", 8, Some("REPT~2")), at("src/a.asm", 7, None)]
+    );
+    assert!(found.iter().all(|d| d.also.is_empty()));
+}
+
+#[test]
+fn the_linkers_and_also_is_a_second_place() {
+    let text = "\
+FATAL: `Dup` is defined as a label, but also as another label
+    at src/b.asm(2)
+    and also:
+    at src/a.asm(7)
+Linking aborted with 1 error
+";
+    let found = parse(Tool::Rgblink, text);
+    assert_eq!(found.len(), 1);
+    let d = &found[0];
+    assert_eq!(d.file.as_deref(), Some("src/b.asm"));
+    assert_eq!(d.line, Some(2));
+    assert!(d.chain.is_empty(), "{d:?}");
+    assert_eq!(d.also, [vec![at("src/a.asm", 7, None)]]);
 }
 
 #[test]

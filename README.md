@@ -8,7 +8,7 @@ gbcli runs a Game Boy emulator in the background with no window, so an AI agent 
 
 ## Install
 
-Build from source with `cargo build --release`; the binary is `target/release/gbcli`. Building gbcli itself needs no RGBDS, SDL or make; SameBoy is vendored and compiled by Cargo. To fetch the test ROMs, which aren't committed, run `python3 -I scripts/corpus/fetch.py` (about 190 MB). gbcli will be a single Rust binary for macOS and Linux. Building games (and running `cargo test`) needs [RGBDS](https://rgbds.gbdev.io/) 1.0.4 on `PATH`: `brew install rgbds`, then `gbcli doctor` checks it.
+Build from source with `cargo build --release`; the binary is `target/release/gbcli`. Building gbcli itself needs no RGBDS, SDL or make; SameBoy is vendored and compiled by Cargo. To fetch the test ROMs, which aren't committed, run `python3 -I scripts/corpus/fetch.py` (about 190 MB). gbcli will be a single Rust binary for macOS and Linux. Building games (and running `cargo test`) needs [RGBDS](https://rgbds.gbdev.io/) 1.0.4 on `PATH`: the [1.0.4 release](https://github.com/gbdev/rgbds/releases/tag/v1.0.4), or `brew install rgbds` while Homebrew's current release is 1.0.4; `gbcli doctor` checks it.
 
 ## Quick start
 

@@ -11,5 +11,5 @@ mod watchdog;
 #[cfg(test)]
 mod fixture;
 
-pub use handle::Handler;
+pub use handle::{Handler, Host, Tooling};
 pub use serve::{Answer, answer, serve};

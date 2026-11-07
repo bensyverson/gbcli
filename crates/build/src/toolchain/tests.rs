@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use gbcli_protocol::{ErrorCode, Tool};
 
@@ -87,16 +87,19 @@ fn the_pin_is_exact_another_patch_warns_and_anything_else_is_refused() {
 fn the_remedy_names_the_install_command_and_the_pinned_release() {
     let remedy = install_remedy();
     assert!(remedy.contains("`brew install rgbds`"), "{remedy}");
-    assert!(
-        remedy.contains("https://github.com/gbdev/rgbds/releases/tag/v1.0.4"),
-        "{remedy}"
-    );
+    let release = remedy
+        .find("https://github.com/gbdev/rgbds/releases/tag/v1.0.4")
+        .expect("names the pinned release");
+    // The pinned release comes first: Homebrew installs its current release,
+    // which may not be the pin, and the remedy says so.
+    assert!(release < remedy.find("brew install").unwrap(), "{remedy}");
+    assert!(remedy.contains("Homebrew's current release"), "{remedy}");
 }
 
 #[test]
 fn no_tool_on_path_is_toolchain_missing_naming_all_three() {
     let empty = FakePath::new("empty", &[]);
-    let err = Toolchain::discover(Some(&empty.var())).unwrap_err();
+    let err = Toolchain::discover(Some(&empty.var()), Path::new("/")).unwrap_err();
     assert_eq!(err.problems.len(), 3);
     let body = err.body();
     assert_eq!(body.code, ErrorCode::ToolchainMissing);
@@ -109,13 +112,16 @@ fn no_tool_on_path_is_toolchain_missing_naming_all_three() {
         "{}",
         body.remedy
     );
-    assert!(Toolchain::discover(None).is_err(), "no PATH at all");
+    assert!(
+        Toolchain::discover(None, Path::new("/")).is_err(),
+        "no PATH at all"
+    );
 }
 
 #[test]
 fn the_pinned_version_is_found_with_no_warning() {
     let path = fake("pinned", &all("v1.0.4"));
-    let chain = Toolchain::discover(Some(&path.var())).unwrap();
+    let chain = Toolchain::discover(Some(&path.var()), Path::new("/")).unwrap();
     assert_eq!(chain.version(), &RGBDS_PIN);
     assert_eq!(chain.path(Tool::Rgblink), path.0.join("rgblink"));
     assert!(chain.warnings().is_empty(), "{:?}", chain.warnings());
@@ -126,7 +132,7 @@ fn another_patch_is_accepted_with_a_warning_naming_the_pin() {
     let mut lines = all("v1.0.4");
     lines[1].1 = "rgblink v1.0.2".into();
     let path = fake("patch", &lines);
-    let chain = Toolchain::discover(Some(&path.var())).unwrap();
+    let chain = Toolchain::discover(Some(&path.var()), Path::new("/")).unwrap();
     let warnings = chain.warnings();
     assert_eq!(warnings.len(), 1, "{warnings:?}");
     assert!(warnings[0].contains("rgblink"), "{warnings:?}");
@@ -137,7 +143,7 @@ fn another_patch_is_accepted_with_a_warning_naming_the_pin() {
 #[test]
 fn another_minor_version_is_refused_naming_it_and_the_pin() {
     let path = fake("old", &all("v0.9.1"));
-    let err = Toolchain::discover(Some(&path.var())).unwrap_err();
+    let err = Toolchain::discover(Some(&path.var()), Path::new("/")).unwrap_err();
     let body = err.body();
     assert_eq!(body.code, ErrorCode::ToolchainMissing);
     assert!(body.message.contains("0.9.1"), "{}", body.message);
@@ -149,7 +155,7 @@ fn a_tool_that_prints_no_version_is_a_problem_quoting_what_it_printed() {
     let mut lines = all("v1.0.4");
     lines[2].1 = "hello".into();
     let path = fake("garbled", &lines);
-    let err = Toolchain::discover(Some(&path.var())).unwrap_err();
+    let err = Toolchain::discover(Some(&path.var()), Path::new("/")).unwrap_err();
     assert_eq!(err.problems.len(), 1);
     assert!(matches!(
         err.problems[0],
@@ -166,7 +172,7 @@ fn probe_takes_the_first_match_on_path() {
     let first = fake("first", &all("v1.0.4"));
     let second = fake("second", &all("v0.9.1"));
     let joined = std::env::join_paths([first.0.clone(), second.0.clone()]).unwrap();
-    let found = probe(Tool::Rgbasm, Some(&joined)).unwrap();
+    let found = probe(Tool::Rgbasm, Some(&joined), Path::new("/")).unwrap();
     assert_eq!(found.path, first.0.join("rgbasm"));
     assert_eq!(found.warning(), None);
 }

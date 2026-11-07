@@ -16,7 +16,7 @@ mod toolchain;
 
 pub use diagnostics::parse as parse_diagnostics;
 pub use doctor::{BOOT_ROM_SIZES, DoctorInput, doctor};
-pub use project::{BuildError, BuildOptions, build};
+pub use project::{BuildError, BuildOptions, TOOL_TIMEOUT, build};
 pub use scaffold::{HARDWARE_INC, NewError, new_project};
 pub use toolchain::{
     INSTALL_COMMAND, PinMatch, RGBDS_PIN, ToolFound, ToolProblem, Toolchain, ToolchainError,

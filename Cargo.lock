@@ -109,7 +109,6 @@ dependencies = [
 name = "gbcli-cli"
 version = "0.1.0"
 dependencies = [
- "gbcli-build",
  "gbcli-bundle",
  "gbcli-core",
  "gbcli-protocol",
@@ -168,12 +167,14 @@ name = "gbcli-server"
 version = "0.1.0"
 dependencies = [
  "gbcli-audio",
+ "gbcli-build",
  "gbcli-bundle",
  "gbcli-core",
  "gbcli-engine",
  "gbcli-protocol",
  "gbcli-view",
  "png",
+ "sameboy-sys",
  "serde",
  "serde_json",
 ]

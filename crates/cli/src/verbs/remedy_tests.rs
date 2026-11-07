@@ -21,6 +21,11 @@ const TEMPLATES: &str = "build/templates";
 /// Flags every verb takes, or that come before a verb.
 const ALWAYS: &[&str] = &["help", "version"];
 
+/// Another program's flags that a file passes to it, which no message
+/// names: (file, flag). RGBDS's `--color never` keeps its diagnostics
+/// parseable.
+const PASSED_ON: &[(&str, &str)] = &[("build/src/project.rs", "color")];
+
 fn sources(dir: &Path, out: &mut Vec<PathBuf>) {
     for entry in fs::read_dir(dir).unwrap() {
         let path = entry.unwrap().path();
@@ -129,7 +134,8 @@ fn every_command_and_flag_a_message_names_exists() {
             }
         }
         for flag in flags(&text) {
-            if !known(&flag) {
+            let passed_on = PASSED_ON.contains(&(at.to_string().as_str(), flag.as_str()));
+            if !known(&flag) && !passed_on {
                 wrong.push(format!("{at}: --{flag} is no verb's flag"));
             }
         }

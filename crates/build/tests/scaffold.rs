@@ -98,3 +98,54 @@ fn new_refuses_a_name_that_cant_name_a_rom_and_a_session() {
     assert!(body.message.contains("my game"), "{}", body.message);
     assert!(!temp.path("my game").exists());
 }
+
+#[test]
+fn new_refuses_a_name_a_session_cant_take_and_offers_one_it_can() {
+    let temp = Temp::new("new-session-name");
+    let long = "a".repeat(41);
+    for (name, offered) in [
+        ("my-game_2", "my-game-2".to_string()),
+        ("my.game", "my-game".to_string()),
+        ("MyGame", "mygame".to_string()),
+        (long.as_str(), "a".repeat(40)),
+    ] {
+        let err = new_project(&temp.path(name), &temp.0).unwrap_err();
+        let body = err.body();
+        assert_eq!(body.code, ErrorCode::BadRequest, "{name}");
+        assert!(body.message.contains(name), "{}", body.message);
+        assert!(
+            body.message.contains("[a-z0-9-]"),
+            "the message states the session rule: {}",
+            body.message
+        );
+        assert!(
+            body.remedy.contains(&format!("`gbcli new {offered}`")),
+            "{name}: {}",
+            body.remedy
+        );
+        assert!(!temp.path(name).exists(), "{name}");
+    }
+    // The offer keeps the directory's parent.
+    let body = new_project(&temp.path("games/My_Game"), &temp.0)
+        .unwrap_err()
+        .body();
+    assert!(
+        body.remedy.contains("`gbcli new games/my-game`"),
+        "{}",
+        body.remedy
+    );
+}
+
+#[test]
+fn every_name_new_accepts_is_a_session_name() {
+    let temp = Temp::new("new-accepts");
+    for name in ["game", "my-game-2", "a1"] {
+        let made = new_project(&temp.path(name), &temp.0).unwrap();
+        assert!(gbcli_protocol::is_session_name(&made.name), "{name}");
+        assert!(
+            made.next[1].contains(&format!("--session {name} ")),
+            "{:?}",
+            made.next
+        );
+    }
+}

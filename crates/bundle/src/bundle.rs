@@ -231,12 +231,7 @@ pub fn now_secs() -> u64 {
 
 /// A session name: `[a-z0-9-]{1,40}`, not starting with `-`, which a CLI would read as a flag.
 pub fn validate_name(name: &str) -> Result<(), StoreError> {
-    let ok = (1..=40).contains(&name.len())
-        && !name.starts_with('-')
-        && name
-            .chars()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
-    if ok {
+    if gbcli_protocol::is_session_name(name) {
         Ok(())
     } else {
         Err(StoreError::BadSessionName {

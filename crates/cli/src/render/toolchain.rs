@@ -1,9 +1,17 @@
 //! Rows for the RGBDS loop: `build`'s diagnostics and outputs, `doctor`'s
 //! checks and `new`'s files.
 
-use gbcli_protocol::{ResultBody, Severity};
+use gbcli_protocol::{ResultBody, Severity, SourceLine};
 
 use super::Row;
+
+fn source_line(kind: &str, at: &SourceLine) -> String {
+    Row::new(kind)
+        .field("file", &at.file)
+        .field("line", at.line)
+        .opt("within", at.within.as_deref())
+        .line()
+}
 
 pub fn rows(r: &ResultBody) -> String {
     let mut out = String::new();
@@ -15,8 +23,19 @@ pub fn rows(r: &ResultBody) -> String {
                 .field("tool", d.tool.name())
                 .opt("file", d.file.as_deref())
                 .opt("line", d.line)
+                .opt("within", d.within.as_deref())
                 .field("message", &d.message)
                 .line();
+            // How the line was reached, then each other place the message
+            // names with how that was reached, indented under the message.
+            for at in &d.chain {
+                out += &source_line("  from", at);
+            }
+            for place in &d.also {
+                for (i, at) in place.iter().enumerate() {
+                    out += &source_line(if i == 0 { "  also" } else { "    from" }, at);
+                }
+            }
         }
         for o in &b.outputs {
             let json = serde_json::to_value(o).expect("serializes");

@@ -6,7 +6,8 @@ use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use gbcli_build::{Toolchain, install_remedy};
+use gbcli_build::{BuildError, BuildOptions, Toolchain, install_remedy, new_project};
+use gbcli_protocol::{BuildMade, Tool};
 
 /// A directory removed on drop.
 pub struct Temp(pub PathBuf);
@@ -36,7 +37,7 @@ impl Drop for Temp {
 /// install command: the build tests never skip silently.
 pub fn rgbds() -> Toolchain {
     let path = std::env::var_os("PATH");
-    Toolchain::discover(path.as_deref()).unwrap_or_else(|e| {
+    Toolchain::discover(path.as_deref(), &std::env::current_dir().unwrap()).unwrap_or_else(|e| {
         panic!(
             "these tests need the pinned RGBDS on PATH: {}\n{}",
             e.body().message,
@@ -62,6 +63,28 @@ pub fn fake_tools(temp: &Temp, scripts: &[(&str, &str)]) -> OsString {
         set_mode(&path, 0o755).unwrap();
     }
     dir.into_os_string()
+}
+
+/// The body of a fake tool that runs the real `tool` with `prefix` (an
+/// environment assignment, or nothing) in front of it.
+pub fn real(tool: Tool, prefix: &str) -> String {
+    let path = rgbds().path(tool).display().to_string();
+    format!("{prefix} exec '{path}' \"$@\"")
+}
+
+/// A fresh starter project at `<temp>/demo`, printed relative to `<temp>`.
+pub fn starter(name: &str) -> (Temp, BuildOptions) {
+    let temp = Temp::new(name);
+    new_project(&temp.path("demo"), &temp.0).unwrap();
+    let options = BuildOptions::new(temp.path("demo"), temp.0.clone());
+    (temp, options)
+}
+
+pub fn failed(result: Result<BuildMade, BuildError>) -> BuildMade {
+    match result {
+        Err(BuildError::Failed { made, .. }) => *made,
+        other => panic!("expected a failed build, got {other:?}"),
+    }
 }
 
 #[cfg(unix)]

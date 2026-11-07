@@ -5,6 +5,38 @@
 
 use serde::{Deserialize, Serialize};
 
+/// `op: "build"`: a project built by convention (design §12). Paths are
+/// relative to the server's working directory; `src`, `include` and `out`
+/// to the project.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BuildArgs {
+    /// The project directory; default the server's working directory.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dir: Option<String>,
+    /// Source directories; default `src`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub src: Vec<String>,
+    /// Include directories; default `include`, when it exists.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub include: Vec<String>,
+    /// The ROM; default `build/<project directory name>.gb`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub out: Option<String>,
+    /// After a good build, restore this checkpoint into the request's
+    /// session, whose ROM must be the one just built.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restore: Option<String>,
+}
+
+/// `op: "new"`: a starter project in `dir`, relative to the server's
+/// working directory.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NewArgs {
+    pub dir: String,
+}
+
 /// One RGBDS program.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -45,7 +77,47 @@ pub struct Diagnostic {
     pub file: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub line: Option<u32>,
+    /// The macro or `REPT` iteration `line` is in (`Bad`, `REPT~2`), when
+    /// it is in one: `line` is then a line of its body.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub within: Option<String>,
     pub message: String,
+    /// How `file:line` was reached, innermost first: the line that called
+    /// the macro, ran the `REPT` or included the file, then what reached
+    /// that line, out to the source that was assembled.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub chain: Vec<SourceLine>,
+    /// The other places the message names (rgblink's "and also", as for a
+    /// symbol defined twice), each with the chain that reached it,
+    /// innermost first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub also: Vec<Vec<SourceLine>>,
+}
+
+impl Diagnostic {
+    /// A message with no location.
+    pub fn new(tool: Tool, severity: Severity, message: impl Into<String>) -> Diagnostic {
+        Diagnostic {
+            tool,
+            severity,
+            file: None,
+            line: None,
+            within: None,
+            message: message.into(),
+            chain: Vec::new(),
+            also: Vec::new(),
+        }
+    }
+}
+
+/// A line of a source file, inside a macro or `REPT` when `within` names it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceLine {
+    /// Relative to the working directory when inside it.
+    pub file: String,
+    pub line: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub within: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -131,11 +203,8 @@ mod tests {
     #[test]
     fn a_diagnostic_spells_its_enums_lowercase_and_drops_what_it_lacks() {
         let d = Diagnostic {
-            tool: Tool::Rgbasm,
-            severity: Severity::Error,
             file: Some("src/main.asm".into()),
-            line: None,
-            message: "syntax error".into(),
+            ..Diagnostic::new(Tool::Rgbasm, Severity::Error, "syntax error")
         };
         let json = serde_json::to_string(&d).unwrap();
         assert_eq!(
@@ -143,6 +212,27 @@ mod tests {
             r#"{"tool":"rgbasm","severity":"error","file":"src/main.asm","message":"syntax error"}"#
         );
         assert_eq!(serde_json::from_str::<Diagnostic>(&json).unwrap(), d);
+    }
+
+    #[test]
+    fn of_the_loops_ops_only_a_build_that_restores_needs_a_bundle_or_changes_the_session() {
+        use crate::Op;
+        let restoring = BuildArgs {
+            restore: Some("start".into()),
+            ..BuildArgs::default()
+        };
+        let quiet = [
+            Op::Doctor,
+            Op::New(NewArgs { dir: "game".into() }),
+            Op::Build(BuildArgs::default()),
+        ];
+        for op in &quiet {
+            assert!(!op.needs_bundle(), "{op:?}");
+            assert!(!op.changes_session(), "{op:?}");
+        }
+        let op = Op::Build(restoring);
+        assert!(op.needs_bundle() && op.changes_session() && op.mutates_head());
+        assert!(Op::Show.needs_bundle() && Op::Sessions.needs_bundle());
     }
 
     #[test]

@@ -158,6 +158,35 @@ fn a_syntax_error_comes_back_with_its_file_and_line() {
 }
 
 #[test]
+fn a_macros_call_site_comes_back_in_rows_and_json() {
+    let p = Project::game("rgbds-macro");
+    fs::write(
+        p.path("game/src/extra.asm"),
+        "MACRO Bad\n\tld q, \\1\nENDM\nSECTION \"extra\", ROM0\n\tBad 1\n",
+    )
+    .unwrap();
+    let rows = p.rgbds(&["build", "game"]);
+    rows.fails(4, "build_failed", "then `gbcli build game` again");
+    assert!(
+        rows.stdout.starts_with(
+            "diagnostic severity=error tool=rgbasm file=game/src/extra.asm line=2 within=Bad \
+             message=\"syntax error, unexpected symbol\"\n  from file=game/src/extra.asm line=5\n"
+        ),
+        "{}",
+        rows.stdout
+    );
+
+    let json = p.rgbds(&["build", "game", "--json"]);
+    let line: serde_json::Value = serde_json::from_str(json.stdout.trim()).unwrap();
+    let first = &line["error"]["result"]["build"]["diagnostics"][0];
+    assert_eq!(first["within"], "Bad");
+    assert_eq!(
+        first["chain"],
+        serde_json::json!([{"file": "game/src/extra.asm", "line": 5}])
+    );
+}
+
+#[test]
 fn without_rgbds_build_and_doctor_name_the_install_command() {
     let p = Project::new("rgbds-missing");
     let made = p.rgbds(&["new", "game"]);
@@ -269,6 +298,120 @@ fn build_restore_needs_a_session_over_the_rom_it_built() {
     let wrong = p.rgbds(&["build", "game", "--session", "demo", "--restore", "start"]);
     wrong.fails(2, "bad_request", "gbcli run game/build/game.gb --session");
     assert!(wrong.stderr.contains("demo.gb"), "{}", wrong.stderr);
+}
+
+/// The responses `gbcli serve` writes for `lines`, run with only the pinned
+/// RGBDS on `PATH`.
+fn served(p: &Project, args: &[&str], lines: &[&str]) -> Vec<serde_json::Value> {
+    let input: String = lines.iter().map(|l| format!("{l}\n")).collect();
+    let run = p.gbcli_with(args, &[("PATH", &rgbds_dir())], Some(&input));
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    run.stdout
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect()
+}
+
+#[test]
+fn a_serve_client_builds_and_restores_in_one_request() {
+    let p = Project::game("rgbds-serve");
+    let run = p.rgbds(&[
+        "run",
+        "game/build/game.gb",
+        "--session",
+        "game",
+        "--frames",
+        "30",
+        "--checkpoint",
+        "start",
+    ]);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    let main = p.path("game/src/main.asm");
+    let text = fs::read_to_string(&main).unwrap();
+    fs::write(&main, text.replacen("%11_10_01_00", "%00_01_10_11", 1)).unwrap();
+
+    let line = r#"{"id":"b","op":"build","args":{"dir":"game","restore":"start"}}"#;
+    let answers = served(&p, &["serve", "--session", "game"], &[line]);
+    let answer = &answers[0];
+    assert_eq!(answer["ok"], true, "{answer}");
+    assert_eq!(answer["id"], "b");
+    assert_eq!(answer["rev"], "s2");
+    let result = &answer["result"];
+    assert_eq!(result["build"]["outputs"][0]["path"], "game/build/game.gb");
+    assert_eq!(result["restored"]["name"], "start", "{result}");
+
+    // The restore is in the session's event log, as any restore is.
+    let events = p.rgbds(&["events", "--session", "game"]);
+    assert!(events.stdout.contains("op=restore"), "{}", events.stdout);
+
+    // batch -F takes the same line.
+    fs::write(p.path("ops.jsonl"), format!("{line}\n")).unwrap();
+    let batch = p.rgbds(&["batch", "-F", "ops.jsonl", "--session", "game"]);
+    assert_eq!(batch.code, 0, "{}{}", batch.stdout, batch.stderr);
+    assert!(
+        batch
+            .stdout
+            .starts_with("line n=1 id=b op=build ok=1 rev=s3\n"),
+        "{}",
+        batch.stdout
+    );
+}
+
+#[test]
+fn serve_answers_doctor_and_new_and_a_build_refusal_keeps_its_report() {
+    let p = Project::game("rgbds-serve-ops");
+    let run = p.rgbds(&["show", "--rom", "game/build/game.gb", "--session", "game"]);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    fs::write(p.path("game/src/extra.asm"), "\tld q, 1\n").unwrap();
+    let answers = served(
+        &p,
+        &["serve", "--session", "game"],
+        &[
+            r#"{"id":"1","op":"doctor"}"#,
+            r#"{"id":"2","op":"new","args":{"dir":"other"}}"#,
+            r#"{"id":"3","op":"build","args":{"dir":"game"}}"#,
+            r#"{"id":"4","op":"build","args":{"dir":"game","restore":"start"}}"#,
+        ],
+    );
+    assert_eq!(answers[0]["ok"], true, "{}", answers[0]);
+    assert_eq!(
+        answers[0]["result"]["doctor"]["checks"][0]["name"],
+        "rgbasm"
+    );
+    assert_eq!(answers[1]["result"]["created"]["name"], "other");
+    assert!(p.path("other/src/main.asm").is_file());
+    let error = &answers[2]["error"];
+    assert_eq!(error["code"], "build_failed", "{}", answers[2]);
+    assert!(
+        error["remedy"]
+            .as_str()
+            .unwrap()
+            .contains("`gbcli build game`"),
+        "{error}"
+    );
+    assert_eq!(
+        error["result"]["build"]["diagnostics"][0]["file"],
+        "game/src/extra.asm"
+    );
+    // A failed build restores nothing.
+    assert_eq!(answers[3]["error"]["code"], "build_failed");
+}
+
+#[test]
+fn the_clis_build_is_the_serve_op() {
+    let p = Project::game("rgbds-same-path");
+    let cli = p.rgbds(&["build", "game", "--json"]);
+    assert_eq!(cli.code, 0, "{}", cli.stderr);
+    // serve needs a bundle; build itself doesn't touch it.
+    let run = p.rgbds(&["show", "--rom", "game/build/game.gb", "--session", "game"]);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    let input = r#"{"id":"cli","op":"build","args":{"dir":"game"}}"#;
+    let theirs = p.gbcli_with(
+        &["serve"],
+        &[("PATH", &rgbds_dir())],
+        Some(&format!("{input}\n")),
+    );
+    assert_eq!(cli.stdout, theirs.stdout);
 }
 
 #[test]

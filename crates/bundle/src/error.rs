@@ -198,7 +198,7 @@ impl StoreError {
                 flag = setting.flag()
             ),
             StoreError::BadSessionName { .. } => {
-                "names are [a-z0-9-], 1 to 40 characters, not starting with -".into()
+                format!("names are {}", gbcli_protocol::SESSION_NAME_RULE)
             }
             StoreError::Busy { .. } => {
                 "wait for the other writer to finish, or use a different --session".into()

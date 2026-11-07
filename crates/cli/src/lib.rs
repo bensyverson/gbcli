@@ -81,9 +81,6 @@ pub fn run(args: Vec<OsString>, env: &Env, io: Io) -> u8 {
         Command::Serve(target) => return serve_cmd::serve(&target, env, io),
         Command::Batch { target, file } => return batch::batch(&target, &file, env, io),
         Command::Request { target, op } => return exec::request(&target, *op, env, io),
-        Command::Doctor { json } => return rgbds::doctor(json, env, io),
-        Command::New { dir, json } => return rgbds::new(&dir, json, env, io),
-        Command::Build(build) => return rgbds::build(*build, env, io),
     };
     match printed {
         Ok(()) => 0,

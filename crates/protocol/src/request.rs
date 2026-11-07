@@ -13,6 +13,7 @@ use crate::profile::{MeasureArgs, ProfileArgs, RunMeasure};
 use crate::rev::Rev;
 use crate::shot::{FilmstripArgs, ShotArgs, ShotReadArgs};
 use crate::stop::{StepKind, TimeBase};
+use crate::toolchain::{BuildArgs, NewArgs};
 use crate::video::ViewArgs;
 
 /// A request: who asks, which session and revision it saw, and what to do.
@@ -65,6 +66,10 @@ pub enum Op {
     Checkpoints,
     Measure(MeasureArgs),
     Equiv(Box<EquivArgs>),
+    /// The RGBDS loop (design §12): no session, except for a build's restore.
+    Build(BuildArgs),
+    Doctor,
+    New(NewArgs),
 }
 
 impl Op {
@@ -93,15 +98,32 @@ impl Op {
             Op::Checkpoints => "checkpoints",
             Op::Measure(_) => "measure",
             Op::Equiv(_) => "equiv",
+            Op::Build(_) => "build",
+            Op::Doctor => "doctor",
+            Op::New(_) => "new",
         }
     }
 
     /// Whether applying it changes the head, and so bumps the revision.
     pub fn mutates_head(&self) -> bool {
-        matches!(
-            self,
-            Op::Run(_) | Op::Step(_) | Op::Restore(_) | Op::Undo | Op::Write(_)
-        )
+        match self {
+            Op::Build(args) => args.restore.is_some(),
+            op => matches!(
+                op,
+                Op::Run(_) | Op::Step(_) | Op::Restore(_) | Op::Undo | Op::Write(_)
+            ),
+        }
+    }
+
+    /// Whether answering it needs the project's bundle: every op but
+    /// `doctor`, `new` and a `build` that restores nothing, which a client
+    /// with no `.gbcli/` yet can still send.
+    pub fn needs_bundle(&self) -> bool {
+        match self {
+            Op::Doctor | Op::New(_) => false,
+            Op::Build(args) => args.restore.is_some(),
+            _ => true,
+        }
     }
 
     /// Whether applying it changes the session: its head, or its named

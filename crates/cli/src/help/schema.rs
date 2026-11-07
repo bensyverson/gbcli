@@ -45,6 +45,12 @@ events  limit?: N
 sessions, gaps   —
 prune   unused_for: "30m"|"12h"|"7d"
 rm      name: NAME  with_checkpoints?: bool
+build   dir?: PATH  src?: [PATH]  include?: [PATH]  out?: PATH
+        restore?: CHECKPOINT  (into session, whose ROM must be the build's)
+doctor  —
+new     dir: PATH
+        (build, doctor and new need no session; paths are relative to the
+        server's working directory)
 
 Response, one line per request:
   {"id", "ok": true, "rev"?: "sN", "result": {…}, "warnings": [TEXT]}
@@ -53,7 +59,8 @@ Response, one line per request:
 result holds only the fields the op fills: stop, reads, shot, measure, profile,
 frame_budget, raster, equiv, view, symbols,
 checkpoints, keys_unapplied, writes, checkpoint, restored, breakpoint, watch,
-deleted, registers, ppu, sessions, events, gaps, pruned, kept, busy, removed.
+deleted, registers, ppu, sessions, events, gaps, pruned, kept, busy, removed,
+build, doctor, created.
 `gbcli VERB --json` prints the whole response line, as serve writes it.
 
 Examples:
@@ -83,6 +90,9 @@ Examples:
   {"id":"24","op":"measure","args":{"from":"Main.loop","to":"Main.loop","iterations":60,"max_t":40000}}
   {"id":"25","op":"run","args":{"frames":60,"profile":{"top":10},"frame_budget":true}}
   {"id":"26","op":"equiv","args":{"b":{"rom":"fast.gb"},"frames":600,"keys":["RIGHT@10"],"ram":[{"at":"wX","len":1}]}}
+  {"id":"27","session":"game","op":"build","args":{"dir":"game","restore":"start"}}
+  {"id":"28","op":"doctor"}
+  {"id":"29","op":"new","args":{"dir":"game"}}
 "#;
 
 #[cfg(test)]
@@ -104,6 +114,6 @@ mod tests {
         }
         ops.sort();
         ops.dedup();
-        assert_eq!(ops.len(), 22, "one example per op: {ops:?}");
+        assert_eq!(ops.len(), 25, "one example per op: {ops:?}");
     }
 }

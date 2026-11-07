@@ -52,7 +52,8 @@ pub use response::{
 };
 pub use rev::Rev;
 pub use session::{
-    EventLogLine, GapCount, GapLine, SessionFile, SessionRow, StopSummary, UndoWalk,
+    EventLogLine, GapCount, GapLine, SESSION_NAME_RULE, SessionFile, SessionRow, StopSummary,
+    UndoWalk, is_session_name,
 };
 pub use shot::{Crop, FilmstripArgs, FilmstripMade, ShotArgs, ShotFrame, ShotMade, ShotReadArgs};
 pub use stop::{
@@ -60,8 +61,8 @@ pub use stop::{
     TimeBase, vblank_name,
 };
 pub use toolchain::{
-    BuildMade, CheckMade, CheckName, CheckStatus, Diagnostic, DoctorMade, NewMade, OutputKind,
-    OutputMade, Severity, Tool,
+    BuildArgs, BuildMade, CheckMade, CheckName, CheckStatus, Diagnostic, DoctorMade, NewArgs,
+    NewMade, OutputKind, OutputMade, Severity, SourceLine, Tool,
 };
 pub use video::{
     AddressingView, ImageMade, ImageOut, MapAreaView, MapSel, OamView, TileView, VideoData,

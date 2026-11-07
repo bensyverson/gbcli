@@ -2,43 +2,75 @@
 //! `error: MESSAGE`, `warning: MESSAGE [-Wflag]` or `FATAL: MESSAGE`, then
 //! optionally `    at FILE(LINE)` (or `FILE::MACRO(LINE)`, the line in FILE
 //! where the macro's body is) and `    <- FILE(LINE)` lines for the include
-//! and macro chain, outermost last. Summary lines (`Assembly aborted with 2
-//! errors`) carry nothing new and are dropped.
+//! and macro chain, outermost last. rgblink may name a second place after
+//! `    and also:`, with its own `at` and `<-` lines. Summary lines
+//! (`Assembly aborted with 2 errors`) carry nothing new and are dropped.
 
-use gbcli_protocol::{Diagnostic, Severity, Tool};
+use gbcli_protocol::{Diagnostic, Severity, SourceLine, Tool};
 
 /// Every diagnostic in `text`, a tool's stderr, with files as the tool
 /// printed them.
 pub fn parse(tool: Tool, text: &str) -> Vec<Diagnostic> {
     let mut found: Vec<Diagnostic> = Vec::new();
-    // Whether the last diagnostic has taken its `at` line: only the first
-    // (innermost) one locates it.
-    let mut located = true;
+    // Which place of the last diagnostic the next location lines belong to.
+    let mut place = Place::Done;
     for line in text.lines() {
         if let Some((severity, message)) = head(line) {
-            found.push(Diagnostic {
-                tool,
-                severity,
-                file: None,
-                line: None,
-                message: message.trim().to_string(),
-            });
-            located = false;
+            found.push(Diagnostic::new(tool, severity, message.trim()));
+            place = Place::Main { located: false };
             continue;
         }
-        let Some(at) = line.trim_start().strip_prefix("at ") else {
+        let Some(last) = found.last_mut() else {
             continue;
         };
-        if located || !line.starts_with(char::is_whitespace) {
+        if !line.starts_with(char::is_whitespace) {
+            place = Place::Done;
             continue;
         }
-        if let (Some(last), Some((file, number))) = (found.last_mut(), location(at)) {
-            last.file = Some(file);
-            last.line = Some(number);
-            located = true;
+        let body = line.trim();
+        if body == "and also:" && place != Place::Done {
+            last.also.push(Vec::new());
+            place = Place::Also { located: false };
+            continue;
+        }
+        let (first, rest) = match (body.strip_prefix("at "), body.strip_prefix("<- ")) {
+            (Some(at), _) => (true, at),
+            (_, Some(from)) => (false, from),
+            _ => continue,
+        };
+        let Some(at) = location(rest) else {
+            continue;
+        };
+        match &mut place {
+            Place::Main { located } if first && !*located => {
+                last.file = Some(at.file);
+                last.line = Some(at.line);
+                last.within = at.within;
+                *located = true;
+            }
+            Place::Main { located: true } if !first => last.chain.push(at),
+            Place::Also { located } if first != *located => {
+                last.also
+                    .last_mut()
+                    .expect("pushed at `and also:`")
+                    .push(at);
+                *located = true;
+            }
+            _ => {}
         }
     }
     found
+}
+
+/// Where the location lines that follow belong.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Place {
+    /// The diagnostic's own place: `at`, then its `<-` chain.
+    Main { located: bool },
+    /// The latest `and also:` place.
+    Also { located: bool },
+    /// Nothing more belongs to the last diagnostic.
+    Done,
 }
 
 fn head(line: &str) -> Option<(Severity, &str)> {
@@ -54,16 +86,23 @@ fn head(line: &str) -> Option<(Severity, &str)> {
     None
 }
 
-/// `FILE(LINE)`, `FILE::MACRO(LINE)` or `FILE::REPT~N(LINE)` → the file and
-/// the line. The last parenthesis is the line's, so a file name may hold
-/// parentheses of its own.
-fn location(text: &str) -> Option<(String, u32)> {
+/// `FILE(LINE)`, `FILE::MACRO(LINE)` or `FILE::REPT~N(LINE)`. The last
+/// parenthesis is the line's, so a file name may hold parentheses of its
+/// own.
+fn location(text: &str) -> Option<SourceLine> {
     let text = text.trim_end().strip_suffix(')')?;
     let open = text.rfind('(')?;
-    let number = text[open + 1..].parse().ok()?;
+    let line = text[open + 1..].parse().ok()?;
     let place = &text[..open];
-    let file = place.split("::").next().unwrap_or(place);
-    Some((file.to_string(), number))
+    let (file, within) = match place.split_once("::") {
+        Some((file, within)) => (file, Some(within.to_string())),
+        None => (place, None),
+    };
+    Some(SourceLine {
+        file: file.to_string(),
+        line,
+        within,
+    })
 }
 
 #[cfg(test)]

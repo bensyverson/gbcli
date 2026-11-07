@@ -30,9 +30,6 @@ pub enum Command {
     Batch { target: Target, file: String },
     // Boxed: an Op is several hundred bytes and the other commands are small.
     Request { target: Target, op: Box<Op> },
-    Doctor { json: bool },
-    New { dir: PathBuf, json: bool },
-    Build(Box<crate::rgbds::BuildCommand>),
 }
 
 /// Where a request goes and how its answer is printed: the flags every
@@ -83,18 +80,9 @@ pub fn build(inv: Invocation, env: &Env) -> Result<Command, Usage> {
         Verb::Recipes => return Ok(Command::Recipes),
         Verb::Schema => return Ok(Command::Schema),
         Verb::Version => return Ok(Command::Version),
-        Verb::Doctor => {
-            return Ok(Command::Doctor {
-                json: inv.has("json"),
-            });
-        }
-        Verb::New => {
-            return Ok(Command::New {
-                dir: env.cwd.join(pos(0)),
-                json: inv.has("json"),
-            });
-        }
-        Verb::Build => return crate::rgbds::command(&inv, env, target(&inv, env, None)?),
+        Verb::Doctor => return Ok(crate::rgbds::doctor(&inv)),
+        Verb::New => return Ok(crate::rgbds::new(&inv)),
+        Verb::Build => return crate::rgbds::build(&inv, env),
         Verb::Serve => return Ok(Command::Serve(target(&inv, env, None)?)),
         Verb::Batch => {
             let Some(file) = inv.one("file") else {
@@ -281,7 +269,7 @@ fn access(text: &str) -> Result<WatchAccess, Usage> {
 
 /// The shared flags, with the environment's defaults (`GBCLI_SESSION`,
 /// `GBCLI_AS`). `rom` is a ROM given as an argument.
-fn target(inv: &Invocation, env: &Env, rom: Option<String>) -> Result<Target, Usage> {
+pub(crate) fn target(inv: &Invocation, env: &Env, rom: Option<String>) -> Result<Target, Usage> {
     let rom = rom.or_else(|| inv.one("rom").map(str::to_string));
     let create = match rom {
         Some(rom) => Some(Create {

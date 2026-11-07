@@ -94,11 +94,13 @@ pub fn release_url() -> String {
     format!("https://github.com/gbdev/rgbds/releases/tag/v{RGBDS_PIN}")
 }
 
-/// What to do when RGBDS is missing or the wrong version.
+/// What to do when RGBDS is missing or the wrong version: the pinned
+/// release first, since Homebrew installs whatever release it has now.
 pub fn install_remedy() -> String {
     format!(
-        "install RGBDS {RGBDS_PIN}: `{INSTALL_COMMAND}`, or the release at {}; put rgbasm, \
-         rgblink and rgbfix on PATH, then check with `gbcli doctor`",
+        "install RGBDS {RGBDS_PIN} from {} (`{INSTALL_COMMAND}` installs Homebrew's current \
+         release, which may not be {RGBDS_PIN}); put rgbasm, rgblink and rgbfix on PATH, then \
+         check with `gbcli doctor`",
         release_url()
     )
 }
@@ -174,9 +176,10 @@ impl ToolFound {
     }
 }
 
-/// Finds `tool` on `path_var` (a `PATH` value) and checks its version.
-pub fn probe(tool: Tool, path_var: Option<&OsStr>) -> Result<ToolFound, ToolProblem> {
-    let path = find(tool.name(), path_var).ok_or(ToolProblem::Missing { tool })?;
+/// Finds `tool` on `path_var` (a `PATH` value) and checks its version. A
+/// relative `PATH` entry is relative to `cwd`.
+pub fn probe(tool: Tool, path_var: Option<&OsStr>, cwd: &Path) -> Result<ToolFound, ToolProblem> {
+    let path = find(tool.name(), path_var, cwd).ok_or(ToolProblem::Missing { tool })?;
     let output = std::process::Command::new(&path)
         .arg("--version")
         .output()
@@ -211,11 +214,13 @@ pub fn probe(tool: Tool, path_var: Option<&OsStr>) -> Result<ToolFound, ToolProb
 }
 
 /// The first executable called `name` in the directories of `path_var`.
-fn find(name: &str, path_var: Option<&OsStr>) -> Option<PathBuf> {
+/// A relative entry is resolved against `cwd` here, since the tool may run
+/// from another directory (a build runs in the project).
+pub(crate) fn find(name: &str, path_var: Option<&OsStr>, cwd: &Path) -> Option<PathBuf> {
     let file = format!("{name}{}", std::env::consts::EXE_SUFFIX);
     std::env::split_paths(path_var?)
         .filter(|dir| !dir.as_os_str().is_empty())
-        .map(|dir| dir.join(&file))
+        .map(|dir| cwd.join(dir).join(&file))
         .find(|candidate| is_executable(candidate))
 }
 
@@ -244,11 +249,12 @@ pub struct ToolchainError {
 }
 
 impl Toolchain {
-    pub fn discover(path_var: Option<&OsStr>) -> Result<Toolchain, ToolchainError> {
+    /// Finds the three on `path_var`; a relative entry is relative to `cwd`.
+    pub fn discover(path_var: Option<&OsStr>, cwd: &Path) -> Result<Toolchain, ToolchainError> {
         let mut found = Vec::new();
         let mut problems = Vec::new();
         for tool in Tool::ALL {
-            match probe(tool, path_var) {
+            match probe(tool, path_var, cwd) {
                 Ok(f) => found.push(f),
                 Err(p) => problems.push(p),
             }

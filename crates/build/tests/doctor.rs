@@ -21,6 +21,7 @@ fn check(made: &DoctorMade, name: CheckName) -> &CheckMade {
 fn run(project: &std::path::Path, path: Option<&std::ffi::OsStr>) -> Result<DoctorMade, ErrorCode> {
     doctor(&DoctorInput {
         path_var: path,
+        cwd: project,
         project,
         boot_roms: GOOD_ROMS,
     })
@@ -70,6 +71,7 @@ fn missing_rgbds_fails_with_toolchain_missing_and_the_install_command() {
     fs::create_dir(&empty).unwrap();
     let err = doctor(&DoctorInput {
         path_var: Some(empty.as_os_str()),
+        cwd: &temp.0,
         project: &temp.0,
         boot_roms: GOOD_ROMS,
     })
@@ -101,6 +103,7 @@ fn a_git_project_that_doesnt_ignore_gbcli_warns_and_one_that_does_passes() {
     let checks = |dir: &std::path::Path| {
         doctor(&DoctorInput {
             path_var: Some(empty.as_os_str()),
+            cwd: dir,
             project: dir,
             boot_roms: GOOD_ROMS,
         })
@@ -130,6 +133,7 @@ fn outside_a_git_repository_there_is_nothing_to_ignore() {
     fs::create_dir(&empty).unwrap();
     let made = doctor(&DoctorInput {
         path_var: Some(empty.as_os_str()),
+        cwd: &temp.0,
         project: &temp.0,
         boot_roms: GOOD_ROMS,
     })
@@ -149,6 +153,7 @@ fn a_boot_rom_of_the_wrong_size_fails_with_boot_rom_missing() {
     let path = std::env::var_os("PATH");
     let err = doctor(&DoctorInput {
         path_var: path.as_deref(),
+        cwd: &temp.0,
         project: &temp.0,
         boot_roms: &[("dmg", &[0; 256]), ("cgb", &[0; 100])],
     })
@@ -171,4 +176,52 @@ fn an_unwritable_project_fails_with_io_failed() {
     let result = run(&project, path.as_deref());
     set_mode(&project, 0o755).unwrap();
     assert_eq!(result.unwrap_err(), ErrorCode::IoFailed);
+}
+
+/// Every check, whether or not one failed.
+fn all_checks(project: &std::path::Path) -> DoctorMade {
+    let path = std::env::var_os("PATH");
+    let input = DoctorInput {
+        path_var: path.as_deref(),
+        cwd: project,
+        project,
+        boot_roms: GOOD_ROMS,
+    };
+    match doctor(&input) {
+        Ok(made) => made,
+        Err(body) => body.result.and_then(|r| r.doctor).unwrap(),
+    }
+}
+
+#[test]
+fn whether_gbcli_is_ignored_is_asked_of_git_itself() {
+    let temp = Temp::new("doctor-git-real");
+    let init = std::process::Command::new("git")
+        .args(["init", "-q", "."])
+        .current_dir(&temp.0)
+        .status()
+        .expect("these tests need git on PATH");
+    assert!(init.success());
+    for dir in ["target/rv", "game", "other"] {
+        fs::create_dir_all(temp.path(dir)).unwrap();
+    }
+    let status = |dir: &str| check(&all_checks(&temp.path(dir)), CheckName::Gitignore).status;
+
+    // An ignored parent directory ignores everything under it.
+    fs::write(temp.path(".gitignore"), "/target/\n").unwrap();
+    assert_eq!(status("target/rv"), CheckStatus::Ok);
+    assert_eq!(status("other"), CheckStatus::Warn);
+
+    // A pattern anchored at the root ignores the root's .gbcli/ only.
+    fs::write(temp.path(".gitignore"), "/.gbcli/\n").unwrap();
+    assert_eq!(status("game"), CheckStatus::Warn);
+
+    // `**/` patterns and .git/info/exclude count.
+    fs::write(temp.path(".gitignore"), "**/.gbcli\n").unwrap();
+    assert_eq!(status("game"), CheckStatus::Ok);
+    fs::write(temp.path(".gitignore"), "").unwrap();
+    fs::write(temp.path(".git/info/exclude"), ".gbcli/\n").unwrap();
+    assert_eq!(status("game"), CheckStatus::Ok);
+    let ok = check(&all_checks(&temp.path("game")), CheckName::Gitignore).clone();
+    assert!(ok.detail.contains("git check-ignore"), "{ok:?}");
 }

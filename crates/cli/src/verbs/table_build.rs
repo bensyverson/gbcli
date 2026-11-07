@@ -32,7 +32,8 @@ const BUILD: &[FlagSpec] = &[
 /// be the one the build wrote.
 const RELOAD: &[FlagSpec] = &[SESSION_FLAG, ALLOW_ROM_CHANGE];
 
-/// `--json` alone: a verb that sends no request has no `--dir` or `--as`.
+/// `--json` alone: `new` and `doctor` need no session or bundle, so they
+/// have no `--dir` or `--as`.
 const JSON_ONLY: &[FlagSpec] = &[JSON];
 
 pub const NEW_VERB: VerbSpec = VerbSpec {

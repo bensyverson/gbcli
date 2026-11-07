@@ -23,10 +23,10 @@ diagnostic severity=error tool=rgbasm file=game/src/main.asm line=29 message="sy
 build rgbds=1.0.4 sources=2 errors=1 warnings=0
 --- stderr
 gbcli: build_failed: the build failed with 1 error: game/src/main.asm:29: syntax error, unexpected end of line (rgbasm)
-remedy: fix the first error at its file and line, then `gbcli build` again
+remedy: fix the first error at its file and line, then `gbcli build game` again
 $ gbcli build game --json
 exit 4
-{"id":"cli","ok":false,"error":{"code":"build_failed","exit":4,"message":"the build failed with 1 error: game/src/main.asm:29: syntax error, unexpected end of line (rgbasm)","remedy":"fix the first error at its file and line, then `gbcli build` again","result":{"build":{"rgbds":"1.0.4","sources":["game/src/main.asm","game/src/oam_dma.asm"],"outputs":[],"diagnostics":[{"tool":"rgbasm","severity":"error","file":"game/src/main.asm","line":29,"message":"syntax error, unexpected end of line"}]}}},"warnings":[]}
+{"id":"cli","ok":false,"error":{"code":"build_failed","exit":4,"message":"the build failed with 1 error: game/src/main.asm:29: syntax error, unexpected end of line (rgbasm)","remedy":"fix the first error at its file and line, then `gbcli build game` again","result":{"build":{"rgbds":"1.0.4","sources":["game/src/main.asm","game/src/oam_dma.asm"],"outputs":[],"diagnostics":[{"tool":"rgbasm","severity":"error","file":"game/src/main.asm","line":29,"message":"syntax error, unexpected end of line"}]}}},"warnings":[]}
 --- stderr
 gbcli: build_failed: the build failed with 1 error: game/src/main.asm:29: syntax error, unexpected end of line (rgbasm)
-remedy: fix the first error at its file and line, then `gbcli build` again
+remedy: fix the first error at its file and line, then `gbcli build game` again

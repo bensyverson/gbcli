@@ -4,7 +4,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use gbcli_protocol::{ErrorBody, ErrorCode, NewMade};
+use gbcli_protocol::{ErrorBody, ErrorCode, NewMade, SESSION_NAME_RULE, is_session_name};
 
 use crate::paths::{display, normalize};
 
@@ -14,8 +14,9 @@ pub const HARDWARE_INC: &str = include_str!("../data/hardware.inc/hardware.inc")
 /// Why `new` wrote nothing.
 #[derive(Debug)]
 pub enum NewError {
-    /// The directory name can't name a ROM and a session.
-    BadName { name: String },
+    /// The directory name can't name a session; `offer` is the directory
+    /// with a name that can, as the caller reads it.
+    BadName { name: String, offer: String },
     /// The directory exists and holds something.
     NotEmpty { dir: PathBuf },
     Io {
@@ -37,13 +38,13 @@ const FILES: &[(&str, &str)] = &[
 impl NewError {
     pub fn body(&self) -> ErrorBody {
         match self {
-            NewError::BadName { name } => ErrorBody::new(
+            NewError::BadName { name, offer } => ErrorBody::new(
                 ErrorCode::BadRequest,
                 format!(
-                    "`{name}` can't name a project: it names the ROM and the session, so it \
-                     takes only letters, digits, `-`, `_` and `.`"
+                    "`{name}` can't name a project: it names the ROM and the session, and a \
+                     session name is {SESSION_NAME_RULE}"
                 ),
-                "pick another directory name, e.g. `gbcli new my-game`",
+                format!("name the directory like a session: `gbcli new {offer}`"),
             ),
             NewError::NotEmpty { dir } => ErrorBody::new(
                 ErrorCode::BadRequest,
@@ -69,13 +70,11 @@ pub fn new_project(dir: &Path, display_base: &Path) -> Result<NewMade, NewError>
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let plain = !name.is_empty()
-        && !name.starts_with('.')
-        && name
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
-    if !plain {
-        return Err(NewError::BadName { name });
+    // The name is the ROM's and the session's, and the printed next
+    // commands use it as both, so it must be a session name.
+    if !is_session_name(&name) {
+        let offer = display(&dir.with_file_name(session_name_like(&name)), display_base);
+        return Err(NewError::BadName { name, offer });
     }
     let io = |path: &Path| {
         let path = path.to_path_buf();
@@ -113,4 +112,24 @@ pub fn new_project(dir: &Path, display_base: &Path) -> Result<NewMade, NewError>
         dir: shown,
         files,
     })
+}
+
+/// The session name nearest `name`: lowercase, with each run of other
+/// characters as one `-`, cut to 40.
+fn session_name_like(name: &str) -> String {
+    let mut out = String::new();
+    for c in name.chars().map(|c| c.to_ascii_lowercase()) {
+        if c.is_ascii_lowercase() || c.is_ascii_digit() {
+            out.push(c);
+        } else if !out.is_empty() && !out.ends_with('-') {
+            out.push('-');
+        }
+    }
+    out.truncate(40);
+    let out = out.trim_end_matches('-');
+    if out.is_empty() {
+        "game".into()
+    } else {
+        out.into()
+    }
 }

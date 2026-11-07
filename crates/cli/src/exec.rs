@@ -4,18 +4,33 @@ use std::io::{Cursor, Write};
 
 use gbcli_bundle::{Bundle, RomSource, StoreError};
 use gbcli_protocol::{ErrorBody, ErrorCode, Op, Request, Response};
-use gbcli_server::{Handler, serve};
+use gbcli_server::{Answer, Handler, Host, Tooling, serve};
 
 use crate::build::Target;
 use crate::{Env, Io, render};
 
 pub fn request(target: &Target, op: Op, env: &Env, io: Io) -> u8 {
-    let mut handler = match handler(target, env) {
-        Ok(handler) => handler,
-        Err(body) => return render::error(io.err, &body),
+    let request = target.request(op);
+    // `doctor`, `new` and a build that restores nothing need no `.gbcli/`,
+    // so they go to the server's bundle-less side and never make one.
+    let response = if request.op.needs_bundle() {
+        let mut handler = match handler(target, env) {
+            Ok(handler) => handler,
+            Err(body) => return render::error(io.err, &body),
+        };
+        answer(&mut handler, &request)
+    } else {
+        answer(&mut Tooling::new(host(env)), &request)
     };
-    let response = answer(&mut handler, &target.request(op));
     render::response(&response, target.json, io.out, io.err)
+}
+
+/// Where the server resolves paths and finds RGBDS: the CLI's own.
+fn host(env: &Env) -> Host {
+    Host {
+        cwd: env.cwd.clone(),
+        path: env.path.clone(),
+    }
 }
 
 /// The project's bundle and a handler over it, with the target's session
@@ -58,11 +73,9 @@ pub fn handler(target: &Target, env: &Env) -> Result<Handler, Box<ErrorBody>> {
             .open_session(name, source.as_ref())
             .map_err(|e| Box::new(store(e)))?;
     }
-    Ok(Handler::new(
-        bundle,
-        target.session.clone(),
-        target.actor.clone(),
-    ))
+    let mut handler = Handler::new(bundle, target.session.clone(), target.actor.clone());
+    handler.set_host(host(env));
+    Ok(handler)
 }
 
 pub fn store(e: StoreError) -> ErrorBody {
@@ -73,13 +86,13 @@ pub fn store(e: StoreError) -> ErrorBody {
 /// parse, the same panic guard. It goes through as a serialized line on
 /// purpose (not `gbcli_server::answer`): the strict parse then proves the
 /// CLI never sends what `serve` would refuse, for microseconds of JSON.
-pub fn answer(handler: &mut Handler, request: &Request) -> Response {
+pub fn answer<A: Answer>(handler: &mut A, request: &Request) -> Response {
     let line = serde_json::to_string(request).expect("a request always serializes");
     answer_line(handler, &line)
 }
 
 /// Answers one protocol line, as `gbcli serve` would.
-pub fn answer_line(handler: &mut Handler, line: &str) -> Response {
+pub fn answer_line<A: Answer>(handler: &mut A, line: &str) -> Response {
     let mut out = Vec::new();
     let input = Cursor::new(format!("{line}\n"));
     if let Err(e) = serve(input, &mut out, handler) {

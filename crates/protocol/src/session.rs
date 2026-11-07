@@ -12,6 +12,19 @@ use crate::request::Op;
 use crate::rev::Rev;
 use crate::stop::{StopReason, StopRecord, TimeBase};
 
+/// What a session name may be, as a remedy states it.
+pub const SESSION_NAME_RULE: &str = "[a-z0-9-], 1 to 40 characters, not starting with -";
+
+/// Whether `name` can name a session ([`SESSION_NAME_RULE`]): `-` first
+/// would read as a flag on the command line.
+pub fn is_session_name(name: &str) -> bool {
+    (1..=40).contains(&name.len())
+        && !name.starts_with('-')
+        && name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
 /// `sessions/<name>/session.json`: everything a machine is rebuilt from, plus
 /// the revision counter (design §1).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

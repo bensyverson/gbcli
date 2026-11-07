@@ -7,24 +7,9 @@ use std::fs;
 use std::path::PathBuf;
 
 use gbcli_build::{BuildError, BuildOptions, Toolchain, build, new_project};
-use gbcli_protocol::{BuildMade, ErrorCode, OutputKind, Severity, Tool};
+use gbcli_protocol::{ErrorCode, OutputKind, Severity, Tool};
 
-use common::{Temp, fake_tools, rgbds};
-
-/// A fresh starter project at `<temp>/demo`, printed relative to `<temp>`.
-fn starter(name: &str) -> (Temp, BuildOptions) {
-    let temp = Temp::new(name);
-    new_project(&temp.path("demo"), &temp.0).unwrap();
-    let options = BuildOptions::new(temp.path("demo"), temp.0.clone());
-    (temp, options)
-}
-
-fn failed(result: Result<BuildMade, BuildError>) -> BuildMade {
-    match result {
-        Err(BuildError::Failed(made)) => *made,
-        other => panic!("expected a failed build, got {other:?}"),
-    }
-}
+use common::{Temp, failed, fake_tools, rgbds, starter};
 
 /// The line of `needle` in `text`, from 1.
 fn line_of(text: &str, needle: &str) -> u32 {
@@ -63,10 +48,12 @@ fn the_starter_builds_a_fixed_rom_with_its_sym_and_map() {
             "{sym}"
         );
     }
-    assert!(
-        !temp.path("demo/build/.staging").exists(),
-        "staging is cleaned up"
-    );
+    let staging: Vec<_> = fs::read_dir(temp.path("demo/build"))
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|n| n.contains("staging"))
+        .collect();
+    assert!(staging.is_empty(), "staging is cleaned up: {staging:?}");
 }
 
 #[test]
@@ -87,7 +74,11 @@ fn a_syntax_error_is_a_structured_error_with_file_and_line() {
     assert_eq!(error.file.as_deref(), Some("demo/src/main.asm"));
     assert_eq!(error.line, Some(line_of(&broken, "\tld sp,")));
     assert!(error.message.contains("syntax error"), "{}", error.message);
-    let body = BuildError::Failed(Box::new(made.clone())).body();
+    let body = BuildError::Failed {
+        made: Box::new(made.clone()),
+        dir: "demo".into(),
+    }
+    .body();
     assert_eq!(body.code, ErrorCode::BuildFailed);
     assert_eq!(body.exit, 4);
     assert!(
@@ -271,14 +262,14 @@ fn a_step_that_exits_zero_but_writes_nothing_fails_the_build() {
             ("rgbfix", "exit 0"),
         ],
     );
-    let fake = Toolchain::discover(Some(&path)).unwrap();
+    let fake = Toolchain::discover(Some(&path), &temp.0).unwrap();
     let made = failed(build(&fake, &options));
     let error = &made.diagnostics[0];
     assert_eq!(error.tool, Tool::Rgblink);
     assert_eq!(error.severity, Severity::Error);
     assert!(error.message.contains("empty"), "{}", error.message);
     assert!(
-        error.message.contains("demo/build/.staging/demo.gb"),
+        error.message.contains("demo/build/.gbcli-staging-") && error.message.contains("/demo.gb"),
         "{}",
         error.message
     );
@@ -295,7 +286,7 @@ fn a_tool_that_fails_without_a_diagnostic_still_reports_one() {
             ("rgbfix", "exit 0"),
         ],
     );
-    let fake = Toolchain::discover(Some(&path)).unwrap();
+    let fake = Toolchain::discover(Some(&path), &temp.0).unwrap();
     let made = failed(build(&fake, &options));
     assert_eq!(made.diagnostics.len(), 2, "one per source");
     let error = &made.diagnostics[0];

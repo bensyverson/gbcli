@@ -54,6 +54,7 @@ fn read(h: &mut Handler, expr: &str) -> i64 {
     .reads
     .expect("values")[0]
         .value
+        .expect("a value")
 }
 
 #[test]

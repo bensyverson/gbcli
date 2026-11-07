@@ -6,7 +6,7 @@ mod common;
 
 use common::cart::*;
 use common::run;
-use gbcli_core::{Budget, Core, CoreError, Region, SavClock};
+use gbcli_core::{Budget, Core, CoreError, Feature, MAX_RTC_ADVANCE_S, Region, SavClock};
 use gbcli_sameboy::SameBoy;
 
 const RAM_32K_BYTES: usize = 32 * 1024;
@@ -193,4 +193,129 @@ fn advancing_the_clock_of_a_cart_without_one_is_refused() {
         matches!(&refused, CoreError::InvalidState { reason } if reason.contains("no clock")),
         "{refused:?}"
     );
+}
+
+/// Review of a066271: `last_rtc_second + seconds` wrapped in the shim, so a
+/// huge advance after any elapsed second did nothing while `advance_rtc`
+/// reported success.
+#[test]
+fn an_advance_too_large_to_add_is_refused_not_silently_dropped() {
+    let mut core = core(cart(MBC3_TIMER_RAM_BATTERY, 4, RAM_32K));
+    set_rtc(&mut core, [0, 0, 0, 0, 0], false);
+    core.advance_rtc(1).unwrap();
+    assert!(core.advance_rtc(u64::MAX).is_err());
+    assert_eq!(read_rtc(&mut core), [1, 0, 0, 0, 0], "unchanged");
+}
+
+/// Review of a066271: the advance loops once per emulated day, so an
+/// unbounded one held the session lock for minutes. Past the bound an MBC3
+/// clock shows nothing a shorter advance can't, so it is refused.
+#[test]
+fn an_advance_past_the_longest_the_clock_can_tell_apart_is_refused() {
+    let mut core = core(cart(MBC3_TIMER_RAM_BATTERY, 4, RAM_32K));
+    set_rtc(&mut core, [0, 0, 0, 0, 0], false);
+    let refused = core.advance_rtc(MAX_RTC_ADVANCE_S + 1).unwrap_err();
+    assert!(
+        matches!(&refused, CoreError::InvalidState { reason } if reason.contains("1024 days")),
+        "{refused:?}"
+    );
+    assert_eq!(read_rtc(&mut core), [0, 0, 0, 0, 0], "unchanged");
+    core.advance_rtc(MAX_RTC_ADVANCE_S).unwrap();
+    // 1024 days: the 9-bit day counter wrapped twice, and its carry is set.
+    assert_eq!(read_rtc(&mut core), [0, 0, 0, 0, 0x80]);
+}
+
+/// Review of a066271: the import refuses the HuC3 footer, by ruling, so a
+/// `.sav` can't carry a HuC3 battery across a power cycle; `battery_state`
+/// does.
+#[test]
+fn a_huc3_sav_import_is_refused() {
+    let mut core = core(cart(HUC3, 4, RAM_8K));
+    run(&mut core, Budget::frames(2));
+    let sav = core.battery_sav().unwrap().expect("HuC3 has a battery");
+    let refused = core.load_battery_sav(&sav).unwrap_err();
+    assert!(
+        matches!(
+            refused,
+            CoreError::Unsupported {
+                feature: Feature::BatterySave,
+                ..
+            }
+        ),
+        "{refused:?}"
+    );
+}
+
+/// A core on `rom` with its cart RAM written with a pattern.
+fn patterned(rom: Vec<u8>) -> SameBoy {
+    let mut core = core(rom);
+    let len = core.region(Region::Sram).unwrap().bytes.len();
+    let pattern: Vec<u8> = (0..len).map(|i| (i * 5 + 1) as u8).collect();
+    core.poke(Region::Sram, 0, &pattern).unwrap();
+    core
+}
+
+/// Takes `from`'s battery state into a fresh core on the same ROM, and
+/// checks that the RAM came across.
+fn carried(from: &mut SameBoy, rom: Vec<u8>) -> SameBoy {
+    let state = from.battery_state().unwrap().expect("a battery cart");
+    assert_eq!(
+        state.len(),
+        from.battery_sav().unwrap().unwrap().len(),
+        "the state is the .sav's size"
+    );
+    let mut to = core(rom);
+    assert_eq!(to.load_battery_state(&state).unwrap(), SavClock::Restored);
+    assert_eq!(
+        to.region(Region::Sram).unwrap().bytes,
+        from.region(Region::Sram).unwrap().bytes
+    );
+    to
+}
+
+#[test]
+fn battery_state_carries_an_mbc3_carts_ram_and_clocks() {
+    let mut from = clocked();
+    let mut to = carried(&mut from, cart(MBC3_TIMER_RAM_BATTERY, 4, RAM_32K));
+    assert_eq!(read_rtc(&mut to), read_rtc(&mut from));
+}
+
+#[test]
+fn battery_state_carries_a_huc3_carts_ram_and_clock() {
+    let rom = cart(HUC3, 4, RAM_8K);
+    let mut from = patterned(rom.clone());
+    from.advance_rtc(3 * 86_400 + 5 * 60).unwrap();
+    let mut to = carried(&mut from, rom);
+    // HuC3's export is all emulated state (its stamp is the clock's epoch),
+    // so equal exports are equal clocks.
+    let sav = from.battery_sav().unwrap();
+    assert_ne!(sav, patterned(cart(HUC3, 4, RAM_8K)).battery_sav().unwrap());
+    assert_eq!(to.battery_sav().unwrap(), sav);
+}
+
+#[test]
+fn battery_state_carries_a_tpp1_carts_ram_and_clock() {
+    let rom = tpp1_cart();
+    let mut from = patterned(rom.clone());
+    poke_bus(&mut from, 0x0003, 0x19); // MR3: start the clock
+    from.advance_rtc(9 * 86_400 + 4 * 3_600).unwrap();
+    let mut to = carried(&mut from, rom);
+    // The footer's stamp (its bytes 8..16) is host time; the rest is the
+    // clock and its control register.
+    let footer = |core: &mut SameBoy| {
+        let sav = core.battery_sav().unwrap().unwrap();
+        let f = &sav[8 * 1024..];
+        [&f[..8], &f[16..]].concat()
+    };
+    let expected = footer(&mut from);
+    assert_ne!(expected, footer(&mut core(tpp1_cart())), "the clock moved");
+    assert_eq!(footer(&mut to), expected);
+}
+
+#[test]
+fn a_battery_state_of_the_wrong_size_is_refused_and_changes_nothing() {
+    let mut core = clocked();
+    let ram = core.region(Region::Sram).unwrap().bytes.to_vec();
+    assert!(core.load_battery_state(&[0; 10]).is_err());
+    assert_eq!(core.region(Region::Sram).unwrap().bytes, &ram[..]);
 }

@@ -1,7 +1,7 @@
 //! Tiles, tilemaps, OAM and CGB palettes as data, decoded from VRAM, OAM and
 //! palette RAM (images are stage 4).
 
-use gbcli_core::{Core, CoreError, IoReg, Region};
+use gbcli_core::{ColorMode, Core, CoreError, IoReg, Region};
 
 const TILE_BYTES: usize = 16;
 /// Tiles in one VRAM bank (8000-97FF).
@@ -235,6 +235,68 @@ pub fn oam(core: &dyn Core, height: ObjectHeight) -> Result<Vec<OamEntry>, CoreE
             .for_each(|e| e.dropped_by_line_limit = true);
     }
     Ok(entries)
+}
+
+/// One OAM entry as `oam[N]` reads it (design §7): its four bytes and what
+/// the attribute byte says, without the screen geometry [`oam`] works out.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ObjectAttributes {
+    pub index: u8,
+    pub y: u8,
+    pub x: u8,
+    pub tile: u8,
+    pub attr: u8,
+    /// Bit 7: background and window colors 1–3 are drawn over the object.
+    pub priority: bool,
+    pub y_flip: bool,
+    pub x_flip: bool,
+    /// Bit 4: OBP0 or OBP1, the palette outside CGB mode.
+    pub palette: u8,
+    /// Bits 3 and 0–2, which only CGB mode reads.
+    pub cgb: Option<CgbObjectAttributes>,
+}
+
+/// The attribute bits CGB mode adds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CgbObjectAttributes {
+    /// The VRAM bank of the tile.
+    pub bank: u8,
+    /// Object palette 0–7.
+    pub palette: u8,
+}
+
+/// OAM entry `index` (0–39), decoded; the CGB bits only when the PPU is in
+/// CGB mode, since a DMG, and a CGB running a DMG cartridge, ignores them.
+pub fn object_attributes(core: &dyn Core, index: u8) -> Result<ObjectAttributes, CoreError> {
+    let i = usize::from(index);
+    if i >= OBJECTS {
+        return Err(CoreError::InvalidState {
+            reason: format!(
+                "OAM holds {OBJECTS} entries, 0 to {}; not {index}",
+                OBJECTS - 1
+            ),
+        });
+    }
+    let bytes = core.region(Region::Oam)?.bytes;
+    let [y, x, tile, attr] = bytes[4 * i..4 * i + 4] else {
+        unreachable!("OAM holds 40 four-byte entries");
+    };
+    let cgb_mode = matches!(core.color_mode(), Ok(ColorMode::CgbPalettes));
+    Ok(ObjectAttributes {
+        index,
+        y,
+        x,
+        tile,
+        attr,
+        priority: attr & 0x80 != 0,
+        y_flip: attr & 0x40 != 0,
+        x_flip: attr & 0x20 != 0,
+        palette: (attr >> 4) & 1,
+        cgb: cgb_mode.then_some(CgbObjectAttributes {
+            bank: (attr >> 3) & 1,
+            palette: attr & 7,
+        }),
+    })
 }
 
 /// Which CGB palette RAM.

@@ -16,6 +16,7 @@ pub const MBC5: u8 = 0x19;
 pub const MBC5_RAM: u8 = 0x1A;
 pub const MBC5_RAM_BATTERY: u8 = 0x1B;
 pub const MBC5_RUMBLE_RAM: u8 = 0x1D;
+pub const HUC3: u8 = 0xFE;
 
 /// $0149 codes.
 pub const NO_RAM: u8 = 0x00;
@@ -45,6 +46,17 @@ pub fn cart(kind: u8, banks: usize, ram: u8) -> Vec<u8> {
     rom[0x14D] = rom[0x134..0x14D]
         .iter()
         .fold(0u8, |x, b| x.wrapping_sub(*b).wrapping_sub(1));
+    rom
+}
+
+/// A TPP1 cart with a clock and 8 KiB of battery RAM: SameBoy knows TPP1 by
+/// $BC at $0147 and the magic $C1 $65 at $0149; $0152 is the RAM size and
+/// $0153's bit 3 the battery.
+pub fn tpp1_cart() -> Vec<u8> {
+    let mut rom = cart(0xBC, 4, 0xC1);
+    rom[0x14A] = 0x65;
+    rom[0x152] = 0x01;
+    rom[0x153] = 0x08;
     rom
 }
 

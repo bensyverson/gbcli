@@ -1,7 +1,7 @@
 //! Battery saves in SameBoy's `.sav` format, read without host time (design
 //! §6, the 2026-11-07 battery-save ruling).
 
-use gbcli_core::{CoreError, Feature, SavClock};
+use gbcli_core::{CoreError, Feature, MAX_RTC_ADVANCE_S, SavClock};
 use sameboy_sys as sb;
 
 use crate::SameBoy;
@@ -95,14 +95,69 @@ impl SameBoy {
         unsafe {
             if !sb::gbcli_has_clock(gb) {
                 return Err(CoreError::InvalidState {
-                    reason: "this cart has no clock to advance (only MBC3 with a timer, and \
-                             HuC3, have one)"
+                    reason: "this cart has no clock to advance (only MBC3 with a timer, HuC3 \
+                             and TPP1 have one)"
                         .into(),
                 });
             }
-            sb::gbcli_advance_rtc(gb, seconds);
+            if seconds > MAX_RTC_ADVANCE_S || !sb::gbcli_advance_rtc(gb, seconds) {
+                return Err(CoreError::InvalidState {
+                    reason: format!(
+                        "an advance of {seconds} s is past the most a cart clock moves at once, \
+                         1024 days ({MAX_RTC_ADVANCE_S} s): an MBC3 clock counts 512 days and \
+                         then only flags the overflow, so a longer advance reads like one 512 \
+                         days shorter"
+                    ),
+                });
+            }
         }
         Ok(())
+    }
+
+    pub(crate) fn export_battery_state(&mut self) -> Result<Option<Vec<u8>>, CoreError> {
+        let gb = self.raw();
+        // SAFETY: a plain query on a live instance outside GB_run.
+        let size = unsafe { sb::GB_save_battery_size(gb) };
+        if size <= 0 {
+            return Ok(None);
+        }
+        let mut state = vec![0u8; size as usize];
+        // SAFETY: the buffer is `state.len()` bytes; outside GB_run.
+        if !unsafe { sb::gbcli_save_battery_state(gb, state.as_mut_ptr(), state.len()) } {
+            return Err(CoreError::Backend {
+                message: format!("the battery state of this cart doesn't fit {size} bytes"),
+            });
+        }
+        Ok(Some(state))
+    }
+
+    pub(crate) fn import_battery_state(&mut self, state: &[u8]) -> Result<SavClock, CoreError> {
+        let gb = self.raw();
+        // SAFETY: plain queries, then a load of `state.len()` bytes, which
+        // the shim checks against the cart; outside GB_run.
+        let (kind, size, ram, loaded) = unsafe {
+            let kind = sb::gbcli_battery_kind(gb);
+            let size = sb::GB_save_battery_size(gb);
+            let ram = sb::gbcli_cart_ram_size(gb) as usize;
+            let loaded = sb::gbcli_load_battery_state(gb, state.as_ptr(), state.len());
+            (kind, size, ram, loaded)
+        };
+        if !loaded {
+            return Err(CoreError::InvalidState {
+                reason: format!(
+                    "a battery state of {} bytes doesn't fit this cart, whose state is {size}; \
+                     carry it only between cores on the same cart",
+                    state.len()
+                ),
+            });
+        }
+        if let Some(tracking) = &mut self.hooks_mut().tracking {
+            tracking.mark_poke(gbcli_core::Region::Sram, 0, ram);
+        }
+        Ok(match kind {
+            sb::GBCLI_BATTERY_RAM => SavClock::NotClocked,
+            _ => SavClock::Restored,
+        })
     }
 }
 

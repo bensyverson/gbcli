@@ -454,6 +454,14 @@ impl Core for SameBoy {
         self.import_battery(sav)
     }
 
+    fn battery_state(&mut self) -> Result<Option<Vec<u8>>, CoreError> {
+        self.export_battery_state()
+    }
+
+    fn load_battery_state(&mut self, state: &[u8]) -> Result<SavClock, CoreError> {
+        self.import_battery_state(state)
+    }
+
     fn advance_rtc(&mut self, seconds: u64) -> Result<(), CoreError> {
         self.advance_clock(seconds)
     }

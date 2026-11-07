@@ -20,7 +20,7 @@ pub use audio::{
     ApuWrite, ApuWriteEffect, AudioCapture, AudioSamples, SOUND_REGISTERS, StereoSample, WAVE_RAM,
     is_sound_addr,
 };
-pub use battery::SavClock;
+pub use battery::{MAX_RTC_ADVANCE_S, SavClock};
 pub use display::{ColorMode, LiveFrame, PixelBuf};
 pub use error::{CoreError, Feature, Gap, Support};
 pub use filter::{AddrFilter, BankSel, StoreFilter, canonical_addr};
@@ -210,9 +210,25 @@ pub trait Core {
             reason: "this core doesn't import battery saves",
         })
     }
+    /// The cart's battery-backed RAM and clock in this core's own layout,
+    /// for [`load_battery_state`](Core::load_battery_state) on a core built
+    /// from the same ROM: a power cycle. Unlike a `.sav` it holds every
+    /// cart's clock and no host time, so it carries what `.sav` import
+    /// refuses (HuC3, TPP1). Never a file. `None` when the cart has no
+    /// battery. The default is the `.sav`.
+    fn battery_state(&mut self) -> Result<Option<Vec<u8>>, CoreError> {
+        self.battery_sav()
+    }
+    /// Takes over a [`battery_state`](Core::battery_state) from a core of
+    /// this backend on the same cart. A state of another size is refused
+    /// and changes nothing. The default reads it as a `.sav`.
+    fn load_battery_state(&mut self, state: &[u8]) -> Result<SavClock, CoreError> {
+        self.load_battery_sav(state)
+    }
     /// Moves the cart's clock on by whole seconds at once, as if the machine
     /// had been off that long; a halted clock stays put, as on hardware.
-    /// `InvalidState` on a cart without a clock.
+    /// `InvalidState` on a cart without a clock, or past
+    /// [`MAX_RTC_ADVANCE_S`].
     fn advance_rtc(&mut self, _seconds: u64) -> Result<(), CoreError> {
         Err(CoreError::Unsupported {
             feature: Feature::BatterySave,

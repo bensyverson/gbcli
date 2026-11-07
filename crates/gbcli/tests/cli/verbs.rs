@@ -11,6 +11,7 @@ const SCRIPT: &[&[&str]] = &[
     &["step", "frame"],
     &["show"],
     &["read", "u16[wFrame]", "pc", "frame"],
+    &["read", "oam[0]", "oam[0].x"],
     &["break", "Work"],
     &["watch", "write", "wFrame", "--once"],
     &["run"],

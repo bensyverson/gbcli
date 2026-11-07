@@ -23,7 +23,12 @@ fn reads(h: &mut Handler, exprs: Vec<String>) -> Vec<i64> {
         allow_uninit: false,
     })));
     let result = response.outcome.expect("reads");
-    result.reads.unwrap().iter().map(|r| r.value).collect()
+    result
+        .reads
+        .unwrap()
+        .iter()
+        .map(|r| r.value.unwrap())
+        .collect()
 }
 
 /// A machine past the boot ROM, whose logo is in VRAM.

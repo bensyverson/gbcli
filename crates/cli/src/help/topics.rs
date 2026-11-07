@@ -92,6 +92,9 @@ Addresses — one grammar for every verb and expression.
                        hex with $ or 0x (Main+$10), as RGBDS reads it
   rLY, rLCDC, rDMA     hardware registers by their hardware.inc names; no .sym
                        needed
+  oam[0], oam[0].x     an OAM entry and one of its bytes, in reads and
+                       conditions only (gbcli help expressions); poke and
+                       watch take the offset: oam:1 is entry 0's x
 
 A bad address says what fits: the region's size, the offsets a symbol allows,
 or the nearest symbol names.
@@ -105,7 +108,11 @@ bus, so evaluating one has no side effects.
   registers   a f b c d e h l af bc de hl sp pc; flags zf nf hf cf; ime
   memory      [ADDR] reads a byte, u16[ADDR] a little-endian word; ADDR is any
               address form (gbcli help addresses) or an expression: [hl]
-  machine     frame, t (T-cycles since the time base), ly, bank
+  sprites     oam[N].y, .x, .tile, .attr: a byte of OAM entry N (0-39);
+              oam[N] alone, in --read and `gbcli read`, prints the entry as
+              fields: y x tile attr priority yflip xflip palette (and
+              cgb_bank cgb_palette in CGB mode)
+  machine    frame, t (T-cycles since the time base), ly, bank
   watches     old and new: the byte before and after the write
   operators   + - * / % & | ^ ~ << >>  == != < <= > >=  && || !  (C precedence)
 

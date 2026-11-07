@@ -122,11 +122,25 @@ pub fn rows(r: &ResultBody) -> String {
         out += &stop::rows(stop);
     }
     for read in r.reads.iter().flatten() {
-        out += &Row::new("read")
+        let row = Row::new("read")
             .field("expr", &read.expr)
-            .field("value", read.value)
-            .opt("hex", hex(read.value))
-            .line();
+            .opt("value", read.value)
+            .opt("hex", read.value.and_then(hex));
+        out += &match &read.oam {
+            Some(o) => row
+                .field("y", o.y)
+                .field("x", o.x)
+                .field("tile", byte(o.tile))
+                .field("attr", byte(o.attr))
+                .flag("priority", o.priority)
+                .flag("yflip", o.yflip)
+                .flag("xflip", o.xflip)
+                .field("palette", o.palette)
+                .opt("cgb_bank", o.cgb_bank)
+                .opt("cgb_palette", o.cgb_palette),
+            None => row,
+        }
+        .line();
     }
     if let Some(m) = &r.measure {
         out += &profile::measure(m);

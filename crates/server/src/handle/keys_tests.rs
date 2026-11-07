@@ -21,7 +21,12 @@ fn read(h: &mut Handler, exprs: &[String]) -> Vec<i64> {
         allow_uninit: false,
     })));
     let result = response.outcome.expect("reads");
-    result.reads.unwrap().iter().map(|r| r.value).collect()
+    result
+        .reads
+        .unwrap()
+        .iter()
+        .map(|r| r.value.unwrap())
+        .collect()
 }
 
 /// The next log index: where the run's first vblank will be logged.

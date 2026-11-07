@@ -131,7 +131,9 @@ const FRAME: &str = r#"{"id":"r","op":"read","args":{"reads":["frame"]}}"#;
 
 fn frame(response: &Response) -> i64 {
     let result = response.result().expect("a read result");
-    result.reads.as_ref().expect("reads")[0].value
+    result.reads.as_ref().expect("reads")[0]
+        .value
+        .expect("a value")
 }
 
 #[test]

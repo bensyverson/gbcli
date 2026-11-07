@@ -1,8 +1,8 @@
 //! A precedence-climbing parser with C precedence.
 
 use super::lex::{Prefix, Tok, lex};
-use super::names;
 use super::{BinOp, Expr, ExprError, Place, UnOp, Width};
+use super::{names, oam};
 use crate::addr::banked_area;
 use crate::inspect::hwreg;
 use crate::inspect::regions::parse_region;
@@ -137,6 +137,9 @@ impl Parser<'_> {
                 if let Some(e) = names::keyword(&name) {
                     return Ok(e);
                 }
+                if name == oam::NAME && self.peek() == Some(&Tok::LBracket) {
+                    return self.oam(at);
+                }
                 if let Some(addr) = hwreg::address_of(&name) {
                     return Ok(Expr::Num(i64::from(addr)));
                 }
@@ -171,6 +174,27 @@ impl Parser<'_> {
                 name,
                 candidates: many.iter().map(|s| (*s).clone()).collect(),
             }),
+        }
+    }
+
+    /// After `oam`, at `[`: `[N]` and a field (design §7).
+    fn oam(&mut self, at: usize) -> Result<Expr, ExprError> {
+        self.expect(Tok::LBracket)?;
+        let (index_at, index) = self.next()?;
+        self.expect(Tok::RBracket)?;
+        let field = match self.toks.get(self.pos) {
+            Some((field_at, Tok::Ident(f))) if f.starts_with('.') => {
+                let field = (*field_at, f.clone());
+                self.pos += 1;
+                Some(field)
+            }
+            _ => None,
+        };
+        let shown = field.as_ref().map_or("", |(_, f)| f.as_str());
+        let index = oam::index(index_at, &index, shown)?;
+        match field {
+            Some((field_at, f)) => oam::field(field_at, index, &f),
+            None => Err(oam::whole_entry(at, index)),
         }
     }
 

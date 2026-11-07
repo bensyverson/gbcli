@@ -84,6 +84,15 @@ fn bad_expression_points_at_the_grammar() {
 }
 
 #[test]
+fn an_oam_entry_past_the_last_or_an_unknown_field_names_what_fits() {
+    let p = Project::with_session("bad-oam");
+    p.gbcli(&["read", "oam[40]", "--session", "demo"])
+        .fails(2, "bad_expression", "oam[39]");
+    p.gbcli(&["read", "oam[0].flags", "--session", "demo"])
+        .fails(2, "bad_expression", "oam[0].attr");
+}
+
+#[test]
 fn ambiguous_symbol_lists_every_candidate() {
     let p = Project::new("ambiguous");
     fs::write(

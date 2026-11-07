@@ -13,6 +13,9 @@ exit 0
 $ gbcli read u16[wFrame] pc frame --session demo --json
 exit 0
 {"id":"cli","ok":true,"rev":"s3","result":{"reads":[{"expr":"u16[wFrame]","value":1878},{"expr":"pc","value":364},{"expr":"frame","value":3}]},"warnings":[]}
+$ gbcli read oam[0] oam[0].x --session demo --json
+exit 0
+{"id":"cli","ok":true,"rev":"s3","result":{"reads":[{"expr":"oam[0]","oam":{"index":0,"y":183,"x":255,"tile":0,"attr":0,"priority":false,"yflip":false,"xflip":false,"palette":0}},{"expr":"oam[0].x","value":255}]},"warnings":[]}
 $ gbcli break Work --session demo --json
 exit 0
 {"id":"cli","ok":true,"rev":"s3","result":{"breakpoint":{"id":1,"at":{"addr":355,"bank":null,"symbol":"Work"}}},"warnings":[]}

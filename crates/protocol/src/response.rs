@@ -229,11 +229,38 @@ pub struct ResultBody {
     pub sav: Option<SavMade>,
 }
 
-/// One `--read` result.
+/// One `--read` result: an expression's `value`, or for a whole OAM entry
+/// (`oam[N]`) its fields in `oam`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReadValue {
     pub expr: String,
-    pub value: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oam: Option<OamEntryRead>,
+}
+
+/// `oam[N]` as a read (design §7): the entry's four bytes, then what the
+/// attribute byte says.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OamEntryRead {
+    pub index: u8,
+    pub y: u8,
+    pub x: u8,
+    pub tile: u8,
+    pub attr: u8,
+    /// Bit 7: background and window colors 1–3 are drawn over the object.
+    pub priority: bool,
+    pub yflip: bool,
+    pub xflip: bool,
+    /// Bit 4: OBP0 or OBP1, the palette outside CGB mode.
+    pub palette: u8,
+    /// CGB mode only: the tile's VRAM bank (bit 3).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cgb_bank: Option<u8>,
+    /// CGB mode only: the object palette 0–7 (bits 0–2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cgb_palette: Option<u8>,
 }
 
 /// A checkpoint that was written.

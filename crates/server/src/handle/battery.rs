@@ -6,7 +6,7 @@ use std::fs;
 use std::path::Path;
 
 use gbcli_bundle::{SessionStore, parse_duration};
-use gbcli_core::SavClock;
+use gbcli_core::{MAX_RTC_ADVANCE_S, SavClock};
 use gbcli_engine::{Battery, LoadOptions, Machine};
 use gbcli_protocol::{
     BatteryFrom, ErrorBody, ErrorCode, PowerCycleArgs, PowerCycleMade, ResultBody, SavArgs,
@@ -38,6 +38,19 @@ impl Handler {
                 .as_secs(),
             None => 0,
         };
+        if rtc_advance > MAX_RTC_ADVANCE_S {
+            return Err(Failure::new(ErrorBody::new(
+                ErrorCode::BadRequest,
+                format!(
+                    "--rtc-advance {} is past 1024 days, the most a cart clock moves at once: an \
+                     MBC3 clock counts 512 days and then only flags the overflow, so a longer \
+                     advance reads like one 512 days shorter",
+                    args.rtc_advance.as_deref().unwrap_or_default()
+                ),
+                "advance by at most 1024d; 512d from day 0 is enough to overflow the day \
+                 counter and set its carry flag",
+            )));
+        }
         let file = args.sav.as_deref().map(read_sav).transpose()?;
         self.forget_warm(store.name());
         let stored = |e| Failure::from_store(&e);
@@ -49,7 +62,7 @@ impl Handler {
         let rom_rebuilt = head
             .as_ref()
             .is_some_and(|h| h.header.rom_sha256 != machine.rom_sha256());
-        let mut head_sav = None;
+        let mut head_state = None;
         match &head {
             Some(head) if rom_rebuilt => {
                 // Only the battery crosses a rebuild; the rest of the state
@@ -63,9 +76,9 @@ impl Handler {
                         ..LoadOptions::default()
                     };
                     store.restore(&mut old, head, &forced).map_err(stored)?;
-                    head_sav = old
+                    head_state = old
                         .core_mut()
-                        .battery_sav()
+                        .battery_state()
                         .map_err(|e| Failure::from_core(&e))?;
                 }
                 warnings.push(
@@ -84,8 +97,9 @@ impl Handler {
             None => {}
         }
         warnings.extend(header_warnings(&machine));
-        let battery = match (&file, &head_sav) {
-            (Some(bytes), _) | (None, Some(bytes)) => Battery::Sav(bytes),
+        let battery = match (&file, &head_state) {
+            (Some(sav), _) => Battery::Sav(sav),
+            (None, Some(state)) => Battery::Carried(state),
             (None, None) => Battery::Keep,
         };
         let cycled = machine

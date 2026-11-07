@@ -314,7 +314,14 @@ unsafe extern "C" {
         real: *const u8,
         latched: *const u8,
     );
-    pub fn gbcli_advance_rtc(gb: *mut GB_gameboy_t, seconds: u64);
+    /// False, and nothing moved, when the target second overflows.
+    pub fn gbcli_advance_rtc(gb: *mut GB_gameboy_t, seconds: u64) -> bool;
+    /// gbcli's own battery state, `GB_save_battery_size` bytes: false when
+    /// `len` is any other size.
+    pub fn gbcli_save_battery_state(gb: *mut GB_gameboy_t, out: *mut u8, len: usize) -> bool;
+    /// Takes over a state from `gbcli_save_battery_state` on the same cart:
+    /// false, and nothing changed, when `len` is the wrong size.
+    pub fn gbcli_load_battery_state(gb: *mut GB_gameboy_t, state: *const u8, len: usize) -> bool;
 }
 
 /// A per-pixel layer tag (`GBCLI_LAYER_*`, the patched `display.h`): what

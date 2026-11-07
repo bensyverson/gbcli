@@ -1,8 +1,10 @@
 use gbcli_bundle::SessionStore;
-use gbcli_engine::{Machine, Since, cond::Condition, cond::EvalCtx, cond::EvalWarning};
+use gbcli_engine::cond::{Condition, EvalCtx, EvalWarning, ExprError, oam_entry};
+use gbcli_engine::inspect::video::{ObjectAttributes, object_attributes};
+use gbcli_engine::{Machine, Since};
 use gbcli_protocol::{
-    EventsArgs, PpuView, ReadArgs, ReadValue, RegistersView, ResultBody, SessionFile, TimeBase,
-    TimeMark,
+    EventsArgs, OamEntryRead, PpuView, ReadArgs, ReadValue, RegistersView, ResultBody, SessionFile,
+    TimeBase, TimeMark,
 };
 
 use super::{Failure, Handler, Need};
@@ -90,10 +92,16 @@ pub(super) fn warning_text(warning: &EvalWarning) -> String {
     warning.to_string()
 }
 
-/// A `--read` expression and its compiled condition.
+/// A `--read` expression, compiled.
 pub(super) struct CompiledRead {
     text: String,
-    condition: Condition,
+    form: ReadForm,
+}
+
+enum ReadForm {
+    Value(Condition),
+    /// `oam[N]`, printed as fields (design §7).
+    OamEntry(u8),
 }
 
 /// Compiles every read against the machine's symbols, before it runs.
@@ -101,17 +109,36 @@ pub(super) fn compile_reads(
     machine: &Machine,
     reads: &[String],
 ) -> Result<Vec<CompiledRead>, Failure> {
+    let bad = |e: ExprError| Failure::new(convert::expr(&e));
     reads
         .iter()
         .map(|text| {
-            Condition::compile(text, machine.symbols())
-                .map(|condition| CompiledRead {
-                    text: text.clone(),
-                    condition,
-                })
-                .map_err(|e| Failure::new(convert::expr(&e)))
+            let form = match oam_entry(text).map_err(bad)? {
+                Some(index) => ReadForm::OamEntry(index),
+                None => ReadForm::Value(Condition::compile(text, machine.symbols()).map_err(bad)?),
+            };
+            Ok(CompiledRead {
+                text: text.clone(),
+                form,
+            })
         })
         .collect()
+}
+
+fn oam_view(e: &ObjectAttributes) -> OamEntryRead {
+    OamEntryRead {
+        index: e.index,
+        y: e.y,
+        x: e.x,
+        tile: e.tile,
+        attr: e.attr,
+        priority: e.priority,
+        yflip: e.y_flip,
+        xflip: e.x_flip,
+        palette: e.palette,
+        cgb_bank: e.cgb.map(|c| c.bank),
+        cgb_palette: e.cgb.map(|c| c.palette),
+    }
 }
 
 /// Evaluates compiled reads; `allow_uninit` reads a never-written byte's
@@ -125,7 +152,20 @@ pub(super) fn eval_reads(
 ) -> Result<Vec<ReadValue>, Failure> {
     let base = machine.time_base(since);
     let mut values = Vec::new();
-    for CompiledRead { text, condition } in reads {
+    for CompiledRead { text, form } in reads {
+        let condition = match form {
+            ReadForm::Value(condition) => condition,
+            ReadForm::OamEntry(index) => {
+                let entry = object_attributes(machine.core(), *index)
+                    .map_err(|e| Failure::from_core(&e))?;
+                values.push(ReadValue {
+                    expr: text.clone(),
+                    value: None,
+                    oam: Some(oam_view(&entry)),
+                });
+                continue;
+            }
+        };
         let ctx = EvalCtx {
             core: machine.core(),
             symbols: machine.symbols(),
@@ -143,7 +183,8 @@ pub(super) fn eval_reads(
         warnings.extend(eval_warnings.iter().map(warning_text));
         values.push(ReadValue {
             expr: text.clone(),
-            value,
+            value: Some(value),
+            oam: None,
         });
     }
     Ok(values)

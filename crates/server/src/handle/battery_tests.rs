@@ -13,6 +13,9 @@ const MBC3_TIMER_RAM_BATTERY: u8 = 0x10;
 const MBC5_RAM: u8 = 0x1A;
 const RAM_8K: u8 = 0x02;
 const SAV_BYTES: u64 = 8 * 1024 + 48;
+const HUC3: u8 = 0xFE;
+/// HuC3's footer is SameBoy's own 17 bytes.
+const HUC3_SAV_BYTES: u64 = 8 * 1024 + 17;
 
 /// `rom` under another cart type and RAM size, its header checksum fixed.
 fn as_cart(rom: &[u8], kind: u8, ram: u8) -> Vec<u8> {
@@ -47,7 +50,7 @@ fn read(h: &mut Handler, expr: &str) -> i64 {
         since: None,
         allow_uninit: true,
     }))));
-    body.reads.unwrap()[0].value
+    body.reads.unwrap()[0].value.unwrap()
 }
 
 fn power_cycle(h: &mut Handler, args: PowerCycleArgs) -> Response {
@@ -222,6 +225,59 @@ fn a_bad_rtc_advance_is_refused_before_anything_changes() {
         },
     );
     assert_eq!(response.outcome.unwrap_err().code, ErrorCode::BadRequest);
+}
+
+/// Review of a066271: the advance loops once per emulated day and could
+/// wrap, so one past the longest an MBC3 clock can tell apart is refused.
+#[test]
+fn an_rtc_advance_past_1024_days_is_refused_with_the_fix() {
+    let f = Fixture::with_rom("cycle-far", &as_cart(V1, MBC3_TIMER_RAM_BATTERY, RAM_8K));
+    let mut h = handler(&f);
+    ok(run_frames(&mut h, 2));
+    for text in ["1025d", "99999999999d"] {
+        let error = power_cycle(
+            &mut h,
+            PowerCycleArgs {
+                sav: None,
+                rtc_advance: Some(text.into()),
+            },
+        )
+        .outcome
+        .unwrap_err();
+        assert_eq!(error.code, ErrorCode::BadRequest, "{text}");
+        assert!(error.message.contains("1024 days"), "{}", error.message);
+        assert!(error.remedy.contains("1024d"), "{}", error.remedy);
+    }
+    let (body, _) = ok(power_cycle(
+        &mut h,
+        PowerCycleArgs {
+            sav: None,
+            rtc_advance: Some("1024d".into()),
+        },
+    ));
+    assert_eq!(body.power_cycle.unwrap().rtc_advanced_s, 1024 * 86_400);
+}
+
+/// Review of a066271: on HuC3 (and TPP1) every power cycle was refused,
+/// because keeping the battery went through the `.sav` import.
+#[test]
+fn a_huc3_cart_power_cycles_keeping_its_battery_and_across_a_rebuild() {
+    let f = Fixture::with_rom("cycle-huc3", &as_cart(V1, HUC3, RAM_8K));
+    let mut h = handler(&f);
+    ok(run_frames(&mut h, 2));
+    poke_sram(&mut h, &[0xAB]);
+    let (body, _) = ok(power_cycle(&mut h, PowerCycleArgs::default()));
+    let made = body.power_cycle.unwrap();
+    assert_eq!(made.battery, BatteryFrom::Head);
+    assert_eq!(made.bytes, Some(HUC3_SAV_BYTES));
+    assert_eq!(read(&mut h, "[sram:$10]"), 0xAB);
+
+    f.rebuild(&as_cart(V2, HUC3, RAM_8K), V2_SYM);
+    let (body, _) = ok(power_cycle(&mut h, PowerCycleArgs::default()));
+    let made = body.power_cycle.unwrap();
+    assert!(made.rom_rebuilt);
+    assert_eq!(made.battery, BatteryFrom::Head);
+    assert_eq!(read(&mut h, "[sram:$10]"), 0xAB);
 }
 
 /// Breakpoints and watches are the session's tooling, not machine state: a

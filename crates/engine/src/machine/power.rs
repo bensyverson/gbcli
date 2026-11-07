@@ -14,6 +14,10 @@ pub enum Battery<'a> {
     /// A `.sav` in [`Core::battery_sav`](gbcli_core::Core::battery_sav)'s
     /// format, in place of the cart's own.
     Sav(&'a [u8]),
+    /// A [`Core::battery_state`](gbcli_core::Core::battery_state) from
+    /// another core of this backend on the same cart (the head's, across a
+    /// rebuild), in place of the cart's own.
+    Carried(&'a [u8]),
 }
 
 /// What a power cycle carried across.
@@ -30,24 +34,29 @@ impl Machine {
     /// patches, setup and seed, at power-on (time 0, no boot handoff yet),
     /// with the battery's RAM and clock carried in, the clock then moved on
     /// by `rtc_advance` seconds. Held keys stay held. The clock's count
-    /// within its current second restarts, as a `.sav` doesn't hold it. On
-    /// any failure the machine is unchanged.
+    /// within its current second restarts, as neither a `.sav` nor a battery
+    /// state holds it. On any failure the machine is unchanged.
     pub fn power_cycle(
         &mut self,
         battery: Battery<'_>,
         rtc_advance: u64,
     ) -> Result<PowerCycled, CoreError> {
-        let sav = match battery {
-            Battery::Keep => self.core.battery_sav()?,
-            Battery::Sav(bytes) => Some(bytes.to_vec()),
+        // Keeping the cart's own battery carries the core's state, not a
+        // `.sav`: the import refuses HuC3 and TPP1 footers.
+        let kept = match battery {
+            Battery::Keep => self.core.battery_state()?,
+            Battery::Carried(_) | Battery::Sav(_) => None,
         };
         let mut core = (self.backend.build)(core_config(&self.setup, &self.rom))?;
         for patch in &self.patches {
             core.patch_rom(patch.offset, &patch.bytes)?;
         }
-        let clock = match &sav {
-            Some(bytes) => core.load_battery_sav(bytes)?,
-            None => SavClock::NotClocked,
+        let (clock, bytes) = match (battery, kept.as_deref()) {
+            (Battery::Keep, None) => (SavClock::NotClocked, None),
+            (Battery::Keep, Some(state)) | (Battery::Carried(state), _) => {
+                (core.load_battery_state(state)?, Some(state.len()))
+            }
+            (Battery::Sav(sav), _) => (core.load_battery_sav(sav)?, Some(sav.len())),
         };
         if rtc_advance > 0 {
             core.advance_rtc(rtc_advance)?;
@@ -56,7 +65,7 @@ impl Machine {
         self.core = core;
         self.boot = None;
         Ok(PowerCycled {
-            battery_bytes: sav.as_ref().map(Vec::len),
+            battery_bytes: bytes,
             clock,
         })
     }

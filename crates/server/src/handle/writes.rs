@@ -184,6 +184,6 @@ mod tests {
             allow_uninit: false,
         })));
         let reads = read.outcome.unwrap().reads.unwrap();
-        assert_eq!(reads[0].value, 2);
+        assert_eq!(reads[0].value, Some(2));
     }
 }

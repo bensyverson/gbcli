@@ -10,6 +10,7 @@ use gbcli_engine::{Battery, Machine, PowerCycled, RunOptions};
 
 const MBC3_TIMER_RAM_BATTERY: u8 = 0x10;
 const MBC5_RAM: u8 = 0x1A;
+const HUC3: u8 = 0xFE;
 
 fn cart(kind: u8) -> Vec<u8> {
     with_cart(BUSY.to_vec(), kind, RAM_8K)
@@ -134,6 +135,37 @@ fn a_refused_import_leaves_the_machine_as_it_was() {
     assert!(m.power_cycle(Battery::Sav(&[0; 10]), 0).is_err());
     assert_eq!(m.core().now(), ticks);
     assert_eq!(region(&m, Region::Sram)[0x100], 0xDE);
+}
+
+/// Review of a066271: keeping the battery round-tripped it through the
+/// `.sav` import, which refuses HuC3's footer, so every power cycle of a
+/// HuC3 cart was refused.
+#[test]
+fn a_power_cycle_keeps_a_huc3_carts_battery_ram_and_clock() {
+    let mut m = used(HUC3);
+    m.core_mut().advance_rtc(2 * 86_400).unwrap();
+    let sram = region(&m, Region::Sram);
+    let sav = m.core_mut().battery_sav().unwrap().unwrap();
+    let cycled = m.power_cycle(Battery::Keep, 0).unwrap();
+    assert_eq!(
+        cycled,
+        PowerCycled {
+            battery_bytes: Some(sav.len()),
+            clock: gbcli_core::SavClock::Restored,
+        }
+    );
+    assert_eq!(region(&m, Region::Sram), sram);
+    // HuC3's export is all emulated state, so an equal export is an equal clock.
+    assert_eq!(m.core_mut().battery_sav().unwrap().unwrap(), sav);
+}
+
+#[test]
+fn a_power_cycle_can_take_a_battery_state_carried_from_another_machine() {
+    let mut a = used(HUC3);
+    let state = a.core_mut().battery_state().unwrap().unwrap();
+    let mut b = machine(&cart(HUC3), None);
+    b.power_cycle(Battery::Carried(&state), 0).unwrap();
+    assert_eq!(region(&b, Region::Sram), region(&a, Region::Sram));
 }
 
 #[test]

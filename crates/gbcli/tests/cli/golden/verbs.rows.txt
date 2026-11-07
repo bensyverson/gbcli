@@ -27,6 +27,11 @@ read expr=u16[wFrame] value=1878 hex=$0756
 read expr=pc value=364 hex=$016C
 read expr=frame value=3 hex=$03
 rev s3
+$ gbcli read oam[0] oam[0].x --session demo
+exit 0
+read expr=oam[0] y=183 x=255 tile=$00 attr=$00 priority=0 yflip=0 xflip=0 palette=0
+read expr=oam[0].x value=255 hex=$FF
+rev s3
 $ gbcli break Work --session demo
 exit 0
 breakpoint id=1 addr=$0163 symbol=Work

@@ -34,6 +34,8 @@ checkpoints  —
 step    unit?: "instruction"|"over"|"out"|"frame"|"scanline"
 show    —
 read    reads: [EXPR]  since?  allow_uninit?
+        (each read is {expr, value}; "oam[N]" is {expr, oam: {index, y, x,
+        tile, attr, priority, yflip, xflip, palette, cgb_bank?, cgb_palette?}})
 break   at: ADDR  condition?: EXPR
 watch   access: "read"|"write"|"access"  at: ADDR  condition?: EXPR  once?: bool
 delete  id: N
@@ -53,7 +55,8 @@ opcode  query: TEXT  ("$20", "$CB37", "jr nz, .loop", "ld a, [hl+]")
         (build, doctor, new and opcode need no session; paths are relative
         to the server's working directory)
 power_cycle  sav?: PATH  rtc_advance?: "45s"|"30m"|"12h"|"7d"
-        (a new head at power-on, keeping the cart's battery RAM and clock)
+        (a new head at power-on, keeping the cart's battery RAM and clock;
+        rtc_advance at most "1024d")
 sav     path: PATH   (writes the head's battery save; changes nothing)
 
 Response, one line per request:

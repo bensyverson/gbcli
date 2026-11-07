@@ -31,7 +31,7 @@ fn read_one(h: &mut Handler, expr: &str) -> i64 {
         allow_uninit: false,
     })));
     assert!(response.is_ok(), "{:?}", response.error());
-    response.outcome.unwrap().reads.unwrap()[0].value
+    response.outcome.unwrap().reads.unwrap()[0].value.unwrap()
 }
 
 #[test]

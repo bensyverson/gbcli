@@ -13,7 +13,8 @@ const POWER_CYCLE: &[FlagSpec] = &[
     value(
         "rtc-advance",
         "DURATION",
-        "move the cart's clock on while the power is off: 45s, 30m, 12h or 7d",
+        "move the cart's clock on while the power is off: 45s, 30m, 12h or 7d, at most \
+         1024d (past that an MBC3 clock reads alike)",
     ),
 ];
 

@@ -6,6 +6,7 @@ mod cadence;
 pub(crate) mod eval;
 mod lex;
 mod names;
+mod oam;
 mod parse;
 
 use std::fmt;
@@ -88,6 +89,13 @@ impl Condition {
             crate::mem::CartSizes::of(core),
         )
     }
+}
+
+/// The entry a text names when it is a whole OAM entry, `oam[N]`, alone:
+/// what a read prints as fields (design §7). `None` for anything else,
+/// which compiles as a condition.
+pub fn oam_entry(text: &str) -> Result<Option<u8>, ExprError> {
+    oam::entry(text)
 }
 
 /// A CPU register an expression names.
@@ -269,5 +277,7 @@ impl From<CoreError> for EvalError {
     }
 }
 
+#[cfg(test)]
+mod oam_tests;
 #[cfg(test)]
 mod tests;

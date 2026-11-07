@@ -315,6 +315,32 @@ fn a_moved_breakpoint_symbol_is_refused() {
 }
 
 #[test]
+fn a_breakpoint_at_a_symbol_plus_or_minus_an_offset_that_did_not_move_loads() {
+    let mut m = machine(V1, Some(V1_SYM));
+    step_to(&mut m, 0x0150);
+    let saved = m.capture(meta());
+    let mut rebuilt = machine(V3, Some(V3_SYM));
+    for (id, text) in [(1, "Work-1"), (2, "Work+$10"), (3, "Main.loop+2")] {
+        let at = gbcli_engine::addr::parse(text, rebuilt.symbols()).unwrap();
+        rebuilt
+            .debugger_config_mut()
+            .breakpoints
+            .push(BreakpointSpec {
+                id,
+                at,
+                condition: None,
+            });
+    }
+    let warnings = rebuilt.restore(&saved, &LoadOptions::default()).unwrap();
+    assert!(
+        warnings
+            .iter()
+            .any(|w| matches!(w, LoadWarning::RomChanged { moved, .. } if moved.is_empty())),
+        "{warnings:?}"
+    );
+}
+
+#[test]
 fn a_rebuilt_rom_with_nothing_live_moved_loads_with_a_warning() {
     let saved = in_work().capture(meta());
     let mut rebuilt = machine(V3, Some(V3_SYM));

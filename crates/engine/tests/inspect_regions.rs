@@ -142,3 +142,20 @@ fn region_names_round_trip_and_follow_the_address_grammar() {
     assert_eq!(parse_region("VRAM"), Some(Region::Vram));
     assert_eq!(parse_region("nope"), None);
 }
+
+#[test]
+fn region_sizes_come_from_the_model_and_the_cart() {
+    use gbcli_engine::addr::{RegionSizes, SizeBasis};
+    let dmg = RegionSizes::of(&quick_dmg(BUSY)).unwrap();
+    assert_eq!(
+        (dmg.wram, dmg.vram, dmg.hram, dmg.oam, dmg.io, dmg.ie),
+        (0x2000, 0x2000, 0x7F, 0xA0, 0x80, 1)
+    );
+    assert_eq!((dmg.rom, dmg.sram), (BUSY.len(), 0));
+    assert_eq!(dmg.basis, SizeBasis::ThisMachine);
+    let cgb = RegionSizes::of(&booted_cgb(BANKED)).unwrap();
+    assert_eq!(
+        (cgb.rom, cgb.sram, cgb.wram, cgb.vram),
+        (0x10000, 0x8000, 0x8000, 0x4000)
+    );
+}

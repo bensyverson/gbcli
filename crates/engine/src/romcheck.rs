@@ -139,10 +139,11 @@ pub fn check(
             continue;
         };
         checked += 1;
-        let (name, offset) = split_offset(symbol);
+        let (name, delta) = crate::addr::split_label(symbol);
         let old = SymbolAt {
             bank: bp.at.bank.unwrap_or(0),
-            addr: bp.at.addr.wrapping_sub(offset),
+            // The grammar refused any offset that leaves $0000-$FFFF.
+            addr: (i64::from(bp.at.addr) - delta) as u16,
         };
         let new = at(name);
         if new != Some(old) {
@@ -163,15 +164,4 @@ pub fn check(
 
 fn missing(side: SymbolSide) -> CheckpointError {
     CheckpointError::SymbolsMissing { side }
-}
-
-/// `Name+3` → (`Name`, 3); `Name` → (`Name`, 0).
-fn split_offset(symbol: &str) -> (&str, u16) {
-    match symbol.rsplit_once('+') {
-        Some((name, n)) => match n.trim().parse() {
-            Ok(n) => (name.trim(), n),
-            Err(_) => (symbol, 0),
-        },
-        None => (symbol, 0),
-    }
 }

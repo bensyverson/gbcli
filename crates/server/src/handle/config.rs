@@ -1,11 +1,12 @@
-use gbcli_bundle::{SessionStore, Start};
-use gbcli_engine::addr;
+use gbcli_bundle::SessionStore;
+use gbcli_engine::LoadOptions;
 use gbcli_protocol::{
     BreakArgs, BreakpointMade, DeleteArgs, Deleted, ResultBody, SessionFile, WatchArgs, WatchMade,
 };
 
+use super::writes::parse_location;
 use super::{Failure, Handler, Need};
-use crate::convert::{self};
+use crate::convert;
 impl Handler {
     pub(super) fn breakpoint(
         &mut self,
@@ -13,9 +14,9 @@ impl Handler {
         meta: &mut SessionFile,
         args: &BreakArgs,
     ) -> Result<ResultBody, Failure> {
-        let (mut machine, _) = self.machine_for(store, meta, Need::Read, None, Start::PowerOn)?;
-        let at = addr::parse(&args.at, machine.symbols())
-            .map_err(|e| Failure::new(convert::addr(&e)))?;
+        let (mut machine, _) =
+            self.machine_for(store, meta, Need::Head, None, &LoadOptions::default())?;
+        let at = parse_location(&machine, &args.at)?;
         let id = machine
             .add_breakpoint(at.clone(), args.condition.as_deref())
             .map_err(|e| Failure::new(convert::expr(&e)))?;
@@ -43,9 +44,9 @@ impl Handler {
         meta: &mut SessionFile,
         args: &WatchArgs,
     ) -> Result<ResultBody, Failure> {
-        let (mut machine, _) = self.machine_for(store, meta, Need::Read, None, Start::PowerOn)?;
-        let at = addr::parse(&args.at, machine.symbols())
-            .map_err(|e| Failure::new(convert::addr(&e)))?;
+        let (mut machine, _) =
+            self.machine_for(store, meta, Need::Head, None, &LoadOptions::default())?;
+        let at = parse_location(&machine, &args.at)?;
         let id = machine
             .add_watch(
                 args.access,
@@ -82,7 +83,8 @@ impl Handler {
         meta: &mut SessionFile,
         args: &DeleteArgs,
     ) -> Result<ResultBody, Failure> {
-        let (mut machine, _) = self.machine_for(store, meta, Need::Read, None, Start::PowerOn)?;
+        let (mut machine, _) =
+            self.machine_for(store, meta, Need::Head, None, &LoadOptions::default())?;
         let found = machine.delete(args.id);
         meta.debugger = machine.debugger_config().clone();
         store
@@ -112,13 +114,13 @@ mod tests {
                 at: "$0170".into(),
                 condition: None
             })))
-            .ok
+            .is_ok()
         );
         let response = h.handle(&request(Op::Run(RunArgs {
             frames: Some(10),
             ..RunArgs::default()
         })));
-        let stop = response.result.unwrap().stop.unwrap();
+        let stop = response.outcome.unwrap().stop.unwrap();
         assert!(matches!(stop.reason, StopReason::Breakpoint { .. }));
         assert_eq!(stop.pc, 0x0170);
     }

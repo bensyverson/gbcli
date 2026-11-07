@@ -5,11 +5,13 @@
 mod checkpoint;
 mod error;
 mod hex;
+mod parse;
 mod request;
 mod response;
 mod rev;
 mod session;
 mod stop;
+mod views;
 
 pub use checkpoint::{
     BreakpointSpec, CheckpointHeader, CoreId, DebuggerConfig, LiveSymbol, Location, Patch,
@@ -17,17 +19,21 @@ pub use checkpoint::{
     model_name,
 };
 pub use error::{ErrorBody, ErrorCode};
+pub use parse::{RequestError, parse_request};
 pub use request::{
     BreakArgs, CheckpointArgs, DeleteArgs, EventsArgs, Op, PruneArgs, ReadArgs, Request,
-    RestoreArgs, RmArgs, RunArgs, StepArgs, WatchArgs, WriteArg, WriteArgs, WriteKind,
+    RestoreArgs, RmArgs, RunArgs, Start, StepArgs, WatchArgs, WriteArg, WriteArgs, WriteKind,
 };
 pub use response::{
-    BreakpointMade, CheckpointMade, Deleted, FlagsView, PpuModeView, PpuView, ReadValue,
-    RegistersView, Response, Restored, ResultBody, WatchMade, WriteMade,
+    BreakpointMade, CheckpointMade, Deleted, ReadValue, Response, Restored, ResultBody, WatchMade,
+    WriteMade,
 };
 pub use rev::Rev;
-pub use session::{EventLogLine, GapCount, GapLine, SessionFile, SessionRow, StopSummary};
+pub use session::{
+    EventLogLine, GapCount, GapLine, SessionFile, SessionRow, StopSummary, UndoWalk,
+};
 pub use stop::{
     BudgetLimits, BudgetUse, Cadence, FrameShown, StepKind, StopReason, StopRecord, StopTime,
     TimeBase,
 };
+pub use views::{FlagsView, PpuModeView, PpuView, RegistersView};

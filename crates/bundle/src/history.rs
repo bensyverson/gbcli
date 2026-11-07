@@ -8,7 +8,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use gbcli_engine::Checkpoint;
-use gbcli_protocol::Rev;
+use gbcli_protocol::{Rev, SessionFile, UndoWalk};
 
 use crate::error::StoreError;
 use crate::io::{atomic_write, ensure_dir};
@@ -41,12 +41,57 @@ impl SessionStore {
     }
 
     /// Writes the head for `rev` and drops entries more than
-    /// [`HISTORY_BACK`] behind it. The caller then writes `session.json`.
-    pub fn write_head(&self, cp: &Checkpoint, rev: Rev) -> Result<(), StoreError> {
+    /// [`HISTORY_BACK`] behind it, or behind the walk's origin while `walk`
+    /// is an undo walk in progress, so the walk can reach every entry that
+    /// was kept when it began. The caller then writes `session.json`.
+    pub fn write_head(
+        &self,
+        cp: &Checkpoint,
+        rev: Rev,
+        walk: Option<&UndoWalk>,
+    ) -> Result<(), StoreError> {
         ensure_dir(&self.history_dir())?;
         atomic_write(&self.history_path(rev), &cp.encode())?;
-        self.prune_history(rev);
+        self.prune_history(walk.map_or(rev, |w| w.origin.min(rev)));
         Ok(())
+    }
+
+    /// What the next undo restores (design §10): the entry before the one
+    /// the last undo restored when the head is part of a walk, else the
+    /// entry before the head. Refused past the oldest entry kept.
+    pub fn undo_target(&self, meta: &SessionFile) -> Result<(Checkpoint, UndoWalk), StoreError> {
+        let (from, origin) = match meta.undo {
+            Some(walk) => (walk.restored, walk.origin),
+            None => (meta.rev, meta.rev),
+        };
+        let past = || StoreError::UndoPastOldest {
+            name: self.name().to_string(),
+            oldest: self.oldest_entry(meta.rev),
+        };
+        let target = from
+            .0
+            .checked_sub(1)
+            .filter(|&rev| rev >= 1)
+            .ok_or_else(past)?;
+        match self.read_head(Rev(target)) {
+            Ok(Some(cp)) => Ok((
+                cp,
+                UndoWalk {
+                    restored: Rev(target),
+                    origin,
+                },
+            )),
+            Ok(None) | Err(StoreError::HeadMissing { .. }) => Err(past()),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// The oldest stored entry at or before `head`.
+    fn oldest_entry(&self, head: Rev) -> Option<Rev> {
+        self.history_revs()
+            .into_iter()
+            .find(|&rev| rev >= 1 && rev <= head.0)
+            .map(Rev)
     }
 
     /// A checkpoint by name, or `~N` for the head N revisions back.
@@ -131,7 +176,7 @@ mod tests {
 
     /// A save as the server makes one: head, then metadata.
     fn save(store: &SessionStore, cp: &Checkpoint, rev: u64) {
-        store.write_head(cp, Rev(rev)).unwrap();
+        store.write_head(cp, Rev(rev), None).unwrap();
         let mut meta = store.read_meta().unwrap();
         meta.rev = Rev(rev);
         store.write_meta(&meta).unwrap();
@@ -166,7 +211,7 @@ mod tests {
         save(&store, &first, 1);
         // Killed after the head write: session.json still says rev 1.
         let orphan = advance(&mut machine);
-        store.write_head(&orphan, Rev(2)).unwrap();
+        store.write_head(&orphan, Rev(2), None).unwrap();
         assert_eq!(store.read_meta().unwrap().rev, Rev(1));
         // The next request starts from rev 1's head and saves rev 2.
         let next = advance(&mut machine);
@@ -187,7 +232,9 @@ mod tests {
         let mut machine = store.machine(&store.read_meta().unwrap()).unwrap();
         let first = advance(&mut machine);
         save(&store, &first, 1);
-        store.write_head(&advance(&mut machine), Rev(2)).unwrap();
+        store
+            .write_head(&advance(&mut machine), Rev(2), None)
+            .unwrap();
         let rev = store.read_meta().unwrap().rev;
         let head = store.read_head(rev).unwrap().unwrap();
         assert_eq!(head.header.ticks, first.header.ticks);

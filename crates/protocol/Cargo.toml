@@ -9,6 +9,4 @@ publish.workspace = true
 [dependencies]
 gbcli-core.workspace = true
 serde.workspace = true
-
-[dev-dependencies]
 serde_json.workspace = true

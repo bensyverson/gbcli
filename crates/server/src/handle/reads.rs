@@ -1,7 +1,10 @@
-use gbcli_bundle::{SessionStore, Start};
-use gbcli_engine::{Machine, Since, cond::Condition, cond::EvalCtx, cond::EvalWarning};
+use gbcli_bundle::SessionStore;
+use gbcli_engine::{
+    LoadOptions, Machine, Since, cond::Condition, cond::EvalCtx, cond::EvalWarning,
+};
 use gbcli_protocol::{
-    EventsArgs, PpuView, ReadArgs, ReadValue, RegistersView, ResultBody, SessionFile, TimeMark,
+    EventsArgs, PpuView, ReadArgs, ReadValue, RegistersView, ResultBody, SessionFile, TimeBase,
+    TimeMark,
 };
 
 use super::{Failure, Handler, Need};
@@ -12,7 +15,8 @@ impl Handler {
         store: &SessionStore,
         meta: &SessionFile,
     ) -> Result<ResultBody, Failure> {
-        let (machine, _) = self.machine_for(store, meta, Need::Read, None, Start::PowerOn)?;
+        let (machine, _) =
+            self.machine_for(store, meta, Need::Head, None, &LoadOptions::default())?;
         let result = ResultBody {
             registers: Some(RegistersView::of(&machine.core().registers())),
             ppu: Some(PpuView::of(&machine.core().ppu())),
@@ -43,10 +47,13 @@ impl Handler {
         meta: &SessionFile,
         args: &ReadArgs,
     ) -> Result<ResultBody, Failure> {
-        let since = self.since(store, args.since.as_deref())?;
-        let (machine, _) = self.machine_for(store, meta, Need::Read, None, Start::PowerOn)?;
-        let reads = read_values(&machine, &args.reads, &since, &mut Vec::new())?;
+        let since = self.since(store, args.since.as_ref())?;
+        let (machine, _) =
+            self.machine_for(store, meta, Need::Head, None, &LoadOptions::default())?;
+        let compiled = compile_reads(&machine, &args.reads);
+        let reads = compiled.and_then(|c| eval_reads(&machine, &c, &since, false, &mut Vec::new()));
         self.keep_warm(store, meta, machine);
+        let reads = reads?;
         Ok(ResultBody {
             reads: Some(reads),
             ..ResultBody::default()
@@ -54,11 +61,15 @@ impl Handler {
     }
 
     /// The time base a request's `--since` names (design §9).
-    pub(super) fn since(&self, store: &SessionStore, text: Option<&str>) -> Result<Since, Failure> {
-        match text {
-            None | Some("boot") => Ok(Since::Boot),
-            Some("power-on") => Ok(Since::PowerOn),
-            Some(name) => {
+    pub(super) fn since(
+        &self,
+        store: &SessionStore,
+        base: Option<&TimeBase>,
+    ) -> Result<Since, Failure> {
+        match base {
+            None | Some(TimeBase::Boot) => Ok(Since::Boot),
+            Some(TimeBase::PowerOn) => Ok(Since::PowerOn),
+            Some(TimeBase::Checkpoint(name)) => {
                 let cp = store
                     .checkpoint(name)
                     .map_err(|e| Failure::from_store(&e))?;
@@ -78,23 +89,48 @@ pub(super) fn warning_text(warning: &EvalWarning) -> String {
     warning.to_string()
 }
 
-pub(super) fn read_values(
+/// A `--read` expression and its compiled condition.
+pub(super) struct CompiledRead {
+    text: String,
+    condition: Condition,
+}
+
+/// Compiles every read against the machine's symbols, before it runs.
+pub(super) fn compile_reads(
     machine: &Machine,
     reads: &[String],
+) -> Result<Vec<CompiledRead>, Failure> {
+    reads
+        .iter()
+        .map(|text| {
+            Condition::compile(text, machine.symbols())
+                .map(|condition| CompiledRead {
+                    text: text.clone(),
+                    condition,
+                })
+                .map_err(|e| Failure::new(convert::expr(&e)))
+        })
+        .collect()
+}
+
+/// Evaluates compiled reads; `allow_uninit` reads a never-written byte's
+/// power-on value with a warning instead of failing (design §8).
+pub(super) fn eval_reads(
+    machine: &Machine,
+    reads: &[CompiledRead],
     since: &Since,
+    allow_uninit: bool,
     warnings: &mut Vec<String>,
 ) -> Result<Vec<ReadValue>, Failure> {
     let base = machine.time_base(since);
     let mut values = Vec::new();
-    for text in reads {
-        let condition = Condition::compile(text, machine.symbols())
-            .map_err(|e| Failure::new(convert::expr(&e)))?;
+    for CompiledRead { text, condition } in reads {
         let ctx = EvalCtx {
             core: machine.core(),
             symbols: machine.symbols(),
             access: None,
             base,
-            allow_uninit: false,
+            allow_uninit,
         };
         let mut eval_warnings: Vec<EvalWarning> = Vec::new();
         let value = condition
@@ -127,7 +163,7 @@ mod tests {
             reads: vec!["[$FEA0]".into()],
             since: None,
         })));
-        let error = response.error.expect("FEA0 has no backing store");
+        let error = response.outcome.expect_err("FEA0 has no backing store");
         assert_eq!(error.code, ErrorCode::Unsupported);
 
         let gaps = f.bundle.gap_counts().unwrap();
@@ -144,9 +180,9 @@ mod tests {
     fn show_reports_registers_and_the_last_stop() {
         let f = Fixture::new("show");
         let mut h = handler(&f);
-        assert!(run_frames(&mut h, 1).ok);
+        assert!(run_frames(&mut h, 1).is_ok());
         let shown = h.handle(&request(Op::Show));
-        let result = shown.result.unwrap();
+        let result = shown.outcome.unwrap();
         assert!(result.registers.is_some());
         assert!(result.ppu.is_some());
         assert!(result.stop.is_some(), "the last stop is still there");

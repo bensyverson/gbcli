@@ -3,10 +3,11 @@
 
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
 
 use gbcli_core::Budget;
 use gbcli_engine::{Checkpoint, LoadOptions, Machine, RunOptions, SaveMeta, sha256};
-use gbcli_protocol::{Location, SessionFile, model_name};
+use gbcli_protocol::{Location, SessionFile, StopReason, model_name};
 
 use crate::error::StoreError;
 use crate::io::{atomic_write, io_at};
@@ -19,24 +20,21 @@ const BOOT_FRAMES: u64 = 600;
 /// The address a normal boot hands over to.
 const HANDOFF_PC: u16 = 0x0100;
 
-/// Where a machine starts from when a request doesn't say.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Start {
-    /// Run the boot ROM to the handoff, using the cache when it exists.
-    Boot,
-    /// Start at power-on; `--from power-on` (design §9).
-    PowerOn,
-}
+/// Where a machine starts from when there is no head: the protocol's own
+/// `--from`, so the request and the store share one type.
+pub use gbcli_protocol::Start;
 
 impl SessionStore {
     /// A machine at the start state a request asks for: a named checkpoint or
     /// history entry when `at` is given, else the head, else the boot handoff.
+    /// `interrupt` ends a boot run early, as the caller's wall guard.
     pub fn start_machine(
         &self,
         meta: &SessionFile,
         at: Option<&str>,
         from: Start,
         load: &LoadOptions,
+        interrupt: Option<&AtomicBool>,
     ) -> Result<(Machine, Vec<String>), StoreError> {
         let mut machine = self.machine(meta)?;
         let mut warnings = Vec::new();
@@ -48,8 +46,23 @@ impl SessionStore {
         } else if let Some(head) = self.read_head(meta.rev)? {
             warnings.extend(self.restore(&mut machine, &head, load)?);
         } else {
-            warnings.extend(self.to_handoff(&mut machine, load)?);
+            warnings.extend(self.to_handoff(&mut machine, load, interrupt)?);
         }
+        Ok((machine, warnings))
+    }
+
+    /// A machine at the head, or at power-on when there is none yet: what a
+    /// request that inspects the session sees. Never runs the boot ROM.
+    pub fn head_or_power_on(
+        &self,
+        meta: &SessionFile,
+        load: &LoadOptions,
+    ) -> Result<(Machine, Vec<String>), StoreError> {
+        let mut machine = self.machine(meta)?;
+        let warnings = match self.read_head(meta.rev)? {
+            Some(head) => self.restore(&mut machine, &head, load)?,
+            None => Vec::new(),
+        };
         Ok((machine, warnings))
     }
 
@@ -70,6 +83,7 @@ impl SessionStore {
         &self,
         machine: &mut Machine,
         load: &LoadOptions,
+        interrupt: Option<&AtomicBool>,
     ) -> Result<Vec<String>, StoreError> {
         let probe = machine.capture(SaveMeta::default());
         let path = self.boot_cache_path(&probe);
@@ -80,8 +94,9 @@ impl SessionStore {
             return Ok(warnings);
         }
         let _ = fs::remove_file(&path);
-        let run = RunOptions::new(Budget::frames(BOOT_FRAMES));
-        machine
+        let mut run = RunOptions::new(Budget::frames(BOOT_FRAMES));
+        run.interrupt = interrupt;
+        let outcome = machine
             .run_to(
                 Location {
                     addr: HANDOFF_PC,
@@ -91,6 +106,9 @@ impl SessionStore {
                 &run,
             )
             .map_err(StoreError::BootFailed)?;
+        if outcome.stop.reason == StopReason::UserBreak {
+            return Err(StoreError::BootInterrupted);
+        }
         if machine.boot().is_none() {
             return Err(StoreError::NoHandoff);
         }
@@ -150,7 +168,7 @@ mod tests {
         let meta = store.read_meta().unwrap();
         let mut machine = store.machine(&meta).unwrap();
         let warnings = store
-            .to_handoff(&mut machine, &LoadOptions::default())
+            .to_handoff(&mut machine, &LoadOptions::default(), None)
             .unwrap();
         assert!(warnings.is_empty(), "{warnings:?}");
         assert!(machine.boot().is_some());

@@ -4,19 +4,26 @@
 
 mod bundle_ops;
 mod config;
+mod head;
 mod history;
+mod log;
 mod reads;
 mod run;
 mod writes;
 
-use gbcli_bundle::{Bundle, LOCK_WAIT, SessionStore, Start, next};
-use gbcli_engine::{DebugError, LoadOptions, Machine, SaveMeta};
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::time::Duration;
+
+use gbcli_bundle::{Bundle, LOCK_WAIT, SessionStore, Start};
+use gbcli_engine::{DebugError, LoadOptions, Machine};
 use gbcli_protocol::{
-    ErrorBody, ErrorCode, EventLogLine, Op, Request, Response, ResultBody, Rev, SessionFile,
-    StopRecord, StopSummary,
+    ErrorBody, ErrorCode, Op, Request, Response, ResultBody, Rev, SessionFile, StopRecord,
 };
 
-use crate::convert::{self, debug as debug_body};
+use crate::convert::{self, Gap, debug as debug_body};
+use crate::watchdog::{WALL_GUARD, Watchdog};
+use head::{HeadChange, save_head};
 
 /// One server side: a project's bundle, a default session and actor, and the
 /// machine kept warm between requests.
@@ -25,10 +32,19 @@ pub struct Handler {
     default_session: Option<String>,
     default_actor: Option<String>,
     warm: Option<Warm>,
+    watchdog: Watchdog,
+    wall_guard: Duration,
+    /// The current request's interrupt flag, which the watchdog sets when
+    /// the request outlives `wall_guard`; runs poll it.
+    interrupt: Arc<AtomicBool>,
 }
 
+/// The machine left by the last request, and which head it is: a session
+/// removed and created again has the same name and may reach the same rev,
+/// but never the same incarnation.
 struct Warm {
     session: String,
+    incarnation: u64,
     rev: Rev,
     machine: Machine,
 }
@@ -38,7 +54,7 @@ struct Failure {
     /// Boxed: a stop record makes an `ErrorBody` large, and every `Result`
     /// here pays for its error type on the stack.
     body: Box<ErrorBody>,
-    gap: Option<(&'static str, &'static str)>,
+    gap: Option<Gap>,
 }
 
 impl Failure {
@@ -46,6 +62,20 @@ impl Failure {
         Failure {
             body: Box::new(body),
             gap: None,
+        }
+    }
+
+    /// The same failure, carrying the stop record of the run it followed.
+    fn with_stop(mut self, stop: StopRecord) -> Self {
+        self.body = Box::new((*self.body).with_stop(stop));
+        self
+    }
+
+    /// A core failure, with its gap-ledger entry when it is `Unsupported`.
+    fn from_core(error: &gbcli_core::CoreError) -> Self {
+        Failure {
+            body: Box::new(convert::core_error(error)),
+            gap: convert::gap_of_core(error),
         }
     }
 
@@ -70,10 +100,16 @@ impl From<ErrorBody> for Failure {
 /// How a request gets its machine.
 #[derive(Clone, Copy)]
 enum Need {
-    /// Read-only: the head, or power-on when there is none; never the boot run.
-    Read,
-    /// Advance: from `at`, else the head, else the boot handoff.
-    Run,
+    /// Inspect or configure: the head, or power-on when there is none; never
+    /// the boot run.
+    Head,
+    /// Advance or change the state: from `at`, else the head, else the boot
+    /// handoff, or power-on for `--from power-on`. Where `run` would start.
+    Start(Start),
+    /// The request replaces the whole state (`restore`, `undo`): any machine
+    /// over the session's ROM. The head isn't loaded, so a head the ROM
+    /// rebuild made unloadable doesn't block the restore that fixes it.
+    Replace,
 }
 
 impl Handler {
@@ -87,7 +123,15 @@ impl Handler {
             default_session,
             default_actor,
             warm: None,
+            watchdog: Watchdog::new(),
+            wall_guard: WALL_GUARD,
+            interrupt: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// Sets the wall-clock guard (design §3) for the requests that follow.
+    pub fn set_wall_guard(&mut self, after: Duration) {
+        self.wall_guard = after;
     }
 
     pub fn bundle(&self) -> &Bundle {
@@ -97,6 +141,9 @@ impl Handler {
     /// Answers one request. Every request takes the session's lock, so two
     /// processes alternate on one head (design §1).
     pub fn handle(&mut self, request: &Request) -> Response {
+        // Armed for every request; only emulation polls the flag.
+        let armed = self.watchdog.arm(self.wall_guard);
+        self.interrupt = armed.flag().clone();
         let id = request.id.clone();
         match &request.op {
             Op::Sessions => self.list_sessions(id),
@@ -140,12 +187,7 @@ impl Handler {
             && let Some(asked) = request.rev
             && asked != meta.rev
         {
-            let by = store.events(Some(20)).ok().and_then(|rows| {
-                rows.iter()
-                    .rev()
-                    .find(|row| row.rev_after == meta.rev)
-                    .and_then(|row| row.actor.clone())
-            });
+            let by = store.last_writer(meta.rev).ok().flatten();
             let error = gbcli_bundle::StoreError::RevMismatch {
                 expected: asked.0,
                 found: meta.rev.0,
@@ -180,16 +222,16 @@ impl Handler {
     ) -> Result<ResultBody, Failure> {
         match &request.op {
             Op::Run(args) => self.run(store, meta, args, actor, warnings),
-            Op::Step(args) => self.step(store, meta, args, warnings),
+            Op::Step(args) => self.step(store, meta, args, actor, warnings),
             Op::Show => self.show(store, meta),
             Op::Read(args) => self.read(store, meta, args),
             Op::Break(args) => self.breakpoint(store, meta, args),
             Op::Watch(args) => self.watch(store, meta, args),
             Op::Delete(args) => self.delete(store, meta, args),
-            Op::Checkpoint(args) => self.checkpoint(store, meta, args, actor),
+            Op::Checkpoint(args) => self.checkpoint(store, meta, args, actor, warnings),
             Op::Restore(args) => self.restore(store, meta, args, actor, warnings),
-            Op::Undo => self.undo(store, meta, actor),
-            Op::Write(args) => self.write(store, meta, args, actor),
+            Op::Undo => self.undo(store, meta, actor, warnings),
+            Op::Write(args) => self.write(store, meta, args, actor, warnings),
             Op::Events(args) => self.events(store, args),
             Op::Sessions | Op::Gaps | Op::Prune(_) | Op::Rm(_) => {
                 Err(Failure::new(ErrorBody::new(
@@ -201,35 +243,35 @@ impl Handler {
         }
     }
 
-    /// The machine a request starts from: warm when another writer hasn't
-    /// moved the head, else rebuilt (and, for a run, booted to the handoff).
+    /// The machine a request starts from: warm when it is this session's
+    /// head, else rebuilt. `load` governs loading a stored state (the head or
+    /// `at`): `--allow-rom-change` reaches here.
     fn machine_for(
         &mut self,
         store: &SessionStore,
         meta: &SessionFile,
         need: Need,
         at: Option<&str>,
-        from: Start,
+        load: &LoadOptions,
     ) -> Result<(Machine, Vec<String>), Failure> {
-        let cold = matches!(need, Need::Run) && from == Start::PowerOn;
-        let warm = at.is_none()
-            && !cold
-            && meta.rev.0 > 0
-            && self
-                .warm
-                .as_ref()
-                .is_some_and(|w| w.session == store.name() && w.rev == meta.rev);
-        let (mut machine, warnings) = if warm {
-            (self.warm.take().expect("checked above").machine, Vec::new())
-        } else {
-            let from = match need {
-                Need::Read => Start::PowerOn,
-                Need::Run => from,
-            };
-            store
-                .start_machine(meta, at, from, &LoadOptions::default())
-                .map_err(|e| Failure::from_store(&e))?
-        };
+        let cold = matches!(need, Need::Start(Start::PowerOn));
+        let warm = self.warm.take().filter(|w| {
+            at.is_none()
+                && !cold
+                && meta.rev.0 > 0
+                && w.session == store.name()
+                && w.incarnation == meta.incarnation
+                && w.rev == meta.rev
+        });
+        let (mut machine, warnings) = match (warm, need) {
+            (Some(warm), _) => Ok((warm.machine, Vec::new())),
+            (None, Need::Start(from)) => {
+                store.start_machine(meta, at, from, load, Some(&self.interrupt))
+            }
+            (None, Need::Head) => store.head_or_power_on(meta, load),
+            (None, Need::Replace) => store.machine(meta).map(|m| (m, Vec::new())),
+        }
+        .map_err(|e| Failure::from_store(&e))?;
         *machine.debugger_config_mut() = meta.debugger.clone();
         Ok((machine, warnings))
     }
@@ -237,101 +279,30 @@ impl Handler {
     fn keep_warm(&mut self, store: &SessionStore, meta: &SessionFile, machine: Machine) {
         self.warm = Some(Warm {
             session: store.name().to_string(),
+            incarnation: meta.incarnation,
             rev: meta.rev,
             machine,
         });
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn log(
-        &mut self,
-        id: String,
-        store: SessionStore,
-        meta: &SessionFile,
-        actor: Option<String>,
-        request: &Request,
-        rev_before: Rev,
-        outcome: Result<ResultBody, Failure>,
-        warnings: Vec<String>,
-    ) -> Response {
-        let rev_after = meta.rev;
-        let mut gap_map = std::collections::BTreeMap::new();
-        let mut code = None;
-        let response = match outcome {
-            Ok(result) => {
-                let stop = result.stop.as_ref().map(summary);
-                (Response::ok(id, Some(rev_after), result), stop)
-            }
-            Err(Failure { body, gap }) => {
-                code = Some(body.code);
-                let stop = body.stop.as_ref().map(summary);
-                if let Some((feature, reason)) = gap {
-                    let _ = self.bundle.append_gap(
-                        Some(store.name()),
-                        request.op.name(),
-                        feature,
-                        reason,
-                    );
-                    if let Ok(counts) = self.bundle.gap_counts() {
-                        for row in counts {
-                            gap_map.insert(row.feature, row.count);
-                        }
-                    }
-                }
-                (Response::failed(id, Some(rev_after), *body), stop)
-            }
-        };
-        let (response, stop) = response;
-        let _ = store.append_events(&[EventLogLine {
-            at: gbcli_bundle::now_secs(),
-            actor,
-            op: request.op.name().to_string(),
-            ok: response.ok,
-            code,
-            rev_before,
-            rev_after,
-            gaps: gap_map,
-            stop,
-        }]);
-        response.with_warnings(warnings)
+    /// Forgets the warm machine, whichever session it belongs to.
+    pub(crate) fn forget_all_warm(&mut self) {
+        self.warm = None;
     }
-}
 
-fn summary(stop: &StopRecord) -> StopSummary {
-    StopSummary {
-        reason: stop.reason.clone(),
-        pc: stop.pc,
-        frame: stop.time.frame,
-        ticks: stop.time.ticks,
+    /// Forgets the warm machine if it belongs to `session`.
+    fn forget_warm(&mut self, session: &str) {
+        if self.warm.as_ref().is_some_and(|w| w.session == session) {
+            self.warm = None;
+        }
     }
-}
-
-fn save_head(
-    store: &SessionStore,
-    meta: &mut SessionFile,
-    machine: &Machine,
-    actor: Option<String>,
-    parent: Option<String>,
-    stop: Option<&StopRecord>,
-) -> Result<(), Failure> {
-    let cp = machine.capture(SaveMeta {
-        created_by: actor,
-        parent,
-    });
-    let rev = next(meta.rev);
-    store
-        .write_head(&cp, rev)
-        .map_err(|e| Failure::from_store(&e))?;
-    meta.rev = rev;
-    meta.last_stop = stop.cloned();
-    store
-        .write_meta(meta)
-        .map_err(|e| Failure::from_store(&e))?;
-    Ok(())
 }
 
 #[cfg(test)]
 mod test_support;
+
+#[cfg(test)]
+mod state_tests;
 
 #[cfg(test)]
 mod tests {
@@ -349,7 +320,7 @@ mod tests {
             ..RunArgs::default()
         }));
         first.actor = Some("alice".into());
-        assert!(h.handle(&first).ok);
+        assert!(h.handle(&first).is_ok());
 
         let mut stale = request(Op::Run(RunArgs {
             frames: Some(1),
@@ -357,7 +328,7 @@ mod tests {
         }));
         stale.rev = Some(Rev(0));
         let response = h.handle(&stale);
-        let error = response.error.expect("stale rev");
+        let error = response.outcome.expect_err("stale rev");
         assert_eq!(error.code, ErrorCode::RevMismatch);
         assert!(error.remedy.contains("alice"), "{}", error.remedy);
     }
@@ -366,11 +337,11 @@ mod tests {
     fn the_event_log_records_every_request_with_both_revisions() {
         let f = Fixture::new("events");
         let mut h = handler(&f);
-        assert!(run_frames(&mut h, 1).ok);
+        assert!(run_frames(&mut h, 1).is_ok());
         let response = h.handle(&request(Op::Events(EventsArgs { limit: None })));
-        let rows = response.result.unwrap().events.unwrap();
+        let rows = response.outcome.unwrap().events.unwrap();
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].op, "run");
+        assert!(matches!(rows[0].op, Op::Run(_)), "{:?}", rows[0].op);
         assert_eq!(rows[0].rev_before, Rev(0));
         assert_eq!(rows[0].rev_after, Rev(1));
         assert_eq!(rows[0].actor.as_deref(), Some("tester"));

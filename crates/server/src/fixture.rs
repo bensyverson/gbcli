@@ -12,26 +12,58 @@ pub struct Fixture {
     pub bundle: Bundle,
 }
 
-const V1: &[u8] = include_bytes!("../../engine/tests/roms/rebuild_v1.gb");
+pub const V1: &[u8] = include_bytes!("../../engine/tests/roms/rebuild_v1.gb");
+pub const V1_SYM: &[u8] = include_bytes!("../../engine/tests/roms/rebuild_v1.sym");
+/// V1 with an instruction inserted, so `Main.loop` and `Work` move.
+pub const V2: &[u8] = include_bytes!("../../engine/tests/roms/rebuild_v2.gb");
+pub const V2_SYM: &[u8] = include_bytes!("../../engine/tests/roms/rebuild_v2.sym");
+/// V1 with a routine appended, so no live symbol moves.
+pub const V3: &[u8] = include_bytes!("../../engine/tests/roms/rebuild_v3.gb");
+pub const V3_SYM: &[u8] = include_bytes!("../../engine/tests/roms/rebuild_v3.sym");
 
 impl Fixture {
     /// A project directory with `demo.gb` and a `demo` session created.
     pub fn new(name: &str) -> Fixture {
+        Fixture::make(name, false)
+    }
+
+    /// As [`Fixture::new`], with `demo.sym` beside the ROM.
+    pub fn with_sym(name: &str) -> Fixture {
+        Fixture::make(name, true)
+    }
+
+    fn make(name: &str, sym: bool) -> Fixture {
         let dir = std::env::temp_dir().join(format!("gbcli-server-{}-{name}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).expect("temp project");
         fs::write(dir.join("demo.gb"), V1).expect("rom");
-        let bundle = Bundle::open_or_create(&dir).expect("bundle");
-        let session = bundle.session("demo").expect("name");
+        if sym {
+            fs::write(dir.join("demo.sym"), V1_SYM).expect("sym");
+        }
+        // Explicit: a GBCLI_DIR in the environment must not move the bundle.
+        let bundle = Bundle::open_or_create_in(&dir, None).expect("bundle");
+        let fixture = Fixture { dir, bundle };
+        fixture.create_session(sym);
+        fixture
+    }
+
+    /// Creates the `demo` session over whatever `demo.gb` now holds.
+    pub fn create_session(&self, sym: bool) {
+        let session = self.bundle.session("demo").expect("name");
         session
             .create(&RomSource {
-                rom: dir.join("demo.gb"),
-                sym: None,
+                rom: self.dir.join("demo.gb"),
+                sym: sym.then(|| self.dir.join("demo.sym")),
                 model: Model::DmgB,
                 seed: 0,
             })
             .expect("session");
-        Fixture { dir, bundle }
+    }
+
+    /// Rebuilds: replaces `demo.gb` and `demo.sym` in place.
+    pub fn rebuild(&self, rom: &[u8], sym: &[u8]) {
+        fs::write(self.dir.join("demo.gb"), rom).expect("rom");
+        fs::write(self.dir.join("demo.sym"), sym).expect("sym");
     }
 }
 

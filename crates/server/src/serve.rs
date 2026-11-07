@@ -2,24 +2,52 @@
 //! final response per request, each flushed. Diagnostics never go to stdout.
 
 use std::io::{BufRead, Write};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 
-use gbcli_protocol::{ErrorBody, ErrorCode, Request, Response};
+use gbcli_protocol::{ErrorBody, ErrorCode, Request, Response, parse_request};
 
 use crate::handle::Handler;
 
-/// Serves requests from `reader` to `writer` until end of input. An error line
-/// is answered with `bad_request`, and the server keeps running.
-pub fn serve<R: BufRead, W: Write>(
+/// What answers the requests `serve` reads: the [`Handler`], or a stand-in.
+pub trait Answer {
+    fn answer(&mut self, request: &Request) -> Response;
+    /// Called after `answer` panicked: drop any state the panic may have
+    /// left half-changed.
+    fn after_panic(&mut self);
+}
+
+impl Answer for Handler {
+    fn answer(&mut self, request: &Request) -> Response {
+        self.handle(request)
+    }
+
+    fn after_panic(&mut self) {
+        self.forget_all_warm();
+    }
+}
+
+/// Serves requests from `reader` to `writer` until end of input. A line that
+/// isn't a request (bad JSON, not UTF-8) is answered with `bad_request`, a
+/// request that panics with `internal`, and the server keeps running.
+pub fn serve<R: BufRead, W: Write, A: Answer>(
     reader: R,
     writer: &mut W,
-    handler: &mut Handler,
+    handler: &mut A,
 ) -> std::io::Result<()> {
-    for line in reader.lines() {
+    for line in reader.split(b'\n') {
         let line = line?;
-        if line.trim().is_empty() {
-            continue;
-        }
-        let response = answer(handler, &line);
+        let response = match std::str::from_utf8(&line) {
+            Ok(text) if text.trim().is_empty() => continue,
+            Ok(text) => answer(handler, text.trim_end_matches('\r')),
+            Err(e) => {
+                let body = ErrorBody::new(
+                    ErrorCode::BadRequest,
+                    format!("the line isn't UTF-8: {e}"),
+                    "send one JSON object per line, encoded as UTF-8",
+                );
+                Response::failed(String::new(), None, body)
+            }
+        };
         let text = serde_json::to_string(&response).expect("a response always serializes");
         writeln!(writer, "{text}")?;
         writer.flush()?;
@@ -27,21 +55,33 @@ pub fn serve<R: BufRead, W: Write>(
     Ok(())
 }
 
-fn answer(handler: &mut Handler, line: &str) -> Response {
-    match serde_json::from_str::<Request>(line) {
-        Ok(request) => handler.handle(&request),
+fn answer<A: Answer>(handler: &mut A, line: &str) -> Response {
+    let request = match parse_request(line) {
+        Ok(request) => request,
         Err(e) => {
-            let id = serde_json::from_str::<serde_json::Value>(line)
-                .ok()
-                .and_then(|value| value.get("id")?.as_str().map(str::to_string))
-                .unwrap_or_default();
+            let body = ErrorBody::new(ErrorCode::BadRequest, e.message, e.remedy);
+            return Response::failed(e.id.unwrap_or_default(), None, body);
+        }
+    };
+    // A panic is a bug, not a reason to end the session: answer it, and let
+    // the handler drop what it held, since the panic may have left it half
+    // changed. What's on disk was written atomically, so it stays trusted.
+    match catch_unwind(AssertUnwindSafe(|| handler.answer(&request))) {
+        Ok(response) => response,
+        Err(payload) => {
+            handler.after_panic();
+            let what = payload
+                .downcast_ref::<&str>()
+                .map(|s| s.to_string())
+                .or_else(|| payload.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "a panic".into());
             Response::failed(
-                id,
+                request.id.clone(),
                 None,
                 ErrorBody::new(
-                    ErrorCode::BadRequest,
-                    format!("not a request: {e}"),
-                    "one JSON object per line; see `gbcli help schema`",
+                    ErrorCode::Internal,
+                    format!("the request panicked: {what}"),
+                    ErrorCode::Internal.default_remedy(),
                 ),
             )
         }
@@ -71,7 +111,7 @@ mod tests {
         let fixture = Fixture::new("serve-blank");
         let responses = run_script(&fixture, &["", "  ", r#"{"id":"1","op":"show"}"#]);
         assert_eq!(responses.len(), 1);
-        assert!(responses[0].ok, "{:?}", responses[0]);
+        assert!(responses[0].is_ok(), "{:?}", responses[0]);
     }
 
     #[test]
@@ -81,10 +121,106 @@ mod tests {
         assert_eq!(responses.len(), 2);
         assert_eq!(responses[0].id, "");
         assert_eq!(
-            responses[0].error.as_ref().map(|e| e.code),
+            responses[0].error().map(|e| e.code),
             Some(ErrorCode::BadRequest)
         );
-        assert!(responses[1].ok);
+        assert!(responses[1].is_ok());
+    }
+
+    #[test]
+    fn an_unknown_field_answers_bad_request_naming_it_and_the_nearest() {
+        let fixture = Fixture::new("serve-unknown");
+        let responses = run_script(
+            &fixture,
+            &[
+                r#"{"id":"1","revv":"s0","op":"show"}"#,
+                r#"{"id":"2","op":"run","args":{"frame":10}}"#,
+            ],
+        );
+        for (response, (field, near)) in
+            responses.iter().zip([("revv", "rev"), ("frame", "frames")])
+        {
+            let error = response.error().expect("refused");
+            assert_eq!(error.code, ErrorCode::BadRequest);
+            assert!(error.message.contains(field), "{}", error.message);
+            assert!(
+                error.remedy.contains(&format!("`{near}`")),
+                "{}",
+                error.remedy
+            );
+        }
+        assert_eq!(responses[0].id, "1", "the id is echoed");
+        let rev = fixture
+            .bundle
+            .session("demo")
+            .unwrap()
+            .read_meta()
+            .unwrap()
+            .rev;
+        assert_eq!(rev, gbcli_protocol::Rev(0), "the misspelled run ran");
+    }
+
+    #[test]
+    fn a_line_that_is_not_utf8_answers_bad_request_and_keeps_going() {
+        let fixture = Fixture::new("serve-utf8");
+        let mut input = b"{\"id\":\"1\",\"op\":\"sh\xFFow\"}\n".to_vec();
+        input.extend_from_slice(b"{\"id\":\"2\",\"op\":\"show\"}\n");
+        let mut out = Vec::new();
+        let mut handler = Handler::new(fixture.bundle.clone(), Some("demo".into()), None);
+        serve(Cursor::new(input), &mut out, &mut handler).unwrap();
+        let responses: Vec<Response> = String::from_utf8(out)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        assert_eq!(responses.len(), 2);
+        assert_eq!(
+            responses[0].error().map(|e| e.code),
+            Some(ErrorCode::BadRequest)
+        );
+        assert!(responses[1].is_ok(), "{:?}", responses[1]);
+    }
+
+    /// Panics on the request whose id is "boom".
+    struct Fragile {
+        resets: usize,
+    }
+
+    impl Answer for Fragile {
+        fn answer(&mut self, request: &Request) -> Response {
+            assert_ne!(request.id, "boom", "injected panic");
+            Response::ok(request.id.clone(), None, Default::default())
+        }
+
+        fn after_panic(&mut self) {
+            self.resets += 1;
+        }
+    }
+
+    #[test]
+    fn a_panic_in_one_request_is_an_error_response_and_the_loop_goes_on() {
+        let input = concat!(
+            r#"{"id":"boom","op":"show"}"#,
+            "\n",
+            r#"{"id":"2","op":"show"}"#,
+            "\n"
+        );
+        let mut out = Vec::new();
+        let mut fragile = Fragile { resets: 0 };
+        serve(Cursor::new(input), &mut out, &mut fragile).unwrap();
+        let responses: Vec<Response> = String::from_utf8(out)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        assert_eq!(responses.len(), 2);
+        assert_eq!(responses[0].id, "boom");
+        assert_eq!(
+            responses[0].error().map(|e| e.code),
+            Some(ErrorCode::Internal)
+        );
+        assert!(responses[1].is_ok());
+        assert_eq!(fragile.resets, 1, "the handler drops what it can't trust");
     }
 
     #[test]
@@ -95,7 +231,7 @@ mod tests {
         let mut handler = Handler::new(fixture.bundle.clone(), None, None);
         serve(Cursor::new(format!("{input}\n")), &mut out, &mut handler).unwrap();
         let response: Response = serde_json::from_slice(&out).unwrap();
-        let error = response.error.expect("an error");
+        let error = response.outcome.expect_err("an error");
         assert_eq!(error.code, ErrorCode::NoSession);
         assert!(!error.remedy.is_empty());
     }

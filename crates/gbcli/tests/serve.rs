@@ -21,7 +21,8 @@ fn project(name: &str) -> PathBuf {
 }
 
 fn create_session(dir: &Path) {
-    let bundle = Bundle::open_or_create(dir).unwrap();
+    // Explicit: a GBCLI_DIR in the environment must not move the bundle.
+    let bundle = Bundle::open_or_create_in(dir, None).unwrap();
     bundle
         .session("demo")
         .unwrap()
@@ -45,6 +46,7 @@ impl Server {
         let mut child = Command::new(env!("CARGO_BIN_EXE_gbcli"))
             .args(["serve", "--session", "demo", "--dir"])
             .arg(dir)
+            .env_remove("GBCLI_DIR")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -91,6 +93,7 @@ fn a_scripted_session_produces_exact_bytes() {
         .arg(&dir)
         .arg("--rom")
         .arg(dir.join("demo.gb"))
+        .env_remove("GBCLI_DIR")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -123,6 +126,14 @@ fn a_scripted_session_produces_exact_bytes() {
     let _ = fs::remove_dir_all(&dir);
 }
 
+/// A read of the machine's own frame counter.
+const FRAME: &str = r#"{"id":"r","op":"read","args":{"reads":["frame"]}}"#;
+
+fn frame(response: &Response) -> i64 {
+    let result = response.result().expect("a read result");
+    result.reads.as_ref().expect("reads")[0].value
+}
+
 #[test]
 fn two_processes_alternate_on_one_head_and_a_stale_rev_is_refused() {
     let dir = project("alternate");
@@ -131,25 +142,28 @@ fn two_processes_alternate_on_one_head_and_a_stale_rev_is_refused() {
     let mut b = Server::start(&dir);
 
     let first = a.request(r#"{"id":"1","op":"run","args":{"frames":1}}"#);
-    assert!(first.ok, "{:?}", first.error);
+    assert!(first.is_ok(), "{:?}", first.error());
     assert_eq!(first.rev, Some(Rev(1)));
 
     // B saw A's head, even though B's own handler was cold.
-    let seen = b.request(r#"{"id":"2","op":"show"}"#);
+    let seen = b.request(FRAME);
     assert_eq!(seen.rev.as_ref().map(|r| r.0), Some(1));
+    assert_eq!(frame(&seen), 1, "B read power-on, not the head");
 
     // B advances from that rev.
     let second = b.request(r#"{"id":"3","op":"run","args":{"frames":1},"rev":"s1"}"#);
-    assert!(second.ok, "{:?}", second.error);
+    assert!(second.is_ok(), "{:?}", second.error());
     assert_eq!(second.rev.as_ref().map(|r| r.0), Some(2));
 
-    // A reloads on the next read.
-    let seen = a.request(r#"{"id":"4","op":"show"}"#);
+    // A reloads on the next read: the rev comes from session.json, the frame
+    // from the machine, so a stale warm machine shows here.
+    let seen = a.request(FRAME);
     assert_eq!(seen.rev.as_ref().map(|r| r.0), Some(2));
+    assert_eq!(frame(&seen), 2, "A answered from its stale warm machine");
 
     // A's stale revision is refused.
     let stale = a.request(r#"{"id":"5","op":"run","args":{"frames":1},"rev":"s1"}"#);
-    let error = stale.error.expect("a stale rev is refused");
+    let error = stale.outcome.expect_err("a stale rev is refused");
     assert_eq!(error.code, gbcli_protocol::ErrorCode::RevMismatch);
     assert!(!error.remedy.is_empty());
 

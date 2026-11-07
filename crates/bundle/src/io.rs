@@ -57,9 +57,9 @@ pub(crate) fn ensure_dir(dir: &Path) -> Result<(), StoreError> {
     }
 }
 
+/// Appends `text` to `path`, creating the file but not its directory, for
+/// the reason [`atomic_write`] gives.
 pub(crate) fn append(path: &Path, text: &str) -> Result<(), StoreError> {
-    let parent = path.parent().unwrap_or(Path::new("."));
-    fs::create_dir_all(parent).map_err(io_at(parent))?;
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)

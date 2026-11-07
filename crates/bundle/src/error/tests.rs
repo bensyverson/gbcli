@@ -255,14 +255,16 @@ fn a_boot_run_the_core_cant_do_keeps_the_unsupported_code() {
 }
 
 #[test]
-fn a_boot_run_that_fails_otherwise_names_the_flag_that_shows_why() {
+fn a_boot_run_that_fails_otherwise_keeps_the_runs_own_code() {
+    // One mapping, the engine's (DebugError::code): a backend fault is
+    // gbcli's, not a missing flag.
     let e = StoreError::BootFailed(DebugError::Core(CoreError::Backend {
         message: "boom".into(),
     }));
     assert_maps(
         &e,
-        ErrorCode::Refused,
-        2,
+        ErrorCode::Internal,
+        5,
         "pass --from power-on to run the boot ROM inside the request and see where it stops",
     );
     assert!(e.to_string().contains("boom"), "{e}");

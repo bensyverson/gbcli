@@ -5,7 +5,9 @@ use std::fmt;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use gbcli_protocol::ErrorCode;
+use gbcli_protocol::{ErrorCode, Rev};
+
+use crate::history::HISTORY_BACK;
 
 use gbcli_core::CoreError;
 use gbcli_engine::{CheckpointError, DebugError, LoadWarning, SetupError};
@@ -78,6 +80,12 @@ pub enum StoreError {
         path: PathBuf,
         reason: String,
     },
+    /// `undo` with no earlier entry kept: the head is the oldest state.
+    UndoPastOldest {
+        name: String,
+        /// The oldest entry kept, if the session has any.
+        oldest: Option<Rev>,
+    },
     /// An `--at ~N` that isn't `~` and a number.
     BadHistoryRef {
         text: String,
@@ -93,6 +101,8 @@ pub enum StoreError {
     BootFailed(DebugError),
     /// The boot ROM never reached the handoff, so there is no boot start state.
     NoHandoff,
+    /// The caller's wall guard ended the boot run before the handoff.
+    BootInterrupted,
     Checkpoint(CheckpointError),
     Setup(SetupError),
 }
@@ -112,12 +122,14 @@ impl StoreError {
             StoreError::SymbolsUnreadable { .. } => ErrorCode::SymbolsUnreadable,
             StoreError::SessionExists { .. }
             | StoreError::RomMismatch { .. }
+            | StoreError::UndoPastOldest { .. }
             | StoreError::BadHistoryRef { .. }
             | StoreError::BadCheckpointName { .. }
             | StoreError::BadDuration { .. } => ErrorCode::BadRequest,
             StoreError::SessionUnreadable { .. } => ErrorCode::SessionUnreadable,
-            StoreError::BootFailed(e) => boot_code(e),
+            StoreError::BootFailed(e) => e.code(),
             StoreError::NoHandoff => ErrorCode::Refused,
+            StoreError::BootInterrupted => ErrorCode::BudgetExhausted,
             StoreError::Checkpoint(e) => e.code(),
             StoreError::Setup(e) => setup_code(e),
         }
@@ -180,6 +192,17 @@ impl StoreError {
                  create it again",
                 path.display()
             ),
+            StoreError::UndoPastOldest { oldest: None, .. } => {
+                "this session has no earlier state; run it first".into()
+            }
+            StoreError::UndoPastOldest {
+                oldest: Some(oldest),
+                ..
+            } => format!(
+                "the head is {oldest}, the oldest state kept ({HISTORY_BACK} heads back); \
+                 `run --from power-on` starts over, and `gbcli checkpoint <name>` keeps a state \
+                 for longer"
+            ),
             StoreError::BadHistoryRef { .. } => {
                 "use ~N for the head N requests back, e.g. ~1".into()
             }
@@ -194,6 +217,11 @@ impl StoreError {
                 .into(),
             StoreError::NoHandoff => {
                 "pass --from power-on, which runs without the boot cache".into()
+            }
+            StoreError::BootInterrupted => {
+                "retry: the boot run takes well under a second unless the host is starved; \
+                 nothing was cached"
+                    .into()
             }
             StoreError::Checkpoint(e) => e.remedy(),
             StoreError::Setup(e) => setup_remedy(e),
@@ -221,26 +249,6 @@ impl StoreError {
                 format!("a patch at ROM offset {offset:#x} differs from the bytes it recorded")
             }
         }
-    }
-}
-
-/// A fresh machine runs to the handoff with no breakpoints or predicate, so
-/// in practice only the core fails. A feature the core lacks keeps its code;
-/// anything else is refused, and `--from power-on` reruns the boot inside the
-/// request, where the run reports its own code and stop.
-fn boot_code(e: &DebugError) -> ErrorCode {
-    match e {
-        DebugError::Core(CoreError::Unsupported { .. }) => ErrorCode::Unsupported,
-        DebugError::Core(
-            CoreError::OutOfRange { .. }
-            | CoreError::InvalidState { .. }
-            | CoreError::Backend { .. },
-        )
-        | DebugError::Condition { .. }
-        | DebugError::Eval { .. }
-        | DebugError::UntilSyntax { .. }
-        | DebugError::Until { .. }
-        | DebugError::NeedsAddress => ErrorCode::Refused,
     }
 }
 
@@ -314,6 +322,9 @@ impl fmt::Display for StoreError {
             StoreError::SessionUnreadable { path, reason, .. } => {
                 write!(f, "{} doesn't parse: {reason}", path.display())
             }
+            StoreError::UndoPastOldest { name, .. } => {
+                write!(f, "session {name:?} has no earlier state to undo to")
+            }
             StoreError::BadHistoryRef { text } => {
                 write!(f, "{text:?} is not a history reference")
             }
@@ -323,6 +334,9 @@ impl fmt::Display for StoreError {
             StoreError::BadDuration { text } => write!(f, "{text:?} is not a duration"),
             StoreError::BootFailed(e) => write!(f, "the boot ROM didn't reach the handoff: {e}"),
             StoreError::NoHandoff => write!(f, "the boot ROM never wrote FF50 (no handoff)"),
+            StoreError::BootInterrupted => {
+                write!(f, "the wall guard ended the boot run before the handoff")
+            }
             StoreError::Checkpoint(e) => write!(f, "{e}"),
             StoreError::Setup(e) => write!(f, "{e}"),
         }

@@ -65,10 +65,9 @@ impl Bundle {
         ))
     }
 
-    pub(crate) fn open_or_create_in(
-        start: &Path,
-        gbcli_dir: Option<&Path>,
-    ) -> Result<Bundle, StoreError> {
+    /// [`Bundle::open_or_create`] with `GBCLI_DIR`'s value passed in, for callers
+    /// (tests above all) that must not depend on the environment.
+    pub fn open_or_create_in(start: &Path, gbcli_dir: Option<&Path>) -> Result<Bundle, StoreError> {
         if let Some(dir) = gbcli_dir {
             let root = absolute(dir);
             fs::create_dir_all(&root).map_err(|source| StoreError::NoRoot {

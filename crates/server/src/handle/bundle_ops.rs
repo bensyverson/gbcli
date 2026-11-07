@@ -43,6 +43,7 @@ impl Handler {
                 None,
                 ResultBody {
                     pruned: Some(report.removed),
+                    kept: Some(report.kept),
                     ..ResultBody::default()
                 },
             ),
@@ -50,11 +51,12 @@ impl Handler {
         }
     }
 
-    pub(super) fn rm(&self, id: String, args: &RmArgs) -> Response {
+    pub(super) fn rm(&mut self, id: String, args: &RmArgs) -> Response {
         let store = match self.bundle.session(&args.name) {
             Ok(store) => store,
             Err(e) => return Response::failed(id, None, convert::store(&e)),
         };
+        self.forget_warm(&args.name);
         match store.remove(args.with_checkpoints, LOCK_WAIT) {
             Ok(()) => Response::ok(
                 id,
@@ -81,7 +83,7 @@ mod tests {
         let f = Fixture::new("sessions");
         let mut h = handler(&f);
         let listed = h.handle(&request(Op::Sessions));
-        let rows = listed.result.unwrap().sessions.unwrap();
+        let rows = listed.outcome.unwrap().sessions.unwrap();
         assert_eq!(rows[0].name, "demo");
         assert_eq!(rows[0].rev, Rev(0));
 
@@ -89,18 +91,42 @@ mod tests {
             h.handle(&request(Op::Checkpoint(CheckpointArgs {
                 name: "keep".into()
             })))
-            .ok
+            .is_ok()
         );
         let refused = h.handle(&request(Op::Rm(RmArgs {
             name: "demo".into(),
             with_checkpoints: false,
         })));
-        assert_eq!(refused.error.unwrap().code, ErrorCode::Refused);
+        assert_eq!(refused.outcome.unwrap_err().code, ErrorCode::Refused);
         let removed = h.handle(&request(Op::Rm(RmArgs {
             name: "demo".into(),
             with_checkpoints: true,
         })));
-        assert!(removed.ok);
-        assert_eq!(removed.result.unwrap().removed.as_deref(), Some("demo"));
+        assert!(removed.is_ok());
+        assert_eq!(removed.outcome.unwrap().removed.as_deref(), Some("demo"));
+    }
+
+    #[test]
+    fn prune_reports_the_sessions_it_kept_for_their_checkpoints() {
+        let f = Fixture::new("prune-kept");
+        let mut h = handler(&f);
+        let made = h.handle(&request(Op::Checkpoint(CheckpointArgs {
+            name: "keep".into(),
+        })));
+        assert!(made.is_ok());
+        // Last use is the lock file's mtime (design §1): date it a day back.
+        let lock = f.bundle.root().join("locks").join("demo.lock");
+        let day_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(2 * 86_400);
+        std::fs::File::options()
+            .write(true)
+            .open(&lock)
+            .and_then(|file| file.set_modified(day_ago))
+            .expect("backdate the lock");
+        let pruned = h.handle(&request(Op::Prune(PruneArgs {
+            unused_for: "1d".into(),
+        })));
+        let result = pruned.outcome.unwrap();
+        assert_eq!(result.pruned, Some(Vec::new()));
+        assert_eq!(result.kept, Some(vec!["demo".to_string()]));
     }
 }

@@ -1,6 +1,6 @@
 //! One session on disk (design §1): where its files live, its metadata,
 //! listing and removal. Heads and history are in `history.rs`, named
-//! checkpoints in `checkpoints.rs`, the lock in `lock.rs`, creation in
+//! checkpoints in `checkpoints.rs`, the event log in `events.rs`, the lock in `lock.rs`, creation in
 //! `session.rs` and start states in `boot.rs`.
 
 use std::fs;
@@ -11,13 +11,16 @@ use gbcli_protocol::{SessionFile, SessionRow};
 
 use crate::bundle::{Bundle, now_secs, validate_name};
 use crate::error::StoreError;
-use crate::io::{append, atomic_write, dir_size, io_at};
+use crate::events::EVENTS_ROTATE_AT;
+use crate::io::{atomic_write, dir_size, io_at};
 
 /// A session directory. `name` is validated when the store is made.
 #[derive(Clone, Debug)]
 pub struct SessionStore {
     bundle: Bundle,
     name: String,
+    /// Where `events.jsonl` rotates; [`EVENTS_ROTATE_AT`] unless set.
+    events_rotate_at: u64,
 }
 
 impl SessionStore {
@@ -26,7 +29,17 @@ impl SessionStore {
         Ok(SessionStore {
             bundle,
             name: name.to_string(),
+            events_rotate_at: EVENTS_ROTATE_AT,
         })
+    }
+
+    /// Sets the size past which the event log rotates (design §10).
+    pub fn set_events_rotate_at(&mut self, bytes: u64) {
+        self.events_rotate_at = bytes;
+    }
+
+    pub(crate) fn events_rotate_at(&self) -> u64 {
+        self.events_rotate_at
     }
 
     pub fn name(&self) -> &str {
@@ -57,10 +70,6 @@ impl SessionStore {
 
     pub(crate) fn checkpoints_dir(&self) -> PathBuf {
         self.dir().join("checkpoints")
-    }
-
-    fn events_path(&self) -> PathBuf {
-        self.dir().join("events.jsonl")
     }
 
     pub(crate) fn no_session(&self) -> StoreError {
@@ -134,37 +143,6 @@ impl SessionStore {
             last_used: self.last_used().unwrap_or_else(now_secs),
             checkpoints: self.checkpoint_names()?.len(),
         })
-    }
-
-    pub fn append_events(&self, lines: &[gbcli_protocol::EventLogLine]) -> Result<(), StoreError> {
-        let path = self.events_path();
-        let mut text = String::new();
-        for line in lines {
-            text.push_str(&serde_json::to_string(line).expect("an event line serializes"));
-            text.push('\n');
-        }
-        append(&path, &text)
-    }
-
-    pub fn events(
-        &self,
-        limit: Option<usize>,
-    ) -> Result<Vec<gbcli_protocol::EventLogLine>, StoreError> {
-        let path = self.events_path();
-        let text = match fs::read_to_string(&path) {
-            Ok(text) => text,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-            Err(source) => return Err(StoreError::Io { path, source }),
-        };
-        let mut lines: Vec<_> = text
-            .lines()
-            .filter_map(|line| serde_json::from_str(line).ok())
-            .collect();
-        if let Some(limit) = limit {
-            let skip = lines.len().saturating_sub(limit);
-            lines.drain(..skip);
-        }
-        Ok(lines)
     }
 
     /// Resolves a stored or given path against the project directory.

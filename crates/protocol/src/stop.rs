@@ -140,7 +140,7 @@ pub struct BudgetUse {
     pub ticks: u64,
     pub instructions: u64,
     pub frames: u64,
-    /// The configured limits. `null` when the caller didn't say.
+    /// The configured limits; a unit the run left uncapped is omitted.
     pub limits: BudgetLimits,
     /// True when the server supplied a default budget because the request
     /// named none (design §3).

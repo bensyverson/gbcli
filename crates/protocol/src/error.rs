@@ -37,6 +37,9 @@ pub enum ErrorCode {
     ToolchainMissing,
     /// The filesystem refused a read or write: permissions, a full disk.
     IoFailed,
+    /// gbcli itself failed: a bug, or a backend fault. The server keeps
+    /// running and trusts nothing it held in memory (design §5).
+    Internal,
 }
 
 impl ErrorCode {
@@ -64,7 +67,8 @@ impl ErrorCode {
             | ErrorCode::NoSession
             | ErrorCode::BootRomMissing
             | ErrorCode::ToolchainMissing
-            | ErrorCode::IoFailed => 5,
+            | ErrorCode::IoFailed
+            | ErrorCode::Internal => 5,
         }
     }
 
@@ -107,6 +111,9 @@ impl ErrorCode {
             ErrorCode::BootRomMissing => "pass --boot-rom <file> with the hash in the remedy",
             ErrorCode::ToolchainMissing => "install the pinned RGBDS, or put it on PATH",
             ErrorCode::IoFailed => "check the path's permissions and the free disk space",
+            ErrorCode::Internal => {
+                "this is a gbcli bug: retry once, then report the request line and the message"
+            }
         }
     }
 }
@@ -137,6 +144,7 @@ impl fmt::Display for ErrorCode {
             ErrorCode::BootRomMissing => "boot_rom_missing",
             ErrorCode::ToolchainMissing => "toolchain_missing",
             ErrorCode::IoFailed => "io_failed",
+            ErrorCode::Internal => "internal",
         };
         f.write_str(name)
     }
@@ -205,6 +213,7 @@ mod tests {
         ErrorCode::ToolchainMissing,
         ErrorCode::SessionUnreadable,
         ErrorCode::IoFailed,
+        ErrorCode::Internal,
     ];
 
     /// Fails to compile when a code is added, as a reminder to add it to `EVERY`.
@@ -231,7 +240,8 @@ mod tests {
             | ErrorCode::NoSession
             | ErrorCode::BootRomMissing
             | ErrorCode::ToolchainMissing
-            | ErrorCode::IoFailed => EVERY.contains(&code),
+            | ErrorCode::IoFailed
+            | ErrorCode::Internal => EVERY.contains(&code),
         }
     }
 
@@ -283,6 +293,7 @@ mod tests {
             (ErrorCode::BootRomMissing, 5),
             (ErrorCode::ToolchainMissing, 5),
             (ErrorCode::IoFailed, 5),
+            (ErrorCode::Internal, 5),
         ];
         for (code, exit) in exits {
             assert_eq!(code.exit_code(), exit, "{code:?}");

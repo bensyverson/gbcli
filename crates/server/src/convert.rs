@@ -2,7 +2,10 @@
 //! one remedy with real values (design §5).
 
 use gbcli_bundle::StoreError;
-use gbcli_engine::{DebugError, addr::AddrError, cond::EvalError, cond::ExprError};
+use gbcli_core::{CoreError, Feature};
+use gbcli_engine::{
+    DebugError, addr::AddrError, cond::EvalError, cond::ExprError, core_code, eval_code, expr_code,
+};
 use gbcli_protocol::{ErrorBody, ErrorCode};
 
 pub fn store(e: &StoreError) -> ErrorBody {
@@ -14,34 +17,23 @@ pub fn addr(e: &AddrError) -> ErrorBody {
 }
 
 pub fn expr(e: &ExprError) -> ErrorBody {
-    let code = match e {
-        ExprError::Syntax { .. } => ErrorCode::BadExpression,
-        ExprError::UnknownSymbol { .. } => ErrorCode::UnknownSymbol,
-        ExprError::AmbiguousSymbol { .. } => ErrorCode::AmbiguousSymbol,
-    };
-    ErrorBody::new(code, e.to_string(), e.remedy())
+    ErrorBody::new(expr_code(e), e.to_string(), e.remedy())
 }
 
 pub fn eval(e: &EvalError) -> ErrorBody {
     match e {
         EvalError::UninitializedRead(read) => ErrorBody::new(
-            ErrorCode::UninitializedRead,
+            eval_code(e),
             e.to_string(),
             format!("{read}: {}", e.remedy()),
         ),
         EvalError::Core(core) => core_error(core),
-        other => ErrorBody::new(ErrorCode::BadExpression, other.to_string(), other.remedy()),
+        other => ErrorBody::new(eval_code(other), other.to_string(), other.remedy()),
     }
 }
 
-pub fn core_error(e: &gbcli_core::CoreError) -> ErrorBody {
-    use gbcli_core::CoreError;
-    let code = match e {
-        CoreError::Unsupported { .. } => ErrorCode::Unsupported,
-        CoreError::OutOfRange { .. } => ErrorCode::BadAddress,
-        CoreError::InvalidState { .. } => ErrorCode::Refused,
-        CoreError::Backend { .. } => ErrorCode::Refused,
-    };
+pub fn core_error(e: &CoreError) -> ErrorBody {
+    let code = core_code(e);
     let remedy = match e {
         CoreError::Unsupported { feature, reason } => format!(
             "the core can't {}: {reason} — see `gbcli doctor --core`",
@@ -51,7 +43,7 @@ pub fn core_error(e: &gbcli_core::CoreError) -> ErrorBody {
         CoreError::InvalidState { .. } => {
             "the machine's current state refuses this; change it first".into()
         }
-        CoreError::Backend { .. } => "this is a backend fault; retry, then report it".into(),
+        CoreError::Backend { .. } => ErrorCode::Internal.default_remedy().into(),
     };
     ErrorBody::new(code, e.to_string(), remedy)
 }
@@ -87,18 +79,36 @@ pub fn debug(e: &DebugError) -> ErrorBody {
     }
 }
 
-/// The gap-ledger entry an evaluation failure deserves, if any.
-pub fn gap_of_eval(e: &EvalError) -> Option<(&'static str, &'static str)> {
+/// A gap-ledger entry: a feature the core said it can't do, and why.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Gap {
+    pub feature: Feature,
+    pub reason: &'static str,
+}
+
+/// The gap-ledger entry a core failure deserves: every `Unsupported`.
+pub fn gap_of_core(e: &CoreError) -> Option<Gap> {
     match e {
-        EvalError::Core(gbcli_core::CoreError::Unsupported { feature, reason }) => {
-            Some((feature.name(), reason))
-        }
+        CoreError::Unsupported { feature, reason } => Some(Gap {
+            feature: *feature,
+            reason,
+        }),
+        CoreError::OutOfRange { .. }
+        | CoreError::InvalidState { .. }
+        | CoreError::Backend { .. } => None,
+    }
+}
+
+/// The gap-ledger entry an evaluation failure deserves, if any.
+pub fn gap_of_eval(e: &EvalError) -> Option<Gap> {
+    match e {
+        EvalError::Core(core) => gap_of_core(core),
         _ => None,
     }
 }
 
 /// The gap-ledger entry a failure deserves, if any.
-pub fn gap_of(e: &DebugError) -> Option<(&'static str, &'static str)> {
+pub fn gap_of(e: &DebugError) -> Option<Gap> {
     let core = match e {
         DebugError::Core(core) => core,
         DebugError::Eval {
@@ -111,8 +121,23 @@ pub fn gap_of(e: &DebugError) -> Option<(&'static str, &'static str)> {
         } => core,
         _ => return None,
     };
-    match core {
-        gbcli_core::CoreError::Unsupported { feature, reason } => Some((feature.name(), reason)),
-        _ => None,
+    gap_of_core(core)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gbcli_core::CoreError;
+
+    #[test]
+    fn a_core_refusal_is_not_refused_which_means_a_flag_is_missing() {
+        let state = core_error(&CoreError::InvalidState {
+            reason: "the LCD is off".into(),
+        });
+        assert_eq!(state.code, ErrorCode::BadRequest);
+        let backend = core_error(&CoreError::Backend {
+            message: "the core said no".into(),
+        });
+        assert_eq!(backend.code, ErrorCode::Internal);
     }
 }

@@ -64,6 +64,16 @@ impl Bundle {
     }
 }
 
+/// A value no earlier creation of a session by this name holds: host time in
+/// nanoseconds, mixed with the process id for two creations in one tick.
+/// Host time is fine here; it never reaches emulation.
+fn new_incarnation() -> u64 {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos() as u64);
+    nanos ^ (u64::from(std::process::id()) << 48)
+}
+
 impl SessionStore {
     /// Creates the session from a ROM. Refuses an existing name. The ROM and
     /// symbols are read and the machine built before anything is written.
@@ -94,6 +104,8 @@ impl SessionStore {
             config,
             debugger: Default::default(),
             last_stop: None,
+            incarnation: new_incarnation(),
+            undo: None,
         };
         let machine = build(&meta, rom, sym.as_deref(), sym_path.as_deref())?;
 

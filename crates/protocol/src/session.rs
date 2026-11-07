@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::checkpoint::{DebuggerConfig, ModelDef, RenderConfig};
 use crate::error::ErrorCode;
+use crate::request::Op;
 use crate::rev::Rev;
 use crate::stop::{StopReason, StopRecord};
 
@@ -31,6 +32,26 @@ pub struct SessionFile {
     /// The stop record of the last run, for `show` (design §12).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_stop: Option<StopRecord>,
+    /// Set when the session was created, and different every time, so a
+    /// session removed and created again is told apart from the old one at
+    /// the same rev. 0 in a session made before the field existed.
+    #[serde(default)]
+    pub incarnation: u64,
+    /// The undo walk the head is part of, if its last change was an undo
+    /// (design §10); any other head change ends it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub undo: Option<UndoWalk>,
+}
+
+/// Where consecutive undos have got to (design §10).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UndoWalk {
+    /// The history entry the head was restored from; the next undo restores
+    /// the one before it.
+    pub restored: Rev,
+    /// The head when the walk began. History is kept back from here, not from
+    /// the head, until the walk ends, so each undo doesn't cost an entry.
+    pub origin: Rev,
 }
 
 /// One row of `gbcli sessions`.
@@ -57,8 +78,9 @@ pub struct EventLogLine {
     pub at: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub actor: Option<String>,
-    /// The op's wire name.
-    pub op: String,
+    /// The op and its args, spelled as in the request (design §10).
+    #[serde(flatten)]
+    pub op: Op,
     pub ok: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub code: Option<ErrorCode>,
@@ -102,6 +124,7 @@ pub struct GapCount {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::request::RunArgs;
 
     #[test]
     fn a_session_file_round_trips_with_a_readable_model() {
@@ -120,6 +143,11 @@ mod tests {
             },
             debugger: DebuggerConfig::default(),
             last_stop: None,
+            incarnation: 7,
+            undo: Some(UndoWalk {
+                restored: Rev(2),
+                origin: Rev(3),
+            }),
         };
         let json = serde_json::to_value(&file).unwrap();
         assert_eq!(json["model"], "dmg-b");
@@ -129,11 +157,35 @@ mod tests {
     }
 
     #[test]
+    fn an_event_line_carries_the_op_and_its_args() {
+        let line = EventLogLine {
+            at: 1,
+            actor: Some("claude".into()),
+            op: Op::Run(RunArgs {
+                frames: Some(3),
+                allow_rom_change: true,
+                ..RunArgs::default()
+            }),
+            ok: true,
+            code: None,
+            rev_before: Rev(1),
+            rev_after: Rev(2),
+            gaps: BTreeMap::new(),
+            stop: None,
+        };
+        let json = serde_json::to_value(&line).unwrap();
+        assert_eq!(json["op"], "run");
+        assert_eq!(json["args"]["frames"], 3);
+        assert_eq!(json["args"]["allow_rom_change"], true);
+        assert_eq!(serde_json::from_value::<EventLogLine>(json).unwrap(), line);
+    }
+
+    #[test]
     fn an_event_line_keeps_its_gap_counts_out_of_the_way_when_empty() {
         let line = EventLogLine {
             at: 1,
             actor: Some("claude".into()),
-            op: "run".into(),
+            op: Op::Show,
             ok: true,
             code: None,
             rev_before: Rev(1),

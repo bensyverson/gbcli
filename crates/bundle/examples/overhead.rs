@@ -37,7 +37,7 @@ fn main() {
         .run(&RunOptions::new(Budget::frames(10)))
         .expect("run");
     let cp = machine.capture(SaveMeta::default());
-    store.write_head(&cp, Rev(1)).unwrap();
+    store.write_head(&cp, Rev(1), None).unwrap();
     let mut head_rev = Rev(1);
 
     let (mut meta_read, mut head_read, mut head_write, mut meta_write) =
@@ -56,7 +56,7 @@ fn main() {
 
         let start = Instant::now();
         head_rev = Rev(cycle + 1);
-        store.write_head(&cp, head_rev).unwrap();
+        store.write_head(&cp, head_rev, None).unwrap();
         head_write += start.elapsed().as_nanos();
 
         let start = Instant::now();

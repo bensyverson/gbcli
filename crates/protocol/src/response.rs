@@ -9,31 +9,92 @@ use crate::request::WriteKind;
 use crate::rev::Rev;
 use crate::session::{EventLogLine, GapCount, SessionRow};
 use crate::stop::StopRecord;
+use crate::views::{PpuView, RegistersView};
 
-/// The answer to one request, echoed with its id.
+/// The answer to one request, echoed with its id: a result or an error,
+/// never both and never neither. On the wire it is
+/// `{"id","ok","rev"?,"result"|"error","warnings"}`, and `ok` is derived from
+/// which one is there, so it can't disagree.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(into = "WireResponse", try_from = "WireResponse")]
 pub struct Response {
     pub id: String,
-    pub ok: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rev: Option<Rev>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub result: Option<ResultBody>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<ErrorBody>,
+    pub outcome: Result<ResultBody, ErrorBody>,
     /// Human-facing notes (never-written reads, a changed ROM that still
     /// loaded). The CLI prints them to stderr; they never fail a request.
     pub warnings: Vec<String>,
+}
+
+/// The wire shape of a [`Response`].
+#[derive(Serialize, Deserialize)]
+struct WireResponse {
+    id: String,
+    ok: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    rev: Option<Rev>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    result: Option<ResultBody>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    error: Option<ErrorBody>,
+    warnings: Vec<String>,
+}
+
+impl From<Response> for WireResponse {
+    fn from(r: Response) -> Self {
+        let (result, error) = match r.outcome {
+            Ok(result) => (Some(result), None),
+            Err(error) => (None, Some(error)),
+        };
+        WireResponse {
+            id: r.id,
+            ok: error.is_none(),
+            rev: r.rev,
+            result,
+            error,
+            warnings: r.warnings,
+        }
+    }
+}
+
+impl TryFrom<WireResponse> for Response {
+    type Error = String;
+
+    fn try_from(w: WireResponse) -> Result<Self, String> {
+        let outcome = match (w.ok, w.result, w.error) {
+            (true, Some(result), None) => Ok(result),
+            (false, None, Some(error)) => Err(error),
+            (ok, result, error) => {
+                return Err(format!(
+                    "\"ok\":{ok} with {} and {}: a response has a result when ok, an error when not",
+                    if result.is_some() {
+                        "a result"
+                    } else {
+                        "no result"
+                    },
+                    if error.is_some() {
+                        "an error"
+                    } else {
+                        "no error"
+                    },
+                ));
+            }
+        };
+        Ok(Response {
+            id: w.id,
+            rev: w.rev,
+            outcome,
+            warnings: w.warnings,
+        })
+    }
 }
 
 impl Response {
     pub fn ok(id: impl Into<String>, rev: Option<Rev>, result: ResultBody) -> Self {
         Response {
             id: id.into(),
-            ok: true,
             rev,
-            result: Some(result),
-            error: None,
+            outcome: Ok(result),
             warnings: Vec::new(),
         }
     }
@@ -41,12 +102,23 @@ impl Response {
     pub fn failed(id: impl Into<String>, rev: Option<Rev>, error: ErrorBody) -> Self {
         Response {
             id: id.into(),
-            ok: false,
             rev,
-            result: None,
-            error: Some(error),
+            outcome: Err(error),
             warnings: Vec::new(),
         }
+    }
+
+    /// Whether the request succeeded: the wire's `ok`.
+    pub fn is_ok(&self) -> bool {
+        self.outcome.is_ok()
+    }
+
+    pub fn result(&self) -> Option<&ResultBody> {
+        self.outcome.as_ref().ok()
+    }
+
+    pub fn error(&self) -> Option<&ErrorBody> {
+        self.outcome.as_ref().err()
     }
 
     pub fn with_warnings(mut self, warnings: Vec<String>) -> Self {
@@ -87,6 +159,9 @@ pub struct ResultBody {
     pub gaps: Option<Vec<GapCount>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pruned: Option<Vec<String>>,
+    /// Idle sessions `prune` kept because they hold named checkpoints.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kept: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub removed: Option<String>,
 }
@@ -148,103 +223,6 @@ pub struct WatchMade {
 pub struct Deleted {
     pub id: u32,
     pub found: bool,
-}
-
-/// CPU registers with the pairs and flags spelled out (design §12 `show`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RegistersView {
-    pub a: u8,
-    pub f: u8,
-    pub b: u8,
-    pub c: u8,
-    pub d: u8,
-    pub e: u8,
-    pub h: u8,
-    pub l: u8,
-    pub sp: u16,
-    pub pc: u16,
-    pub af: u16,
-    pub bc: u16,
-    pub de: u16,
-    pub hl: u16,
-    pub flags: FlagsView,
-    pub ime: bool,
-    pub halted: bool,
-    pub double_speed: bool,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FlagsView {
-    pub z: bool,
-    pub n: bool,
-    pub h: bool,
-    pub c: bool,
-}
-
-impl RegistersView {
-    pub fn of(r: &gbcli_core::Registers) -> Self {
-        let pair = |hi: u8, lo: u8| u16::from_be_bytes([hi, lo]);
-        RegistersView {
-            a: r.a,
-            f: r.f,
-            b: r.b,
-            c: r.c,
-            d: r.d,
-            e: r.e,
-            h: r.h,
-            l: r.l,
-            sp: r.sp,
-            pc: r.pc,
-            af: pair(r.a, r.f),
-            bc: pair(r.b, r.c),
-            de: pair(r.d, r.e),
-            hl: pair(r.h, r.l),
-            flags: FlagsView {
-                z: r.f & 0x80 != 0,
-                n: r.f & 0x40 != 0,
-                h: r.f & 0x20 != 0,
-                c: r.f & 0x10 != 0,
-            },
-            ime: r.ime,
-            halted: r.halted,
-            double_speed: r.double_speed,
-        }
-    }
-}
-
-/// The PPU as the core reports it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PpuView {
-    pub ly: u8,
-    pub mode: PpuModeView,
-    pub lcd_on: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub dot: Option<u16>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum PpuModeView {
-    Hblank,
-    Vblank,
-    OamScan,
-    Drawing,
-}
-
-impl PpuView {
-    pub fn of(p: &gbcli_core::PpuStatus) -> Self {
-        PpuView {
-            ly: p.ly,
-            mode: match p.mode {
-                gbcli_core::PpuMode::HBlank => PpuModeView::Hblank,
-                gbcli_core::PpuMode::VBlank => PpuModeView::Vblank,
-                gbcli_core::PpuMode::OamScan => PpuModeView::OamScan,
-                gbcli_core::PpuMode::Drawing => PpuModeView::Drawing,
-            },
-            lcd_on: p.lcd_on,
-            dot: p.dot,
-        }
-    }
 }
 
 #[cfg(test)]
@@ -317,6 +295,24 @@ mod tests {
         assert_eq!(json["ok"], false);
         assert_eq!(json["error"]["code"], "budget_exhausted");
         assert_eq!(json["error"]["exit"], 3);
+        assert!(json.get("result").is_none());
+    }
+
+    #[test]
+    fn ok_cannot_disagree_with_result_and_error() {
+        let error = r#"{"code":"bad_request","exit":2,"message":"m","remedy":"r"}"#;
+        for line in [
+            format!(r#"{{"id":"1","ok":true,"error":{error},"warnings":[]}}"#),
+            r#"{"id":"1","ok":false,"result":{},"warnings":[]}"#.to_string(),
+            r#"{"id":"1","ok":true,"warnings":[]}"#.to_string(),
+            format!(r#"{{"id":"1","ok":true,"result":{{}},"error":{error},"warnings":[]}}"#),
+        ] {
+            assert!(serde_json::from_str::<Response>(&line).is_err(), "{line}");
+        }
+        let failed = Response::failed("1", None, ErrorBody::plain(ErrorCode::BadRequest, "m"));
+        assert!(!failed.is_ok());
+        let json = serde_json::to_value(&failed).unwrap();
+        assert_eq!(json["ok"], false);
         assert!(json.get("result").is_none());
     }
 

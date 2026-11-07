@@ -6,9 +6,10 @@
 mod convert;
 mod handle;
 mod serve;
+mod watchdog;
 
 #[cfg(test)]
 mod fixture;
 
 pub use handle::Handler;
-pub use serve::serve;
+pub use serve::{Answer, serve};

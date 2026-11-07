@@ -3,6 +3,7 @@
 //! Breakpoints are PC checks in the run loop; nothing is patched into memory.
 
 mod backtrace;
+mod code;
 mod decide;
 mod drive;
 mod record;
@@ -20,6 +21,7 @@ use crate::cond::{Condition, EvalError, EvalWarning, ExprError};
 use crate::machine::Machine;
 
 pub use backtrace::CallFrame;
+pub use code::{core_code, eval_code, expr_code};
 use drive::Goal;
 
 /// What frame and cycle counts count from (design §9). The default is the

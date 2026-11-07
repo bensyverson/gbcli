@@ -4,16 +4,22 @@ use gbcli_protocol::{
     CheckpointArgs, CheckpointMade, RestoreArgs, Restored, ResultBody, Rev, SessionFile,
 };
 
-use super::{Failure, Handler, Need, save_head};
+use super::{Failure, Handler, HeadChange, Need, save_head};
 impl Handler {
+    /// A checkpoint before the first run is the boot handoff, where a run
+    /// would start, not power-on.
     pub(super) fn checkpoint(
         &mut self,
         store: &SessionStore,
         meta: &SessionFile,
         args: &CheckpointArgs,
         actor: &Option<String>,
+        warnings: &mut Vec<String>,
     ) -> Result<ResultBody, Failure> {
-        let (machine, _) = self.machine_for(store, meta, Need::Read, None, Start::PowerOn)?;
+        let need = Need::Start(Start::Boot);
+        let (machine, loaded) =
+            self.machine_for(store, meta, need, None, &LoadOptions::default())?;
+        warnings.extend(loaded);
         let made = write_checkpoint(store, &machine, &args.name, actor, meta.rev)?;
         self.keep_warm(store, meta, machine);
         Ok(ResultBody {
@@ -30,28 +36,26 @@ impl Handler {
         actor: &Option<String>,
         warnings: &mut Vec<String>,
     ) -> Result<ResultBody, Failure> {
-        let (mut machine, _) = self.machine_for(store, meta, Need::Read, None, Start::PowerOn)?;
-        let cp = store
-            .checkpoint(&args.name)
-            .map_err(|e| Failure::from_store(&e))?;
         let load = LoadOptions {
             allow_rom_change: args.allow_rom_change,
             ..LoadOptions::default()
         };
+        let cp = store
+            .checkpoint(&args.name)
+            .map_err(|e| Failure::from_store(&e))?;
+        let (mut machine, _) = self.machine_for(store, meta, Need::Replace, None, &load)?;
         warnings.extend(
             store
                 .restore(&mut machine, &cp, &load)
                 .map_err(|e| Failure::from_store(&e))?,
         );
         let frame = checkpoint_frame(&cp);
-        save_head(
-            store,
-            meta,
-            &machine,
-            actor.clone(),
-            Some(args.name.clone()),
-            None,
-        )?;
+        let change = HeadChange {
+            actor: actor.clone(),
+            parent: Some(args.name.clone()),
+            ..HeadChange::default()
+        };
+        save_head(store, meta, &machine, change)?;
         self.keep_warm(store, meta, machine);
         Ok(ResultBody {
             restored: Some(Restored {
@@ -63,29 +67,32 @@ impl Handler {
         })
     }
 
+    /// Consecutive undos walk back through history (design §10).
     pub(super) fn undo(
         &mut self,
         store: &SessionStore,
         meta: &mut SessionFile,
         actor: &Option<String>,
+        warnings: &mut Vec<String>,
     ) -> Result<ResultBody, Failure> {
-        let (mut machine, _) = self.machine_for(store, meta, Need::Read, None, Start::PowerOn)?;
-        let cp = store
-            .checkpoint_or_history(meta.rev, "~1")
+        let (cp, walk) = store
+            .undo_target(meta)
             .map_err(|e| Failure::from_store(&e))?;
-        let frame = checkpoint_frame(&cp);
         let load = LoadOptions::default();
-        store
-            .restore(&mut machine, &cp, &load)
-            .map_err(|e| Failure::from_store(&e))?;
-        save_head(
-            store,
-            meta,
-            &machine,
-            actor.clone(),
-            Some("undo".into()),
-            None,
-        )?;
+        let (mut machine, _) = self.machine_for(store, meta, Need::Replace, None, &load)?;
+        let frame = checkpoint_frame(&cp);
+        warnings.extend(
+            store
+                .restore(&mut machine, &cp, &load)
+                .map_err(|e| Failure::from_store(&e))?,
+        );
+        let change = HeadChange {
+            actor: actor.clone(),
+            parent: Some("undo".into()),
+            walk: Some(walk),
+            ..HeadChange::default()
+        };
+        save_head(store, meta, &machine, change)?;
         self.keep_warm(store, meta, machine);
         Ok(ResultBody {
             restored: Some(Restored {
@@ -139,29 +146,79 @@ mod tests {
     fn checkpoint_restore_and_undo_move_the_head_back_and_forth() {
         let f = Fixture::new("undo");
         let mut h = handler(&f);
-        assert!(run_frames(&mut h, 2).ok);
+        assert!(run_frames(&mut h, 2).is_ok());
         let saved = h.handle(&request(Op::Checkpoint(CheckpointArgs {
             name: "f2".into(),
         })));
-        assert!(saved.ok);
+        assert!(saved.is_ok());
         assert_eq!(
             saved.rev,
             Some(Rev(1)),
             "a checkpoint doesn't move the head"
         );
-        assert!(run_frames(&mut h, 2).ok);
+        assert!(run_frames(&mut h, 2).is_ok());
 
         let restored = h.handle(&request(Op::Restore(RestoreArgs {
             name: "f2".into(),
             allow_rom_change: false,
         })));
-        let restored = restored.result.unwrap().restored.unwrap();
+        let restored = restored.outcome.unwrap().restored.unwrap();
         assert_eq!(restored.name.as_deref(), Some("f2"));
         assert_eq!(restored.frame, Some(2));
 
         let undone = h.handle(&request(Op::Undo));
-        let undone = undone.result.unwrap().restored.unwrap();
+        let undone = undone.outcome.unwrap().restored.unwrap();
         assert_eq!(undone.name, None);
         assert_eq!(undone.frame, Some(4));
+    }
+
+    /// The frame an undo restored, or its error.
+    fn undo(h: &mut Handler) -> Result<u64, Box<gbcli_protocol::ErrorBody>> {
+        let response = h.handle(&request(Op::Undo));
+        match response.outcome {
+            Err(error) => Err(Box::new(error)),
+            Ok(result) => Ok(result.restored.unwrap().frame.unwrap()),
+        }
+    }
+
+    #[test]
+    fn consecutive_undos_walk_back_and_stop_at_the_oldest_entry() {
+        let f = Fixture::new("undo-walk");
+        let mut h = handler(&f);
+        for _ in 0..4 {
+            assert!(run_frames(&mut h, 1).is_ok());
+        }
+        assert_eq!(undo(&mut h), Ok(3));
+        assert_eq!(undo(&mut h), Ok(2));
+        assert_eq!(undo(&mut h), Ok(1));
+        let error = undo(&mut h).expect_err("rev 0 has no entry to restore");
+        assert_eq!(error.code, gbcli_protocol::ErrorCode::BadRequest);
+        assert!(error.remedy.contains("s1"), "{}", error.remedy);
+    }
+
+    #[test]
+    fn a_run_after_an_undo_resets_the_walk() {
+        let f = Fixture::new("undo-reset");
+        let mut h = handler(&f);
+        for _ in 0..3 {
+            assert!(run_frames(&mut h, 1).is_ok());
+        }
+        assert_eq!(undo(&mut h), Ok(2));
+        assert!(run_frames(&mut h, 1).is_ok());
+        assert_eq!(undo(&mut h), Ok(2), "the run's ~1 is the undone state");
+    }
+
+    #[test]
+    fn an_undo_walk_reaches_eight_back_from_where_it_began() {
+        let f = Fixture::new("undo-full");
+        let mut h = handler(&f);
+        for _ in 0..12 {
+            assert!(run_frames(&mut h, 1).is_ok());
+        }
+        for back in 1..=8 {
+            assert_eq!(undo(&mut h), Ok(12 - back), "undo {back}");
+        }
+        let error = undo(&mut h).expect_err("s4 is the oldest kept");
+        assert!(error.remedy.contains("s4"), "{}", error.remedy);
     }
 }

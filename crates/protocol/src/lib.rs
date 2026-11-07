@@ -39,7 +39,10 @@ pub use equiv::{
     EquivSide, RamRangeArg, SideMade,
 };
 pub use error::{ErrorBody, ErrorCode};
-pub use images::{ImageAsset, ImageKind, ImageLimit, ImageProblem, ImagesMade, TileAt};
+pub use images::{
+    ImageAsset, ImageKind, ImageLimit, ImageProblem, ImagesMade, KnownPalette, ShadeChoice,
+    ShadeRule, TileAt,
+};
 pub use keys::{Button, KEY_GRAMMAR, KeyAction, KeyError, KeyEvent, parse_keys};
 pub use listing::{CheckpointRow, SymArgs, SymbolArea, SymbolRow};
 pub use opcode::{OpcodeArgs, OpcodeRow};

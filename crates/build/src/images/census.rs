@@ -127,6 +127,7 @@ pub(crate) fn error(
         count: count as u32,
         max: max as u32,
         tiles: Vec::new(),
+        line: None,
         message,
         remedy: remedy.to_string(),
     }

@@ -112,8 +112,11 @@ fn a_project_without_images_reports_none_and_builds_as_before() {
     );
 }
 
+/// The classic greens are a known palette (Ben's second ruling,
+/// 2026-11-07), so they take the four shades exactly. By plain lightness
+/// (0.66, 0.60, 0.33, 0.17) they would crowd into shades 1 and 2.
 #[test]
-fn four_colors_that_are_not_gray_become_the_four_shades_by_lightness() {
+fn the_classic_greens_take_the_four_shades_as_a_known_palette() {
     let (temp, options) = starter("bg-green");
     // The classic green palette, lightest to darkest across one tile.
     let greens: [Rgba; 4] = [
@@ -125,10 +128,12 @@ fn four_colors_that_are_not_gray_become_the_four_shades_by_lightness() {
     write_png(&temp.path("demo/assets/bg/field.png"), 8, 8, |x, _| {
         greens[(x / 2) as usize]
     });
-    build(&rgbds(), &options).unwrap();
+    let made = build(&rgbds(), &options).unwrap();
     let tiles = fs::read(temp.path("demo/build/images/bg/field.2bpp")).unwrap();
     // Every row: pixels 0-1 index 0, 2-3 index 1, 4-5 index 2, 6-7 index 3.
     assert_eq!(&tiles[..2], &[0b0011_0011, 0b0000_1111]);
+    let shared = problems(&made, ImageLimit::SharedShade);
+    assert!(shared.is_empty(), "{shared:#?}");
 }
 
 #[test]
@@ -307,6 +312,35 @@ fn a_background_rgbgfx_draws_otherwise_than_planned_stops_the_build() {
     );
     assert!(made.images.unwrap().images.is_empty());
     assert!(!temp.path("demo/build/demo.gb").exists());
+}
+
+/// Colors that share a shade reach rgbgfx as one color, and its output is
+/// still checked: a misdrawn tile stops the build.
+#[test]
+fn a_background_with_a_shared_shade_rgbgfx_misdraws_stops_the_build() {
+    let (temp, options) = starter("bg-shared-disagrees");
+    let near_white: Rgba = [0xF0, 0xF0, 0xF0, 0xFF];
+    // Black too, so the stretch keeps #f0f0f0 beside white, in shade 0.
+    write_png(&temp.path("demo/assets/bg/haze.png"), 24, 8, |x, _| {
+        [WHITE, near_white, BLACK][(x / 8) as usize]
+    });
+    let tools = tools_whose_rgbgfx_misdraws(&temp);
+    let made = match build(&tools, &options) {
+        Err(BuildError::Failed { made, .. }) => *made,
+        other => panic!("expected the disagreement to stop the build, got {other:?}"),
+    };
+    let p = problem(&made, ImageLimit::RgbgfxAgrees);
+    assert_eq!(p.tiles, [TileAt { x: 0, y: 0 }, TileAt { x: 1, y: 0 }]);
+    assert!(
+        p.message
+            .contains("planned color index 0 and rgbgfx wrote index 1"),
+        "{}",
+        p.message
+    );
+    assert_eq!(
+        problem(&made, ImageLimit::SharedShade).severity,
+        Severity::Warning
+    );
 }
 
 #[test]

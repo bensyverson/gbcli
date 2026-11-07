@@ -204,6 +204,7 @@ mod tests {
     fn symbols_lists_what_each_kind_defines_but_frame_labels() {
         let plan = SheetPlan {
             spec: String::new(),
+            merges: Vec::new(),
             obp: 0,
             width: 1,
             height: 2,

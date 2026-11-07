@@ -7,12 +7,23 @@ Images — PNGs under assets/, converted by `gbcli build` with rgbgfx (RGBDS).
   assets/bg/town.png           a background: unique tiles + a tilemap
   assets/sprites/hero.png      8x16 objects; the whole sheet is one frame
   assets/sprites/hero.16x16.png  frames of 16x16, left to right, then down
-Draw in up to 4 colors (any 4: grays or greens); each takes the DMG shade
-nearest its lightness, unless two would share one: then all are spread
-apart, lightest to darkest (2 colors: white, black; 3: white, light or dark
-gray by the middle one's lightness, black; 4: all four shades). Colors equal
-in RGB555 (5 bits a channel, as rgbgfx reads them) are one color.
-Sprites: 3 colors + transparent (alpha 0).
+Draw each image in up to 4 colors (sprites: 3 + transparent, alpha 0).
+Shades 0-3 (white to black) are chosen once for the whole project, so a
+color is one shade in every image, by the first rule that applies:
+  1. declared   assets/palette.txt: 4 lines of #rrggbb, shade 0 first ('# '
+                starts a comment); each color takes its nearest line's shade
+  2. known      every color is in one palette: the DMG grays (#ffffff
+                #aaaaaa #555555 #000000), the DMG-01 pea greens (#9bbc0f
+                #8bac0f #306230 #0f380f), GB Studio's greens (#e0f8cf
+                #86c06c #306850 #071821) or the Pocket grays as SameBoy draws
+                them (#c2ce93 #818d66 #3a4c3a #07100e)
+  3. stretched  lightness rescaled so the project's lightest color is shade
+                0 and its darkest shade 3, then the nearest shade (nearest:
+                one lightness only, so nothing to stretch)
+The images row says which: shades=declared|known|stretched|nearest, and
+palette= for a known one. Colors in one shade draw alike, with a
+shared_shade warning. Colors equal in RGB555 (5 bits a channel, as rgbgfx
+reads them) are one color.
 
 Every hardware limit is a `problem` row: limit, count, max, tiles=x,y (in
 the image's 8x8 grid; --json lists them all), message and remedy.
@@ -28,6 +39,10 @@ the image's 8x8 grid; --json lists them all), message and remedy.
   frame_span          a frame at most 256 pixels each way (OAM's bytes)
   romx_bank           one image's data and frame lists in a 16 KiB bank
   obj_no_transparency a warning: no transparent pixel, every object a block
+  shared_shade        a warning: colors drawn in one shade (names them)
+  palette_file        assets/palette.txt isn't 4 #rrggbb lines (line=N)
+  shade_stretched     a warning: the stretch put a color 2+ shades from its
+                      nearest (e.g. #101010 beside only black, drawn white)
   alpha               a pixel half transparent, or any in a background
   rgbgfx_agrees       not a limit: rgbgfx drew other indices than gbcli
                       planned (a gbcli bug; re-save the PNG as 8-bit)

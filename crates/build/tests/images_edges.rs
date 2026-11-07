@@ -58,12 +58,6 @@ fn layout_error(r: Result<gbcli_protocol::BuildMade, BuildError>) -> (String, St
     }
 }
 
-/// The 2bpp color index of pixel `x` in row `row` of the tile data at `data`.
-fn index_at(data: &[u8], row: usize, x: u32) -> u8 {
-    let (lo, hi) = (data[row * 2], data[row * 2 + 1]);
-    ((lo >> (7 - x)) & 1) | (((hi >> (7 - x)) & 1) << 1)
-}
-
 /// A sheet of many frames that all reuse one 8x16 unit needs 2 tiles,
 /// though the sheet itself is 17x32 = 544 tiles: rgbgfx must not count the
 /// raw sheet against a tile limit gbcli's own dedup already checked.

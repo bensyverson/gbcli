@@ -12,10 +12,12 @@ mod bg;
 mod census;
 mod emit;
 mod find;
+mod palette;
 mod pixels;
 mod preview;
 mod run;
 mod shades;
+mod shared;
 mod sheet;
 
 use std::fs;
@@ -66,6 +68,20 @@ impl Plan {
             Plan::Sheet(p) => p.tiles(),
         }
     }
+
+    fn warnings(&self) -> &[ImageProblem] {
+        match self {
+            Plan::Bg(p) => &p.warnings,
+            Plan::Sheet(p) => &p.warnings,
+        }
+    }
+
+    fn merges(&self) -> &[(census::Key, pixels::Rgba)] {
+        match self {
+            Plan::Bg(p) => &p.merges,
+            Plan::Sheet(p) => &p.merges,
+        }
+    }
 }
 
 /// Converts the project's images; `None` when it has none.
@@ -80,33 +96,53 @@ pub(crate) fn convert(
         return Ok(None);
     }
     let mut made = ImagesMade::default();
-    let mut plans: Vec<(&Source, String, Plan)> = Vec::new();
+    let stopped = Converted {
+        made: ImagesMade::default(),
+        diagnostics: Vec::new(),
+        generated: None,
+    };
+    let mut all = Vec::with_capacity(sources.len());
     for s in &sources {
         let image = shown(&s.path);
         let pixels = Pixels::read(&s.path).map_err(|e| BuildError::Layout {
             message: format!("{image} isn't a PNG gbcli can read: {e}"),
             remedy: "save it as a PNG (8-bit gray, RGB or RGBA)".into(),
         })?;
+        all.push((s, image, pixels));
+    }
+    // One color, one shade, in every image: the shades are chosen from the
+    // whole project's colors before any image is planned.
+    let declared = match palette::read(project, &shown(&project.join(palette::PATH))) {
+        Ok(declared) => declared,
+        Err(p) => {
+            made.problems.push(p);
+            return Ok(Some(Converted { made, ..stopped }));
+        }
+    };
+    let colors = project_colors(all.iter().map(|(_, _, p)| p));
+    let shading = shades::choose(declared.as_ref(), &colors);
+    made.shades = Some(shading.choice);
+
+    let mut plans: Vec<(&Source, String, Plan)> = Vec::new();
+    // Each plan's pixels, for the merged copy rgbgfx reads (`shared`).
+    let mut read: Vec<Pixels> = Vec::new();
+    for (s, image, pixels) in all {
         let checked = match s.kind {
-            ImageKind::Bg => bg::check(&image, &pixels).map(Plan::Bg),
-            ImageKind::Sprites => sheet::check(&image, &s.stem, &pixels, s.frame).map(Plan::Sheet),
+            ImageKind::Bg => bg::check(&image, &pixels, &shading).map(Plan::Bg),
+            ImageKind::Sprites => {
+                sheet::check(&image, &s.stem, &pixels, s.frame, &shading).map(Plan::Sheet)
+            }
         };
         match checked {
             Ok(plan) => {
-                if let Plan::Sheet(p) = &plan {
-                    made.problems.extend(p.warnings.iter().cloned());
-                }
+                made.problems.extend(plan.warnings().iter().cloned());
                 plans.push((s, image, plan));
+                read.push(pixels);
             }
             Err(problems) => made.problems.extend(problems),
         }
     }
     made.problems.extend(vram(&plans));
-    let stopped = Converted {
-        made: ImagesMade::default(),
-        diagnostics: Vec::new(),
-        generated: None,
-    };
     if made.first_error().is_some() {
         return Ok(Some(Converted { made, ..stopped }));
     }
@@ -125,9 +161,23 @@ pub(crate) fn convert(
     }
     let mut data_paths = Vec::new();
     let mut ok = true;
-    for (s, image, plan) in &plans {
-        let rel = s.path.strip_prefix(project).unwrap_or(&s.path);
+    for ((s, image, plan), pixels) in plans.iter().zip(&read) {
         let data = format!("{OUT}/{}/{}", s.kind.dir(), s.stem);
+        // rgbgfx reads the image, or, when colors share a shade, a copy
+        // with them merged, removed once converted.
+        let merged = PathBuf::from(format!("{data}.merged.png"));
+        let transient = if plan.merges().is_empty() {
+            None
+        } else {
+            let path = project.join(&merged);
+            shared::write(pixels, plan.merges(), &path).map_err(io(path.clone()))?;
+            Some(Removed(path))
+        };
+        let rel = if transient.is_some() {
+            merged.as_path()
+        } else {
+            s.path.strip_prefix(project).unwrap_or(&s.path)
+        };
         let preview_path = project.join(format!("{data}.preview.png"));
         let (asset, picture) = match plan {
             Plan::Bg(p) => {
@@ -221,6 +271,32 @@ pub(crate) fn convert(
             include_dir: PathBuf::from(OUT),
         }),
     }))
+}
+
+/// Every color of every image, one per RGB555 key: the key's most used
+/// value in the image that uses it most (the first such image on a tie),
+/// as `census::colors` stands one value for its key.
+fn project_colors<'a>(images: impl Iterator<Item = &'a Pixels>) -> Vec<pixels::Rgba> {
+    let mut best: std::collections::BTreeMap<census::Key, (pixels::Rgba, u32)> =
+        std::collections::BTreeMap::new();
+    for p in images {
+        for (c, n) in census::colors(p) {
+            let entry = best.entry(census::key(c)).or_insert((c, n));
+            if n > entry.1 {
+                *entry = (c, n);
+            }
+        }
+    }
+    best.into_values().map(|(c, _)| c).collect()
+}
+
+/// A transient file, removed when dropped.
+struct Removed(PathBuf);
+
+impl Drop for Removed {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.0);
+    }
 }
 
 fn asset(

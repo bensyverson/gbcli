@@ -13,3 +13,5 @@ scripts/bench/rust-build/target/
 # Test-ROM corpus (fetched by scripts/corpus/fetch.py)
 /tests/corpus/fetched
 /tests/corpus/.downloads/
+# Machine-local inputs (e.g. a GB Studio project and its ROM), never committed
+/local/

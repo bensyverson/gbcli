@@ -305,12 +305,26 @@ mod tests {
             RomxBank,
             Alpha,
             RgbgfxAgrees,
+            SharedShade,
+            PaletteFile,
+            ShadeStretched,
         ] {
             assert!(text.contains(limit.name()), "{} missing", limit.name());
         }
-        // The shade rule as shades.rs applies it: nearest lightness, unless
-        // two colors would share a shade, and colors one in RGB555 are one.
-        for needle in ["nearest its lightness", "spread", "RGB555"] {
+        // The shade rules as shades.rs applies them (Ben's rulings,
+        // 2026-11-07): declared, known, stretched, one shade per color in
+        // the whole project, shared shades warned, RGB555 colors one.
+        for needle in [
+            "assets/palette.txt",
+            "pea greens",
+            "GB Studio",
+            "Pocket",
+            "stretched",
+            "whole project",
+            "shades=",
+            "shared_shade",
+            "RGB555",
+        ] {
             assert!(text.contains(needle), "{needle} missing");
         }
         for needle in [

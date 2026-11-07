@@ -57,6 +57,34 @@ pub fn read_png(path: &Path) -> (u32, u32, Vec<u32>) {
     (info.width, info.height, pixels)
 }
 
+/// The 2bpp color index of pixel `x` in row `row` of the tile data at `data`.
+pub fn index_at(data: &[u8], row: usize, x: u32) -> u8 {
+    let (lo, hi) = (data[row * 2], data[row * 2 + 1]);
+    ((lo >> (7 - x)) & 1) | (((hi >> (7 - x)) & 1) << 1)
+}
+
+/// The value of `DEF <constant> EQU %..` in images.inc, read as binary.
+pub fn binary_constant(inc: &str, constant: &str) -> u8 {
+    let prefix = format!("DEF {constant} EQU %");
+    let bits = inc
+        .lines()
+        .find_map(|l| l.strip_prefix(prefix.as_str()))
+        .unwrap_or_else(|| panic!("{constant} in\n{inc}"));
+    let bits: String = bits.split(' ').next().unwrap().replace('_', "");
+    u8::from_str_radix(&bits, 2).unwrap()
+}
+
+/// The problems under `limit`, any number.
+pub fn problems(made: &BuildMade, limit: ImageLimit) -> Vec<ImageProblem> {
+    let images = made.images.as_ref().expect("the build reports its images");
+    images
+        .problems
+        .iter()
+        .filter(|p| p.limit == limit)
+        .cloned()
+        .collect()
+}
+
 /// Tile `n` as a pattern no other `n` below 2^16 shares: its bits as black
 /// pixels along the first two rows, on white.
 pub fn numbered_tile(n: u32, x: u32, y: u32) -> Rgba {

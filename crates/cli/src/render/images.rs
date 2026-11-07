@@ -48,6 +48,7 @@ pub fn rows(m: &ImagesMade) -> String {
         if !p.tiles.is_empty() {
             row = row.field("tiles", tiles(&p.tiles));
         }
+        row = row.opt("line", p.line);
         out += &row
             .field("message", &p.message)
             .field("remedy", &p.remedy)
@@ -59,6 +60,11 @@ pub fn rows(m: &ImagesMade) -> String {
         .field("converted", m.images.len())
         .field("errors", count(Severity::Error))
         .field("warnings", count(Severity::Warning))
+        .opt("shades", m.shades.map(|s| s.rule.name()))
+        .opt(
+            "palette",
+            m.shades.and_then(|s| s.palette).map(|p| p.name()),
+        )
         .line();
     out
 }

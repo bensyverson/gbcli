@@ -109,7 +109,8 @@ fn a_png_in_a_new_project_is_built_and_shows_on_screen_pixel_for_pixel() {
     for row in [
         "image kind=bg source=game/assets/bg/sign.png label=Sign size=4x2 tiles=",
         " preview=game/build/images/bg/sign.preview.png\n",
-        "images include=game/build/images/images.inc converted=1 errors=0 warnings=0\n",
+        "images include=game/build/images/images.inc converted=1 errors=0 warnings=0 \
+         shades=known palette=dmg_grays\n",
     ] {
         assert!(built.stdout.contains(row), "{row:?} in\n{}", built.stdout);
     }
@@ -275,7 +276,7 @@ fn an_over_budget_background_comes_back_as_its_limit_in_rows_and_json() {
     for row in [
         "problem limit=bg_tiles_map severity=error image=game/assets/bg/town.png count=272 \
          max=256 tiles=\"0,0 1,0 2,0 3,0 4,0 5,0 6,0 7,0 (+264 more)\"",
-        "images converted=0 errors=1 warnings=0\n",
+        "images converted=0 errors=1 warnings=0 shades=known palette=dmg_grays\n",
     ] {
         assert!(built.stdout.contains(row), "{row:?} in\n{}", built.stdout);
     }
@@ -298,4 +299,21 @@ fn an_over_budget_background_comes_back_as_its_limit_in_rows_and_json() {
             .unwrap()
             .contains("split the image")
     );
+}
+
+#[test]
+fn a_malformed_palette_file_is_a_problem_row_naming_its_line() {
+    let p = Project::new("images-palette-bad");
+    assert_eq!(p.rgbds(&["new", "game"]).code, 0);
+    write_png(&p.path("game/assets/bg/sky.png"), 8, 8, |_, _| GRAYS[0]);
+    fs::write(
+        p.path("game/assets/palette.txt"),
+        "# lightest first\n#ffffff\n#aaaa\n#555555\n#000000\n",
+    )
+    .unwrap();
+    let built = p.rgbds(&["build", "game"]);
+    assert_eq!(built.code, 4, "{}{}", built.stdout, built.stderr);
+    let row = "problem limit=palette_file severity=error image=game/assets/palette.txt count=";
+    assert!(built.stdout.contains(row), "{row:?} in\n{}", built.stdout);
+    assert!(built.stdout.contains(" line=3 "), "{}", built.stdout);
 }

@@ -7,7 +7,8 @@ use gbcli_protocol::{ImageLimit, ImageProblem, TileAt};
 
 use super::census::{self, Key, error, key};
 use super::pixels::{Pixels, Rgba, hex};
-use super::shades::shades;
+use super::shades::Shading;
+use super::shared;
 
 /// Tiles one background map addresses (Pan Docs, Tile Maps).
 pub(crate) const MAP_TILES: usize = 256;
@@ -18,8 +19,14 @@ const BG_SHADES: usize = 4;
 #[derive(Debug)]
 pub(crate) struct BgPlan {
     /// rgbgfx's `-c`: each color at the index of its shade, so BGP $E4
-    /// shows it as drawn.
+    /// shows it as drawn. Colors that share a shade are one color to
+    /// rgbgfx, the most used of them (`merges`).
     pub spec: String,
+    /// The colors rgbgfx must see as another (`shared`): none unless two
+    /// colors share a shade.
+    pub merges: Vec<(Key, Rgba)>,
+    /// Problems that don't stop the build.
+    pub warnings: Vec<ImageProblem>,
     /// Size in tiles.
     pub width: u32,
     pub height: u32,
@@ -33,7 +40,12 @@ pub(crate) struct BgPlan {
 }
 
 /// Checks a background; the plan when it fits, else every problem found.
-pub(crate) fn check(image: &str, pixels: &Pixels) -> Result<BgPlan, Vec<ImageProblem>> {
+/// `shading` is the project's (`shades::choose`).
+pub(crate) fn check(
+    image: &str,
+    pixels: &Pixels,
+    shading: &Shading,
+) -> Result<BgPlan, Vec<ImageProblem>> {
     if let Some(p) = census::size(image, pixels, 8) {
         return Err(vec![p]);
     }
@@ -59,11 +71,23 @@ pub(crate) fn check(image: &str, pixels: &Pixels) -> Result<BgPlan, Vec<ImagePro
         "#none".into(),
         "#none".into(),
     ];
+    let shade_of = shading.shades(&list);
+    let mut shared = shared::find(image, pixels, &colors, &shade_of, shading.choice);
+    shared
+        .warnings
+        .extend(shared::stretched(image, pixels, &colors, shading));
     let mut shade: HashMap<Key, u8> = HashMap::new();
-    for (c, s) in list.iter().zip(shades(&list)) {
-        slots[usize::from(s)] = hex(*c);
+    for (c, &s) in list.iter().zip(&shade_of) {
+        if !shared.merges.iter().any(|(k, _)| *k == key(*c)) {
+            slots[usize::from(s)] = hex(*c);
+        }
         shade.insert(key(*c), s);
     }
+    let warned = |p: ImageProblem| {
+        let mut all = vec![p];
+        all.extend(shared.warnings.iter().cloned());
+        all
+    };
     let (width, height) = (pixels.width / 8, pixels.height / 8);
     // Each unique tile's first place and how often it is used.
     let mut seen: HashMap<Vec<u8>, (TileAt, u32)> = HashMap::new();
@@ -105,7 +129,7 @@ pub(crate) fn check(image: &str, pixels: &Pixels) -> Result<BgPlan, Vec<ImagePro
             "redraw the tiles used once to match others, simplify detail, or split the image \
              into two backgrounds",
         );
-        return Err(vec![ImageProblem { tiles: once, ..p }]);
+        return Err(warned(ImageProblem { tiles: once, ..p }));
     }
     let map = (width * height) as usize;
     if let Some(p) = census::bank(
@@ -118,10 +142,12 @@ pub(crate) fn check(image: &str, pixels: &Pixels) -> Result<BgPlan, Vec<ImagePro
             census::BANK_BYTES - unique * 16
         ),
     ) {
-        return Err(vec![p]);
+        return Err(warned(p));
     }
     Ok(BgPlan {
         spec: slots.join(","),
+        merges: shared.merges,
+        warnings: shared.warnings,
         width,
         height,
         tiles: unique as u32,

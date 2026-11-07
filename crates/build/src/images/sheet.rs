@@ -9,7 +9,8 @@ use gbcli_protocol::{ImageLimit, ImageProblem, Severity, TileAt};
 
 use super::census::{self, Key, error, key};
 use super::pixels::{Pixels, Rgba, hex};
-use super::shades::shades;
+use super::shades::Shading;
+use super::shared;
 
 /// Objects one line shows, and OAM holds (Pan Docs, OAM).
 pub(crate) const PER_LINE: usize = 10;
@@ -37,7 +38,10 @@ pub(crate) struct Object {
 #[derive(Debug)]
 pub(crate) struct SheetPlan {
     pub spec: String,
-    /// OBP: index 0 transparent, 1-3 the sheet's colors, lightest first.
+    /// The colors rgbgfx must see as another (`shared`): none unless two
+    /// colors share a shade.
+    pub merges: Vec<(Key, Rgba)>,
+    /// OBP: index 0 transparent, 1-3 the sheet's shades, lightest first.
     pub obp: u8,
     /// Size in tiles.
     pub width: u32,
@@ -64,12 +68,14 @@ impl SheetPlan {
 
 /// Checks a sheet whose frames are `frame` pixels (the whole sheet when
 /// `None`; its name, `<name>.WxH.png`, may give another); the plan when it
-/// fits, else every problem found.
+/// fits, else every problem found. `shading` is the project's
+/// (`shades::choose`).
 pub(crate) fn check(
     image: &str,
     stem: &str,
     pixels: &Pixels,
     frame: Option<(u32, u32)>,
+    shading: &Shading,
 ) -> Result<SheetPlan, Vec<ImageProblem>> {
     if let Some(p) = census::size(image, pixels, 16) {
         return Err(vec![p]);
@@ -110,18 +116,30 @@ pub(crate) fn check(
             )
         });
     }
-    // Lightest first as indices 1-3; OBP gives each its shade.
-    let mut list: Vec<Rgba> = colors.iter().map(|(c, _)| *c).collect();
-    let shade = shades(&list);
-    let mut by_shade: Vec<(u8, Rgba)> = shade.iter().copied().zip(list.drain(..)).collect();
-    by_shade.sort();
+    // One index a shade, lightest first, from 1; OBP gives each its shade.
+    // Colors that share a shade share its index (`shared`).
+    let list: Vec<Rgba> = colors.iter().map(|(c, _)| *c).collect();
+    let shade = shading.shades(&list);
+    let shared = shared::find(image, pixels, &colors, &shade, shading.choice);
+    warnings.extend(shared.warnings);
+    warnings.extend(shared::stretched(image, pixels, &colors, shading));
+    let mut used = shade.clone();
+    used.sort();
+    used.dedup();
     let mut index: HashMap<Key, u8> = HashMap::new();
     let mut slots = vec!["#none".to_string()];
     let mut obp = 0u8;
-    for (i, (s, c)) in by_shade.iter().enumerate() {
+    for (i, &s) in used.iter().enumerate() {
         let i = i as u8 + 1;
-        index.insert(key(*c), i);
-        slots.push(hex(*c));
+        // The shade's most used color stands for it in rgbgfx's spec.
+        let mut first = true;
+        for (&c, _) in list.iter().zip(&shade).filter(|&(_, &t)| t == s) {
+            index.insert(key(c), i);
+            if first {
+                slots.push(hex(c));
+                first = false;
+            }
+        }
         obp |= s << (2 * i);
     }
     while slots.len() < 4 {
@@ -259,6 +277,7 @@ pub(crate) fn check(
     }
     Ok(SheetPlan {
         spec: slots.join(","),
+        merges: shared.merges,
         obp,
         width: pixels.width / 8,
         height: pixels.height / 8,

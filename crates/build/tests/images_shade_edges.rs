@@ -422,3 +422,42 @@ fn the_stretch_warning_names_each_image_once() {
     let images: Vec<_> = w.iter().map(|p| p.image.clone().unwrap()).collect();
     assert_eq!(images, ["demo/assets/bg/a.png", "demo/assets/bg/b.png"]);
 }
+
+/// Black and near-black together in cave, a third near-black alone in bug,
+/// all one shade (review of d0e891a): cave's own warning names the pair, so
+/// the project-level one lists cave's colors as one group and bug's as
+/// another, counts the groups, and says no image holds two groups together.
+#[test]
+fn the_project_warning_groups_colors_an_image_already_names_together() {
+    let (temp, options) = starter("edge-across-overlap");
+    let nb2: Rgba = [0x20, 0x20, 0x20, 0xFF];
+    write_png(&temp.path("demo/assets/bg/cave.png"), 24, 8, |x, _| {
+        [WHITE, BLACK, NEAR_BLACK][(x / 8) as usize]
+    });
+    write_png(&temp.path("demo/assets/sprites/bug.png"), 8, 16, |x, _| {
+        if x < 4 { nb2 } else { CLEAR }
+    });
+    let made = build(&rgbds(), &options).unwrap();
+    let shared = problems(&made, ImageLimit::SharedShade);
+    let images: Vec<_> = shared.iter().map(|p| p.image.clone()).collect();
+    assert_eq!(
+        images,
+        [Some("demo/assets/bg/cave.png".to_string()), None],
+        "{shared:#?}"
+    );
+    let w = &shared[1];
+    assert_eq!((w.count, w.max), (2, 1), "{w:?}");
+    assert!(
+        w.message.contains(
+            "#000000/#101010 (demo/assets/bg/cave.png) and #202020 (demo/assets/sprites/bug.png)"
+        ),
+        "{}",
+        w.message
+    );
+    assert!(
+        w.message
+            .contains("no image holds colors from two of these groups"),
+        "{}",
+        w.message
+    );
+}

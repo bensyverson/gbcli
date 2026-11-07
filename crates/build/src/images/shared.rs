@@ -2,9 +2,9 @@
 //! the shade the project's rule gives it (`shades::choose`), so they draw
 //! alike, and the build warns (`shared_shade`), naming them, the shade, the
 //! rule and the tiles of all but the most used, in case the artist meant
-//! the difference. Colors that share a shade only across images (none of
-//! the images holds both) get one project-level warning instead, naming
-//! the images each is in (`across`).
+//! the difference. A shade whose colors fall into groups no image joins
+//! gets one project-level warning too, listing each group with the images
+//! holding it (`across`).
 //!
 //! rgbgfx's `-c` gives each palette slot one color, so two colors can't be
 //! asked to share an index. An image with a shared shade therefore reaches
@@ -152,10 +152,12 @@ pub(crate) fn stretched(
 }
 
 /// One project-level `shared_shade` warning (no image) a shade whose colors
-/// share it only across images (leaf GTXXyr): two colors in one shade that
-/// no single image holds together draw alike on screen, yet no image's own
-/// warning (`find`) names them. The warning names each such color with the
-/// images it is in. `images` are every image read with its name, `colors`
+/// fall into two or more groups no image joins (leaves GTXXyr, L3PdEW).
+/// Colors one image holds together, or chained through shared colors, are
+/// one group, which the images' own warnings (`find`) already name; colors
+/// in different groups draw alike yet no image's warning names them
+/// together. The warning lists each group (colors joined by `/`) with the
+/// images holding it, and counts the groups. `images` are every image read with its name, `colors`
 /// the project's colors as `shades::choose` was given them.
 pub(crate) fn across(
     images: &[(&str, &Pixels)],
@@ -166,7 +168,6 @@ pub(crate) fn across(
         .iter()
         .map(|(_, p)| census::colors(p).iter().map(|&(c, _)| key(c)).collect())
         .collect();
-    let together = |a: Key, b: Key| held.iter().any(|k| k.contains(&a) && k.contains(&b));
     let shade_of = shading.shades(colors);
     let mut warnings = Vec::new();
     for shade in 0..4u8 {
@@ -176,34 +177,27 @@ pub(crate) fn across(
             .filter(|&(_, &s)| s == shade)
             .map(|(&c, _)| c)
             .collect();
-        let apart: Vec<Rgba> = group
-            .iter()
-            .copied()
-            .filter(|&c| {
-                group
-                    .iter()
-                    .any(|&d| key(d) != key(c) && !together(key(c), key(d)))
-            })
-            .collect();
-        if apart.is_empty() {
+        let clusters = clusters(&group, &held);
+        if clusters.len() < 2 {
             continue;
         }
-        let listed: Vec<String> = apart
+        let listed: Vec<String> = clusters
             .iter()
-            .map(|&c| {
-                let names: Vec<String> = images
+            .map(|cluster| {
+                let names: Vec<&str> = images
                     .iter()
                     .zip(&held)
-                    .filter(|(_, k)| k.contains(&key(c)))
-                    .map(|((name, _), _)| name.to_string())
+                    .filter(|(_, k)| cluster.iter().any(|&c| k.contains(&key(c))))
+                    .map(|((name, _), _)| *name)
                     .collect();
-                format!("{} ({})", hex(c), names.join(", "))
+                let hexes: Vec<String> = cluster.iter().map(|&c| hex(c)).collect();
+                format!("{} ({})", hexes.join("/"), names.join(", "))
             })
             .collect();
         let message = format!(
             "the project draws {} in one shade, shade {shade} ({}), by its shade rule, {}, so \
-             they look alike on screen; they are in different images, so no image's own \
-             shared_shade warning names them together",
+             they look alike on screen; no image holds colors from two of these groups, so no \
+             image's own shared_shade warning names them together",
             and(&listed),
             name(shade),
             rule(shading.choice),
@@ -211,10 +205,46 @@ pub(crate) fn across(
         warnings.push(ImageProblem {
             image: None,
             severity: Severity::Warning,
-            ..error("", ImageLimit::SharedShade, apart.len(), 1, message, REMEDY)
+            ..error(
+                "",
+                ImageLimit::SharedShade,
+                clusters.len(),
+                1,
+                message,
+                REMEDY,
+            )
         });
     }
     warnings
+}
+
+/// `group`'s colors split into the groups images join: two colors are in
+/// one group when some image in `held` holds both, or through a chain of
+/// such colors. Groups and their colors keep `group`'s order.
+fn clusters(group: &[Rgba], held: &[Vec<Key>]) -> Vec<Vec<Rgba>> {
+    let mut of: Vec<usize> = (0..group.len()).collect();
+    for keys in held {
+        let joined: Vec<usize> = (0..group.len())
+            .filter(|&i| keys.contains(&key(group[i])))
+            .map(|i| of[i])
+            .collect();
+        let Some(&into) = joined.first() else {
+            continue;
+        };
+        for o in &mut of {
+            if joined.contains(o) {
+                *o = into;
+            }
+        }
+    }
+    let mut out: Vec<(usize, Vec<Rgba>)> = Vec::new();
+    for (&c, &id) in group.iter().zip(&of) {
+        match out.iter_mut().find(|(g, _)| *g == id) {
+            Some((_, v)) => v.push(c),
+            None => out.push((id, vec![c])),
+        }
+    }
+    out.into_iter().map(|(_, v)| v).collect()
 }
 
 /// "a", "a and b", "a, b and c".
@@ -335,6 +365,43 @@ mod tests {
             "{}",
             w.message
         );
+        let cave = pixels(vec![B, NEAR_B], 2);
+        assert!(across(&[("cave.png", &cave), ("bug.png", &bug)], &colors, &shading).is_empty());
+    }
+
+    /// X and Y in a, Y and Z in b, W in c, one shade: the chain through Y
+    /// makes X, Y and Z one group, so two groups, not three.
+    #[test]
+    fn colors_chained_through_a_shared_color_are_one_group() {
+        let (x, y, z, w) = (B, NEAR_B, [0x18, 0x18, 0x18, 255], [0x08, 0x08, 0x08, 255]);
+        let colors = [W, x, y, z, w];
+        let shading = super::super::shades::choose(None, &colors);
+        assert_eq!(shading.shades(&colors)[1..], [3, 3, 3, 3]);
+        let a = pixels(vec![W, x, y, y], 2);
+        let b = pixels(vec![y, z], 2);
+        let c = pixels(vec![w, w], 2);
+        let [warning] = &across(
+            &[("a.png", &a), ("b.png", &b), ("c.png", &c)],
+            &colors,
+            &shading,
+        )[..] else {
+            panic!("one warning")
+        };
+        assert_eq!(warning.count, 2);
+        assert!(
+            warning
+                .message
+                .contains("#000000/#101010/#181818 (a.png, b.png) and #080808 (c.png)"),
+            "{}",
+            warning.message
+        );
+    }
+
+    #[test]
+    fn a_shade_held_whole_by_one_image_is_no_project_warning() {
+        let colors = [W, B, NEAR_B];
+        let shading = super::super::shades::choose(None, &colors);
+        let bug = pixels(vec![NEAR_B, NEAR_B], 2);
         let cave = pixels(vec![B, NEAR_B], 2);
         assert!(across(&[("cave.png", &cave), ("bug.png", &bug)], &colors, &shading).is_empty());
     }

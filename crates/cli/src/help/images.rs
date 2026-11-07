@@ -24,9 +24,10 @@ color is one shade in every image, by the first rule that applies:
 The images row says which: shades=declared|known|stretched|nearest, and
 palette= for a known one. Colors in one shade draw alike, with a
 shared_shade warning: one per image for colors that image holds together,
-and one for the project (no image=) for colors in one shade only across
-images, naming the images each is in. Colors equal in RGB555 (5 bits a
-channel, as rgbgfx reads them) are one color.
+and one for the project (no image=) for colors that share it only across
+images: colors one image holds, or chained through one, are a group (a/b);
+it lists each group with its images, and count= is the groups. Colors
+equal in RGB555 (5 bits a channel, as rgbgfx reads them) are one color.
 
 Every hardware limit is a `problem` row: limit, count, max, tiles=x,y (in
 the image's 8x8 grid; --json lists them all), message and remedy.

@@ -15,3 +15,8 @@
 {"v":1,"rep":"Z7rGfP","seq":15,"ts":1794093909122,"actor":"claude","type":"criteria_added","task":"L3PdEW","data":{"criteria":[{"label":"the cave/bug repro lists only colors no image's warning names together, with a true message and count (test)","state":"pending","short_id":"YG6","sort_key":"Uzzzzz"}]}}
 {"v":1,"rep":"Z7rGfP","seq":16,"ts":1794093909146,"actor":"claude","type":"labeled","task":"L00RuF","data":{"names":["reviewed"],"existing":[]}}
 {"v":1,"rep":"Z7rGfP","seq":17,"ts":1794093909187,"actor":"claude","type":"blocked","task":"4hM0UN","data":{"blocked_id":"4hM0UN","blocker_id":"6pr1FU"}}
+{"v":1,"rep":"Z7rGfP","seq":18,"ts":1794094048618,"actor":"diff-opcode","type":"claimed","task":"mDk1lR","data":{"duration":"3h","expires_at":1794104848}}
+{"v":1,"rep":"Z7rGfP","seq":19,"ts":1794094049908,"actor":"shade-fix","type":"claimed","task":"L3PdEW","data":{"duration":"2h","expires_at":1794101249}}
+{"v":1,"rep":"Z7rGfP","seq":20,"ts":1794094052628,"actor":"flash-fix","type":"claimed","task":"6pr1FU","data":{"duration":"3h","expires_at":1794104852}}
+{"v":1,"rep":"Z7rGfP","seq":21,"ts":1794094052658,"actor":"flash-fix","type":"claimed","task":"4hM0UN","data":{"duration":"3h","expires_at":1794104852}}
+{"v":1,"rep":"Z7rGfP","seq":22,"ts":1794094366735,"actor":"shade-fix","type":"released","task":"L3PdEW","data":{"was_claimed_by":"shade-fix","was_expires_at":1794101249}}

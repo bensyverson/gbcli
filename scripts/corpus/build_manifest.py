@@ -205,6 +205,7 @@ DOCBOY_DIR_LICENSE = {
 PALETTES = {
     "dmg_gray": "Four DMG shades as 8-bit gray: $FF, $AA, $55, $00 (lightest to darkest), per the mealybug and c-sp READMEs.",
     "cgb_rgb555": "CGB colors: each 5-bit channel x becomes (x << 3) | (x >> 2).",
+    "cgb_rgb555_shift": "CGB colors: each 5-bit channel x becomes x << 3, with no low-bit fill (white is $F8), as some references were captured.",
     "cgb_compat_csp": "A DMG-only ROM on CGB: the CGB boot ROM's compatibility palette, which c-sp lists as BG #000000 #0063C6 #7BFF31 #FFFFFF and OBJ #000000 #943939 #FF8484 #FFFFFF (8-bit RGB). Depends on which boot ROM runs.",
 }
 
@@ -306,8 +307,16 @@ def palette_for(model, rom_path):
     return "cgb_rgb555" if header_cgb_flag(rom_path) & 0x80 else "cgb_compat_csp"
 
 
+# References captured in another palette than their model's default, found by running them
+# (project/2026-11-06-sameboy-baseline.md): the frame matched in shape and differed only in colors.
+REFERENCE_PALETTE = {
+    "blargg/oam_bug/oam_bug-cgb.png": "cgb_rgb555_shift",  # white is $F8F8F8
+}
+
+
 def fb(ref, model, rom_path):
-    return {"kind": "framebuffer", "reference": ref, "palette": palette_for(model, rom_path)}
+    palette = REFERENCE_PALETTE.get(ref) or palette_for(model, rom_path)
+    return {"kind": "framebuffer", "reference": ref, "palette": palette}
 
 
 class Rows:
@@ -417,8 +426,11 @@ def build_mooneye(r):
             continue
         if inner == "madness/mgb_oam_dma_halt_sprites.gb":
             m = fam("mgb")
+            # It starts an OAM DMA at LY 144 and HALTs with no interrupt enabled, so it never
+            # reaches LD B,B: the screen it leaves is the result.
             r.add("mooneye", path, [m], fb("mooneye/madness/mgb_oam_dma_halt_sprites_expected.png", m, r.abs(path)),
-                  LD_B_B, 120, notes="'madness' test; reference from c-sp v7.0 in upstream's palette, unverified.")
+                  secs(1), notes="'madness' test; reference from c-sp v7.0 in upstream's palette, unverified. "
+                                 "Halts forever (IE=0) after its DMA; judged after 1 emulated second.")
             continue
         r.add("mooneye", path, models, FIB, LD_B_B, 120, alternatives=[FIB_SERIAL], boot_sensitive=boot)
 

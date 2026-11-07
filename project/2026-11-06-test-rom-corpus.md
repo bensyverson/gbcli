@@ -101,7 +101,7 @@ A row is **one test: a ROM plus, where references differ by model, one model var
   - `serial_bytes` — the same six bytes on the link port (mooneye's alternative).
   - `serial_text` — link-port text contains `Passed` / `Failed` (blargg).
   - `blargg_memory` — `$A001-$A003` = `DE B0 61`, then `$A000` holds `$80` while running and the result code after (0 = pass), text at `$A004` (blargg's `dmg_sound/readme.txt`, "Output to memory").
-  - `framebuffer` — compare the frame with `reference` under a named `palette` (`dmg_gray`, `cgb_rgb555`, `cgb_compat_csp`; defined in the manifest).
+  - `framebuffer` — compare the frame with `reference` under a named `palette` (`dmg_gray`, `cgb_rgb555`, `cgb_rgb555_shift` (added 2026-11-06 for `oam_bug@cgb`), `cgb_compat_csp`; defined in the manifest).
   - `memory_byte` — `$FF82` = 0x01 pass, 0xFF fail (GBMicrotest).
   - `docboy_case` — see above.
   - `manual` — no automatic rule; `reason` says why.
@@ -125,6 +125,8 @@ A row is **one test: a ROM plus, where references differ by model, one model var
 ### Open questions for the runner leaf
 
 > **Answered, 2026-11-06 (leaf `rInSEQ`):** see [2026-11-06-sameboy-baseline.md](2026-11-06-sameboy-baseline.md) § Open questions. In short: SameBoy's open CGB boot ROM matches `cgb_compat_csp`; SameBoy matches neither Mealybug's DMG-blob nor its DMG-B references on the two tests that have both; every blargg output choice produced output except the `blargg_memory` alternatives of `halt_bug` and `interrupt_time` (no cart RAM, as suspected); 47 of the 50 uncalibrated GBMicrotest rows pass and 3 report failure, none "no result". Two manifest problems surfaced: `mgb_oam_dma_halt_sprites` never reaches its `ld_b_b` exit, and `oam_bug@cgb`'s reference uses `x << 3`, not `cgb_rgb555`.
+>
+> **Fixed, 2026-11-06 (leaf `5ewkYZ`):** both manifest problems. `mgb_oam_dma_halt_sprites` is judged after 1 emulated second, and `oam_bug@cgb` in a new `cgb_rgb555_shift` palette (x << 3); see [2026-11-06-docboy-baseline.md](2026-11-06-docboy-baseline.md) § Other findings.
 
 - **Compatibility-mode colors.** A DMG ROM on CGB is colored by the boot ROM's palette choice. c-sp's references assume particular colors (`cgb_compat_csp`); SameBoy's open CGB boot ROM may choose differently. 53 rows depend on it.
 - **DMG revision.** SameBoy emulates DMG-B only; mealybug's DMG references are "DMG-blob" and AGE's are DMG-C. Where a revision-specific reference exists only for another revision, a mismatch is not necessarily a bug.

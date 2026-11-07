@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use gbcli_core::{FrameRef, Keys, Pixels, Region, VblankKind};
+use gbcli_core::{BootRom, FrameRef, Keys, Pixels, Region, VblankKind};
 use serde::Deserialize;
 
 use crate::drive::{Driver, Event};
@@ -104,6 +104,17 @@ pub enum KeyState {
 }
 
 pub type Config = HashMap<String, Vec<Case>>;
+
+/// gbcli's boot ROM that hands over in docboy's DMG post-boot state
+/// (`roms/docboy_boot.asm`). docboy runs with no boot ROM, starting from that
+/// state; SameBoy needs a boot ROM, so this one reproduces it. Test-only: no
+/// session uses it.
+const POST_BOOT_ROM: &[u8] = include_bytes!("../roms/docboy_boot.bin");
+
+/// [`POST_BOOT_ROM`] as a core's boot ROM.
+pub fn post_boot_rom() -> BootRom {
+    BootRom::Custom(POST_BOOT_ROM.to_vec())
+}
 
 /// docboy's DMG appearances in RGB565: the LCD-off color, then shades 0–3.
 const DEFAULT_APPEARANCE: (u16, [u16; 4]) = (0xAD00, [0x84A0, 0x4B40, 0x2AA0, 0x1200]);
@@ -234,7 +245,7 @@ fn run_case(
         ),
         None => None,
     };
-    let mut d = boot(&rom, target, factory)?;
+    let mut d = boot(&rom, target, factory, post_boot_rom())?;
     let verdict = judge(&mut d, case, reference.as_deref())?;
     Ok((verdict, Some(d.elapsed())))
 }

@@ -2,8 +2,8 @@
 # Builds the ROM binaries the repository commits, so a normal `cargo build` needs no RGBDS:
 #   - SameBoy's open-source boot ROMs (Expat) from crates/sameboy-sys/SameBoy/BootROMs/*.asm
 #     into crates/sameboy-sys/bootroms/, with their license alongside;
-#   - gbcli's own test ROMs from crates/sameboy-sys/tests/roms/*.asm, crates/sameboy/tests/roms/*.asm
-#     and crates/engine/tests/roms/*.asm, each with its .sym (an .asm may INCLUDE an .inc beside it)
+#   - gbcli's own test ROMs from crates/sameboy-sys/tests/roms/*.asm, crates/sameboy/tests/roms/*.asm,
+#     crates/engine/tests/roms/*.asm and crates/corpus/roms/*.asm, each with its .sym (an .asm may INCLUDE an .inc beside it)
 #     (a name ending in _boot assembles to an unpadded .bin boot ROM, the rest to fixed-up .gb carts).
 # Never put Nintendo boot ROM dumps in the repository.
 #
@@ -15,7 +15,7 @@ repo_root=${0:A:h:h}
 sys=$repo_root/crates/sameboy-sys
 src=$sys/SameBoy/BootROMs
 out=$sys/bootroms
-rom_dirs=($sys/tests/roms $repo_root/crates/sameboy/tests/roms $repo_root/crates/engine/tests/roms)
+rom_dirs=($sys/tests/roms $repo_root/crates/sameboy/tests/roms $repo_root/crates/engine/tests/roms $repo_root/crates/corpus/roms)
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/gbcli-roms.XXXXXX")
 trap 'rm -rf "$work"' EXIT

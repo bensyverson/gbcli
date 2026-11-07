@@ -58,6 +58,8 @@ pub enum Palette {
     DmgGray,
     /// CGB colors, each 5-bit channel x as (x << 3) | (x >> 2).
     CgbRgb555,
+    /// CGB colors, each 5-bit channel x as x << 3 (no low-bit fill).
+    CgbRgb555Shift,
     /// A DMG ROM on CGB, colored by the boot ROM's compatibility palette.
     CgbCompatCsp,
 }

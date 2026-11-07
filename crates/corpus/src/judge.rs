@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use gbcli_core::{Core, CoreConfig, CoreError, Region, WriteTracking};
+use gbcli_core::{BootRom, Core, CoreConfig, CoreError, Region, WriteTracking};
 use serde::Serialize;
 
 use crate::docboy;
@@ -52,8 +52,16 @@ pub struct Outcome {
     pub alternatives: Vec<Verdict>,
 }
 
-/// Runs `row` on `target` and judges it.
+/// Runs `row` on `target` and judges it: docboy cases from docboy's hand-over
+/// state ([`docboy::post_boot_rom`]), every other row after the model's
+/// built-in boot ROM.
 pub fn run(row: &Row, target: &Target, ctx: Context<'_>) -> Outcome {
+    run_with_boot(row, target, ctx, BootRom::BuiltIn)
+}
+
+/// [`run`], with `boot_rom` in place of the built-in boot ROM for a row that
+/// is not a docboy case (docboy cases always start from docboy's state).
+pub fn run_with_boot(row: &Row, target: &Target, ctx: Context<'_>, boot_rom: BootRom) -> Outcome {
     let mut outcome = Outcome {
         id: row.id.clone(),
         suite: row.suite.clone(),
@@ -79,7 +87,7 @@ pub fn run(row: &Row, target: &Target, ctx: Context<'_>) -> Outcome {
         outcome.emulated_s = elapsed.map(seconds);
         return outcome;
     }
-    match judge(row, target, ctx) {
+    match judge(row, target, ctx, boot_rom) {
         Ok((verdict, alternatives, elapsed)) => {
             outcome.verdict = verdict;
             outcome.alternatives = alternatives;
@@ -94,20 +102,31 @@ fn seconds(ticks: u64) -> f64 {
     (ticks as f64 / TICKS_PER_SECOND as f64 * 1000.0).round() / 1000.0
 }
 
-/// Builds and boots a core for `rom` on `target`.
-pub fn boot(rom: &[u8], target: &Target, factory: Factory) -> Result<Driver, String> {
+/// Builds a core for `rom` on `target` and runs `boot_rom` to the hand-over.
+pub fn boot(
+    rom: &[u8],
+    target: &Target,
+    factory: Factory,
+    boot_rom: BootRom,
+) -> Result<Driver, String> {
     let mut config = CoreConfig::new(target.model, rom.to_vec());
     config.write_tracking = WriteTracking::Off;
+    config.boot_rom = boot_rom;
     let core = factory(config).map_err(|e| e.to_string())?;
     Driver::boot(core, rom)
 }
 
 type Judged = (Verdict, Vec<Verdict>, u64);
 
-fn judge(row: &Row, target: &Target, ctx: Context<'_>) -> Result<Judged, String> {
+fn judge(
+    row: &Row,
+    target: &Target,
+    ctx: Context<'_>,
+    boot_rom: BootRom,
+) -> Result<Judged, String> {
     let rom =
         std::fs::read(ctx.corpus.join(&row.path)).map_err(|e| format!("{}: {e}", row.path))?;
-    let mut d = boot(&rom, target, ctx.factory)?;
+    let mut d = boot(&rom, target, ctx.factory, boot_rom)?;
     let timeout = (row.timeout_s.unwrap_or(DEFAULT_TIMEOUT_S) * TICKS_PER_SECOND as f64) as u64;
 
     let ended = match &row.exit {

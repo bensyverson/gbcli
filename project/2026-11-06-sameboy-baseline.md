@@ -2,6 +2,8 @@
 
 2026-11-06. **Finding: SameBoy passes every mooneye and blargg test its authors claim, except the ones that depend on the boot ROM — and those fail because gbcli runs SameBoy's open boot ROMs, not Nintendo's.** Every other difference is explained below as boot-ROM dependent, a revision mismatch, a reference-image problem, a manifest problem, a runner limit, or a SameBoy gap (recorded, not fixed). Leaf `rInSEQ`. The corpus and its pass rules: [2026-11-06-test-rom-corpus.md](2026-11-06-test-rom-corpus.md).
 
+> **Updated 2026-11-06 (leaf `5ewkYZ`):** docboy's cases now run from docboy's own post-boot state and are classified case by case in [2026-11-06-docboy-baseline.md](2026-11-06-docboy-baseline.md): 173 fail, not 469, and none of the 173 is a boot-state effect. Two causes below were wrong and are corrected in place: six GBMicrotest `poweron_oam_*` failures are a power-on OAM seed artifact, not boot-ROM dependent, and blargg's `7-timing_effect` overflows its own output buffer rather than depending on boot state. The two manifest problems are fixed.
+
 ## Re-running it
 
 ```
@@ -19,6 +21,8 @@ cargo run --release -p gbcli-corpus -- --check tests/corpus/baseline-sameboy.jso
 
 - **Models.** A family with no revisions runs on SameBoy's default (DMG-B, CGB-E, AGB-A, MGB, SGB, SGB2). Listed revisions run once each where SameBoy has them (all CGB revisions); where it has none of them (DMG-0, DMG-C, AGB revisions other than A) the row runs on the family default and the result carries `substitute_for` (e.g. `"C"`).
 - **Boot.** Every run boots SameBoy's built-in open boot ROM to the hand-over at $0100; exits and timeouts count from there (c-sp's and docboy's timings assume a ROM start, and docboy runs with no boot ROM at all).
+
+  > **Changed 2026-11-06 (leaf `5ewkYZ`):** docboy rows now boot `crates/corpus/roms/docboy_boot.asm`, a test-only boot ROM that hands over in docboy's post-boot state ([2026-11-06-docboy-baseline.md](2026-11-06-docboy-baseline.md) § The boot ROM). Every other row still boots the built-in open boot ROM.
 - **Exits.** `ld_b_b`: an execution filter over every ROM address holding $40 (bank-exact) plus every RAM address holding $40 now, rescanned once per frame; a hit whose opcode is $40 is the exit. `emulated_seconds`/`emulated_frames`: a tick budget (a frame is 70,224 dots). `result_reported`: polled every 0.1 emulated s. A null `timeout_s` means 30 emulated seconds.
 - **Serial** needs no backend change: a write filter on SC ($FF02) stops the run after any write that starts an internally clocked transfer, and SB still holds the outgoing byte then.
 - **Rules.** `fibonacci_registers` reads B–L at the exit; `blargg_memory` reads cart RAM; `memory_byte` reads HRAM; `framebuffer` renders the last complete frame in the row's palette (DMG shades as $FF/$AA/$55/$00, CGB RGB as SameBoy emits it with color correction off, i.e. `(x << 3) | (x >> 2)`) and compares exactly. A frame that differs only by a one-to-one recoloring is reported as such. `pass_alternatives` are judged on the same run and recorded beside the verdict. `manual` rows are skipped with their reason.
@@ -27,6 +31,8 @@ cargo run --release -p gbcli-corpus -- --check tests/corpus/baseline-sameboy.jso
 ## Results
 
 `tests/corpus/baseline-sameboy.json`, written 2026-11-06 by `cargo run --release -p gbcli-corpus -- --write tests/corpus/baseline-sameboy.json` against SameBoy `ea667ad` (v1.0.5): **4,491 runs of 3,855 rows: 3,822 pass, 621 fail, 48 skip.**
+
+> **Superseded 2026-11-06 (leaf `5ewkYZ`):** rewritten with the docboy boot ROM and the two manifest fixes by the same command (header date 2026-11-07, UTC): **4,491 runs: 4,119 pass, 324 fail, 48 skip.** Two rows of the table changed: blargg 93 / 2 / 0 (`oam_bug@cgb` passes in its reference's palette) and docboy 2,765 / 173 / 11. The 299 status changes against the old file are exactly those: 297 docboy cases fail → pass, `docboy/.../stop_trigger_interrupt` pass → fail, and `oam_bug@cgb` fail → pass.
 
 | Suite | Pass | Fail | Skip |
 |---|---|---|---|
@@ -55,13 +61,17 @@ The claim under test, as this leaf's brief states it: all of blargg's and mooney
 - **Revision mismatch (3):** `boot_div-dmg0`, `boot_hwio-dmg0` and `boot_regs-dmg0` want DMG-0, which SameBoy doesn't emulate; they ran on DMG-B as substitutes (and are boot-ROM dependent as well).
 - **`madness/mgb_oam_dma_halt_sprites` (MGB):** never reaches LD B,B in 720 emulated seconds, so the manifest's `ld_b_b` exit looks wrong for it (**manifest problem, reported, not fixed**). Judged instead after 5 s (a scratch manifest), the frame differs from c-sp's reference in 11,523 pixels: the checkerboard's phase differs and the sprite is missing. A "madness" test is outside the acceptance set SameBoy's claim covers; recorded as a **SameBoy gap, unconfirmed**, since the reference is c-sp's and unverified.
 
+  > **Fixed 2026-11-06 (leaf `5ewkYZ`):** the ROM starts an OAM DMA at LY 144 and HALTs with IE=0, so it can never reach LD B,B. The manifest now judges it after 1 emulated second (`build_manifest.py`). The frame differs in the same 11,523 pixels, so the SameBoy gap, unconfirmed, stands.
+
 Every other mooneye run passes, including all 81 acceptance tests on all six families.
 
 ### blargg (65 rows, 95 runs): 3 failures, none a SameBoy gap
 
 - **`oam_bug/oam_bug.gb@dmg` — reference-image problem.** Our frame shows the same text as the reference ("Passed", 01–08 ok, checked visually with `--dump`) and the `blargg_memory` alternative passes; the reference's last row holds 50 near-white pixels ($FE/$FD instead of $FF), an artifact of the image, not of any emulator.
 - **`oam_bug/oam_bug.gb@cgb` — reference/palette problem.** Shape identical, colors not: c-sp's reference uses $F8 white, i.e. `x << 3` without the `| x >> 2` the manifest's `cgb_rgb555` palette (and c-sp's own howto) prescribes. The runner reports "differs only in colors".
+  > **Fixed 2026-11-06 (leaf `5ewkYZ`):** the manifest now judges this row in a `cgb_rgb555_shift` palette (x << 3), and it passes.
 - **`oam_bug/rom_singles/7-timing_effect.gb` (DMG) — unexplained, boot state suspected.** The result byte stays at $80 (running) with the signature in place, still after 126 emulated s (a scratch manifest with 6× the bound). The same sub-test passes inside the multi-test `oam_bug.gb` ("07:ok") on the same build, so SameBoy emulates the behavior; the single ROM starting straight from the open boot ROM is the likeliest difference. Not settled.
+  > **Explained 2026-11-06 (leaf `5ewkYZ`): the suspected cause was wrong.** It fails identically from docboy's DMG hand-over state and with seeds 0–5. The single ROM prints a timing table into the $A004 text buffer, which fills cart RAM to $BFFF at 13.0 emulated seconds and then runs on into $C000, overwriting the code the test runs from WRAM. The multi-test ROM doesn't print the table. A test-ROM limit, not a SameBoy result: [2026-11-06-docboy-baseline.md](2026-11-06-docboy-baseline.md) § Other findings.
 
 All `cpu_instrs`, `instr_timing`, `mem_timing`, `mem_timing-2`, `halt_bug`, `interrupt_time`, `dmg_sound` and `cgb_sound` rows pass, on every listed model.
 
@@ -97,12 +107,15 @@ Both fail with "Invalid initial DIV" on screen (`--dump`): DIV at hand-over, set
 ### GBMicrotest (513 rows): 78 failures, 31 skipped
 
 - **Boot-ROM dependent (35):** every failing `poweron_*` test (DIV, LY, OAM, STAT, VRAM at fixed cycles after hand-over), which measure where the boot ROM leaves the PPU and timer.
+  > **Corrected 2026-11-06 (leaf `5ewkYZ`): 29, not 35.** Six of them — `poweron_oam_000`, `_005`, `_070`, `_119`, `_184`, `_233` — read $FE35 while OAM is accessible, and SameBoy's power-on OAM randomization leaves $FF there under the runner's seed 0. With seeds 1–3 they pass from either boot ROM. They are a runner artifact, not boot-ROM dependent. The other 29 pass from docboy's hand-over state ([2026-11-06-docboy-baseline.md](2026-11-06-docboy-baseline.md)).
 - **SameBoy gaps (43):** `hblank_int_scx{0..7}_if_{b,c,d}` and `_nops_{a,b}` (HBlank STAT interrupt timing against SCX), `line_153_lyc_b`, `line_65_ly`, `lyc1_int_if_edge_c`, `halt_op_dupe_delay`, `stat_write_glitch_l154_d`. Checked on a DMG-CPU-08 board (CPU B or C) per upstream, so DMG-B should match.
 - 31 skipped: the `manual` rows with no $FF82 write. **Calibration (open question 3):** of the 50 uncalibrated rows (not in docboy's set), 47 pass and 3 fail with the test's own failure value ($FF); none ended with "no result", so the static $FF82 scan picked real tests.
 
 ### docboy (2,949 rows)
 
 2,469 pass, 469 fail, 11 skipped (2 linked-Game-Boy cases, 8 instruction-triggered inputs, 1 disabled). **Not classified case by case; the adapter is not yet calibrated well enough to call these SameBoy gaps.** What is known:
+
+> **Superseded 2026-11-06 (leaf `5ewkYZ`):** classified in [2026-11-06-docboy-baseline.md](2026-11-06-docboy-baseline.md). From docboy's own hand-over state, 173 fail: 26 runner artifacts (19 from a STOP-wake bug in gbcli-sameboy, 6 from the OAM seed, 1 unexplained STOP case), 1 probable reference problem, 10 SameBoy gaps already known from Mealybug and GBMicrotest, and 136 disagreements with docboy's own tests. The list below is the state before that.
 
 - Where docboy's set overlaps ours, the verdicts agree: its mooneye `boot_div`/`boot_hwio`/`boot_sclk_align`, `hacktix/bully` and `whichboot` fail (boot-ROM dependent, as above), its 9 Mealybug failures are the DMG-blob nine, and its GBMicrotest failures (75) are the `poweron_*` and `hblank_int_*` families above.
 - **docboy runs its tests with no boot ROM** and its own post-boot state; we run SameBoy's open boot ROM first, so every docboy test that depends on DIV phase or PPU alignment at hand-over is suspect. 12 `docboy/boot` cases fail for exactly that reason; the 282 cases that report docboy's own failure value ($02 at $FFF0) are concentrated in `ppu` (190 failures in all), `interrupts` (73) and `serial` (39), timing families where hand-over alignment matters.
@@ -117,7 +130,7 @@ Both fail with "Invalid initial DIV" on screen (`--dump`): DIV at hand-over, set
 
 ## Runtime
 
-Full corpus, 8 threads, Apple M1 with two other agents building: **311 s wall** (1,177 s CPU) for 4,491 runs, measured with `/usr/bin/time -p ./target/release/gbcli-corpus --write tests/corpus/baseline-sameboy.json`; an earlier identical run under heavier load took 557 s. Without docboy, about 30 s for gbmicrotest, Mealybug, AGE and Bully together and under 4 minutes for the rest (blargg's 55-second screenshot rows dominate). Most of it is docboy's failing cases, which run to `max_ticks` (23.8 emulated s each). Two findings from getting there:
+Full corpus, 8 threads, Apple M1 with two other agents building: **311 s wall** (1,177 s CPU) for 4,491 runs, measured with `/usr/bin/time -p ./target/release/gbcli-corpus --write tests/corpus/baseline-sameboy.json`; an earlier identical run under heavier load took 557 s. (2026-11-06, leaf `5ewkYZ`: the same totals re-ran in 202.9 s at `32b8666`, and the rewritten baseline ran in 135.5 s, both as printed by the runner itself, because docboy's failing cases, which run to `max_ticks`, fell from 469 to 173.) Without docboy, about 30 s for gbmicrotest, Mealybug, AGE and Bully together and under 4 minutes for the rest (blargg's 55-second screenshot rows dominate). Most of it is docboy's failing cases, which run to `max_ticks` (23.8 emulated s each). Two findings from getting there:
 
 - **An LD B,B filter over all of RAM made code running from RAM pay one run per instruction**, which kept one 720-emulated-second run going for over 13 minutes before it was killed (28 s now). The filter now holds only RAM bytes that are $40, rescanned each frame.
 - **Claude Code kills a background command after 10 minutes** (`time: command terminated abnormally` at 595 s), so the full run is started detached (`nohup … & disown`).
@@ -126,3 +139,4 @@ Full corpus, 8 threads, Apple M1 with two other agents building: **311 s wall** 
 
 - Nintendo's boot ROMs (`BootRom::Custom`) would turn the boot-ROM rows into a real test of SameBoy; gbcli ships open ones by design.
 - A manifest fix for `mgb_oam_dma_halt_sprites`'s exit and for `oam_bug@cgb`'s reference palette (both reported to the corpus leaf's owner; the manifest is generated by `scripts/corpus/build_manifest.py` and was not edited here).
+  > **Done 2026-11-06 (leaf `5ewkYZ`).**

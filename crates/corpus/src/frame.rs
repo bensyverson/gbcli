@@ -91,6 +91,16 @@ pub fn render(frame: &FrameRef<'_>, palette: Palette) -> Result<Image, String> {
             .iter()
             .map(|&p| [(p >> 16) as u8, (p >> 8) as u8, p as u8])
             .collect(),
+        (Pixels::Rgb(rgb), Palette::CgbRgb555Shift) => rgb
+            .iter()
+            .map(|&p| {
+                [
+                    (p >> 16) as u8 & 0xF8,
+                    (p >> 8) as u8 & 0xF8,
+                    p as u8 & 0xF8,
+                ]
+            })
+            .collect(),
         (pixels, palette) => {
             let kind = match pixels {
                 Pixels::Shades(_) => "DMG shades",
@@ -205,6 +215,19 @@ mod tests {
         };
         let got = render(&frame, Palette::CgbRgb555).unwrap();
         assert_eq!(got.rgb, vec![[0x12, 0x34, 0x56]]);
+    }
+
+    #[test]
+    fn rgb_frames_in_the_shift_palette_drop_the_low_bit_fill() {
+        // SameBoy emits (x << 3) | (x >> 2); the shift convention is x << 3.
+        let frame = FrameRef {
+            tag: TAG,
+            width: 2,
+            height: 1,
+            pixels: Pixels::Rgb(&[0x00_FF_FF_FF, 0x00_84_00_08]),
+        };
+        let got = render(&frame, Palette::CgbRgb555Shift).unwrap();
+        assert_eq!(got.rgb, vec![[0xF8; 3], [0x80, 0x00, 0x08]]);
     }
 
     #[test]

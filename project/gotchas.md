@@ -33,3 +33,7 @@ On the first vblank after LCDC's enable bit is written, `GB_display_vblank` (dis
 ## 2026-11-06 — WRAM is random at power-on, so a test ROM's unset flag picks a branch by seed
 
 SameBoy randomizes RAM at power-on (seeded, so it is the same every run), and `quick_dmg` does not clear it. `layers.gb` chose its quiet or VRAM-reading loop from `$C000`, and the test only wrote it for the busy variant, so the "quiet" variant silently ran the busy loop too and the batched renderer (`render_line`) was never tested. Write every flag a test ROM reads (`select_loop` in `crates/sameboy/tests/layers.rs`), or have the ROM clear it, and check a claimed code path with an observation (leaf XKaz0o).
+
+## 2026-11-06 — in an isolated worktree, a path containing `git` reads as a git command
+
+The worktree guard refused plain commands that only *mentioned* a path under `/Users/ben/git/...` inside a pipe, redirect or heredoc ("names git in a form too complex to verify"), including the session scratchpad (`/private/tmp/claude-501/-Users-ben-git-gbcli/...`), and `/usr/bin/time -p cargo test` ("cannot be shown not to be git"). Keep scratch files under the worktree's `target/` (gitignored), run scripts as `python3 -I <file>` rather than heredocs, and keep each call to one plain command (leaf 5ewkYZ).

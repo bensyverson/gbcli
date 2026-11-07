@@ -38,6 +38,8 @@ pub use state::{
 pub use stop::{Access, Hit, Hits, Stop, StopReason};
 pub use time::Ticks;
 
+pub use gbcli_flash as flash;
+
 /// An emulator core. Construction is not on the trait: each backend has a
 /// `new(CoreConfig)` that does its determinism setup.
 pub trait Core {
@@ -243,6 +245,31 @@ pub trait Core {
             reason: "this core doesn't report the cart's clock",
         })
     }
+    // Flash-save carts (`CoreConfig::flash`, `gbcli_flash`).
+
+    /// What the cart's flash chip keeps with the power off
+    /// ([`FlashChip::contents`](gbcli_flash::FlashChip::contents)), for
+    /// [`load_flash_contents`](Core::load_flash_contents) on a core built
+    /// from the same ROM and board: a power cycle. Never a file. `None` on a
+    /// mask-ROM cart. The default is for a core without flash carts.
+    fn flash_contents(&mut self) -> Result<Option<Vec<u8>>, CoreError> {
+        Ok(None)
+    }
+    /// Takes over a [`flash_contents`](Core::flash_contents) at power-on. A
+    /// state from another board or ROM size is refused and changes nothing.
+    fn load_flash_contents(&mut self, _contents: &[u8]) -> Result<(), CoreError> {
+        Err(CoreError::Unsupported {
+            feature: Feature::FlashCart,
+            reason: "this core doesn't model flash carts",
+        })
+    }
+    /// What the flash chip noted since the last take: commands that missed
+    /// this board, and why ([`FlashNote`](gbcli_flash::FlashNote)). Empty on
+    /// a mask-ROM cart.
+    fn take_flash_notes(&mut self) -> Result<gbcli_flash::FlashNotes, CoreError> {
+        Ok(gbcli_flash::FlashNotes::default())
+    }
+
     /// Never-written tracking for WRAM, HRAM or cart RAM (design §9).
     /// `InvalidState` when the core was built with tracking off.
     fn written(&self, region: Region) -> Result<WrittenView<'_>, CoreError>;

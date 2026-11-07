@@ -125,6 +125,9 @@ pub(crate) struct Hooks {
     /// The LCD toggles of the current step, while the log is on; the run loop
     /// logs an LCD-off from them with the step's PC and time.
     pub lcd_toggles: Option<LcdToggles>,
+    /// The cart's flash chip, on a flash-save cart; it keeps both memory
+    /// callbacks installed for the core's life.
+    pub flash: Option<gbcli_core::flash::FlashChip>,
 }
 
 /// The LCD's on/off toggles during one CPU step. One program write to LCDC
@@ -182,12 +185,18 @@ impl Hooks {
             lcd_turning_off: false,
             lcd_off_log: None,
             lcd_toggles: None,
+            flash: None,
         }
     }
 
     /// Whether something outside a run needs SameBoy's write callback.
     pub fn write_hook_wanted(&self) -> bool {
-        self.tracking.is_some() || self.apu_log.is_some()
+        self.tracking.is_some() || self.apu_log.is_some() || self.flash.is_some()
+    }
+
+    /// Whether something outside a run needs SameBoy's read callback.
+    pub fn read_hook_wanted(&self) -> bool {
+        self.flash.is_some()
     }
 
     /// Starts collecting tags from a clean buffer. Unless the frame in

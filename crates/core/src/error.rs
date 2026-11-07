@@ -57,6 +57,9 @@ pub enum Feature {
     /// A log of the LCD being turned off during a run, with the line it was
     /// on (`Core::set_lcd_off_log`).
     LcdOffLog,
+    /// A flash-save cart: the CPU's command writes reach a modeled flash
+    /// chip (`CoreConfig::flash`, `Core::flash_contents`).
+    FlashCart,
 }
 
 impl Feature {
@@ -85,6 +88,7 @@ impl Feature {
             Feature::DisplayColors => "display_colors",
             Feature::HaltWake => "halt_wake",
             Feature::BatterySave => "battery_save",
+            Feature::FlashCart => "flash_cart",
         }
     }
 }

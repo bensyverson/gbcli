@@ -15,6 +15,7 @@ members = [
     "crates/audio",
     "crates/build",
     "crates/music",
+    "crates/flash",
 ]
 
 [workspace.package]
@@ -35,6 +36,7 @@ gbcli-view = { path = "crates/view" }
 gbcli-audio = { path = "crates/audio" }
 gbcli-build = { path = "crates/build" }
 gbcli-music = { path = "crates/music" }
+gbcli-flash = { path = "crates/flash" }
 sameboy-sys = { path = "crates/sameboy-sys" }
 cc = "1"
 serde = { version = "1", features = ["derive"] }

@@ -9,5 +9,8 @@ publish.workspace = true
 [lib]
 name = "gbcli_core"
 
+[dependencies]
+gbcli-flash.workspace = true
+
 [lints]
 workspace = true

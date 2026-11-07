@@ -6,6 +6,7 @@
 use std::fmt;
 use std::sync::Arc;
 
+use gbcli_core::flash::FlashProfile;
 use gbcli_core::{BootRom, Core, CoreConfig, CoreError, Keys, Model, Region};
 use gbcli_protocol::{
     CheckpointHeader, CoreId, DebuggerConfig, Patch, RenderConfig, Sha256, TimeMark,
@@ -86,6 +87,9 @@ struct Setup {
     config: RenderConfig,
     boot_rom: Arc<[u8]>,
     boot_sha256: Sha256,
+    /// The cart's flash board, on a flash-save cart. Not in the checkpoint
+    /// header yet: a restore keeps the machine's own.
+    flash: Option<FlashProfile>,
 }
 
 pub struct Machine {
@@ -133,6 +137,7 @@ impl Machine {
             },
             boot_sha256: sha256(&boot_rom),
             boot_rom,
+            flash: config.flash.clone(),
         };
         let rom: Arc<[u8]> = config.rom.as_slice().into();
         let core = (backend.build)(core_config(&setup, &rom)).map_err(SetupError::Core)?;
@@ -324,6 +329,7 @@ impl Machine {
             config: h.config,
             boot_sha256: h.boot_rom_sha256,
             boot_rom,
+            flash: self.setup.flash.clone(),
         };
         let rejected = |reason: String| CheckpointError::CoreRejected {
             saved: h.core.clone(),
@@ -438,5 +444,6 @@ fn core_config(setup: &Setup, rom: &[u8]) -> CoreConfig {
         rendering: setup.config.rendering,
         joypad_bounce: setup.config.joypad_bounce,
         write_tracking: setup.config.write_tracking,
+        flash: setup.flash.clone(),
     }
 }

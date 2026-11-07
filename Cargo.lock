@@ -128,6 +128,9 @@ dependencies = [
 [[package]]
 name = "gbcli-core"
 version = "0.1.0"
+dependencies = [
+ "gbcli-flash",
+]
 
 [[package]]
 name = "gbcli-corpus"
@@ -151,6 +154,10 @@ dependencies = [
  "serde",
  "serde_json",
 ]
+
+[[package]]
+name = "gbcli-flash"
+version = "0.1.0"
 
 [[package]]
 name = "gbcli-music"

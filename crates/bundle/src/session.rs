@@ -214,6 +214,7 @@ fn build(
         rendering: meta.config.rendering,
         joypad_bounce: meta.config.joypad_bounce,
         write_tracking: meta.config.write_tracking,
+        flash: None,
     };
     Machine::new(Backend::sameboy(), core, sym).map_err(|e| match e {
         SetupError::Symbols(_) => StoreError::SymbolsUnreadable {

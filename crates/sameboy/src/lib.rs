@@ -7,6 +7,7 @@ mod audio;
 mod battery;
 mod blob;
 mod display;
+mod flash;
 mod hooks;
 mod memory;
 mod raster;
@@ -65,6 +66,26 @@ impl SameBoy {
                 ),
             });
         }
+        // A flash board's chip holds the image from address 0 and reads
+        // erased past it, and the mapper reaches all of it.
+        let image: std::borrow::Cow<'_, [u8]> = match &config.flash {
+            None => config.rom.as_slice().into(),
+            Some(profile) => {
+                let size = profile.size as usize;
+                if config.rom.len() > size {
+                    return Err(CoreError::InvalidState {
+                        reason: format!(
+                            "the ROM is {:#x} bytes, and the {} board's flash chip holds {size:#x}",
+                            config.rom.len(),
+                            profile.name
+                        ),
+                    });
+                }
+                let mut chip = config.rom.clone();
+                chip.resize(size, 0xFF);
+                chip.into()
+            }
+        };
         let boot_rom: &[u8] = match &config.boot_rom {
             BootRom::BuiltIn => builtin_boot_rom(config.model),
             BootRom::Custom(bytes) => bytes,
@@ -106,7 +127,7 @@ impl SameBoy {
             sb::GB_set_lcd_status_callback(raw, Some(raster::on_lcd_status));
             sb::GB_set_rendering_disabled(raw, !rendering);
             sb::GB_load_boot_rom_from_buffer(raw, boot_rom.as_ptr(), boot_rom.len());
-            sb::GB_load_rom_from_buffer(raw, config.rom.as_ptr(), config.rom.len());
+            sb::GB_load_rom_from_buffer(raw, image.as_ptr(), image.len());
         }
         let mut core = SameBoy {
             gb,
@@ -126,6 +147,9 @@ impl SameBoy {
             core.hooks_mut().tracking = Some(tracking);
             // SAFETY: installs our callback; it reaches `hooks` through user data.
             unsafe { sb::GB_set_write_memory_callback(raw, Some(watch::on_write)) };
+        }
+        if let Some(profile) = config.flash {
+            core.attach_flash(gbcli_core::flash::FlashChip::new(profile));
         }
         Ok(core)
     }
@@ -470,6 +494,18 @@ impl Core for SameBoy {
         Ok(self.clock_kind())
     }
 
+    fn flash_contents(&mut self) -> Result<Option<Vec<u8>>, CoreError> {
+        Ok(self.export_flash())
+    }
+
+    fn load_flash_contents(&mut self, contents: &[u8]) -> Result<(), CoreError> {
+        self.import_flash(contents)
+    }
+
+    fn take_flash_notes(&mut self) -> Result<gbcli_core::flash::FlashNotes, CoreError> {
+        Ok(self.flash_notes())
+    }
+
     fn written(&self, region: Region) -> Result<WrittenView<'_>, CoreError> {
         let tracking = self
             .hooks()
@@ -505,6 +541,8 @@ impl Core for SameBoy {
     }
 
     fn bus_read(&mut self, addr: u16) -> Result<u8, CoreError> {
+        let ticks = self.ticks;
+        self.hooks_mut().step_ticks = ticks;
         // SAFETY: a bus read on a live instance outside GB_run.
         Ok(unsafe { sb::GB_read_memory(self.raw(), addr) })
     }
@@ -572,6 +610,7 @@ impl Core for SameBoy {
             frame: self.hooks().frame.without_layers(),
             screen: self.hooks().screen[..self.screen_pixels()].to_vec(),
             sameboy,
+            flash: self.flash_save(),
         })
     }
 
@@ -603,10 +642,16 @@ impl Core for SameBoy {
                 ),
             });
         }
+        // The flash chip checks its section whole before changing anything;
+        // if SameBoy then refuses its own, the chip goes back as it was.
+        let flash_before = self.flash_save();
+        self.flash_load(blob.flash.as_deref())?;
         // SAFETY: SameBoy validates the buffer and leaves the instance unchanged on failure.
         let status =
             unsafe { sb::GB_load_state_from_buffer(gb, blob.sameboy.as_ptr(), blob.sameboy.len()) };
         if status != 0 {
+            self.flash_load(flash_before.as_deref())
+                .expect("the chip's own state loads back");
             return Err(CoreError::InvalidState {
                 reason: format!("SameBoy refused the state (error {status})"),
             });

@@ -13,9 +13,11 @@ use sameboy_sys as sb;
 use crate::hooks::FrameCopy;
 
 const MAGIC: &[u8; 8] = b"GBCLISB\0";
-/// 3 adds the patch set; 2 is the last format from before the layer-identity
-/// patch grew SameBoy's saved video section.
-const VERSION: u32 = 3;
+/// 4 adds the flash chip's section; 3 adds the patch set; 2 is the last
+/// format from before the layer-identity patch grew SameBoy's saved video
+/// section. A 3 reads as a cart without a flash chip.
+const VERSION: u32 = 4;
+const BEFORE_FLASH: u32 = 3;
 const BEFORE_LAYER_PATCH: u32 = 2;
 /// What every refusal of a state this build can't read tells the caller to do.
 const REMEDY: &str = "load it with the gbcli build that saved it, or re-create the state \
@@ -34,6 +36,8 @@ pub(crate) struct Blob {
     /// Never-written bitmaps (`Tracking::words`); empty with tracking off.
     pub written: Vec<u64>,
     pub sameboy: Vec<u8>,
+    /// The flash chip's state (`FlashChip::save`), on a flash-save cart.
+    pub flash: Option<Vec<u8>>,
 }
 
 pub(crate) fn encode(blob: &Blob) -> Vec<u8> {
@@ -72,6 +76,14 @@ fn encode_with_patch_set(blob: &Blob, patch_set: &str) -> Vec<u8> {
     }
     out.extend_from_slice(&(blob.sameboy.len() as u64).to_le_bytes());
     out.extend_from_slice(&blob.sameboy);
+    match &blob.flash {
+        None => out.push(0),
+        Some(flash) => {
+            out.push(1);
+            out.extend_from_slice(&(flash.len() as u64).to_le_bytes());
+            out.extend_from_slice(flash);
+        }
+    }
     out
 }
 
@@ -80,8 +92,9 @@ pub(crate) fn decode(bytes: &[u8]) -> Result<Blob, CoreError> {
     if r.take(MAGIC.len())? != MAGIC {
         return Err(invalid("wrong magic"));
     }
-    match r.u32()? {
-        VERSION => {}
+    let version = r.u32()?;
+    match version {
+        VERSION | BEFORE_FLASH => {}
         BEFORE_LAYER_PATCH => {
             return Err(unreadable(format!(
                 "the state is format {BEFORE_LAYER_PATCH}, saved before the layer-identity patch \
@@ -123,6 +136,17 @@ pub(crate) fn decode(bytes: &[u8]) -> Result<Blob, CoreError> {
     let written = (0..n).map(|_| r.u64()).collect::<Result<_, _>>()?;
     let n = r.len()?;
     let sameboy = r.take(n)?.to_vec();
+    let flash = match version {
+        BEFORE_FLASH => None,
+        _ => match r.u8()? {
+            0 => None,
+            1 => {
+                let n = r.len()?;
+                Some(r.take(n)?.to_vec())
+            }
+            _ => return Err(invalid("bad flash flag")),
+        },
+    };
     if !r.0.is_empty() {
         return Err(invalid("trailing bytes"));
     }
@@ -143,6 +167,7 @@ pub(crate) fn decode(bytes: &[u8]) -> Result<Blob, CoreError> {
         screen,
         written,
         sameboy,
+        flash,
     })
 }
 
@@ -246,6 +271,7 @@ mod tests {
             screen: vec![0x0000_0003; 4],
             written: vec![1, u64::MAX],
             sameboy: vec![9, 8, 7, 6, 5],
+            flash: Some(vec![4, 2]),
         }
     }
 
@@ -263,6 +289,19 @@ mod tests {
         assert_eq!(a.screen, b.screen);
         assert_eq!(a.written, b.written);
         assert_eq!(a.sameboy, b.sameboy);
+        assert_eq!(a.flash, b.flash);
+    }
+
+    #[test]
+    fn a_format_3_blob_reads_as_a_cart_without_flash() {
+        let blob = Blob {
+            flash: None,
+            ..sample(false)
+        };
+        let mut bytes = encode(&blob);
+        bytes[MAGIC.len()..MAGIC.len() + 4].copy_from_slice(&BEFORE_FLASH.to_le_bytes());
+        assert_eq!(bytes.pop(), Some(0), "format 3 has no flash flag");
+        assert_same(&decode(&bytes).unwrap(), &blob);
     }
 
     #[test]
@@ -338,7 +377,7 @@ mod tests {
     #[test]
     fn a_blob_records_this_builds_patch_set() {
         let bytes = encode(&sample(false));
-        assert_eq!(u32::from_le_bytes(bytes[8..12].try_into().unwrap()), 3);
+        assert_eq!(u32::from_le_bytes(bytes[8..12].try_into().unwrap()), 4);
         let n = u64::from_le_bytes(bytes[12..20].try_into().unwrap()) as usize;
         assert_eq!(&bytes[20..20 + n], sb::PATCH_SET.as_bytes());
     }

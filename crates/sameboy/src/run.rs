@@ -92,7 +92,7 @@ impl Drop for Arming {
             hooks.armed = None;
             hooks.hit = None;
             hooks.in_run = false;
-            if self.read {
+            if self.read && !hooks.read_hook_wanted() {
                 sb::GB_set_read_memory_callback(self.gb, None);
             }
             if (self.write || self.raster) && !hooks.write_hook_wanted() {
@@ -180,7 +180,7 @@ pub(crate) fn run(core: &mut SameBoy, req: &mut RunRequest<'_>) -> Result<Stop, 
             }
             _ => {}
         }
-        if arming.armed() || tapping {
+        if arming.armed() || tapping || core.hooks().flash.is_some() {
             let ticks = core.ticks;
             let hooks = core.hooks_mut();
             hooks.step_pc = pc;
@@ -214,7 +214,7 @@ pub(crate) fn run(core: &mut SameBoy, req: &mut RunRequest<'_>) -> Result<Stop, 
 
         // SAFETY: no reference into the hooks is alive across this call.
         let ticks = u64::from(unsafe { sb::GB_run(gb) });
-        if before.is_some_and(|b| b.halted) && !arming.read {
+        if before.is_some_and(|b| b.halted) && !arming.read && !core.hooks().read_hook_wanted() {
             // SAFETY: removes our callback outside GB_run.
             unsafe { sb::GB_set_read_memory_callback(gb, None) };
         }

@@ -1,5 +1,7 @@
 //! CPU, PPU and input state, and what a core is built from.
 
+use gbcli_flash::FlashProfile;
+
 use crate::run::PpuMode;
 
 /// CPU registers plus the flags that are part of CPU state.
@@ -181,11 +183,14 @@ pub struct CoreConfig {
     pub rendering: Rendering,
     pub joypad_bounce: JoypadBounce,
     pub write_tracking: WriteTracking,
+    /// The cart's ROM is a flash chip on this board, which the CPU's
+    /// command writes reach; `None` is a mask ROM, which ignores them.
+    pub flash: Option<FlashProfile>,
 }
 
 impl CoreConfig {
     /// Defaults for everything but the model and ROM: built-in boot ROM, seed 0,
-    /// accurate RTC, rendering on, bounce off, write tracking on.
+    /// accurate RTC, rendering on, bounce off, write tracking on, mask ROM.
     pub fn new(model: Model, rom: Vec<u8>) -> Self {
         CoreConfig {
             model,
@@ -196,6 +201,7 @@ impl CoreConfig {
             rendering: Rendering::On,
             joypad_bounce: JoypadBounce::Off,
             write_tracking: WriteTracking::On,
+            flash: None,
         }
     }
 }

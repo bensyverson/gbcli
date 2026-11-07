@@ -35,7 +35,9 @@ impl Machine {
     /// with the battery's RAM and clock carried in, the clock then moved on
     /// by `rtc_advance` seconds. Held keys stay held. The clock's count
     /// within its current second restarts, as neither a `.sav` nor a battery
-    /// state holds it. On any failure the machine is unchanged.
+    /// state holds it. A flash-save cart keeps its flash chip's array (an
+    /// operation the power cuts off counts as done, with a note). On any
+    /// failure the machine is unchanged.
     pub fn power_cycle(
         &mut self,
         battery: Battery<'_>,
@@ -47,6 +49,8 @@ impl Machine {
             Battery::Keep => self.core.battery_state()?,
             Battery::Carried(_) | Battery::Sav(_) => None,
         };
+        // A flash chip keeps its array whatever happens to the battery.
+        let flash = self.core.flash_contents()?;
         let mut core = (self.backend.build)(core_config(&self.setup, &self.rom))?;
         for patch in &self.patches {
             core.patch_rom(patch.offset, &patch.bytes)?;
@@ -58,6 +62,9 @@ impl Machine {
             }
             (Battery::Sav(sav), _) => (core.load_battery_sav(sav)?, Some(sav.len())),
         };
+        if let Some(contents) = &flash {
+            core.load_flash_contents(contents)?;
+        }
         if rtc_advance > 0 {
             core.advance_rtc(rtc_advance)?;
         }

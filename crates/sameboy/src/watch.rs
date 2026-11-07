@@ -6,7 +6,8 @@
 //!   `gbcli_write_target` names where a CPU write will land, and hits, store
 //!   hits and tracking all use that byte (a write the conflict drops is none);
 //! - the read callback also fires for SameBoy's own "safe" reads (we never
-//!   make any: inspection uses direct access and the shim's peeks);
+//!   make any: inspection uses direct access and the shim's peeks), which
+//!   matters doubly on a flash cart, whose status reads change state;
 //! - execution filters are checked by the run loop, not the execution
 //!   callback (which can't veto and skips interrupt dispatch), so a
 //!   breakpoint on an interrupt vector works.
@@ -185,6 +186,9 @@ pub(crate) unsafe extern "C" fn on_read(gb: *mut sb::GB_gameboy_t, addr: u16, da
             // SAFETY: as above.
             hooks.wake = Some(Wake::At(unsafe { sb::gbcli_cycles_since_run(gb) }));
         }
+        // A flash chip answering with status or IDs replaces the byte, and
+        // the CPU (and any read filter) sees what it answers.
+        let data = crate::flash::on_read(gb, hooks, addr, data);
         let Some(armed) = hooks.armed else {
             return data;
         };
@@ -252,6 +256,7 @@ pub(crate) unsafe extern "C" fn on_write(gb: *mut sb::GB_gameboy_t, addr: u16, d
                 }
             }
         }
+        crate::flash::on_write(gb, hooks, addr, data);
         crate::audio::log_write(gb, hooks, addr, data);
         crate::raster::log_write(gb, hooks, addr, data);
         if let Some(tracking) = &mut hooks.tracking

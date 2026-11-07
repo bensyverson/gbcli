@@ -386,6 +386,14 @@ int gbcli_pre_run(GB_gameboy_t *gb, uint8_t *opcode)
 // ticks): from inside a callback, how far into the instruction it fired.
 unsigned gbcli_cycles_since_run(GB_gameboy_t *gb) { return gb->cycles_since_run; }
 
+// Whether a read of `addr` returns the boot ROM rather than the cart, as
+// read_rom (memory.c) decides: the cart's flash chip doesn't see it.
+bool gbcli_reads_boot_rom(GB_gameboy_t *gb, uint16_t addr)
+{
+    if (gb->boot_rom_finished) return false;
+    return addr < 0x100 || (addr >= 0x200 && addr < 0x900 && GB_is_cgb(gb));
+}
+
 // Whether the read in progress is OAM DMA's (GB_dma_run in memory.c sets the
 // flag around its reads), so a read callback can tell it from the CPU's.
 bool gbcli_in_dma_read(GB_gameboy_t *gb) { return gb->in_dma_read; }

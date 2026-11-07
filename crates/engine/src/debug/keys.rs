@@ -9,7 +9,7 @@ use gbcli_protocol::{KeyAction, KeyEvent};
 use crate::machine::Machine;
 
 /// The events not yet applied, in frame order (stable for one frame).
-pub(super) struct Schedule {
+pub(crate) struct Schedule {
     events: Vec<KeyEvent>,
     next: usize,
 }

@@ -9,6 +9,7 @@ mod checkpoint;
 mod checkpoint_error;
 pub mod cond;
 mod debug;
+pub mod equiv;
 mod machine;
 pub mod mem;
 pub mod profile;

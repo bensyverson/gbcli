@@ -25,6 +25,7 @@ use crate::machine::Machine;
 pub use backtrace::CallFrame;
 pub use code::{core_code, eval_code, expr_code};
 use drive::Goal;
+pub(crate) use keys::Schedule;
 pub use keys::unapplied_keys;
 
 /// What frame and cycle counts count from (design §9). The default is the

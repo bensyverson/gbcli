@@ -144,6 +144,14 @@ fn an_unknown_mnemonic_names_the_near_ones() {
     assert!(lookup("illegal").is_err(), "not an instruction");
 }
 
+/// The mnemonic ends where its name does (`rl[hl]`), so a line that starts
+/// with no name at all is named as written, not as an empty word.
+#[test]
+fn a_line_with_no_mnemonic_is_named_as_written() {
+    let e = lookup("[hl], a").unwrap_err();
+    assert_eq!(e.to_string(), "no instruction `[hl],`");
+}
+
 #[test]
 fn a_known_mnemonic_with_no_such_form_says_how_to_list_them() {
     let e = lookup("ld q, a").unwrap_err();

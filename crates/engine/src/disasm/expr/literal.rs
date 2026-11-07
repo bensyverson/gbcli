@@ -84,13 +84,14 @@ fn digits(text: &[u8], radix: u32) -> Option<i32> {
     any.then_some(if wide { 0 } else { value as u32 as i32 })
 }
 
-/// A graphics constant at the start of `s` (`` `01012323 ``): one to eight
-/// pixels of 0 to 3, with `_` between them. Read but not valued.
+/// A graphics constant at the start of `s` (`` `01012323 ``): pixels of 0
+/// to 3, with `_` between them; past eight, rgbasm warns and keeps the
+/// first eight. Read but not valued.
 pub(super) fn graphics(s: &[u8]) -> Option<(Value, usize)> {
     let len = 1 + word_len(&s[1..]);
     let body = &s[1..len];
     let pixels = body.iter().filter(|&&c| c != b'_').count();
-    let fine = (1..=8).contains(&pixels)
+    let fine = pixels > 0
         && body.iter().all(|c| matches!(c, b'0'..=b'3' | b'_'))
         && body.last() != Some(&b'_')
         && !body.windows(2).any(|w| w == b"__");

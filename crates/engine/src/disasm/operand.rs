@@ -30,6 +30,17 @@ pub(super) struct Operand {
     /// `[$ff00+c]`: in brackets, `+ c` after an expression worth $FF00, in
     /// any base or spelling rgbasm reads (`[255*256+c]`).
     pub high_c: bool,
+    /// What the operand may name: a register pair's half (`low(bc)`) is
+    /// never a condition, and a negated condition (`!nc`) never a register.
+    pub role: Role,
+}
+
+/// What a spelling of an operand may stand for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Role {
+    Any,
+    Register,
+    Condition,
 }
 
 impl Operand {
@@ -55,6 +66,7 @@ impl Operand {
             shape,
             data: expr::eval(text),
             high_c,
+            role: Role::Any,
         }
     }
 
@@ -65,6 +77,7 @@ impl Operand {
             shape: Shape::Plain,
             data: Err(Refused::Invalid),
             high_c: false,
+            role: Role::Any,
         }
     }
 
@@ -84,6 +97,10 @@ fn sp_offset(operand: &str) -> Option<&str> {
         return None;
     }
     let rest = operand[2..].trim_start();
+    // `++` is rgbasm's string concatenation, never `+` and a sign.
+    if rest.starts_with("++") {
+        return None;
+    }
     rest.strip_prefix('+')
         .or_else(|| rest.starts_with('-').then_some(rest))
 }
@@ -95,6 +112,16 @@ fn high_c_base(inner: &str) -> Option<&str> {
         .strip_suffix(['c', 'C'])?
         .trim_end()
         .strip_suffix('+')
+}
+
+/// A line's mnemonic and the rest: the mnemonic ends where an identifier
+/// does in rgbasm's lexer, not only at whitespace (`rl[hl]`, `set!$6, e`).
+pub(super) fn split_mnemonic(query: &str) -> (&str, &str) {
+    let len = query
+        .bytes()
+        .take_while(|c| c.is_ascii_alphanumeric() || b"_.@#$".contains(c))
+        .count();
+    query.split_at(len)
 }
 
 pub(super) fn norms(tokens: &[Operand]) -> Vec<&str> {
@@ -183,7 +210,7 @@ pub(super) fn operands(rest: &str) -> Vec<&str> {
 /// (`jr nz Top`), which rgbasm refuses: whitespace between two names or
 /// numbers, with no operator, outside a string. `None` when there is none.
 pub(super) fn missing_commas(query: &str) -> Option<String> {
-    let (word, rest) = query.split_once(char::is_whitespace)?;
+    let (word, rest) = split_mnemonic(query);
     let ends = |c: u8| c.is_ascii_alphanumeric() || b"_.#@'\")]".contains(&c);
     let starts = |c: u8| c.is_ascii_alphanumeric() || b"_.#@$'\"[`".contains(&c);
     let mut found = false;

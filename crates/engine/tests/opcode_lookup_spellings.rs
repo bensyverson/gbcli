@@ -3,8 +3,7 @@
 //! below is checked against rgbasm itself (`every_spelling_agrees_with_rgbasm`),
 //! so a case can't drift from what the assembler does.
 
-use std::path::Path;
-use std::process::Command;
+mod rgbasm;
 
 use gbcli_engine::disasm::{LookupError, Opcode, lookup};
 
@@ -24,8 +23,8 @@ fn refusal(query: &str) -> LookupError {
 use Opcode::{Base, Cb};
 
 /// Each spelling and the one opcode rgbasm assembles it to, or `None` where
-/// rgbasm refuses it. Labels: `Top` (a code label), `wFoo` ($C000) and
-/// `rLCDC` ($FF40).
+/// rgbasm refuses it. Labels: `Top` (a code label at the line), `wFoo`
+/// ($C000) and `rLCDC` ($FF40); `wBar` is not defined.
 const CASES: &[(&str, Option<Opcode>)] = &[
     // The 8-bit ALU ops may leave out `a,`.
     ("xor a", Some(Base(0xAF))),
@@ -418,6 +417,66 @@ const CASES: &[(&str, Option<Opcode>)] = &[
     ("ldh a, [-256]", None),
     ("ldh [$fe00+$180], a", Some(Base(0xE0))),
     ("ldh [255*256+$40], a", Some(Base(0xE0))),
+    // The differential test's first sweep (leaf mDk1lR,
+    // `opcode_rgbasm_differential.rs`). `LOW(bc)` names the register c,
+    // never the condition.
+    ("call low(bc), Top", None),
+    ("jp LOW(BC), $100", None),
+    ("ret low (bc)", None),
+    ("jr low(bc), Top", None),
+    ("ld low(bc), a", Some(Base(0x4F))),
+    // `++` is one token, rgbasm's string concatenation.
+    ("bit ++3, a", None),
+    ("bit 1 ++ 2, a", None),
+    ("ld a, ++3", None),
+    ("ld a, 1++2", None),
+    ("bit + + 3, a", Some(Cb(0x5F))),
+    ("bit 1 + +2, a", Some(Cb(0x5F))),
+    // The mnemonic ends where its name does, not at whitespace.
+    ("rl[hl]", Some(Cb(0x16))),
+    ("ld[hl], b", Some(Base(0x70))),
+    ("set!$6, e", Some(Cb(0xC3))),
+    ("bit($5),b", Some(Cb(0x68))),
+    ("add-$66", Some(Base(0xC6))),
+    ("sbc`3233", Some(Base(0xDE))),
+    ("cp'x'", Some(Base(0xFE))),
+    ("jp$100", None),
+    ("ld_a, b", None),
+    // A graphics constant may have more than eight pixels (rgbasm warns
+    // and keeps the first eight).
+    ("ld a, `230223223", Some(Base(0x3E))),
+    ("jp `0123012301230123", Some(Base(0xC3))),
+    // ldi and ldd take `HIGH(af)` for a.
+    ("ldi [hl], high(af)", Some(Base(0x22))),
+    ("ldd HIGH(AF), [hl]", Some(Base(0x3A))),
+    // A condition after `!` is its opposite.
+    ("ret !nz", Some(Base(0xC8))),
+    ("ret ! Z", Some(Base(0xC0))),
+    ("jp !c, Top", Some(Base(0xD2))),
+    ("jr !nc, Top", Some(Base(0x38))),
+    ("call !!nz, Top", Some(Base(0xC4))),
+    ("ret !!!z", Some(Base(0xC0))),
+    ("ld a, !nc", None),
+    ("ld a, !c", None),
+    ("ret !a", None),
+    // `.` is the current label scope's symbol.
+    ("ld a, .", Some(Base(0x3E))),
+    ("xor .", Some(Base(0xEE))),
+    ("jp . + 3", Some(Base(0xC3))),
+    // rgbasm folds `&&` with 0, `||` with a non-zero value and `&` with 0
+    // to a constant, whatever the other side.
+    ("bit wBar && 0, a", Some(Cb(0x47))),
+    ("bit 0 && wBar, a", Some(Cb(0x47))),
+    ("bit wBar || 5, a", Some(Cb(0x4F))),
+    ("bit 1 || wBar, a", Some(Cb(0x4F))),
+    ("bit wBar & 0, a", Some(Cb(0x47))),
+    ("bit (0 & wBar) + 3, a", Some(Cb(0x5F))),
+    ("rst wBar & 0", Some(Base(0xC7))),
+    ("ld a, [wBar & 0 + $ff00 + c]", Some(Base(0xF2))),
+    ("bit wBar && 0 + 1, a", None),
+    ("bit -1 && wBar, a", None),
+    ("bit wBar * 0, a", None),
+    ("bit 0 & 1 + wBar, a", None),
 ];
 
 #[test]
@@ -472,72 +531,26 @@ fn each_refusal_names_a_spelling_rgbasm_takes() {
     assert!(remedy.contains("gbcli opcode ld"), "{remedy}");
 }
 
-/// Each case through rgbasm and rgblink 1.0.4: an accepted line must
-/// assemble to the case's opcode, a refused one must not assemble.
+/// Each case through rgbasm and rgblink 1.0.4, in one batch: an accepted
+/// line must assemble to the case's opcode, a refused one must not assemble.
 #[test]
 fn every_spelling_agrees_with_rgbasm() {
-    let dir = std::env::temp_dir().join(format!("gbcli-opcode-spellings-{}", std::process::id()));
-    // Two processes a case, so the cases run on several threads.
-    let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
-    let wrong: Vec<String> = std::thread::scope(|scope| {
-        let workers: Vec<_> = (0..threads)
-            .map(|worker| {
-                let dir = dir.join(worker.to_string());
-                scope.spawn(move || {
-                    std::fs::create_dir_all(&dir).unwrap();
-                    let mut wrong = Vec::new();
-                    for &(query, expected) in CASES.iter().skip(worker).step_by(threads) {
-                        let got = assemble(&dir, query);
-                        let want = expected.map(|op| match op {
-                            Base(b) => vec![b],
-                            Cb(b) => vec![0xCB, b],
-                        });
-                        let agrees = match (&want, &got) {
-                            (Some(want), Some(bytes)) => bytes.starts_with(want),
-                            (None, None) => true,
-                            _ => false,
-                        };
-                        if !agrees {
-                            wrong.push(format!("{query:?}: table {want:02X?}, rgbasm {got:02X?}"));
-                        }
-                    }
-                    wrong
-                })
-            })
-            .collect();
-        workers
-            .into_iter()
-            .flat_map(|w| w.join().expect("worker"))
-            .collect()
-    });
-    std::fs::remove_dir_all(&dir).ok();
+    let lines: Vec<&str> = CASES.iter().map(|&(query, _)| query).collect();
+    let wrong: Vec<String> = CASES
+        .iter()
+        .zip(rgbasm::assemble(&lines))
+        .filter_map(|(&(query, expected), got)| {
+            let want = expected.map(|op| match op {
+                Base(b) => vec![b],
+                Cb(b) => vec![0xCB, b],
+            });
+            let agrees = match (&want, &got) {
+                (Some(want), Some(bytes)) => bytes.starts_with(want),
+                (None, None) => true,
+                _ => false,
+            };
+            (!agrees).then(|| format!("{query:?}: table {want:02X?}, rgbasm {got:02X?}"))
+        })
+        .collect();
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
-}
-
-/// The bytes rgbasm and rgblink make of `line`, or `None` if either refuses it.
-fn assemble(dir: &Path, line: &str) -> Option<Vec<u8>> {
-    let (src, obj, rom) = (dir.join("t.asm"), dir.join("t.o"), dir.join("t.gb"));
-    std::fs::write(
-        &src,
-        format!(
-            "DEF wFoo EQU $C000\nDEF rLCDC EQU $FF40\n\
-             SECTION \"s\", ROM0[$0]\nTop:\n    {line}\n"
-        ),
-    )
-    .unwrap();
-    let run = |cmd: &str, args: &[&Path]| {
-        Command::new(cmd)
-            .args(args)
-            .output()
-            .unwrap_or_else(|e| {
-                panic!("{cmd} is needed for this test ({e}): brew install rgbds (1.0.4)")
-            })
-            .status
-            .success()
-    };
-    let o = Path::new("-o");
-    if !run("rgbasm", &[o, &obj, &src]) || !run("rgblink", &[o, &rom, &obj]) {
-        return None;
-    }
-    Some(std::fs::read(&rom).unwrap()[..3].to_vec())
 }

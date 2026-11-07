@@ -105,11 +105,23 @@ pub(super) fn eval(text: &str) -> Result<Value, Refused> {
 }
 
 /// `f` of two values when both are known; unknown when either is.
+/// (`&&`, `||` and `&` fold first: see [`folded`].)
 fn both(l: Value, r: Value, f: impl FnOnce(i32, i32) -> i32) -> Value {
     match (l, r) {
         (Known(l), Known(r)) => Known(f(l, r)),
         _ => Unknown,
     }
+}
+
+/// What rgbasm makes constant whatever the other side: `x && 0`, `x || 5`
+/// and `x & 0`, either way round.
+fn folded(op: &str, l: Value, r: Value) -> Option<Value> {
+    let absorbs = |v: Value| match (op, v) {
+        ("&&" | "&", Known(0)) => Some(Known(0)),
+        ("||", Known(v)) if v != 0 => Some(Known(1)),
+        _ => None,
+    };
+    absorbs(l).or_else(|| absorbs(r))
 }
 
 fn truth(b: bool) -> i32 {
@@ -177,7 +189,7 @@ impl Parser<'_> {
         let mut v = self.and()?;
         while self.eat("||") {
             let r = self.and()?;
-            v = both(v, r, |l, r| truth(l != 0 || r != 0));
+            v = folded("||", v, r).unwrap_or_else(|| both(v, r, |l, r| truth(l != 0 || r != 0)));
         }
         Some(v)
     }
@@ -186,7 +198,7 @@ impl Parser<'_> {
         let mut v = self.compare()?;
         while self.eat("&&") {
             let r = self.compare()?;
-            v = both(v, r, |l, r| truth(l != 0 && r != 0));
+            v = folded("&&", v, r).unwrap_or_else(|| both(v, r, |l, r| truth(l != 0 && r != 0)));
         }
         Some(v)
     }
@@ -211,7 +223,8 @@ impl Parser<'_> {
 
     fn sum(&mut self) -> Option<Value> {
         let mut v = self.bits()?;
-        while let Some(op) = self.op(&["+", "-"], &[]) {
+        // `++` is rgbasm's string concatenation, never two `+`s.
+        while let Some(op) = self.op(&["+", "-"], &["++"]) {
             let r = self.bits()?;
             v = both(v, r, |l, r| {
                 if op == "+" {
@@ -228,6 +241,10 @@ impl Parser<'_> {
         let mut v = self.shift()?;
         while let Some(op) = self.op(&["&", "|", "^"], &["&&", "||"]) {
             let r = self.shift()?;
+            if let Some(f) = folded(op, v, r) {
+                v = f;
+                continue;
+            }
             v = both(v, r, |l, r| match op {
                 "&" => l & r,
                 "|" => l | r,
@@ -285,7 +302,7 @@ impl Parser<'_> {
 
     /// A unary operator binds looser than `**`: `-2 ** 2` is -4.
     fn unary(&mut self) -> Option<Value> {
-        if let Some(op) = self.op(&["+", "-", "~", "!"], &["!="]) {
+        if let Some(op) = self.op(&["+", "-", "~", "!"], &["!=", "++"]) {
             let v = self.nested(Self::unary)?;
             return Some(match (op, v) {
                 (_, Unknown) => Unknown,
@@ -353,6 +370,10 @@ impl Parser<'_> {
             return (len > 1).then_some(Unknown);
         }
         let name = std::str::from_utf8(word).ok()?.to_ascii_lowercase();
+        // `.` and `..` are the current label scopes; `Top.` is nothing.
+        if matches!(word, b"." | b"..") {
+            return Some(Unknown);
+        }
         if word.ends_with(b".") || REGISTERS.contains(&name.as_str()) {
             return None;
         }

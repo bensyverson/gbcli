@@ -3,7 +3,8 @@
 //! `ld a, [hl+]`, `ld [wFoo], a`): each form's size, cycles and flags, for
 //! `gbcli opcode`. A line rgbasm refuses is refused, with the spelling it
 //! takes where one is near (`crates/engine/tests/opcode_lookup_spellings.rs`
-//! checks the cases against rgbasm itself), except for what needs the
+//! checks the cases against rgbasm itself, and `opcode_rgbasm_differential.rs`
+//! seeded generated lines), except for what needs the
 //! source or the link: a symbol is taken as defined, a value as in range
 //! for its slot (only `ldh`'s address is checked), and the arguments of a
 //! function other than `HIGH()` and `LOW()` as the kind and number it
@@ -16,7 +17,8 @@ use std::fmt;
 use super::Opcode;
 use super::expr::{MAX_DEPTH, Refused, Value};
 use super::operand::{
-    Operand, Shape, lowercase_outside_quotes, missing_commas, norms, operands, without_comment,
+    Operand, Role, Shape, lowercase_outside_quotes, missing_commas, norms, operands,
+    split_mnemonic, without_comment,
 };
 use super::table;
 use super::types::{Cycles, Mnemonic, OpInfo, OperandKind};
@@ -182,7 +184,15 @@ pub fn lookup(query: &str) -> Result<Vec<Form>, LookupError> {
             .ok_or_else(|| LookupError::BadByte { text: query.into() });
     }
     let lower = lowercase_outside_quotes(query);
-    let (word, rest) = query.split_once(char::is_whitespace).unwrap_or((query, ""));
+    let (word, rest) = split_mnemonic(query);
+    if word.is_empty() {
+        // Name what was written, not an empty word: `no instruction `[hl]``.
+        let first = query.split(char::is_whitespace).next().unwrap_or(query);
+        return Err(LookupError::NoMnemonic {
+            word: first.into(),
+            near: Vec::new(),
+        });
+    }
     let word = word.to_ascii_lowercase();
     let word = word.as_str();
     let written: Vec<Operand> = if rest.trim().is_empty() {
@@ -261,7 +271,9 @@ fn spell(
             })
             .collect();
         return match written {
-            [a, hl] | [hl, a] if a.norm == "a" && hl.norm == "[hl]" => Ok((Mnemonic::Ld, tokens)),
+            [a, hl] | [hl, a] if token(&a.norm) == "a" && hl.norm == "[hl]" => {
+                Ok((Mnemonic::Ld, tokens.iter().map(spelled).collect()))
+            }
             _ => {
                 // `ldi a, [hli]` means `ld a, [hli]`; otherwise show the form.
                 let as_ld = format!("ld {}", norms(&tokens).join(", "));
@@ -294,16 +306,7 @@ fn spell(
             mnemonic = Mnemonic::Ldh;
         }
     }
-    let mut tokens: Vec<Operand> = written
-        .iter()
-        .map(|t| {
-            t.renamed(if t.high_c {
-                "[c]".into()
-            } else {
-                token(&t.norm)
-            })
-        })
-        .collect();
+    let mut tokens: Vec<Operand> = written.iter().map(spelled).collect();
     if is_alu8(mnemonic) && tokens.len() == 1 {
         tokens.insert(0, Operand::implied("a"));
     }
@@ -416,6 +419,32 @@ fn near(word: &str) -> Vec<String> {
     near.into_iter().map(|(_, m)| m).take(5).collect()
 }
 
+/// An operand as the table writes it: `[$ff00+c]` as `[c]`, a negated
+/// condition as its opposite (`!nz` is `z`, `!!nz` is `nz`), and the rest
+/// by [`token`], marking what each spelling may stand for.
+fn spelled(t: &Operand) -> Operand {
+    if t.high_c {
+        return t.renamed("[c]".into());
+    }
+    let nots = t.norm.bytes().take_while(|&c| c == b'!').count();
+    if nots > 0 {
+        const OPPOSITES: [(&str, &str); 4] = [("nz", "z"), ("z", "nz"), ("nc", "c"), ("c", "nc")];
+        if let Some(&(cond, opposite)) = OPPOSITES.iter().find(|o| o.0 == &t.norm[nots..]) {
+            let norm = if nots % 2 == 1 { opposite } else { cond };
+            return Operand {
+                role: Role::Condition,
+                ..t.renamed(norm.into())
+            };
+        }
+    }
+    let norm = token(&t.norm);
+    let half = norm != t.norm && (t.norm.starts_with("high(") || t.norm.starts_with("low("));
+    Operand {
+        role: if half { Role::Register } else { Role::Any },
+        ..t.renamed(norm)
+    }
+}
+
 /// One operand, whitespace removed, with rgbasm's other spellings of the
 /// same operand mapped to the table's.
 fn token(t: &str) -> String {
@@ -436,8 +465,11 @@ fn token(t: &str) -> String {
 
 /// An operand position of a form, and what a query may write there.
 enum Slot {
-    /// A register, a condition or `[hl+]`: only its own spelling.
+    /// A register or `[hl+]`: only its own spelling.
     Fixed(String),
+    /// A condition: only its own name, never a register pair's half
+    /// (`low(bc)` is the register c, not the condition).
+    Condition(String),
     /// Immediate data (`n8`, `n16`, `a16`, `e8`): any expression rgbasm
     /// takes, its value unchecked.
     Value(&'static str),
@@ -453,7 +485,7 @@ enum Slot {
 impl Slot {
     fn text(&self) -> String {
         match self {
-            Slot::Fixed(s) => s.clone(),
+            Slot::Fixed(s) | Slot::Condition(s) => s.clone(),
             Slot::Value(p) => (*p).into(),
             Slot::Address(p) => format!("[{p}]"),
             Slot::SpOffset => "sp+e8".into(),
@@ -468,6 +500,8 @@ impl Slot {
             Slot::Number { value, .. } => {
                 operand.shape == Shape::Plain && operand.data == Ok(Value::Known(i32::from(*value)))
             }
+            Slot::Condition(name) => operand.role != Role::Register && token == name,
+            Slot::Fixed(_) if operand.role == Role::Condition => false,
             _ if token == self.text() => true,
             Slot::Fixed(_) => false,
             // A placeholder names its own slot: `n8` is not `n16`.
@@ -513,6 +547,9 @@ fn slots(info: &OpInfo) -> Vec<Slot> {
                 }
             }
             K::Vector(value) | K::Bit(value) => Slot::Number { text: name, value },
+            K::CondNz | K::CondZ | K::CondNc | K::CondC => {
+                Slot::Condition(name.to_ascii_lowercase())
+            }
             _ => {
                 let reg = name.to_ascii_lowercase();
                 Slot::Fixed(match (spec.indirect, spec.increment, spec.decrement) {

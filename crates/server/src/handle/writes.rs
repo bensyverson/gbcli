@@ -28,7 +28,7 @@ impl Handler {
             actor: actor.clone(),
             ..HeadChange::default()
         };
-        save_head(store, meta, &machine, change)?;
+        save_head(store, meta, &mut machine, change)?;
         self.keep_warm(store, meta, machine);
         Ok(ResultBody {
             writes: Some(writes),

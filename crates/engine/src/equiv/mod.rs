@@ -188,9 +188,13 @@ impl fmt::Display for EquivError {
 impl std::error::Error for EquivError {}
 
 /// Runs `a` and `b` side by side and reports the first frame where they
-/// differ. Works on copies, so neither machine changes; the copies ignore
-/// both machines' breakpoints and watches.
-pub fn compare(a: &Machine, b: &Machine, spec: &EquivSpec<'_>) -> Result<Verdict, EquivError> {
+/// differ. Works on copies, so neither machine runs (copying saves each, which
+/// takes `&mut`); the copies ignore both machines' breakpoints and watches.
+pub fn compare(
+    a: &mut Machine,
+    b: &mut Machine,
+    spec: &EquivSpec<'_>,
+) -> Result<Verdict, EquivError> {
     start::check(a, b).map_err(EquivError::Start)?;
     let ranges = spec
         .ram
@@ -260,7 +264,7 @@ struct Run {
 }
 
 impl Run {
-    fn new(side: Side, m: &Machine, spec: &EquivSpec<'_>) -> Result<Run, EquivError> {
+    fn new(side: Side, m: &mut Machine, spec: &EquivSpec<'_>) -> Result<Run, EquivError> {
         let core_error = |error| EquivError::Core { side, error };
         let mut m = m.try_clone().map_err(core_error)?;
         let debugger = m.debugger_config_mut();
@@ -304,7 +308,7 @@ impl Run {
             })
     }
 
-    fn state(&self, stop: StopRecord) -> SideState {
+    fn state(&mut self, stop: StopRecord) -> SideState {
         SideState {
             stop,
             checkpoint: self.m.capture(SaveMeta {

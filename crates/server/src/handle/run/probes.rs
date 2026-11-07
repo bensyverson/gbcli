@@ -99,7 +99,7 @@ impl Probes {
     }
 
     /// One measurement on a copy of the stop, if asked for.
-    pub(super) fn measure(&self, machine: &Machine) -> Option<Result<MeasureMade, Failure>> {
+    pub(super) fn measure(&self, machine: &mut Machine) -> Option<Result<MeasureMade, Failure>> {
         let (from, to, spec) = self.measure.as_ref()?;
         Some(measure_on(machine, spec, from, to, None))
     }

@@ -210,10 +210,19 @@ impl Machine {
         &mut self.debugger
     }
 
-    /// The current state as a checkpoint.
-    pub fn capture(&self, meta: SaveMeta) -> Checkpoint {
+    /// The current state as a checkpoint. It takes `&mut self` because the
+    /// core's save does (see [`Core::save`]).
+    pub fn capture(&mut self, meta: SaveMeta) -> Checkpoint {
+        Checkpoint {
+            header: self.header(meta),
+            blob: self.core.save(),
+        }
+    }
+
+    /// The header [`Machine::capture`] would write, without saving the core.
+    pub fn header(&self, meta: SaveMeta) -> CheckpointHeader {
         let info = self.core.info();
-        let header = CheckpointHeader {
+        CheckpointHeader {
             core: CoreId {
                 backend: info.backend.into(),
                 commit: info.version.into(),
@@ -237,10 +246,6 @@ impl Machine {
             created_by: meta.created_by,
             parent: meta.parent,
             rev: meta.rev,
-        };
-        Checkpoint {
-            header,
-            blob: self.core.save(),
         }
     }
 
@@ -352,8 +357,9 @@ impl Machine {
         Ok(warnings)
     }
 
-    /// An independent copy in the same state, for A/B experiments.
-    pub fn try_clone(&self) -> Result<Machine, CoreError> {
+    /// An independent copy in the same state, for A/B experiments. Copying
+    /// saves this machine, hence `&mut self` (see `Core::save`).
+    pub fn try_clone(&mut self) -> Result<Machine, CoreError> {
         let mut core = (self.backend.build)(core_config(&self.setup, &self.rom))?;
         for patch in &self.patches {
             core.patch_rom(patch.offset, &patch.bytes)?;

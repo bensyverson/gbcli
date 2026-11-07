@@ -47,7 +47,7 @@ fn a_garbage_blob_is_refused_and_changes_nothing() {
 
 #[test]
 fn a_blob_from_another_model_is_refused() {
-    let cgb = SameBoy::new(CoreConfig::new(Model::CgbE, BUSY.to_vec())).unwrap();
+    let mut cgb = SameBoy::new(CoreConfig::new(Model::CgbE, BUSY.to_vec())).unwrap();
     let mut core = quick_dmg(BUSY);
     let before = core.save();
     let err = core.load(&cgb.save()).unwrap_err();
@@ -57,8 +57,8 @@ fn a_blob_from_another_model_is_refused() {
 
 #[test]
 fn the_same_seed_gives_identical_power_on_state_and_another_seed_does_not() {
-    let a = dmg(BUSY, 7);
-    let b = dmg(BUSY, 7);
+    let mut a = dmg(BUSY, 7);
+    let mut b = dmg(BUSY, 7);
     let c = dmg(BUSY, 8);
     assert_eq!(a.save(), b.save());
     assert_ne!(
@@ -71,8 +71,8 @@ fn the_same_seed_gives_identical_power_on_state_and_another_seed_does_not() {
 fn host_time_does_not_reach_the_state() {
     // SameBoy stamps the RTC epoch with time(NULL) when the RTC mode is set,
     // and that field is saved; two instances a second apart must still match.
-    let a = dmg(BUSY, 1);
+    let mut a = dmg(BUSY, 1);
     std::thread::sleep(std::time::Duration::from_millis(1_100));
-    let b = dmg(BUSY, 1);
+    let mut b = dmg(BUSY, 1);
     assert_eq!(a.save(), b.save());
 }

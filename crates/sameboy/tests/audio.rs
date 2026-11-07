@@ -304,3 +304,25 @@ fn capture_renders_the_same_whatever_the_apu_had_batched() {
     }
     assert_eq!(batched.take_audio().unwrap(), synced.take_audio().unwrap());
 }
+
+#[test]
+fn a_save_renders_no_sample() {
+    // SameBoy earns a sample's cycles in timers_run and renders it in the
+    // GB_apu_run that ends the same GB_advance_cycles, so no run ends owing
+    // one and the sync in `save` never renders. Were that to change, such a
+    // sample would need stamping at the save, not the last step's start.
+    // Each try starts from one state, so no earlier save caught the APU up.
+    let mut core = quick_dmg(TUNE);
+    core.set_audio_capture(Some(AudioCapture::MIXED)).unwrap();
+    let start = core.save();
+    for n in 1..2000 {
+        core.load(&start).unwrap();
+        run(&mut core, Budget::instructions(n));
+        core.take_audio().unwrap();
+        core.save();
+        assert!(
+            core.take_audio().unwrap().samples.is_empty(),
+            "after {n} instructions"
+        );
+    }
+}

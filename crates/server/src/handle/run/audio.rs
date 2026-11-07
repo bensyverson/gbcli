@@ -274,7 +274,7 @@ fn bad(message: String, remedy: String) -> Failure {
 /// The per-channel takes: five runs of the same request, each from a copy of
 /// `start` (the run's starting state, after its writes).
 pub(super) fn takes(
-    start: Option<&Machine>,
+    start: Option<&mut Machine>,
     mut drive: impl FnMut(&mut Machine) -> Result<(), Failure>,
 ) -> Result<Takes, Failure> {
     let start = start.ok_or_else(|| {

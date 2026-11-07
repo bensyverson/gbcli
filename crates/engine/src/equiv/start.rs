@@ -43,10 +43,7 @@ impl fmt::Display for StartMismatch {
 
 /// Refuses two machines whose starting states aren't equivalent.
 pub fn check(a: &Machine, b: &Machine) -> Result<(), StartMismatch> {
-    let (ha, hb) = (
-        a.capture(SaveMeta::default()).header,
-        b.capture(SaveMeta::default()).header,
-    );
+    let (ha, hb) = (a.header(SaveMeta::default()), b.header(SaveMeta::default()));
     let same = |field, x: String, y: String| {
         if x == y {
             Ok(())

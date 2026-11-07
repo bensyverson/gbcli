@@ -39,7 +39,7 @@ fn save_mutate_restore_gives_a_byte_identical_blob_and_envelope() {
     run(&mut m, 5_000);
     m.patch(0x0200, &[0xAA]).unwrap();
     m.core_mut().poke(Region::Wram, 2, &[0x55]).unwrap();
-    assert_ne!(m.core().save(), saved.blob);
+    assert_ne!(m.core_mut().save(), saved.blob);
 
     m.restore(&saved, &LoadOptions::default()).unwrap();
     let again = m.capture(meta());
@@ -132,7 +132,7 @@ fn the_machine_is_rebuilt_from_the_envelopes_model() {
     .unwrap();
     cgb.restore(&saved, &LoadOptions::default()).unwrap();
     assert_eq!(cgb.core().info().model, Model::DmgB);
-    assert_eq!(cgb.core().save(), saved.blob);
+    assert_eq!(cgb.core_mut().save(), saved.blob);
 }
 
 #[test]
@@ -410,15 +410,15 @@ fn a_clone_runs_identically_and_independently() {
     let mut a = in_work();
     a.patch(0x0300, &[0x99]).unwrap();
     let mut b = a.try_clone().unwrap();
-    assert_eq!(a.core().save(), b.core().save());
+    assert_eq!(a.core_mut().save(), b.core_mut().save());
     assert_eq!(a.patches(), b.patches());
     run(&mut a, 3_000);
     run(&mut b, 3_000);
-    assert_eq!(a.core().save(), b.core().save());
+    assert_eq!(a.core_mut().save(), b.core_mut().save());
     b.core_mut().poke(Region::Wram, 2, &[7]).unwrap();
     run(&mut b, 10);
     run(&mut a, 10);
-    assert_ne!(a.core().save(), b.core().save());
+    assert_ne!(a.core_mut().save(), b.core_mut().save());
 }
 
 #[test]
@@ -430,7 +430,7 @@ fn a_session_keeps_named_checkpoints_and_clones() {
     run(session.machine_mut(id), 2_000);
     session.restore(id, "f30", &LoadOptions::default()).unwrap();
     assert_eq!(
-        session.machine(id).core().save(),
+        session.machine_mut(id).core_mut().save(),
         session.checkpoint("f30").unwrap().blob
     );
     let b = session.clone_machine(id).unwrap();

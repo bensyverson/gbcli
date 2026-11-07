@@ -157,8 +157,9 @@ impl From<CoreError> for MeasureError {
 }
 
 impl Machine {
-    /// Measures `spec` on a copy of this machine, which is left unchanged.
-    pub fn measure(&self, spec: &MeasureSpec) -> Result<Measurement, MeasureError> {
+    /// Measures `spec` on a copy of this machine, which doesn't run: copying
+    /// saves it, which may only catch its APU up (see `Core::save`).
+    pub fn measure(&mut self, spec: &MeasureSpec) -> Result<Measurement, MeasureError> {
         if spec.iterations == 0 {
             return Err(MeasureError::NoIterations);
         }

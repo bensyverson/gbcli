@@ -101,7 +101,7 @@ mod tests {
     fn reading_a_checkpoint_checks_its_name_before_touching_a_file() {
         let f = Fixture::new("checkpoint-read-name");
         let store = f.demo();
-        let machine = store.machine(&store.read_meta().unwrap()).unwrap();
+        let mut machine = store.machine(&store.read_meta().unwrap()).unwrap();
         let cp = machine.capture(SaveMeta::default());
         // A real .gbck outside checkpoints/ that a path could reach.
         fs::create_dir_all(store.history_dir()).unwrap();
@@ -125,7 +125,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let f = Fixture::new("checkpoint-eacces");
         let store = f.demo();
-        let machine = store.machine(&store.read_meta().unwrap()).unwrap();
+        let mut machine = store.machine(&store.read_meta().unwrap()).unwrap();
         store
             .write_checkpoint("a", &machine.capture(SaveMeta::default()))
             .unwrap();

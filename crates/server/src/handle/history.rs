@@ -17,9 +17,9 @@ impl Handler {
         warnings: &mut Vec<String>,
     ) -> Result<ResultBody, Failure> {
         let need = Need::Start(Start::Boot);
-        let (machine, loaded) = self.machine_for(store, meta, need, None)?;
+        let (mut machine, loaded) = self.machine_for(store, meta, need, None)?;
         warnings.extend(loaded);
-        let made = write_checkpoint(store, &machine, &args.name, actor, meta.rev)?;
+        let made = write_checkpoint(store, &mut machine, &args.name, actor, meta.rev)?;
         self.keep_warm(store, meta, machine);
         Ok(ResultBody {
             checkpoint: Some(made),
@@ -51,7 +51,7 @@ impl Handler {
             parent: Some(args.name.clone()),
             ..HeadChange::default()
         };
-        save_head(store, meta, &machine, change)?;
+        save_head(store, meta, &mut machine, change)?;
         self.keep_warm(store, meta, machine);
         Ok(ResultBody {
             restored: Some(Restored {
@@ -88,7 +88,7 @@ impl Handler {
             walk: Some(walk),
             ..HeadChange::default()
         };
-        save_head(store, meta, &machine, change)?;
+        save_head(store, meta, &mut machine, change)?;
         self.keep_warm(store, meta, machine);
         Ok(ResultBody {
             restored: Some(Restored {
@@ -110,7 +110,7 @@ pub(super) fn checkpoint_frame(cp: &gbcli_engine::Checkpoint) -> u64 {
 
 pub(super) fn write_checkpoint(
     store: &SessionStore,
-    machine: &Machine,
+    machine: &mut Machine,
     name: &str,
     actor: &Option<String>,
     rev: Rev,

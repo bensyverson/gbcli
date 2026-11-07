@@ -331,12 +331,14 @@ fn the_wall_guard_firing_during_the_replays_is_the_wall_guard_error() {
     let f = Fixture::with_rom("guard-replay", crate::fixture::TUNE);
     let store = gbcli_bundle::SessionStore::new(f.bundle.clone(), "demo").unwrap();
     let meta = store.read_meta().unwrap();
-    let start = store.machine(&meta).unwrap();
+    let mut start = store.machine(&meta).unwrap();
     let fired = std::sync::atomic::AtomicBool::new(true);
     let mut opts = RunOptions::new(Budget::frames(30));
     opts.interrupt = Some(&fired);
     let guard = Duration::from_secs(5);
-    let result = audio::takes(Some(&start), |m| replay(m, &Target::Budget, &opts, guard));
+    let result = audio::takes(Some(&mut start), |m| {
+        replay(m, &Target::Budget, &opts, guard)
+    });
     let error = result.expect_err("the guard ended the replays").body;
     assert_eq!(error.code, ErrorCode::BudgetExhausted);
     assert!(error.message.contains("wall guard"), "{}", error.message);

@@ -23,46 +23,46 @@ const REGIONS: [Region; 11] = [
 ];
 
 /// Calls every inspection method, asserting the state blob is unchanged after each.
-fn assert_inspection_is_pure(core: &dyn Core, at: &str) {
-    let check = |what: &str, call: &dyn Fn()| {
+fn assert_inspection_is_pure(core: &mut dyn Core, at: &str) {
+    let mut check = |what: &str, call: &dyn Fn(&dyn Core)| {
         let before = core.save();
-        call();
+        call(core);
         assert!(core.save() == before, "{what} changed the state ({at})");
     };
-    check("info", &|| {
+    check("info", &|core| {
         core.info();
     });
-    check("supports", &|| {
+    check("supports", &|core| {
         core.supports(Feature::PpuDot);
     });
-    check("now", &|| {
+    check("now", &|core| {
         core.now();
     });
-    check("registers", &|| {
+    check("registers", &|core| {
         core.registers();
     });
-    check("ppu", &|| {
+    check("ppu", &|core| {
         core.ppu();
     });
-    check("last_complete_frame", &|| {
+    check("last_complete_frame", &|core| {
         core.last_complete_frame();
     });
-    check("pixel_layers", &|| {
+    check("pixel_layers", &|core| {
         let _ = core.pixel_layers();
     });
-    check("apu", &|| {
+    check("apu", &|core| {
         let _ = core.apu();
     });
     for region in REGIONS {
-        check(&format!("region {region:?}"), &|| {
+        check(&format!("region {region:?}"), &|core| {
             let _ = core.region(region);
         });
-        check(&format!("written {region:?}"), &|| {
+        check(&format!("written {region:?}"), &|core| {
             let _ = core.written(region);
         });
     }
     for reg in 0x00..=0x7F {
-        check(&format!("io_register {reg:#04x}"), &|| {
+        check(&format!("io_register {reg:#04x}"), &|core| {
             let _ = core.io_register(IoReg(reg));
         });
     }
@@ -75,7 +75,8 @@ fn inspection_never_changes_the_state_at_random_points() {
     run(&mut core, Budget::frames(2));
     for i in 0..12 {
         run(&mut core, Budget::instructions(1 + rng.below(3_000)));
-        assert_inspection_is_pure(&core, &format!("point {i}, ly {}", core.ppu().ly));
+        let at = format!("point {i}, ly {}", core.ppu().ly);
+        assert_inspection_is_pure(&mut core, &at);
     }
 }
 
@@ -85,6 +86,6 @@ fn inspection_never_changes_the_state_during_the_boot_rom() {
     let mut rng = Rng::new(0xB007);
     for i in 0..4 {
         run(&mut core, Budget::instructions(1 + rng.below(100_000)));
-        assert_inspection_is_pure(&core, &format!("boot point {i}"));
+        assert_inspection_is_pure(&mut core, &format!("boot point {i}"));
     }
 }

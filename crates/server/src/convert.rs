@@ -2,7 +2,7 @@
 //! one remedy with real values (design §5).
 
 use gbcli_bundle::StoreError;
-use gbcli_core::{CoreError, Feature};
+use gbcli_core::CoreError;
 use gbcli_engine::{
     DebugError, SetupError, addr::AddrError, cond::EvalError, cond::ExprError, core_code,
     eval_code, expr_code,
@@ -80,12 +80,8 @@ pub fn debug(e: &DebugError) -> ErrorBody {
     }
 }
 
-/// A gap-ledger entry: a feature the core said it can't do, and why.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Gap {
-    pub feature: Feature,
-    pub reason: &'static str,
-}
+/// A gap-ledger entry: the core's own type, one definition for both sides.
+pub use gbcli_core::Gap;
 
 /// The gap-ledger entry a core failure deserves: every `Unsupported`.
 pub fn gap_of_core(e: &CoreError) -> Option<Gap> {
@@ -139,7 +135,17 @@ pub fn gap_of(e: &DebugError) -> Option<Gap> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gbcli_core::CoreError;
+    use gbcli_core::{CoreError, Feature};
+
+    #[test]
+    fn a_gap_is_the_cores_own_type() {
+        let gap: gbcli_core::Gap = gap_of_core(&CoreError::Unsupported {
+            feature: Feature::PpuDot,
+            reason: "no dot",
+        })
+        .unwrap();
+        assert_eq!((gap.feature, gap.reason), (Feature::PpuDot, "no dot"));
+    }
 
     #[test]
     fn a_core_refusal_is_not_refused_which_means_a_flag_is_missing() {

@@ -40,7 +40,7 @@ impl Handler {
                 "drop one of them: --at names the state both sides start from",
             ));
         }
-        let a = self.side(store, meta, args, warnings)?;
+        let mut a = self.side(store, meta, args, warnings)?;
         let mut b = self.side(store, &side_b(store, meta, args), args, warnings)?;
         apply_writes(&mut b, &args.b.writes)?;
         let ram: Vec<RamRange> = args
@@ -63,7 +63,7 @@ impl Handler {
             },
             interrupt: Some(&interrupt),
         };
-        let verdict = equiv::compare(&a, &b, &spec).map_err(|e| match e {
+        let verdict = equiv::compare(&mut a, &mut b, &spec).map_err(|e| match e {
             EquivError::Interrupted { frames } => Failure::new(ErrorBody::new(
                 ErrorCode::BudgetExhausted,
                 format!(

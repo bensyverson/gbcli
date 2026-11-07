@@ -91,7 +91,7 @@ fn main() {
         .and_then(|a| a.parse().ok())
         .unwrap_or(10_000);
     let mut m = machine();
-    let blob = m.core().save();
+    let blob = m.core_mut().save();
     let opts = RunOptions::new(Budget::frames(60));
 
     let (mut restore, mut floor, mut derived, mut baseline) = (f64::MAX, f64::MAX, None, None);

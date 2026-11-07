@@ -179,7 +179,7 @@ mod tests {
     fn a_boot_cache_entry_from_another_core_identity_is_not_reused() {
         let f = Fixture::new("boot-cache-identity");
         let store = f.demo();
-        let machine = store.machine(&store.read_meta().unwrap()).unwrap();
+        let mut machine = store.machine(&store.read_meta().unwrap()).unwrap();
         // A loadable entry at power-on, as another build of the core would have
         // written it: reused, it would leave the machine short of the handoff.
         let mut foreign = machine.capture(SaveMeta::default());
@@ -197,7 +197,7 @@ mod tests {
     fn the_boot_cache_key_names_the_model_and_seed_and_changes_with_them() {
         let f = Fixture::new("boot-cache-key");
         let store = f.demo();
-        let machine = store.machine(&store.read_meta().unwrap()).unwrap();
+        let mut machine = store.machine(&store.read_meta().unwrap()).unwrap();
         let cp = machine.capture(SaveMeta::default());
         let path = store.boot_cache_path(&cp);
         let name = path.file_name().unwrap().to_str().unwrap();

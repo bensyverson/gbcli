@@ -210,7 +210,7 @@ mod tests {
     fn named_checkpoints_are_listed_and_removal_needs_a_flag() {
         let f = Fixture::new("checkpoints");
         let store = f.demo();
-        let machine = store.machine(&store.read_meta().unwrap()).unwrap();
+        let mut machine = store.machine(&store.read_meta().unwrap()).unwrap();
         store
             .write_checkpoint("f30", &machine.capture(Default::default()))
             .unwrap();
@@ -279,7 +279,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let f = Fixture::new("rm-midway");
         let store = f.demo();
-        let machine = store.machine(&store.read_meta().unwrap()).unwrap();
+        let mut machine = store.machine(&store.read_meta().unwrap()).unwrap();
         let mut meta = store.read_meta().unwrap();
         store
             .write_head(&machine.capture(Default::default()), Rev(1), None)

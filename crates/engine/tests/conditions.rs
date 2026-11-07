@@ -101,8 +101,8 @@ fn a_never_written_read_fails_naming_the_symbol_unless_allowed() {
 
 #[test]
 fn evaluating_memory_reads_leaves_the_state_unchanged() {
-    let m = running();
-    let before = sha256(&m.core().save());
+    let mut m = running();
+    let before = sha256(&m.core_mut().save());
     for text in [
         "[wFrame] + u16[wFrame]",
         "[rLY] + [rDIV] + [rSTAT] + [rTIMA] + [rIF] + [rP1]",
@@ -113,7 +113,7 @@ fn evaluating_memory_reads_leaves_the_state_unchanged() {
         let _ = eval(&m, text);
     }
     let _ = eval(&m, "[wNever]");
-    assert_eq!(sha256(&m.core().save()), before);
+    assert_eq!(sha256(&m.core_mut().save()), before);
 }
 
 #[test]

@@ -95,7 +95,7 @@ fn the_hand_computed_main_loop_is_288_t_by_the_table() {
 
 #[test]
 fn measure_counts_the_main_loop_at_its_table_cost_every_iteration() {
-    let m = at_main_loop();
+    let mut m = at_main_loop();
     let result = m.measure(&spec("MainLoop", "MainLoop", 3)).unwrap();
     let t = sum(&main_loop());
     assert_eq!(result.n(), 3);
@@ -113,7 +113,7 @@ fn measure_counts_the_main_loop_at_its_table_cost_every_iteration() {
 #[test]
 fn measure_runs_from_the_first_arrival_at_from_to_the_next_at_to() {
     // From Leaf's first instruction to Outer's: the leaf, then `call Outer`.
-    let m = at_main_loop();
+    let mut m = at_main_loop();
     let result = m.measure(&spec("Leaf", "Outer", 1)).unwrap();
     let expected = sum(&leaf()) + table_t(addr("MainLoop") + 3);
     assert_eq!(result.t().max, expected);
@@ -121,22 +121,22 @@ fn measure_runs_from_the_first_arrival_at_from_to_the_next_at_to() {
 
 #[test]
 fn measure_leaves_the_machine_unchanged() {
-    let m = at_main_loop();
-    let before = m.core().save();
+    let mut m = at_main_loop();
+    let before = m.core_mut().save();
     m.measure(&spec("MainLoop", "MainLoop", 2)).unwrap();
-    assert_eq!(m.core().save(), before);
+    assert_eq!(m.core_mut().save(), before);
 }
 
 #[test]
 fn measure_refuses_zero_iterations() {
-    let m = at_main_loop();
+    let mut m = at_main_loop();
     let err = m.measure(&spec("MainLoop", "MainLoop", 0)).unwrap_err();
     assert_eq!(err, MeasureError::NoIterations);
 }
 
 #[test]
 fn measure_says_how_far_it_got_when_the_budget_runs_out() {
-    let m = at_main_loop();
+    let mut m = at_main_loop();
     let mut never = spec("MainLoop", "MainLoop", 1);
     never.to = Location {
         addr: 0x3000,
@@ -291,7 +291,7 @@ fn a_frame_that_halts_is_not_a_lag_frame_and_a_busy_one_is() {
 fn measure_ends_at_a_stop_nothing_can_wake() {
     // stop.gb: STOP at $015B with neither joypad row selected; no key comes
     // during a measurement, so waiting there would only spend the budget.
-    let m = common::machine(include_bytes!("../../sameboy/tests/roms/stop.gb"), None);
+    let mut m = common::machine(include_bytes!("../../sameboy/tests/roms/stop.gb"), None);
     let place = |addr| Location {
         addr,
         bank: None,

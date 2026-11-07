@@ -241,6 +241,11 @@ impl Core for SameBoy {
         Ticks(self.ticks)
     }
 
+    fn in_stop(&self) -> bool {
+        // SAFETY: a plain read of a live instance.
+        unsafe { sb::gbcli_stopped(self.raw()) }
+    }
+
     fn registers(&self) -> Registers {
         let gb = self.raw();
         // SAFETY: plain reads of a live instance.
@@ -476,14 +481,16 @@ impl Core for SameBoy {
         unsafe { sb::GB_set_key_mask(self.raw(), sb::GB_key_mask_t::from(keys.0)) };
     }
 
-    fn save(&self) -> Vec<u8> {
+    fn save(&mut self) -> Vec<u8> {
         let gb = self.raw();
         // The batched APU cycle count is saved, and capture changes how often
         // it is caught up, so catch it up first: observing must not change the
         // head's bytes. This changes no behavior (any APU access does it).
-        // SAFETY: outside GB_run, so no callback holds a reference into the
-        // hooks; the sample callback this may fire reaches them through user
-        // data, and no reference from here is alive while it runs.
+        // SAFETY: outside GB_run. A render here would fire `on_sample`, which
+        // makes a `&mut Hooks` from user data; `&mut self` means no caller
+        // holds a borrow into the hooks, and none is made here until after.
+        // (SameBoy renders each sample in the advance that earns it, so this
+        // sync renders none today; `a_save_renders_no_sample` pins that.)
         unsafe { sb::gbcli_sync_apu(gb) };
         // SAFETY: SameBoy fills exactly GB_get_save_state_size bytes; saving reads only.
         let sameboy = unsafe {

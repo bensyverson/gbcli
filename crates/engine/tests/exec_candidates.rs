@@ -53,6 +53,9 @@ impl Core for Counting {
     fn registers(&self) -> Registers {
         self.0.registers()
     }
+    fn in_stop(&self) -> bool {
+        self.0.in_stop()
+    }
     fn region(&self, region: Region) -> Result<RegionView<'_>, CoreError> {
         self.0.region(region)
     }
@@ -101,7 +104,7 @@ impl Core for Counting {
     fn set_keys(&mut self, keys: Keys) {
         self.0.set_keys(keys)
     }
-    fn save(&self) -> Vec<u8> {
+    fn save(&mut self) -> Vec<u8> {
         self.0.save()
     }
     fn load(&mut self, blob: &[u8]) -> Result<(), CoreError> {

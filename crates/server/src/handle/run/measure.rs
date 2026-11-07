@@ -27,7 +27,7 @@ impl Handler {
         if iterations == 0 {
             return Err(failure(&MeasureError::NoIterations));
         }
-        let (machine, loaded) =
+        let (mut machine, loaded) =
             self.machine_for(store, meta, Need::Start(Start::Boot), args.at.as_deref())?;
         warnings.extend(loaded);
         let (budget, _, _) = budget_from(args.frames, args.instructions, args.ticks);
@@ -35,7 +35,7 @@ impl Handler {
             .and_then(|from| Ok((from, parse_location(&machine, &args.to)?)))
             .and_then(|(from, to)| {
                 let spec = spec(from, to, iterations, budget);
-                measure_on(&machine, &spec, &args.from, &args.to, args.max_t)
+                measure_on(&mut machine, &spec, &args.from, &args.to, args.max_t)
             });
         // Only the head's machine may stay warm: `--at` loaded another state.
         if args.at.is_none() {
@@ -60,7 +60,7 @@ pub(super) fn spec(from: Location, to: Location, iterations: u32, budget: Budget
 /// Measures `spec` on a copy of `machine`; with `max_t`, a slowest iteration
 /// over it is `predicate_false` carrying the measurement.
 pub(super) fn measure_on(
-    machine: &Machine,
+    machine: &mut Machine,
     spec: &MeasureSpec,
     from: &str,
     to: &str,

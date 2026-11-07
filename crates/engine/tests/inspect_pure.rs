@@ -15,30 +15,30 @@ use gbcli_engine::inspect::{
     },
 };
 
-fn assert_pure(core: &dyn Core, at: &str) {
-    let check = |what: &str, call: &dyn Fn()| {
+fn assert_pure(core: &mut dyn Core, at: &str) {
+    let mut check = |what: &str, call: &dyn Fn(&dyn Core)| {
         let before = core.save();
-        call();
+        call(core);
         assert!(core.save() == before, "{what} changed the state ({at})");
     };
-    check("cpu", &|| {
+    check("cpu", &|core| {
         cpu(core);
     });
-    check("apu_state", &|| {
+    check("apu_state", &|core| {
         let _ = apu_state(core);
     });
-    check("hwreg read_all", &|| {
+    check("hwreg read_all", &|core| {
         read_all(core);
     });
     for region in ALL_REGIONS {
-        check(&format!("region_info {region:?}"), &|| {
+        check(&format!("region_info {region:?}"), &|core| {
             let _ = region_info(core, region);
         });
-        check(&format!("read {region:?}"), &|| {
+        check(&format!("read {region:?}"), &|core| {
             let _ = read(core, region, None, 0, 1);
         });
     }
-    check("video", &|| {
+    check("video", &|core| {
         let _ = tile(core, 0, 1);
         let _ = tilemap(core, MapArea::Map9800, TileAddressing::Signed8800);
         let _ = object_height(core);
@@ -54,9 +54,9 @@ fn engine_inspection_never_changes_the_state() {
     let mut rng = Rng::new(0x9E7E);
     for i in 0..8 {
         run(&mut dmg, Budget::instructions(1 + rng.below(3_000)));
-        assert_pure(&dmg, &format!("dmg point {i}"));
+        assert_pure(&mut dmg, &format!("dmg point {i}"));
         run(&mut cgb, Budget::instructions(1 + rng.below(3_000)));
-        assert_pure(&cgb, &format!("cgb point {i}"));
+        assert_pure(&mut cgb, &format!("cgb point {i}"));
     }
 }
 

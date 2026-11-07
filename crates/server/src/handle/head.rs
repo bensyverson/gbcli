@@ -22,7 +22,7 @@ pub(super) struct HeadChange<'a> {
 pub(super) fn save_head(
     store: &SessionStore,
     meta: &mut SessionFile,
-    machine: &Machine,
+    machine: &mut Machine,
     change: HeadChange,
 ) -> Result<(), Failure> {
     let cp = machine.capture(SaveMeta {

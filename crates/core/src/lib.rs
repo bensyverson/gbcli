@@ -54,6 +54,9 @@ pub trait Core {
     // Side-effect-free inspection: never advances, syncs or perturbs anything.
 
     fn registers(&self) -> Registers;
+    /// Whether the CPU is in STOP, which only a key in a selected joypad row
+    /// ends. PC already points past STOP, as it does in HALT.
+    fn in_stop(&self) -> bool;
     /// A region's raw backing bytes and its current bank. For ROM, the bank
     /// is the one mapped at 4000-7FFF; see [`rom0_bank`](Core::rom0_bank).
     fn region(&self, region: Region) -> Result<RegionView<'_>, CoreError>;
@@ -177,6 +180,28 @@ pub trait Core {
 
     /// The core's own state blob, including its emulated time; the engine wraps
     /// it in an envelope.
-    fn save(&self) -> Vec<u8>;
+    ///
+    /// It takes `&mut self` because saving may catch batched work up (SameBoy
+    /// renders any samples its APU owes), which reaches state that a shared
+    /// borrow could be reading. So no borrow into the core outlives a save:
+    ///
+    /// ```compile_fail,E0502
+    /// fn f(core: &mut dyn gbcli_core::Core) {
+    ///     let frame = core.last_complete_frame();
+    ///     core.save();
+    ///     let _number = frame.map(|f| f.tag.number);
+    /// }
+    /// ```
+    ///
+    /// while one that ends first is fine:
+    ///
+    /// ```
+    /// fn f(core: &mut dyn gbcli_core::Core) {
+    ///     let number = core.last_complete_frame().map(|f| f.tag.number);
+    ///     core.save();
+    ///     drop(number);
+    /// }
+    /// ```
+    fn save(&mut self) -> Vec<u8>;
     fn load(&mut self, blob: &[u8]) -> Result<(), CoreError>;
 }

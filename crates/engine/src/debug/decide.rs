@@ -89,8 +89,8 @@ impl Notes {
     }
 
     /// The warnings for the outcome: the run's own, then each condition
-    /// still waiting on a byte that is still unwritten. `until` is the
-    /// predicate's own wait, if any.
+    /// still waiting on a byte that is still unwritten, then STOP if the CPU
+    /// is in it. `until` is the predicate's own wait, if any.
     pub fn finish(self, m: &Machine, until: Option<UninitRead>) -> Vec<EvalWarning> {
         let mut warnings = self.warnings;
         let waits = until.map(|read| (StopTrigger::Until, read)).into_iter();
@@ -104,6 +104,9 @@ impl Notes {
                 .chain(points)
                 .map(|(trigger, read)| EvalWarning::NotYet { trigger, read }),
         );
+        if m.core().in_stop() {
+            warnings.push(EvalWarning::InStop);
+        }
         warnings
     }
 }
@@ -137,10 +140,13 @@ pub(super) fn exec_breakpoint(
     decide(m, compiled, &Goal::Run, hit, opts, used, notes)
 }
 
-/// The exec hit at the current PC, when the execution filter matches it.
+/// The exec hit at the current PC, when the execution filter matches it. In
+/// HALT or STOP, PC already points past it, but that instruction runs only
+/// after the wake (and any interrupt it dispatches), so there is none yet.
 pub(super) fn exec_hit(m: &Machine, exec: &gbcli_core::AddrFilter) -> Option<Hit> {
-    let pc = m.core().registers().pc;
-    if !exec.may_match(pc) {
+    let regs = m.core().registers();
+    let pc = regs.pc;
+    if !exec.may_match(pc) || regs.halted || m.core().in_stop() {
         return None;
     }
     let bank = mem::bank_at(m.core(), pc);

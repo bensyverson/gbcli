@@ -52,7 +52,7 @@ fn diverged(verdict: Verdict) -> Box<gbcli_engine::equiv::Divergence> {
 
 #[test]
 fn a_broken_clamp_diverges_in_ram_at_the_frame_it_first_runs() {
-    let (a, b) = (machine(A, Some(A_SYM)), machine(BROKEN, Some(BROKEN_SYM)));
+    let (mut a, mut b) = (machine(A, Some(A_SYM)), machine(BROKEN, Some(BROKEN_SYM)));
     let start = a.core().now().0;
     let keys = parse_keys(HOLD_RIGHT).unwrap();
     let ram = wx();
@@ -61,7 +61,7 @@ fn a_broken_clamp_diverges_in_ram_at_the_frame_it_first_runs() {
         ram: &ram,
         ..EquivSpec::new(120)
     };
-    let d = diverged(compare(&a, &b, &spec).unwrap());
+    let d = diverged(compare(&mut a, &mut b, &spec).unwrap());
     assert_eq!(d.frame, 30);
     // Each side found wX through its own .sym.
     assert_eq!(
@@ -95,13 +95,13 @@ fn a_broken_clamp_diverges_in_ram_at_the_frame_it_first_runs() {
 fn without_ram_ranges_the_broken_clamp_shows_on_screen_a_frame_later() {
     // The vblank handler after frame 30 erases column 19 and draws column 20,
     // off screen, so frame 31 is the first drawn without the block.
-    let (a, b) = (machine(A, Some(A_SYM)), machine(BROKEN, Some(BROKEN_SYM)));
+    let (mut a, mut b) = (machine(A, Some(A_SYM)), machine(BROKEN, Some(BROKEN_SYM)));
     let keys = parse_keys(HOLD_RIGHT).unwrap();
     let spec = EquivSpec {
         keys: &keys,
         ..EquivSpec::new(120)
     };
-    let d = diverged(compare(&a, &b, &spec).unwrap());
+    let d = diverged(compare(&mut a, &mut b, &spec).unwrap());
     assert_eq!(d.frame, 31);
     assert_eq!(
         d.differences,
@@ -117,7 +117,7 @@ fn without_ram_ranges_the_broken_clamp_shows_on_screen_a_frame_later() {
 
 #[test]
 fn either_side_restores_from_the_divergence() {
-    let (a, b) = (machine(A, Some(A_SYM)), machine(BROKEN, Some(BROKEN_SYM)));
+    let (mut a, mut b) = (machine(A, Some(A_SYM)), machine(BROKEN, Some(BROKEN_SYM)));
     let keys = parse_keys(HOLD_RIGHT).unwrap();
     let ram = wx();
     let spec = EquivSpec {
@@ -125,7 +125,7 @@ fn either_side_restores_from_the_divergence() {
         ram: &ram,
         ..EquivSpec::new(120)
     };
-    let d = diverged(compare(&a, &b, &spec).unwrap());
+    let d = diverged(compare(&mut a, &mut b, &spec).unwrap());
     let restored = |rom, sym, cp| {
         let mut m = machine(rom, Some(sym));
         m.restore(cp, &LoadOptions::default()).unwrap();
@@ -148,7 +148,7 @@ const SCRIPT: &str = "RIGHT@10 A@12 -A@13 DOWN@20 -DOWN@45 A@35 -A@37 -RIGHT@50 
 
 #[test]
 fn a_known_equivalent_rewrite_passes_600_frames_of_scripted_input() {
-    let (a, b) = (machine(A, Some(A_SYM)), machine(FAST, Some(FAST_SYM)));
+    let (mut a, mut b) = (machine(A, Some(A_SYM)), machine(FAST, Some(FAST_SYM)));
     let keys = parse_keys(SCRIPT).unwrap();
     let ram = [
         RamRange {
@@ -174,15 +174,15 @@ fn a_known_equivalent_rewrite_passes_600_frames_of_scripted_input() {
         ..EquivSpec::new(600)
     };
     assert_eq!(
-        compare(&a, &b, &spec).unwrap(),
+        compare(&mut a, &mut b, &spec).unwrap(),
         Verdict::Same {
             frames: 600,
             ended: None
         }
     );
     // The same script catches the broken build: it walks into the right edge.
-    let broken = machine(BROKEN, Some(BROKEN_SYM));
-    let d = diverged(compare(&a, &broken, &spec).unwrap());
+    let mut broken = machine(BROKEN, Some(BROKEN_SYM));
+    let d = diverged(compare(&mut a, &mut broken, &spec).unwrap());
     // RIGHT from 10: column 19 at the end of frame 29, 20 (broken) at 30.
     assert_eq!(d.frame, 30);
 }
@@ -191,7 +191,7 @@ fn a_known_equivalent_rewrite_passes_600_frames_of_scripted_input() {
 fn a_patched_note_diverges_in_the_sound_writes_of_the_frame_that_plays_it() {
     // A at frame 40 with the block at column 0: the main loop of frame 41
     // writes NR21, NR22, then NR23 = NoteTable[0], then NR24.
-    let a = machine(FAST, Some(FAST_SYM));
+    let mut a = machine(FAST, Some(FAST_SYM));
     let mut b = machine(FAST, Some(FAST_SYM));
     let table = u32::from(addr(FAST_SYM, "NoteTable"));
     b.patch(table, &[0x07]).unwrap();
@@ -200,7 +200,7 @@ fn a_patched_note_diverges_in_the_sound_writes_of_the_frame_that_plays_it() {
         keys: &keys,
         ..EquivSpec::new(60)
     };
-    let d = diverged(compare(&a, &b, &spec).unwrap());
+    let d = diverged(compare(&mut a, &mut b, &spec).unwrap());
     assert_eq!(d.frame, 41);
     let [
         Difference::Apu {
@@ -220,14 +220,14 @@ fn a_patched_note_diverges_in_the_sound_writes_of_the_frame_that_plays_it() {
 #[test]
 fn sound_writes_ignore_when_in_the_frame_they_land_unless_timed() {
     // The rewrite reaches Beep sooner in the frame, with the same writes.
-    let (a, b) = (machine(A, Some(A_SYM)), machine(FAST, Some(FAST_SYM)));
+    let (mut a, mut b) = (machine(A, Some(A_SYM)), machine(FAST, Some(FAST_SYM)));
     let keys = parse_keys("A@40 -A@42").unwrap();
     let writes = EquivSpec {
         keys: &keys,
         ..EquivSpec::new(60)
     };
     assert_eq!(
-        compare(&a, &b, &writes).unwrap(),
+        compare(&mut a, &mut b, &writes).unwrap(),
         Verdict::Same {
             frames: 60,
             ended: None
@@ -237,7 +237,7 @@ fn sound_writes_ignore_when_in_the_frame_they_land_unless_timed() {
         audio: AudioCompare::Timed,
         ..writes
     };
-    let d = diverged(compare(&a, &b, &timed).unwrap());
+    let d = diverged(compare(&mut a, &mut b, &timed).unwrap());
     assert_eq!(d.frame, 41);
     let [
         Difference::Apu {
@@ -255,10 +255,10 @@ fn sound_writes_ignore_when_in_the_frame_they_land_unless_timed() {
 
 #[test]
 fn machines_at_different_times_are_refused() {
-    let a = machine(A, Some(A_SYM));
+    let mut a = machine(A, Some(A_SYM));
     let mut b = machine(FAST, Some(FAST_SYM));
     b.core_mut().step(StepUnit::Instruction).unwrap();
-    let Err(EquivError::Start(mismatch)) = compare(&a, &b, &EquivSpec::new(10)) else {
+    let Err(EquivError::Start(mismatch)) = compare(&mut a, &mut b, &EquivSpec::new(10)) else {
         panic!("expected a start mismatch");
     };
     assert_eq!(mismatch.field, StartField::Ticks);
@@ -266,7 +266,7 @@ fn machines_at_different_times_are_refused() {
 
 #[test]
 fn a_range_that_does_not_resolve_on_one_side_is_refused() {
-    let (a, b) = (machine(A, Some(A_SYM)), machine(FAST, Some(FAST_SYM)));
+    let (mut a, mut b) = (machine(A, Some(A_SYM)), machine(FAST, Some(FAST_SYM)));
     let ram = [RamRange {
         at: "VBlank.row".into(), // only the original has it
         len: 1,
@@ -275,7 +275,7 @@ fn a_range_that_does_not_resolve_on_one_side_is_refused() {
         ram: &ram,
         ..EquivSpec::new(10)
     };
-    let Err(EquivError::Range { side, at, .. }) = compare(&a, &b, &spec) else {
+    let Err(EquivError::Range { side, at, .. }) = compare(&mut a, &mut b, &spec) else {
         panic!("expected a range error");
     };
     assert_eq!(
@@ -286,11 +286,11 @@ fn a_range_that_does_not_resolve_on_one_side_is_refused() {
 
 #[test]
 fn breakpoints_on_either_machine_are_ignored() {
-    let (mut a, b) = (machine(A, Some(A_SYM)), machine(FAST, Some(FAST_SYM)));
+    let (mut a, mut b) = (machine(A, Some(A_SYM)), machine(FAST, Some(FAST_SYM)));
     let main_loop = gbcli_engine::addr::parse("MainLoop", a.symbols()).unwrap();
     a.add_breakpoint(main_loop, None).unwrap();
     assert_eq!(
-        compare(&a, &b, &EquivSpec::new(20)).unwrap(),
+        compare(&mut a, &mut b, &EquivSpec::new(20)).unwrap(),
         Verdict::Same {
             frames: 20,
             ended: None
@@ -302,8 +302,8 @@ fn breakpoints_on_either_machine_are_ignored() {
 fn a_machine_that_stops_otherwise_diverges_and_two_that_stop_alike_end_the_check() {
     // halt.gb halts with IE = 0 in its first instructions, and a run reports
     // HALT forever as soon as it sees it, so frame 1 never ends.
-    let (a, b) = (machine(A, Some(A_SYM)), machine(HALT, None));
-    let d = diverged(compare(&a, &b, &EquivSpec::new(10)).unwrap());
+    let (mut a, mut b) = (machine(A, Some(A_SYM)), machine(HALT, None));
+    let d = diverged(compare(&mut a, &mut b, &EquivSpec::new(10)).unwrap());
     assert_eq!(d.frame, 1);
     assert_eq!(
         d.differences[0],
@@ -312,9 +312,9 @@ fn a_machine_that_stops_otherwise_diverges_and_two_that_stop_alike_end_the_check
             b: StopReason::HaltForever
         }
     );
-    let (a, b) = (machine(HALT, None), machine(HALT, None));
+    let (mut a, mut b) = (machine(HALT, None), machine(HALT, None));
     assert_eq!(
-        compare(&a, &b, &EquivSpec::new(10)).unwrap(),
+        compare(&mut a, &mut b, &EquivSpec::new(10)).unwrap(),
         Verdict::Same {
             frames: 0,
             ended: Some(StopReason::HaltForever)

@@ -61,6 +61,9 @@ pub enum EvalWarning {
         trigger: StopTrigger,
         read: UninitRead,
     },
+    /// The run ended with the CPU in STOP, where it stays however long a run
+    /// goes: only a key in a selected joypad row wakes it.
+    InStop,
 }
 
 /// A condition that triggers a stop.
@@ -83,6 +86,10 @@ impl fmt::Display for EvalWarning {
                 };
                 write!(f, "{what} never held: {}", uninit_remedy(read))
             }
+            EvalWarning::InStop => f.write_str(
+                "the CPU is in STOP, which only a key in a selected joypad row (JOYP, $FF00) \
+                 ends; hold one with `run --keys`",
+            ),
         }
     }
 }

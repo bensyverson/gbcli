@@ -249,6 +249,18 @@ fn a_key_pressed_while_time_passes_in_stop_wakes_the_core() {
 }
 
 #[test]
+fn in_stop_reports_the_cpu_in_stop_until_a_key_wakes_it() {
+    let mut core = quick_dmg(STOP_WAKE);
+    assert!(!core.in_stop());
+    run(&mut core, Budget::frames(3));
+    assert!(core.in_stop());
+    assert!(!core.registers().halted, "STOP isn't HALT");
+    core.set_keys(Keys::UP);
+    run(&mut core, Budget::frames(1));
+    assert!(!core.in_stop());
+}
+
+#[test]
 fn a_bouncing_key_in_the_selected_row_wakes_a_stopped_core() {
     let mut config = CoreConfig::new(Model::DmgB, STOP_WAKE.to_vec());
     config.joypad_bounce = JoypadBounce::On;

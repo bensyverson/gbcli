@@ -126,7 +126,7 @@ impl Handler {
         let writes = apply_writes(&mut machine, &args.writes)?;
         let sound = args.audio.as_deref();
         // The per-channel replays start where the run starts: after the writes.
-        let replay_from = match sound.and_then(|a| a.wav.as_ref()) {
+        let mut replay_from = match sound.and_then(|a| a.wav.as_ref()) {
             Some(w) if w.channels == WavChannels::Each => {
                 Some(machine.try_clone().map_err(|e| Failure::from_core(&e))?)
             }
@@ -188,13 +188,13 @@ impl Handler {
             stop: Some(&stop),
             ..HeadChange::default()
         };
-        save_head(store, meta, &machine, change)?;
+        save_head(store, meta, &mut machine, change)?;
         let reads = eval_reads(&machine, &plan.reads, &since, args.allow_uninit, warnings);
         // After the reads (design §11 step 6); capturing only reads the core.
         let shot = args.shot.as_ref().map(|s| shot::take(&machine, s, &since));
         let answered = self.answered(args, defaulted, guarded, &stop);
         // Step 5, on a copy of the stop; and what the run's sinks collected.
-        let measured = plan.probes.measure(&machine);
+        let measured = plan.probes.measure(&mut machine);
         let (profile, frame_budget) = plan.probes.finish(&machine);
         // The files after the shot are written only when everything before
         // them succeeded: the filmstrip, then the audio, whose per-channel
@@ -213,7 +213,7 @@ impl Handler {
                 let guard = self.wall_guard;
                 let drive = |m: &mut Machine| replay(m, &plan.target, &replay_opts, guard);
                 audio::deliver(a, c, &machine, &since, || {
-                    audio::takes(replay_from.as_ref(), drive)
+                    audio::takes(replay_from.as_mut(), drive)
                 })
             })),
             _ => None,
@@ -222,7 +222,9 @@ impl Handler {
         // the head's save, so the checkpoint records the rev it is.
         let so_far = so_far && sound.as_ref().is_none_or(Result::is_ok);
         let checkpoint = match &args.checkpoint {
-            Some(name) if so_far => Some(write_checkpoint(store, &machine, name, actor, meta.rev)),
+            Some(name) if so_far => {
+                Some(write_checkpoint(store, &mut machine, name, actor, meta.rev))
+            }
             _ => None,
         }
         .transpose();
@@ -292,7 +294,7 @@ impl Handler {
         &mut self,
         store: &SessionStore,
         meta: &mut SessionFile,
-        machine: Machine,
+        mut machine: Machine,
         error: &DebugError,
         actor: &Option<String>,
         parent: Option<String>,
@@ -307,7 +309,7 @@ impl Handler {
             stop: Some(&stop),
             ..HeadChange::default()
         };
-        if let Err(mut saved) = save_head(store, meta, &machine, change) {
+        if let Err(mut saved) = save_head(store, meta, &mut machine, change) {
             saved.body.message = format!("{} (after: {error})", saved.body.message);
             return saved;
         }
@@ -358,7 +360,7 @@ impl Handler {
             stop: Some(&stop),
             ..HeadChange::default()
         };
-        save_head(store, meta, &machine, change)?;
+        save_head(store, meta, &mut machine, change)?;
         self.keep_warm(store, meta, machine);
         if guarded {
             return Err(Failure::new(wall_guard_error(self.wall_guard, stop)));

@@ -150,7 +150,7 @@ mod tests {
     fn pruning_keeps_idle_sessions_that_hold_named_checkpoints_and_says_so() {
         let f = Fixture::new("prune-checkpoints");
         let store = f.demo();
-        let machine = store.machine(&store.read_meta().unwrap()).unwrap();
+        let mut machine = store.machine(&store.read_meta().unwrap()).unwrap();
         store
             .write_checkpoint("keep", &machine.capture(Default::default()))
             .unwrap();

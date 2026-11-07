@@ -42,6 +42,14 @@ What the sound-register write log and sample capture cost the run loop: the `gbc
 scripts/bench/audio-tap-cost/run.sh tests/corpus/fetched/blargg/cpu_instrs/cpu_instrs.gb 6 3600 main   # args: rounds (5), frames (3600), base revision (none)
 ```
 
+## profile-overhead
+
+What the cycle profiler costs: the `gbcli-engine` example `profile_bench` in modes `plain` (a run with no sink), `profile` (`Machine::profile`) and `frames` (`Machine::frame_budget`), in interleaved rounds; prints each mode's best and median speed and its time against `plain`'s best. Figures are in `project/2026-11-06-design.md` (§11, the leaf 6eLWSu update).
+
+```sh
+scripts/bench/profile-overhead/run.sh tests/corpus/fetched/blargg/cpu_instrs/cpu_instrs.gb 5 3600   # args: rounds (5), frames (3600)
+```
+
 ## layer-patch-cost
 
 What gbcli's SameBoy patches (`crates/sameboy-sys/patches/`) cost with the layer buffer detached: `sb_bench.c` in CPU seconds, built with `build.rs`'s flags against the vendored tree and against the same tree with the patches reverse-applied (no clone), run in simultaneously-started pairs; prints each pair's cost and the median. Figures are in `project/2026-11-06-sameboy-vendoring.md` (Throughput).

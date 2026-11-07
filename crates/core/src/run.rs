@@ -168,17 +168,67 @@ pub enum PpuMode {
     Drawing,
 }
 
+/// What one CPU step did, as an [`Event::Exec`] reports it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CpuStep {
+    /// An instruction ran; `opcode` is its first byte (0xCB for a CB-prefixed
+    /// one).
+    Instruction { opcode: u8 },
+    /// An interrupt was dispatched: the return address was pushed and PC set
+    /// to the vector (0 if a write to IE during the push cancelled it).
+    Interrupt,
+    /// No instruction ran: a HALT or STOP tick, or waking from HALT.
+    Idle,
+}
+
 /// Something a tap or the profiler receives during a run.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Event {
-    IoWrite { reg: u8, value: u8, at: Ticks },
-    PpuMode { mode: PpuMode, ly: u8, at: Ticks },
-    Scanline { ly: u8, at: Ticks },
-    Exec { pc: u16, bank: u16, cycles: u32 },
+    IoWrite {
+        reg: u8,
+        value: u8,
+        at: Ticks,
+    },
+    PpuMode {
+        mode: PpuMode,
+        ly: u8,
+        at: Ticks,
+    },
+    Scanline {
+        ly: u8,
+        at: Ticks,
+    },
+    /// One CPU step, sent after it completes.
+    Exec {
+        /// PC and its bank before the step.
+        pc: u16,
+        bank: u16,
+        step: CpuStep,
+        /// The step's emulated time.
+        ticks: u32,
+        sp_before: u16,
+        sp_after: u16,
+        /// PC after the step, and the bank mapped there.
+        next_pc: u16,
+        next_bank: u16,
+        /// Whether the CPU ran at double speed during the step.
+        double_speed: bool,
+    },
+}
+
+/// Which events a sink wants; a core arms only those.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct EventKinds {
+    /// [`Event::Exec`] ([`Feature::EventSinks`](crate::Feature::EventSinks)).
+    pub exec: bool,
+    /// [`Event::IoWrite`], [`Event::PpuMode`] and [`Event::Scanline`]
+    /// ([`Feature::RasterEvents`](crate::Feature::RasterEvents)).
+    pub raster: bool,
 }
 
 /// Receives events during a run. Must not call back into the core.
 pub trait EventSink {
+    fn kinds(&self) -> EventKinds;
     fn event(&mut self, event: Event);
 }
 

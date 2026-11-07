@@ -98,6 +98,9 @@ pub(crate) struct Hooks {
     pub step_ticks: u64,
     /// Whether a run is in progress, so SameBoy's cycle count is this step's.
     pub in_run: bool,
+    /// The opcode SameBoy's execution callback saw this step, while a run's
+    /// sink wants execution events; `None` when the step ran no instruction.
+    pub executed: Option<u8>,
 }
 
 impl Hooks {
@@ -122,6 +125,7 @@ impl Hooks {
             audio: None,
             step_ticks: 0,
             in_run: false,
+            executed: None,
         }
     }
 
@@ -180,6 +184,13 @@ pub(crate) unsafe extern "C" fn on_log(
         }
         hooks.log.push(line.into_owned());
     });
+}
+
+/// Records the opcode of the instruction the step runs. SameBoy calls this
+/// for every instruction and never for an interrupt dispatch or a HALT tick,
+/// which is how a step is told apart from those.
+pub(crate) unsafe extern "C" fn on_exec(gb: *mut sb::GB_gameboy_t, _addr: u16, opcode: u8) {
+    guard(gb, (), |hooks| hooks.executed = Some(opcode));
 }
 
 /// SameBoy's input callbacks read stdin by default; ours never does.

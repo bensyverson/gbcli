@@ -11,6 +11,7 @@ pub mod cond;
 mod debug;
 mod machine;
 pub mod mem;
+pub mod profile;
 mod romcheck;
 mod session;
 mod sha256;

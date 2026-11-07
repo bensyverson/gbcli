@@ -63,7 +63,10 @@ pub(crate) fn support(feature: Feature) -> Support {
             "SameBoy's execution callback doesn't fire for interrupt dispatch"
         }
         Feature::Mmm01RomPatch => "MMM01 rotates its ROM in memory, so file offsets don't map",
-        Feature::EventSinks => "event sinks are not implemented in the SameBoy backend yet",
+        Feature::EventSinks => return Support::Yes,
+        Feature::RasterEvents => {
+            "PPU mode, scanline and IO-write events are not implemented in the SameBoy backend"
+        }
     };
     Support::No { reason }
 }

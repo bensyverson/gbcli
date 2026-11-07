@@ -25,7 +25,9 @@ pub use filter::{AddrFilter, BankSel, StoreFilter, canonical_addr};
 pub use region::{
     FrameRef, FrameTag, Layer, LayerMap, Pixels, Region, RegionView, VblankKind, WrittenView,
 };
-pub use run::{Budget, BudgetKind, Event, EventSink, PpuMode, RunRequest, StepUnit, Usage};
+pub use run::{
+    Budget, BudgetKind, CpuStep, Event, EventKinds, EventSink, PpuMode, RunRequest, StepUnit, Usage,
+};
 pub use state::{
     BootRom, CoreConfig, CoreInfo, IoReg, JoypadBounce, Keys, Model, PpuStatus, Registers,
     Rendering, RtcMode, WriteTracking,

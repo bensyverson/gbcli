@@ -8,11 +8,12 @@
 //! after the instruction that made the access.
 
 use gbcli_core::{
-    Access, CoreError, Feature, FrameTag, Hit, Hits, RunRequest, Stop, StopReason, Ticks, Usage,
+    Access, CoreError, CpuStep, Event, Feature, FrameTag, Hit, Hits, RunRequest, Stop, StopReason,
+    Ticks, Usage,
 };
 use sameboy_sys as sb;
 
-use crate::hooks::{Hooks, vblank_kind};
+use crate::hooks::{Hooks, on_exec, vblank_kind};
 use crate::watch::{self, Armed};
 use crate::{SameBoy, unsupported_err};
 
@@ -23,10 +24,11 @@ struct Arming {
     hooks: *mut Hooks,
     read: bool,
     write: bool,
+    exec: bool,
 }
 
 impl Arming {
-    fn new(core: &mut SameBoy, req: &RunRequest<'_>) -> Arming {
+    fn new(core: &mut SameBoy, req: &RunRequest<'_>, exec: bool) -> Arming {
         let gb = core.raw();
         let read = !req.read.is_empty();
         let write = !(req.write.is_empty() && req.veto.is_empty() && req.stores.is_empty());
@@ -48,12 +50,16 @@ impl Arming {
             if write {
                 sb::GB_set_write_memory_callback(gb, Some(watch::on_write));
             }
+            if exec {
+                sb::GB_set_execution_callback(gb, Some(on_exec));
+            }
         }
         Arming {
             gb,
             hooks,
             read,
             write,
+            exec,
         }
     }
 
@@ -76,15 +82,25 @@ impl Drop for Arming {
             if self.write && !hooks.write_hook_wanted() {
                 sb::GB_set_write_memory_callback(self.gb, None);
             }
+            if self.exec {
+                hooks.executed = None;
+                sb::GB_set_execution_callback(self.gb, None);
+            }
         }
     }
 }
 
 pub(crate) fn run(core: &mut SameBoy, req: &mut RunRequest<'_>) -> Result<Stop, CoreError> {
-    if req.sink.is_some() {
-        return Err(unsupported_err(Feature::EventSinks));
+    let kinds = req
+        .sink
+        .as_ref()
+        .map(|sink| sink.kinds())
+        .unwrap_or_default();
+    if kinds.raster {
+        return Err(unsupported_err(Feature::RasterEvents));
     }
-    let arming = Arming::new(core, req);
+    let exec_events = kinds.exec;
+    let arming = Arming::new(core, req, exec_events);
     let check_exec = !req.exec.is_empty();
     let tapping = core.hooks().apu_log.is_some() || core.hooks().audio.is_some();
     let gb = core.raw();
@@ -132,8 +148,37 @@ pub(crate) fn run(core: &mut SameBoy, req: &mut RunRequest<'_>) -> Result<Stop, 
             hooks.step_ticks = ticks;
         }
 
+        let before = exec_events.then(|| {
+            core.hooks_mut().executed = None;
+            // SAFETY: plain reads of a live instance outside GB_run.
+            unsafe { ((*regs).sp, sb::gbcli_bank_for(gb, pc)) }
+        });
+
         // SAFETY: no reference into the hooks is alive across this call.
         let ticks = u64::from(unsafe { sb::GB_run(gb) });
+        if let (Some((sp_before, bank)), Some(sink)) = (before, req.sink.as_mut()) {
+            // SAFETY: plain reads of a live instance outside GB_run.
+            let (sp_after, next_pc, double_speed) =
+                unsafe { ((*regs).sp, (*regs).pc, sb::gbcli_double_speed(gb)) };
+            // SAFETY: a side-effect-free accessor on a live instance outside GB_run.
+            let next_bank = unsafe { sb::gbcli_bank_for(gb, next_pc) };
+            let step = match core.hooks().executed {
+                Some(opcode) => CpuStep::Instruction { opcode },
+                None if sp_after == sp_before.wrapping_sub(2) => CpuStep::Interrupt,
+                None => CpuStep::Idle,
+            };
+            sink.event(Event::Exec {
+                pc,
+                bank,
+                step,
+                ticks: ticks as u32,
+                sp_before,
+                sp_after,
+                next_pc,
+                next_bank,
+                double_speed,
+            });
+        }
         core.ticks += ticks;
         used.ticks += ticks;
         used.instructions += 1;

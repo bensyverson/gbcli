@@ -113,7 +113,7 @@ fn unsupported_features_say_no_with_a_reason() {
         Feature::ExtraOam,
         Feature::ApuInternals,
         Feature::Mmm01RomPatch,
-        Feature::EventSinks,
+        Feature::RasterEvents,
     ] {
         assert!(
             matches!(core.supports(feature), Support::No { reason } if !reason.is_empty()),

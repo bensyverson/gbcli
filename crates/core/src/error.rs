@@ -36,8 +36,11 @@ pub enum Feature {
     ExecHookCoversInterrupts,
     /// ROM patches on MMM01 carts, which rotate their ROM in memory.
     Mmm01RomPatch,
-    /// Event sinks (taps and the profiler) on a run.
+    /// Event sinks on a run, with [`Event::Exec`](crate::Event::Exec) for
+    /// every CPU step (the profiler).
     EventSinks,
+    /// PPU mode, scanline and IO-write events on a run (the raster timeline).
+    RasterEvents,
     /// The live, partly drawn framebuffer (`Core::live_frame`).
     LiveFrame,
     /// The core's color mode and its RGB output for a CGB color
@@ -64,6 +67,7 @@ impl Feature {
             Feature::ExecHookCoversInterrupts => "exec_hook_covers_interrupts",
             Feature::Mmm01RomPatch => "mmm01_rom_patch",
             Feature::EventSinks => "event_sinks",
+            Feature::RasterEvents => "raster_events",
             Feature::LiveFrame => "live_frame",
             Feature::DisplayColors => "display_colors",
         }

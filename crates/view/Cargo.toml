@@ -14,3 +14,6 @@ png.workspace = true
 [dev-dependencies]
 gbcli-sameboy.workspace = true
 sameboy-sys.workspace = true
+
+[lints]
+workspace = true

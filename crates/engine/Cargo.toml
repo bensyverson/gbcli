@@ -12,3 +12,6 @@ gbcli-protocol.workspace = true
 gbcli-sameboy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+
+[lints]
+workspace = true

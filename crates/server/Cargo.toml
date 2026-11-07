@@ -14,3 +14,6 @@ gbcli-protocol.workspace = true
 gbcli-view.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+
+[lints]
+workspace = true

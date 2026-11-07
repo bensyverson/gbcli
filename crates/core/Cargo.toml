@@ -8,3 +8,6 @@ publish.workspace = true
 
 [lib]
 name = "gbcli_core"
+
+[lints]
+workspace = true

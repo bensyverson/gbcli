@@ -14,3 +14,6 @@ gbcli-bundle.workspace = true
 gbcli-core.workspace = true
 gbcli-protocol.workspace = true
 serde_json.workspace = true
+
+[lints]
+workspace = true

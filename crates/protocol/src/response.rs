@@ -162,6 +162,9 @@ pub struct ResultBody {
     /// Idle sessions `prune` kept because they hold named checkpoints.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kept: Option<Vec<String>>,
+    /// Idle sessions `prune` skipped because another process held their lock.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub busy: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub removed: Option<String>,
 }

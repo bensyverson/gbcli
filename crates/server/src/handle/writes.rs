@@ -1,7 +1,7 @@
 use gbcli_bundle::{SessionStore, Start};
 use gbcli_core::Region;
 use gbcli_engine::addr::{self, RegionSizes, WriteTarget};
-use gbcli_engine::{LoadOptions, Machine, mem};
+use gbcli_engine::{Machine, mem};
 use gbcli_protocol::{
     ErrorBody, ErrorCode, Location, ResultBody, SessionFile, WriteArg, WriteArgs, WriteKind,
     WriteMade,
@@ -21,8 +21,7 @@ impl Handler {
         warnings: &mut Vec<String>,
     ) -> Result<ResultBody, Failure> {
         let need = Need::Start(Start::Boot);
-        let (mut machine, loaded) =
-            self.machine_for(store, meta, need, None, &LoadOptions::default())?;
+        let (mut machine, loaded) = self.machine_for(store, meta, need, None)?;
         warnings.extend(loaded);
         let writes = apply_writes(&mut machine, &args.writes)?;
         let change = HeadChange {
@@ -182,6 +181,7 @@ mod tests {
         let read = h.handle(&request(Op::Read(ReadArgs {
             reads: vec!["[$C002]".into()],
             since: None,
+            allow_uninit: false,
         })));
         let reads = read.outcome.unwrap().reads.unwrap();
         assert_eq!(reads[0].value, 2);

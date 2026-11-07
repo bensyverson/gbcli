@@ -13,6 +13,7 @@ use crate::bundle::{Bundle, now_secs, validate_name};
 use crate::error::StoreError;
 use crate::events::EVENTS_ROTATE_AT;
 use crate::io::{atomic_write, dir_size, io_at};
+use crate::session::new_incarnation;
 
 /// A session directory. `name` is validated when the store is made.
 #[derive(Clone, Debug)]
@@ -122,10 +123,20 @@ impl SessionStore {
         self.remove_locked()
     }
 
-    /// Deletes the session directory; the caller holds the lock.
+    /// Removes the session directory; the caller holds the lock. The
+    /// directory is first renamed into `removed/`, one atomic step, so a
+    /// process killed while deleting leaves no part of a session under its
+    /// name (a `session.json` without its head). Deleting is then best
+    /// effort: what is left goes with the next `rm` or `prune`.
     pub(crate) fn remove_locked(&self) -> Result<(), StoreError> {
+        self.bundle.sweep_removed();
         let dir = self.dir();
-        fs::remove_dir_all(&dir).map_err(io_at(&dir))
+        let removed = self.bundle.removed_dir();
+        fs::create_dir_all(&removed).map_err(io_at(&removed))?;
+        let aside = removed.join(format!("{}-{}", self.name, new_incarnation()));
+        fs::rename(&dir, &aside).map_err(io_at(&dir))?;
+        let _ = fs::remove_dir_all(&aside);
+        Ok(())
     }
 
     pub fn row(&self, meta: &SessionFile) -> Result<SessionRow, StoreError> {
@@ -185,7 +196,7 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
-    use crate::test_fixture::Fixture;
+    use crate::test_fixture::{DAY, Fixture};
 
     const SHORT: Duration = Duration::from_millis(20);
 
@@ -237,5 +248,59 @@ mod tests {
         let store = f.bundle.session("typo").unwrap();
         fs::create_dir_all(store.dir()).unwrap();
         assert!(!store.exists());
+    }
+
+    #[test]
+    fn listing_skips_directories_that_are_not_sessions() {
+        let f = Fixture::new("list-strays");
+        f.demo();
+        for stray in ["Bad_Name", "typo"] {
+            fs::create_dir_all(f.bundle.sessions_dir().join(stray)).unwrap();
+        }
+        let rows = f.bundle.list().unwrap();
+        let names: Vec<&str> = rows.iter().map(|r| r.name.as_str()).collect();
+        assert_eq!(names, vec!["demo"]);
+        let StoreError::NoSession { known, .. } = f.bundle.session("nope").unwrap().no_session()
+        else {
+            panic!()
+        };
+        assert_eq!(known, vec!["demo".to_string()], "only real sessions");
+    }
+
+    #[test]
+    fn a_removal_that_stops_midway_leaves_nothing_under_the_sessions_name() {
+        use gbcli_protocol::Rev;
+        use std::os::unix::fs::PermissionsExt;
+        let f = Fixture::new("rm-midway");
+        let store = f.demo();
+        let machine = store.machine(&store.read_meta().unwrap()).unwrap();
+        let mut meta = store.read_meta().unwrap();
+        store
+            .write_head(&machine.capture(Default::default()), Rev(1), None)
+            .unwrap();
+        meta.rev = Rev(1);
+        store.write_meta(&meta).unwrap();
+        // The head can't be unlinked, so deleting the files stops partway,
+        // as a kill would stop it.
+        let mode = |dir: &Path, mode| {
+            fs::set_permissions(dir, fs::Permissions::from_mode(mode)).unwrap();
+        };
+        mode(&store.history_dir(), 0o555);
+        let result = store.remove(true, SHORT);
+        let moved: Vec<PathBuf> = fs::read_dir(f.bundle.removed_dir())
+            .map(|d| d.map(|e| e.unwrap().path()).collect())
+            .unwrap_or_default();
+        for dir in &moved {
+            mode(&dir.join("history"), 0o755);
+        }
+        if store.history_dir().exists() {
+            mode(&store.history_dir(), 0o755);
+        }
+        assert!(result.is_ok(), "{result:?}");
+        assert!(!store.dir().exists(), "part of the session is left");
+        assert_eq!(moved.len(), 1, "{moved:?}");
+        // What the removal couldn't delete goes with the next prune.
+        f.bundle.prune(DAY, SHORT).unwrap();
+        assert!(!f.bundle.removed_dir().exists());
     }
 }

@@ -81,6 +81,9 @@ pub struct EventLogLine {
     /// The op and its args, spelled as in the request (design §10).
     #[serde(flatten)]
     pub op: Op,
+    /// The request's `allow_rom_change` (design §6: a forced load is logged).
+    #[serde(default, skip_serializing_if = "crate::request::is_false")]
+    pub allow_rom_change: bool,
     pub ok: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub code: Option<ErrorCode>,
@@ -163,9 +166,9 @@ mod tests {
             actor: Some("claude".into()),
             op: Op::Run(RunArgs {
                 frames: Some(3),
-                allow_rom_change: true,
                 ..RunArgs::default()
             }),
+            allow_rom_change: true,
             ok: true,
             code: None,
             rev_before: Rev(1),
@@ -176,7 +179,10 @@ mod tests {
         let json = serde_json::to_value(&line).unwrap();
         assert_eq!(json["op"], "run");
         assert_eq!(json["args"]["frames"], 3);
-        assert_eq!(json["args"]["allow_rom_change"], true);
+        assert_eq!(
+            json["allow_rom_change"], true,
+            "beside the op, as in the request"
+        );
         assert_eq!(serde_json::from_value::<EventLogLine>(json).unwrap(), line);
     }
 
@@ -186,6 +192,7 @@ mod tests {
             at: 1,
             actor: Some("claude".into()),
             op: Op::Show,
+            allow_rom_change: false,
             ok: true,
             code: None,
             rev_before: Rev(1),

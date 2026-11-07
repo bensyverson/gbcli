@@ -28,6 +28,7 @@ fn read_one(h: &mut Handler, expr: &str) -> i64 {
     let response = h.handle(&request(Op::Read(ReadArgs {
         reads: vec![expr.into()],
         since: None,
+        allow_uninit: false,
     })));
     assert!(response.is_ok(), "{:?}", response.error());
     response.outcome.unwrap().reads.unwrap()[0].value
@@ -103,11 +104,12 @@ fn run_allow_rom_change_loads_the_head_over_a_rebuild() {
         Some(ErrorCode::RomChanged)
     );
 
-    let forced = handler(&f).handle(&request(Op::Run(RunArgs {
+    let mut run = request(Op::Run(RunArgs {
         frames: Some(1),
-        allow_rom_change: true,
         ..RunArgs::default()
-    })));
+    }));
+    run.allow_rom_change = true;
+    let forced = handler(&f).handle(&run);
     assert!(forced.is_ok(), "{:?}", forced.error());
     assert!(!forced.warnings.is_empty(), "a forced load warns");
 }
@@ -122,10 +124,9 @@ fn restore_over_a_rebuild_does_not_load_the_head_first() {
     })));
     assert!(made.is_ok());
     f.rebuild(V2, V2_SYM);
-    let restored = handler(&f).handle(&request(Op::Restore(RestoreArgs {
-        name: "a".into(),
-        allow_rom_change: true,
-    })));
+    let mut restore = request(Op::Restore(RestoreArgs { name: "a".into() }));
+    restore.allow_rom_change = true;
+    let restored = handler(&f).handle(&restore);
     assert!(restored.is_ok(), "{:?}", restored.error());
     assert!(!restored.warnings.is_empty(), "a forced load warns");
 }

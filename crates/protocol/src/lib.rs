@@ -11,6 +11,7 @@ mod response;
 mod rev;
 mod session;
 mod stop;
+mod strict;
 mod views;
 
 pub use checkpoint::{

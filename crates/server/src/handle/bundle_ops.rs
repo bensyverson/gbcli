@@ -44,6 +44,7 @@ impl Handler {
                 ResultBody {
                     pruned: Some(report.removed),
                     kept: Some(report.kept),
+                    busy: Some(report.busy),
                     ..ResultBody::default()
                 },
             ),

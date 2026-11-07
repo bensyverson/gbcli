@@ -54,6 +54,7 @@ fn a_thousand_steps_leave_no_threads_behind() {
         session: None,
         actor: None,
         rev: None,
+        allow_rom_change: false,
         op: Op::Step(StepArgs {
             unit: StepKind::Instruction,
         }),

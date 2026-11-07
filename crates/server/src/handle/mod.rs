@@ -4,6 +4,7 @@
 
 mod bundle_ops;
 mod config;
+mod failure;
 mod head;
 mod history;
 mod log;
@@ -15,14 +16,13 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
-use gbcli_bundle::{Bundle, LOCK_WAIT, SessionStore, Start};
-use gbcli_engine::{DebugError, LoadOptions, Machine};
-use gbcli_protocol::{
-    ErrorBody, ErrorCode, Op, Request, Response, ResultBody, Rev, SessionFile, StopRecord,
-};
+use gbcli_bundle::{Bundle, FilesStamp, LOCK_WAIT, SessionStore, Start};
+use gbcli_engine::{LoadOptions, Machine};
+use gbcli_protocol::{ErrorBody, ErrorCode, Op, Request, Response, ResultBody, Rev, SessionFile};
 
-use crate::convert::{self, Gap, debug as debug_body};
+use crate::convert;
 use crate::watchdog::{WALL_GUARD, Watchdog};
+use failure::Failure;
 use head::{HeadChange, save_head};
 
 /// One server side: a project's bundle, a default session and actor, and the
@@ -32,6 +32,10 @@ pub struct Handler {
     default_session: Option<String>,
     default_actor: Option<String>,
     warm: Option<Warm>,
+    /// Where the current request's machine came from, for [`Handler::keep_warm`].
+    loaded: Option<Loaded>,
+    /// How the current request loads a stored state: its `allow_rom_change`.
+    load: LoadOptions,
     watchdog: Watchdog,
     wall_guard: Duration,
     /// The current request's interrupt flag, which the watchdog sets when
@@ -41,60 +45,27 @@ pub struct Handler {
 
 /// The machine left by the last request, and which head it is: a session
 /// removed and created again has the same name and may reach the same rev,
-/// but never the same incarnation.
+/// but never the same incarnation. It is reused only while the ROM and `.sym`
+/// are the files it was built from, and only when it is exactly what a cold
+/// load of that head, with no flags, would build (design §1).
 struct Warm {
     session: String,
     incarnation: u64,
     rev: Rev,
+    files: FilesStamp,
     machine: Machine,
 }
 
-/// A failed request: its body, and the gap-ledger entry it deserves.
-struct Failure {
-    /// Boxed: a stop record makes an `ErrorBody` large, and every `Result`
-    /// here pays for its error type on the stack.
-    body: Box<ErrorBody>,
-    gap: Option<Gap>,
-}
-
-impl Failure {
-    fn new(body: ErrorBody) -> Self {
-        Failure {
-            body: Box::new(body),
-            gap: None,
-        }
-    }
-
-    /// The same failure, carrying the stop record of the run it followed.
-    fn with_stop(mut self, stop: StopRecord) -> Self {
-        self.body = Box::new((*self.body).with_stop(stop));
-        self
-    }
-
-    /// A core failure, with its gap-ledger entry when it is `Unsupported`.
-    fn from_core(error: &gbcli_core::CoreError) -> Self {
-        Failure {
-            body: Box::new(convert::core_error(error)),
-            gap: convert::gap_of_core(error),
-        }
-    }
-
-    fn from_store(error: &gbcli_bundle::StoreError) -> Self {
-        Failure::new(convert::store(error))
-    }
-
-    fn from_debug(error: &DebugError) -> Self {
-        Failure {
-            body: Box::new(debug_body(error)),
-            gap: convert::gap_of(error),
-        }
-    }
-}
-
-impl From<ErrorBody> for Failure {
-    fn from(body: ErrorBody) -> Self {
-        Failure::new(body)
-    }
+/// How the current request's machine was obtained.
+struct Loaded {
+    files: FilesStamp,
+    /// The head's rev when it was loaded: a request that saved has moved it.
+    rev: Rev,
+    /// Whether the machine is the head as a flagless cold load builds it, with
+    /// nothing to report. A load that warned (a compatible rebuild, another
+    /// core commit) or that `--allow-rom-change` forced is not: reusing it
+    /// would hide the warning, or carry the flag into requests without it.
+    exact: bool,
 }
 
 /// How a request gets its machine.
@@ -123,6 +94,8 @@ impl Handler {
             default_session,
             default_actor,
             warm: None,
+            loaded: None,
+            load: LoadOptions::default(),
             watchdog: Watchdog::new(),
             wall_guard: WALL_GUARD,
             interrupt: Arc::new(AtomicBool::new(false)),
@@ -205,6 +178,10 @@ impl Handler {
             );
         }
 
+        self.load = LoadOptions {
+            allow_rom_change: request.allow_rom_change,
+            ..LoadOptions::default()
+        };
         let mut warnings: Vec<String> = Vec::new();
         let outcome = self.dispatch(&store, &mut meta, request, &actor, &mut warnings);
         self.log(
@@ -223,11 +200,11 @@ impl Handler {
         match &request.op {
             Op::Run(args) => self.run(store, meta, args, actor, warnings),
             Op::Step(args) => self.step(store, meta, args, actor, warnings),
-            Op::Show => self.show(store, meta),
-            Op::Read(args) => self.read(store, meta, args),
-            Op::Break(args) => self.breakpoint(store, meta, args),
-            Op::Watch(args) => self.watch(store, meta, args),
-            Op::Delete(args) => self.delete(store, meta, args),
+            Op::Show => self.show(store, meta, warnings),
+            Op::Read(args) => self.read(store, meta, args, warnings),
+            Op::Break(args) => self.breakpoint(store, meta, args, warnings),
+            Op::Watch(args) => self.watch(store, meta, args, warnings),
+            Op::Delete(args) => self.delete(store, meta, args, warnings),
             Op::Checkpoint(args) => self.checkpoint(store, meta, args, actor, warnings),
             Op::Restore(args) => self.restore(store, meta, args, actor, warnings),
             Op::Undo => self.undo(store, meta, actor, warnings),
@@ -244,16 +221,17 @@ impl Handler {
     }
 
     /// The machine a request starts from: warm when it is this session's
-    /// head, else rebuilt. `load` governs loading a stored state (the head or
-    /// `at`): `--allow-rom-change` reaches here.
+    /// head over unchanged files, else rebuilt. A stored state (the head or
+    /// `at`) loads with the request's options: `allow_rom_change` reaches here.
     fn machine_for(
         &mut self,
         store: &SessionStore,
         meta: &SessionFile,
         need: Need,
         at: Option<&str>,
-        load: &LoadOptions,
     ) -> Result<(Machine, Vec<String>), Failure> {
+        let load = &self.load;
+        self.loaded = None;
         let cold = matches!(need, Need::Start(Start::PowerOn));
         let warm = self.warm.take().filter(|w| {
             at.is_none()
@@ -263,24 +241,48 @@ impl Handler {
                 && w.incarnation == meta.incarnation
                 && w.rev == meta.rev
         });
-        let (mut machine, warnings) = match (warm, need) {
-            (Some(warm), _) => Ok((warm.machine, Vec::new())),
-            (None, Need::Start(from)) => {
-                store.start_machine(meta, at, from, load, Some(&self.interrupt))
+        let warm = warm.and_then(|mut w| w.files.still_current().then_some(w));
+        let (mut machine, warnings, files) = match (warm, need) {
+            (Some(warm), _) => (warm.machine, Vec::new(), warm.files),
+            (None, need) => {
+                // Stamped before the files are read: a rebuild in between
+                // reads as a change next time.
+                let files = store.files_stamp(meta);
+                let (machine, warnings) = match need {
+                    Need::Start(from) => {
+                        store.start_machine(meta, at, from, load, Some(&self.interrupt))
+                    }
+                    Need::Head => store.head_or_power_on(meta, load),
+                    Need::Replace => store.machine(meta).map(|m| (m, Vec::new())),
+                }
+                .map_err(|e| Failure::from_store(&e))?;
+                (machine, warnings, files)
             }
-            (None, Need::Head) => store.head_or_power_on(meta, load),
-            (None, Need::Replace) => store.machine(meta).map(|m| (m, Vec::new())),
-        }
-        .map_err(|e| Failure::from_store(&e))?;
+        };
+        self.loaded = Some(Loaded {
+            files,
+            rev: meta.rev,
+            exact: warnings.is_empty(),
+        });
         *machine.debugger_config_mut() = meta.debugger.clone();
         Ok((machine, warnings))
     }
 
+    /// Keeps `machine` for the next request when it is the session's head as
+    /// a flagless cold load would build it: the request saved it as the head,
+    /// or loaded the head exactly.
     fn keep_warm(&mut self, store: &SessionStore, meta: &SessionFile, machine: Machine) {
+        let Some(loaded) = self.loaded.take() else {
+            return;
+        };
+        if !(loaded.exact || meta.rev != loaded.rev) {
+            return;
+        }
         self.warm = Some(Warm {
             session: store.name().to_string(),
             incarnation: meta.incarnation,
             rev: meta.rev,
+            files: loaded.files,
             machine,
         });
     }
@@ -303,6 +305,15 @@ mod test_support;
 
 #[cfg(test)]
 mod state_tests;
+
+#[cfg(test)]
+mod warm_tests;
+
+#[cfg(test)]
+mod review_tests;
+
+#[cfg(test)]
+mod rom_change_tests;
 
 #[cfg(test)]
 mod tests {

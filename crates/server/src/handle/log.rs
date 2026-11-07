@@ -52,6 +52,7 @@ impl Handler {
             at: gbcli_bundle::now_secs(),
             actor,
             op: request.op.clone(),
+            allow_rom_change: request.allow_rom_change,
             ok: response.is_ok(),
             code,
             rev_before,
@@ -110,18 +111,20 @@ mod tests {
         let f = Fixture::with_sym("log-args");
         assert!(run_frames(&mut handler(&f), 1).is_ok());
         f.rebuild(V2, V2_SYM);
-        let forced = handler(&f).handle(&request(Op::Run(RunArgs {
+        let mut run = request(Op::Run(RunArgs {
             frames: Some(2),
-            allow_rom_change: true,
             ..RunArgs::default()
-        })));
+        }));
+        run.allow_rom_change = true;
+        let forced = handler(&f).handle(&run);
         assert!(forced.is_ok(), "{:?}", forced.error());
         let rows = f.bundle.session("demo").unwrap().events(None).unwrap();
-        let Op::Run(args) = &rows.last().unwrap().op else {
-            panic!("{:?}", rows.last())
+        let row = rows.last().unwrap();
+        let Op::Run(args) = &row.op else {
+            panic!("{row:?}")
         };
         assert_eq!(args.frames, Some(2));
-        assert!(args.allow_rom_change, "--allow-rom-change isn't in the log");
+        assert!(row.allow_rom_change, "--allow-rom-change isn't in the log");
     }
 
     #[test]
@@ -159,6 +162,7 @@ mod tests {
             Op::Read(ReadArgs {
                 reads: vec!["[$FEA0]".into()],
                 since: None,
+                allow_uninit: false,
             })
         };
         let mut other = request(read());

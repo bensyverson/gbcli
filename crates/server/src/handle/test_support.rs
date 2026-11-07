@@ -15,6 +15,7 @@ pub(super) fn request(op: Op) -> Request {
         session: None,
         actor: None,
         rev: None,
+        allow_rom_change: false,
         op,
     }
 }

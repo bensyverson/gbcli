@@ -33,12 +33,18 @@ pub(super) fn save_head(
     store
         .write_head(&cp, rev, change.walk.as_ref())
         .map_err(|e| Failure::from_store(&e))?;
-    meta.rev = rev;
-    meta.last_stop = change.stop.cloned();
-    meta.undo = change.walk;
-    meta.debugger = machine.debugger_config().clone();
+    // `meta` changes only once the write has landed: the response and the
+    // event log report its rev, which must be what the disk says.
+    let saved = SessionFile {
+        rev,
+        last_stop: change.stop.cloned(),
+        undo: change.walk,
+        debugger: machine.debugger_config().clone(),
+        ..meta.clone()
+    };
     store
-        .write_meta(meta)
+        .write_meta(&saved)
         .map_err(|e| Failure::from_store(&e))?;
+    *meta = saved;
     Ok(())
 }

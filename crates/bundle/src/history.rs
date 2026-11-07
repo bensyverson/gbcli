@@ -64,9 +64,12 @@ impl SessionStore {
             Some(walk) => (walk.restored, walk.origin),
             None => (meta.rev, meta.rev),
         };
+        // `from` is the head, or the entry the walk restored last: either
+        // way the oldest kept once nothing precedes it.
         let past = || StoreError::UndoPastOldest {
             name: self.name().to_string(),
-            oldest: self.oldest_entry(meta.rev),
+            head: meta.rev,
+            oldest: (from.0 >= 1).then_some(from),
         };
         let target = from
             .0
@@ -84,14 +87,6 @@ impl SessionStore {
             Ok(None) | Err(StoreError::HeadMissing { .. }) => Err(past()),
             Err(e) => Err(e),
         }
-    }
-
-    /// The oldest stored entry at or before `head`.
-    fn oldest_entry(&self, head: Rev) -> Option<Rev> {
-        self.history_revs()
-            .into_iter()
-            .find(|&rev| rev >= 1 && rev <= head.0)
-            .map(Rev)
     }
 
     /// A checkpoint by name, or `~N` for the head N revisions back.

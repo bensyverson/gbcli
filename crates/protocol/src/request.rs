@@ -23,6 +23,11 @@ pub struct Request {
     /// The revision the caller read; a mutation may pass it (design §5).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rev: Option<Rev>,
+    /// Load a stored state (the head, `--at`, a checkpoint, a history entry)
+    /// under a rebuilt ROM even when the rebuilt-ROM check refuses it
+    /// (design §6). One field for every op that loads a state.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub allow_rom_change: bool,
     #[serde(flatten)]
     pub op: Op,
 }
@@ -117,8 +122,6 @@ pub struct RunArgs {
     pub checkpoint: Option<String>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub allow_uninit: bool,
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub allow_rom_change: bool,
 }
 
 /// Where a run starts when it doesn't start from the head (design §9).
@@ -158,7 +161,7 @@ mod since_word {
     }
 }
 
-fn is_false(b: &bool) -> bool {
+pub(crate) fn is_false(b: &bool) -> bool {
     !*b
 }
 
@@ -181,6 +184,10 @@ pub struct ReadArgs {
     /// What `frame` and `t` count from (design §9).
     #[serde(default, skip_serializing_if = "Option::is_none", with = "since_word")]
     pub since: Option<TimeBase>,
+    /// Read never-written bytes as their power-on values, with a warning
+    /// (design §8), instead of failing with `uninitialized_read`.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub allow_uninit: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -218,8 +225,6 @@ pub struct CheckpointArgs {
 #[serde(deny_unknown_fields)]
 pub struct RestoreArgs {
     pub name: String,
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub allow_rom_change: bool,
 }
 
 /// Which of the three writes (design §4).
@@ -351,6 +356,19 @@ mod tests {
             };
             assert_eq!(args.since, Some(base));
         }
+    }
+
+    #[test]
+    fn allow_rom_change_rides_on_the_request_not_its_args() {
+        let line = r#"{"id":"1","allow_rom_change":true,"op":"show"}"#;
+        let request = parse(line);
+        assert!(request.allow_rom_change);
+        assert_eq!(serde_json::to_string(&request).unwrap(), line);
+        let old = r#"{"id":"1","op":"run","args":{"allow_rom_change":true}}"#;
+        assert!(
+            serde_json::from_str::<Request>(old).is_err(),
+            "no twin in the args"
+        );
     }
 
     #[test]

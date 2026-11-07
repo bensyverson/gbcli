@@ -182,6 +182,7 @@ mod tests {
 
     fn line(actor: &str, op: Op, before: u64, after: u64) -> EventLogLine {
         EventLogLine {
+            allow_rom_change: false,
             at: 0,
             actor: Some(actor.into()),
             op,

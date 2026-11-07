@@ -6,7 +6,7 @@ mod budget;
 
 use gbcli_bundle::{SessionStore, Start, validate_checkpoint_name};
 use gbcli_core::Budget;
-use gbcli_engine::{DebugError, LoadOptions, Machine, Outcome, RunOptions};
+use gbcli_engine::{DebugError, Machine, Outcome, RunOptions};
 use gbcli_protocol::{
     ErrorBody, ErrorCode, Location, ResultBody, RunArgs, SessionFile, StepArgs, StepKind,
     StopReason, StopRecord,
@@ -60,12 +60,8 @@ impl Handler {
 
         // What needs the machine's symbols and sizes. A refusal here hands
         // the machine back untouched.
-        let load = LoadOptions {
-            allow_rom_change: args.allow_rom_change,
-            ..LoadOptions::default()
-        };
         let (mut machine, loaded) =
-            self.machine_for(store, meta, Need::Start(from), args.at.as_deref(), &load)?;
+            self.machine_for(store, meta, Need::Start(from), args.at.as_deref())?;
         warnings.extend(loaded);
         let plan = match plan_of(&machine, args) {
             Ok(plan) => plan,
@@ -194,8 +190,7 @@ impl Handler {
             )));
         }
         let need = Need::Start(Start::Boot);
-        let (mut machine, loaded) =
-            self.machine_for(store, meta, need, None, &LoadOptions::default())?;
+        let (mut machine, loaded) = self.machine_for(store, meta, need, None)?;
         warnings.extend(loaded);
         let budget = match args.unit {
             StepKind::Frame => Budget::frames(1),

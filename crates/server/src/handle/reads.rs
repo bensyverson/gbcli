@@ -1,7 +1,5 @@
 use gbcli_bundle::SessionStore;
-use gbcli_engine::{
-    LoadOptions, Machine, Since, cond::Condition, cond::EvalCtx, cond::EvalWarning,
-};
+use gbcli_engine::{Machine, Since, cond::Condition, cond::EvalCtx, cond::EvalWarning};
 use gbcli_protocol::{
     EventsArgs, PpuView, ReadArgs, ReadValue, RegistersView, ResultBody, SessionFile, TimeBase,
     TimeMark,
@@ -14,9 +12,10 @@ impl Handler {
         &mut self,
         store: &SessionStore,
         meta: &SessionFile,
+        warnings: &mut Vec<String>,
     ) -> Result<ResultBody, Failure> {
-        let (machine, _) =
-            self.machine_for(store, meta, Need::Head, None, &LoadOptions::default())?;
+        let (machine, loaded) = self.machine_for(store, meta, Need::Head, None)?;
+        warnings.extend(loaded);
         let result = ResultBody {
             registers: Some(RegistersView::of(&machine.core().registers())),
             ppu: Some(PpuView::of(&machine.core().ppu())),
@@ -46,12 +45,14 @@ impl Handler {
         store: &SessionStore,
         meta: &SessionFile,
         args: &ReadArgs,
+        warnings: &mut Vec<String>,
     ) -> Result<ResultBody, Failure> {
         let since = self.since(store, args.since.as_ref())?;
-        let (machine, _) =
-            self.machine_for(store, meta, Need::Head, None, &LoadOptions::default())?;
+        let (machine, loaded) = self.machine_for(store, meta, Need::Head, None)?;
+        warnings.extend(loaded);
         let compiled = compile_reads(&machine, &args.reads);
-        let reads = compiled.and_then(|c| eval_reads(&machine, &c, &since, false, &mut Vec::new()));
+        let reads =
+            compiled.and_then(|c| eval_reads(&machine, &c, &since, args.allow_uninit, warnings));
         self.keep_warm(store, meta, machine);
         let reads = reads?;
         Ok(ResultBody {
@@ -162,6 +163,7 @@ mod tests {
         let response = h.handle(&request(Op::Read(ReadArgs {
             reads: vec!["[$FEA0]".into()],
             since: None,
+            allow_uninit: false,
         })));
         let error = response.outcome.expect_err("FEA0 has no backing store");
         assert_eq!(error.code, ErrorCode::Unsupported);

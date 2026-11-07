@@ -1,5 +1,4 @@
 use gbcli_bundle::SessionStore;
-use gbcli_engine::LoadOptions;
 use gbcli_protocol::{
     BreakArgs, BreakpointMade, DeleteArgs, Deleted, ResultBody, SessionFile, WatchArgs, WatchMade,
 };
@@ -13,9 +12,10 @@ impl Handler {
         store: &SessionStore,
         meta: &mut SessionFile,
         args: &BreakArgs,
+        warnings: &mut Vec<String>,
     ) -> Result<ResultBody, Failure> {
-        let (mut machine, _) =
-            self.machine_for(store, meta, Need::Head, None, &LoadOptions::default())?;
+        let (mut machine, loaded) = self.machine_for(store, meta, Need::Head, None)?;
+        warnings.extend(loaded);
         let at = parse_location(&machine, &args.at)?;
         let id = machine
             .add_breakpoint(at.clone(), args.condition.as_deref())
@@ -43,9 +43,10 @@ impl Handler {
         store: &SessionStore,
         meta: &mut SessionFile,
         args: &WatchArgs,
+        warnings: &mut Vec<String>,
     ) -> Result<ResultBody, Failure> {
-        let (mut machine, _) =
-            self.machine_for(store, meta, Need::Head, None, &LoadOptions::default())?;
+        let (mut machine, loaded) = self.machine_for(store, meta, Need::Head, None)?;
+        warnings.extend(loaded);
         let at = parse_location(&machine, &args.at)?;
         let id = machine
             .add_watch(
@@ -82,9 +83,10 @@ impl Handler {
         store: &SessionStore,
         meta: &mut SessionFile,
         args: &DeleteArgs,
+        warnings: &mut Vec<String>,
     ) -> Result<ResultBody, Failure> {
-        let (mut machine, _) =
-            self.machine_for(store, meta, Need::Head, None, &LoadOptions::default())?;
+        let (mut machine, loaded) = self.machine_for(store, meta, Need::Head, None)?;
+        warnings.extend(loaded);
         let found = machine.delete(args.id);
         meta.debugger = machine.debugger_config().clone();
         store

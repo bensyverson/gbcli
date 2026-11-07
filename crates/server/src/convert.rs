@@ -4,7 +4,8 @@
 use gbcli_bundle::StoreError;
 use gbcli_core::{CoreError, Feature};
 use gbcli_engine::{
-    DebugError, addr::AddrError, cond::EvalError, cond::ExprError, core_code, eval_code, expr_code,
+    DebugError, SetupError, addr::AddrError, cond::EvalError, cond::ExprError, core_code,
+    eval_code, expr_code,
 };
 use gbcli_protocol::{ErrorBody, ErrorCode};
 
@@ -103,6 +104,17 @@ pub fn gap_of_core(e: &CoreError) -> Option<Gap> {
 pub fn gap_of_eval(e: &EvalError) -> Option<Gap> {
     match e {
         EvalError::Core(core) => gap_of_core(core),
+        _ => None,
+    }
+}
+
+/// The gap-ledger entry a store failure deserves: an `Unsupported` from the
+/// core while building the machine or running the boot ROM.
+pub fn gap_of_store(e: &StoreError) -> Option<Gap> {
+    match e {
+        StoreError::BootFailed(debug) => gap_of(debug),
+        StoreError::Setup(SetupError::Core(core)) => gap_of_core(core),
+        // No other store failure carries a core error.
         _ => None,
     }
 }

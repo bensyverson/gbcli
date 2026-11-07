@@ -67,7 +67,7 @@ impl Bundle {
 /// A value no earlier creation of a session by this name holds: host time in
 /// nanoseconds, mixed with the process id for two creations in one tick.
 /// Host time is fine here; it never reaches emulation.
-fn new_incarnation() -> u64 {
+pub(crate) fn new_incarnation() -> u64 {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_nanos() as u64);

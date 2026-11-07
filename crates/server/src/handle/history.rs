@@ -1,5 +1,5 @@
 use gbcli_bundle::{SessionStore, Start};
-use gbcli_engine::{LoadOptions, Machine, SaveMeta};
+use gbcli_engine::{Machine, SaveMeta};
 use gbcli_protocol::{
     CheckpointArgs, CheckpointMade, RestoreArgs, Restored, ResultBody, Rev, SessionFile,
 };
@@ -17,8 +17,7 @@ impl Handler {
         warnings: &mut Vec<String>,
     ) -> Result<ResultBody, Failure> {
         let need = Need::Start(Start::Boot);
-        let (machine, loaded) =
-            self.machine_for(store, meta, need, None, &LoadOptions::default())?;
+        let (machine, loaded) = self.machine_for(store, meta, need, None)?;
         warnings.extend(loaded);
         let made = write_checkpoint(store, &machine, &args.name, actor, meta.rev)?;
         self.keep_warm(store, meta, machine);
@@ -36,14 +35,11 @@ impl Handler {
         actor: &Option<String>,
         warnings: &mut Vec<String>,
     ) -> Result<ResultBody, Failure> {
-        let load = LoadOptions {
-            allow_rom_change: args.allow_rom_change,
-            ..LoadOptions::default()
-        };
+        let load = self.load.clone();
         let cp = store
             .checkpoint(&args.name)
             .map_err(|e| Failure::from_store(&e))?;
-        let (mut machine, _) = self.machine_for(store, meta, Need::Replace, None, &load)?;
+        let (mut machine, _) = self.machine_for(store, meta, Need::Replace, None)?;
         warnings.extend(
             store
                 .restore(&mut machine, &cp, &load)
@@ -78,8 +74,8 @@ impl Handler {
         let (cp, walk) = store
             .undo_target(meta)
             .map_err(|e| Failure::from_store(&e))?;
-        let load = LoadOptions::default();
-        let (mut machine, _) = self.machine_for(store, meta, Need::Replace, None, &load)?;
+        let load = self.load.clone();
+        let (mut machine, _) = self.machine_for(store, meta, Need::Replace, None)?;
         let frame = checkpoint_frame(&cp);
         warnings.extend(
             store
@@ -158,10 +154,7 @@ mod tests {
         );
         assert!(run_frames(&mut h, 2).is_ok());
 
-        let restored = h.handle(&request(Op::Restore(RestoreArgs {
-            name: "f2".into(),
-            allow_rom_change: false,
-        })));
+        let restored = h.handle(&request(Op::Restore(RestoreArgs { name: "f2".into() })));
         let restored = restored.outcome.unwrap().restored.unwrap();
         assert_eq!(restored.name.as_deref(), Some("f2"));
         assert_eq!(restored.frame, Some(2));

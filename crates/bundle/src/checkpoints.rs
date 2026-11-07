@@ -20,9 +20,15 @@ impl SessionStore {
     pub fn checkpoint(&self, name: &str) -> Result<Checkpoint, StoreError> {
         validate_checkpoint_name(name)?;
         let path = self.checkpoint_path(name);
-        let bytes = fs::read(&path).map_err(|_| StoreError::CheckpointMissing {
-            name: name.to_string(),
-            known: self.checkpoint_names().unwrap_or_default(),
+        let bytes = fs::read(&path).map_err(|e| match e.kind() {
+            std::io::ErrorKind::NotFound => StoreError::CheckpointMissing {
+                name: name.to_string(),
+                known: self.checkpoint_names().unwrap_or_default(),
+            },
+            _ => StoreError::Io {
+                path: path.clone(),
+                source: e,
+            },
         })?;
         Checkpoint::decode(&bytes).map_err(StoreError::Checkpoint)
     }
@@ -112,5 +118,25 @@ mod tests {
                 "{bad}: {err:?}"
             );
         }
+    }
+
+    #[test]
+    fn an_unreadable_checkpoint_is_an_io_failure_not_a_missing_one() {
+        use std::os::unix::fs::PermissionsExt;
+        let f = Fixture::new("checkpoint-eacces");
+        let store = f.demo();
+        let machine = store.machine(&store.read_meta().unwrap()).unwrap();
+        store
+            .write_checkpoint("a", &machine.capture(SaveMeta::default()))
+            .unwrap();
+        let path = store.checkpoint_path("a");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o000)).unwrap();
+        let err = store.checkpoint("a").unwrap_err();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+        assert_eq!(err.code(), gbcli_protocol::ErrorCode::IoFailed, "{err:?}");
+        assert!(matches!(
+            store.checkpoint("b"),
+            Err(StoreError::CheckpointMissing { .. })
+        ));
     }
 }

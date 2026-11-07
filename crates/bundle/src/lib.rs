@@ -14,6 +14,7 @@ mod lock;
 mod log;
 mod prune;
 mod session;
+mod stamp;
 mod store;
 #[cfg(test)]
 mod test_fixture;
@@ -27,4 +28,5 @@ pub use history::HISTORY_BACK;
 pub use lock::{LOCK_WAIT, SessionLock};
 pub use prune::{PruneReport, parse_duration};
 pub use session::RomSource;
+pub use stamp::FilesStamp;
 pub use store::SessionStore;

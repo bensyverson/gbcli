@@ -119,8 +119,29 @@ impl Bundle {
         SessionStore::new(self.clone(), name)
     }
 
-    /// Session names, sorted.
+    /// Where a removal moves a session directory before deleting it, so a
+    /// removal killed midway never leaves part of a session under its name.
+    pub(crate) fn removed_dir(&self) -> PathBuf {
+        self.root.join("removed")
+    }
+
+    /// Deletes what removals left in [`Bundle::removed_dir`], best effort.
+    pub(crate) fn sweep_removed(&self) {
+        let _ = fs::remove_dir_all(self.removed_dir());
+    }
+
+    /// The sessions: directories with a valid name and a `session.json`,
+    /// sorted. Anything else under `sessions/` is not a session.
     pub fn session_names(&self) -> Result<Vec<String>, StoreError> {
+        Ok(self
+            .session_dirs()?
+            .into_iter()
+            .filter(|name| self.session(name).is_ok_and(|s| s.exists()))
+            .collect())
+    }
+
+    /// Every directory under `sessions/`, sorted, session or not.
+    pub(crate) fn session_dirs(&self) -> Result<Vec<String>, StoreError> {
         let dir = self.sessions_dir();
         let entries = match fs::read_dir(&dir) {
             Ok(entries) => entries,
@@ -145,11 +166,14 @@ impl Bundle {
         Ok(names)
     }
 
-    /// One row per session, as `gbcli sessions` prints.
+    /// One row per session, as `gbcli sessions` prints; directories that
+    /// aren't sessions are left out.
     pub fn list(&self) -> Result<Vec<SessionRow>, StoreError> {
         let mut rows = Vec::new();
         for name in self.session_names()? {
-            let store = self.session(&name)?;
+            let Ok(store) = self.session(&name) else {
+                continue;
+            };
             let Ok(meta) = store.read_meta() else {
                 continue;
             };

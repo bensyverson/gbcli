@@ -7,8 +7,6 @@ use std::time::Duration;
 
 use gbcli_protocol::{ErrorCode, Rev};
 
-use crate::history::HISTORY_BACK;
-
 use gbcli_core::CoreError;
 use gbcli_engine::{CheckpointError, DebugError, LoadWarning, SetupError};
 
@@ -83,7 +81,9 @@ pub enum StoreError {
     /// `undo` with no earlier entry kept: the head is the oldest state.
     UndoPastOldest {
         name: String,
-        /// The oldest entry kept, if the session has any.
+        head: Rev,
+        /// The oldest entry kept, which the walk has reached; `None` before
+        /// the first head.
         oldest: Option<Rev>,
     },
     /// An `--at ~N` that isn't `~` and a number.
@@ -196,13 +196,22 @@ impl StoreError {
                 "this session has no earlier state; run it first".into()
             }
             StoreError::UndoPastOldest {
+                head,
                 oldest: Some(oldest),
                 ..
-            } => format!(
-                "the head is {oldest}, the oldest state kept ({HISTORY_BACK} heads back); \
-                 `run --from power-on` starts over, and `gbcli checkpoint <name>` keeps a state \
-                 for longer"
-            ),
+            } => {
+                let reached = if head == oldest {
+                    format!("the head, {head}, is the oldest state kept")
+                } else {
+                    format!(
+                        "undo has reached {oldest}, the oldest state kept, which the head, {head}, holds"
+                    )
+                };
+                format!(
+                    "{reached}; `run --from power-on` starts over, and `gbcli checkpoint <name>` \
+                     keeps a state for longer"
+                )
+            }
             StoreError::BadHistoryRef { .. } => {
                 "use ~N for the head N requests back, e.g. ~1".into()
             }

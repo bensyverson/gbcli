@@ -14,16 +14,21 @@ pub struct PruneReport {
     /// Idle sessions kept because they hold named checkpoints, which only
     /// `sessions rm --with-checkpoints` deletes.
     pub kept: Vec<String>,
+    /// Idle sessions skipped because another process held their lock past
+    /// the wait; the next prune tries them again.
+    pub busy: Vec<String>,
 }
 
 impl Bundle {
     /// Removes sessions whose last recorded use is older than `unused_for`.
-    /// Each is judged again under its lock, which it waits up to `wait` for.
+    /// Each is judged again under its lock, which it waits up to `wait` for;
+    /// one still held after that is skipped and reported as busy.
     pub fn prune(&self, unused_for: Duration, wait: Duration) -> Result<PruneReport, StoreError> {
         let cutoff = now_secs().saturating_sub(unused_for.as_secs());
         let idle = |store: &SessionStore| store.last_used().is_some_and(|t| t < cutoff);
         let mut report = PruneReport::default();
-        for name in self.session_names()? {
+        self.sweep_removed();
+        for name in self.session_dirs()? {
             // A directory whose name no session could have isn't ours.
             let Ok(store) = self.session(&name) else {
                 continue;
@@ -31,7 +36,14 @@ impl Bundle {
             if !idle(&store) {
                 continue;
             }
-            let _lock = store.acquire(wait)?;
+            let _lock = match store.acquire(wait) {
+                Ok(lock) => lock,
+                Err(StoreError::Busy { .. }) => {
+                    report.busy.push(name);
+                    continue;
+                }
+                Err(e) => return Err(e),
+            };
             // Judged again: a request may have used it while we waited.
             if !idle(&store) || !store.dir().is_dir() {
                 continue;
@@ -164,14 +176,22 @@ mod tests {
     }
 
     #[test]
-    fn pruning_waits_for_a_held_lock_then_reports_busy() {
+    fn pruning_skips_a_busy_session_and_reports_it_beside_the_ones_it_removed() {
         let f = Fixture::new("prune-busy");
         let store = f.demo();
-        let held = store.lock(SHORT).unwrap();
-        store.backdate_use(10 * DAY);
-        let err = f.bundle.prune(DAY, SHORT).unwrap_err();
-        assert!(matches!(err, StoreError::Busy { .. }), "{err:?}");
-        assert!(store.exists());
+        let idle = f.bundle.session("idle").unwrap();
+        idle.create(&f.source()).unwrap();
+        // "busy" sorts first: a prune that stops at it removes nothing.
+        let busy = f.bundle.session("busy").unwrap();
+        busy.create(&f.source()).unwrap();
+        let held = busy.lock(SHORT).unwrap();
+        for s in [&store, &idle, &busy] {
+            s.backdate_use(10 * DAY);
+        }
+        let report = f.bundle.prune(DAY, SHORT).unwrap();
+        assert_eq!(report.removed, vec!["demo".to_string(), "idle".to_string()]);
+        assert_eq!(report.busy, vec!["busy".to_string()]);
+        assert!(busy.exists());
         drop(held);
     }
 }

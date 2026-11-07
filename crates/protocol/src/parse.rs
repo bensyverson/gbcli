@@ -9,6 +9,7 @@ use serde_json::{Map, Value};
 
 use crate::request::{Op, Request};
 use crate::rev::Rev;
+use crate::strict::Strict;
 
 /// A request as read, before its op and args become an [`Op`]. Its own
 /// fields refuse strangers here, which `#[serde(flatten)]` can't do: a
@@ -24,26 +25,50 @@ pub(crate) struct WireRequest {
     actor: Option<String>,
     #[serde(default)]
     rev: Option<Rev>,
-    op: Value,
     #[serde(default)]
-    args: Option<Value>,
+    allow_rom_change: bool,
+    op: Value,
+    /// `null` reads as absent.
+    #[serde(default)]
+    args: Option<Strict>,
 }
 
 impl TryFrom<WireRequest> for Request {
     type Error = serde_json::Error;
 
     fn try_from(w: WireRequest) -> Result<Request, serde_json::Error> {
-        let mut tagged = Map::new();
-        tagged.insert("op".into(), w.op);
-        if let Some(args) = w.args {
-            tagged.insert("args".into(), args);
-        }
+        let build = |args: Option<Value>| {
+            let mut tagged = Map::new();
+            tagged.insert("op".into(), w.op.clone());
+            if let Some(args) = args {
+                tagged.insert("args".into(), args);
+            }
+            Op::deserialize(Value::Object(tagged))
+        };
+        // Absent, null and `{}` args mean the same: every field defaulted, or
+        // no args at all for a unit op. The first error is the one to report:
+        // it names a required field (`reads`) rather than `args`.
+        let args = w.args.map(|s| s.0);
+        let empty = match &args {
+            None => true,
+            Some(Value::Object(fields)) => fields.is_empty(),
+            Some(_) => false,
+        };
+        let op =
+            build(Some(args.unwrap_or_else(|| Value::Object(Map::new())))).or_else(|first| {
+                if empty {
+                    build(None).map_err(|_| first)
+                } else {
+                    Err(first)
+                }
+            })?;
         Ok(Request {
             id: w.id,
             session: w.session,
             actor: w.actor,
             rev: w.rev,
-            op: Op::deserialize(Value::Object(tagged))?,
+            allow_rom_change: w.allow_rom_change,
+            op,
         })
     }
 }
@@ -176,5 +201,64 @@ mod tests {
     #[test]
     fn a_line_without_an_id_is_refused() {
         assert!(parse_request(r#"{"op":"show"}"#).is_err());
+    }
+
+    fn op_of(line: &str) -> Op {
+        match parse_request(line) {
+            Ok(request) => request.op,
+            Err(e) => panic!("{line}: {e} ({})", e.remedy),
+        }
+    }
+
+    #[test]
+    fn args_may_be_left_out_or_null_when_every_field_has_a_default() {
+        use crate::request::{EventsArgs, StepArgs};
+        use crate::stop::StepKind;
+        for line in [
+            r#"{"id":"1","op":"run"}"#,
+            r#"{"id":"1","op":"run","args":null}"#,
+        ] {
+            assert_eq!(op_of(line), Op::Run(RunArgs::default()), "{line}");
+        }
+        let step = Op::Step(StepArgs {
+            unit: StepKind::Instruction,
+        });
+        assert_eq!(op_of(r#"{"id":"1","op":"step"}"#), step);
+        assert_eq!(
+            op_of(r#"{"id":"1","op":"events"}"#),
+            Op::Events(EventsArgs::default())
+        );
+    }
+
+    #[test]
+    fn a_unit_op_takes_empty_or_null_args() {
+        for line in [
+            r#"{"id":"1","op":"show","args":{}}"#,
+            r#"{"id":"1","op":"show","args":null}"#,
+            r#"{"id":"1","op":"undo","args":{}}"#,
+        ] {
+            assert!(parse_request(line).is_ok(), "{line}");
+        }
+        let err = parse_request(r#"{"id":"1","op":"show","args":{"x":1}}"#).unwrap_err();
+        assert!(
+            err.message.contains("x") || err.message.contains("args"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn an_op_with_a_required_arg_still_names_it_when_args_are_left_out() {
+        let err = parse_request(r#"{"id":"1","op":"read"}"#).unwrap_err();
+        assert!(err.message.contains("reads"), "{}", err.message);
+    }
+
+    #[test]
+    fn a_duplicate_key_inside_args_is_refused_as_at_the_top_level() {
+        assert!(parse_request(r#"{"id":"1","id":"2","op":"show"}"#).is_err());
+        let err =
+            parse_request(r#"{"id":"1","op":"run","args":{"frames":1,"frames":2}}"#).unwrap_err();
+        assert!(err.message.contains("frames"), "{}", err.message);
+        let nested = r#"{"id":"1","op":"write","args":{"writes":[{"kind":"poke","kind":"bus","target":"$C000","bytes":"01"}]}}"#;
+        assert!(parse_request(nested).is_err());
     }
 }

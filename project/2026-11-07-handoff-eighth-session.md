@@ -60,6 +60,8 @@ Ben was present at the start and for the battery-save ruling. Every commit below
 
 ## Needs Ben
 
+> **Update, 2026-11-07 (after the handoff was written): ruled.** Ben: install hUGETracker, or use GB Studio's embedded one, whichever is easiest. The pick is option 1, the 1.0.11 release's `uge2source` as a pinned corpus step; the details are in `pukTN6`'s last note. This is first in line for the next session.
+
 - **`pukTN6` (labeled `decision`):** how to get hUGETracker's own `.asm` export, the reference for criteria Nt1 and r4P. The options are in the leaf's last note:
   1. Recommended: fetch the hUGETracker 1.0.11 macOS release and run its `uge2source` (an x86_64 binary, so Rosetta) as a corpus step.
   2. Build `uge2source` with FPC and Lazarus.

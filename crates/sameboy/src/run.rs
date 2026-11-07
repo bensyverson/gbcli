@@ -150,12 +150,17 @@ pub(crate) fn run(core: &mut SameBoy, req: &mut RunRequest<'_>) -> Result<Stop, 
         // By default a run never stops on an execution hit before its first
         // step, so resuming from a breakpoint makes progress. In HALT or
         // STOP, PC already points past it, but the next step is an idle tick
-        // (or a wake, which SameBoy never folds into running that instruction).
+        // or a wake that doesn't run that instruction, except at the end of a
+        // CGB speed switch's pause: there the step that ends the pause runs
+        // it too (`GB_cpu_run`), so the hit is due before that step.
         if check_exec
             && (used.instructions > 0 || req.first_step == FirstStep::Check)
             && req.exec.may_match(pc)
             // SAFETY: plain reads of a live instance outside GB_run.
-            && !unsafe { sb::gbcli_halted(gb) || sb::gbcli_stopped(gb) }
+            && !unsafe {
+                (sb::gbcli_halted(gb) && !sb::gbcli_speed_switch_halt_ends_into_pc(gb))
+                    || sb::gbcli_stopped(gb)
+            }
         {
             // SAFETY: side-effect-free accessors.
             let bank = unsafe { sb::gbcli_bank_for(gb, pc) };

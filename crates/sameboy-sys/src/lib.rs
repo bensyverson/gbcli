@@ -244,6 +244,10 @@ unsafe extern "C" {
     pub fn gbcli_set_halted(gb: *mut GB_gameboy_t, halted: bool);
     pub fn gbcli_stopped(gb: *mut GB_gameboy_t) -> bool;
     pub fn gbcli_double_speed(gb: *mut GB_gameboy_t) -> bool;
+    /// In the HALT a CGB speed switch enters, which ends on its own countdown.
+    pub fn gbcli_speed_switch_halt(gb: *mut GB_gameboy_t) -> bool;
+    /// The next `GB_run` ends that HALT and runs the instruction at PC.
+    pub fn gbcli_speed_switch_halt_ends_into_pc(gb: *mut GB_gameboy_t) -> bool;
     pub fn gbcli_is_mmm01(gb: *mut GB_gameboy_t) -> bool;
     pub fn gbcli_clear_rtc_epoch(gb: *mut GB_gameboy_t);
     pub fn gbcli_ppu_batched(gb: *mut GB_gameboy_t) -> bool;

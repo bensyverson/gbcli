@@ -30,8 +30,8 @@ pub use run::{
     RunRequest, StepUnit, Usage,
 };
 pub use state::{
-    BootRom, CoreConfig, CoreInfo, IoReg, JoypadBounce, Keys, Model, PpuStatus, Registers,
-    Rendering, RtcMode, WriteTracking,
+    BootRom, CoreConfig, CoreInfo, HaltWake, IoReg, JoypadBounce, Keys, Model, PpuStatus,
+    Registers, Rendering, RtcMode, WriteTracking,
 };
 pub use stop::{Access, Hit, Hits, Stop, StopReason};
 pub use time::Ticks;
@@ -57,6 +57,15 @@ pub trait Core {
     /// Whether the CPU is in STOP, which only a key in a selected joypad row
     /// ends. PC already points past STOP, as it does in HALT.
     fn in_stop(&self) -> bool;
+    /// What ends the CPU's HALT, or `None` outside HALT (and in STOP)
+    /// ([`Feature::HaltWake`]). The default is for a core without it, so
+    /// adding this method broke no backend.
+    fn halt_wake(&self) -> Result<Option<HaltWake>, CoreError> {
+        Err(CoreError::Unsupported {
+            feature: Feature::HaltWake,
+            reason: "this core doesn't say what ends its HALT",
+        })
+    }
     /// A region's raw backing bytes and its current bank. For ROM, the bank
     /// is the one mapped at 4000-7FFF; see [`rom0_bank`](Core::rom0_bank).
     fn region(&self, region: Region) -> Result<RegionView<'_>, CoreError>;

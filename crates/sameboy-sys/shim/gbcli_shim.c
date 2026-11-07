@@ -16,6 +16,31 @@ bool gbcli_halted(GB_gameboy_t *gb) { return gb->halted; }
 void gbcli_set_halted(GB_gameboy_t *gb, bool halted) { gb->halted = halted; }
 bool gbcli_stopped(GB_gameboy_t *gb) { return gb->stopped; }
 bool gbcli_double_speed(GB_gameboy_t *gb) { return gb->cgb_double_speed; }
+
+// Whether the CPU is in the HALT a CGB speed switch enters (stop() in
+// sm83_cpu.c), which ends when speed_switch_halt_countdown runs out
+// (GB_advance_cycles in timing.c) rather than on an interrupt.
+bool gbcli_speed_switch_halt(GB_gameboy_t *gb)
+{
+    return gb->halted && !gb->stopped && gb->speed_switch_halt_countdown > 0;
+}
+
+// Whether the next GB_cpu_run ends that HALT on its countdown and then runs
+// the instruction at PC in the same call. Its halted branch advances 4 cycles
+// on CGB (2 or 4, after 2 more, otherwise); the countdown clearing `halted`
+// there lets the run-mode branch follow, unless an interrupt queued before
+// that advance dispatches instead (with IME on; with IME off, the
+// wake-without-dispatch branch needs `halted` still set, so the instruction
+// runs).
+bool gbcli_speed_switch_halt_ends_into_pc(GB_gameboy_t *gb)
+{
+    if (!gbcli_speed_switch_halt(gb)) return false;
+    int32_t advance = (GB_is_cgb(gb) || gb->just_halted) ? 4 : 2;
+    if (!GB_is_cgb(gb) && !gb->just_halted) advance += 2;
+    if (gb->speed_switch_halt_countdown > advance) return false;
+    uint8_t queued = gb->interrupt_enable & gb->io_registers[GB_IO_IF] & 0x1F;
+    return !(gb->ime && queued);
+}
 bool gbcli_is_mmm01(GB_gameboy_t *gb) { return gb->cartridge_type->mbc_type == GB_MMM01; }
 
 // The per-pixel layer tags the display patch writes while capture is on;

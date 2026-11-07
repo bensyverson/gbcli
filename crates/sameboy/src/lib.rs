@@ -18,9 +18,9 @@ use std::sync::Mutex;
 
 use gbcli_core::{
     ApuState, ApuWrite, AudioCapture, AudioSamples, BootRom, Budget, BudgetKind, ColorMode, Core,
-    CoreConfig, CoreError, CoreInfo, Feature, FrameRef, IoReg, JoypadBounce, Keys, LayerMap,
-    LiveFrame, Model, PpuMode, PpuStatus, Region, RegionView, Registers, Rendering, RtcMode,
-    RunRequest, StepUnit, Stop, StopReason, Support, Ticks, WriteTracking, WrittenView,
+    CoreConfig, CoreError, CoreInfo, Feature, FrameRef, HaltWake, IoReg, JoypadBounce, Keys,
+    LayerMap, LiveFrame, Model, PpuMode, PpuStatus, Region, RegionView, Registers, Rendering,
+    RtcMode, RunRequest, StepUnit, Stop, StopReason, Support, Ticks, WriteTracking, WrittenView,
 };
 use sameboy_sys as sb;
 
@@ -244,6 +244,23 @@ impl Core for SameBoy {
     fn in_stop(&self) -> bool {
         // SAFETY: a plain read of a live instance.
         unsafe { sb::gbcli_stopped(self.raw()) }
+    }
+
+    fn halt_wake(&self) -> Result<Option<HaltWake>, CoreError> {
+        let gb = self.raw();
+        // SAFETY: plain reads of a live instance.
+        let wake = unsafe {
+            if !sb::gbcli_halted(gb) || sb::gbcli_stopped(gb) {
+                None
+            } else if sb::gbcli_speed_switch_halt_ends_into_pc(gb) {
+                Some(HaltWake::SpeedSwitchEnding)
+            } else if sb::gbcli_speed_switch_halt(gb) {
+                Some(HaltWake::SpeedSwitch)
+            } else {
+                Some(HaltWake::Interrupt)
+            }
+        };
+        Ok(wake)
     }
 
     fn registers(&self) -> Registers {

@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use gbcli_core::{Access, Hit, Usage};
+use gbcli_core::{Access, HaltWake, Hit, Usage};
 use gbcli_protocol::{Location, StepKind, StopReason, TimeMark, WatchAccess};
 
 use super::drive::{BOOT_OFF, Goal};
@@ -142,11 +142,13 @@ pub(super) fn exec_breakpoint(
 
 /// The exec hit at the current PC, when the execution filter matches it. In
 /// HALT or STOP, PC already points past it, but that instruction runs only
-/// after the wake (and any interrupt it dispatches), so there is none yet.
+/// after the wake (and any interrupt it dispatches), so there is none yet;
+/// except as a CGB speed switch's pause ends, when the next step runs it.
 pub(super) fn exec_hit(m: &Machine, exec: &gbcli_core::AddrFilter) -> Option<Hit> {
     let regs = m.core().registers();
     let pc = regs.pc;
-    if !exec.may_match(pc) || regs.halted || m.core().in_stop() {
+    let ending = m.core().halt_wake() == Ok(Some(HaltWake::SpeedSwitchEnding));
+    if !exec.may_match(pc) || (regs.halted && !ending) || m.core().in_stop() {
         return None;
     }
     let bank = mem::bank_at(m.core(), pc);

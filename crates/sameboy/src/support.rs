@@ -44,6 +44,7 @@ pub(crate) fn support(feature: Feature) -> Support {
         Feature::LiveFrame => return Support::Yes,
         // The color mode always; CGB colors only where frames are RGB.
         Feature::DisplayColors => return Support::Yes,
+        Feature::HaltWake => return Support::Yes,
         Feature::DotStep => "SameBoy's finest public step is one CPU step (GB_run)",
         Feature::MCycleStep => "SameBoy's finest public step is one CPU step (GB_run)",
         Feature::PpuDot => {

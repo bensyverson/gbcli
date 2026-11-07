@@ -48,6 +48,9 @@ pub enum Feature {
     /// The core's color mode and its RGB output for a CGB color
     /// (`Core::color_mode`, `Core::rgb555_color`).
     DisplayColors,
+    /// What ends the CPU's HALT, telling the CGB speed switch's self-ending
+    /// pause from a wait for an interrupt (`Core::halt_wake`).
+    HaltWake,
 }
 
 impl Feature {
@@ -73,6 +76,7 @@ impl Feature {
             Feature::PpuModeEvents => "ppu_mode_events",
             Feature::LiveFrame => "live_frame",
             Feature::DisplayColors => "display_colors",
+            Feature::HaltWake => "halt_wake",
         }
     }
 }

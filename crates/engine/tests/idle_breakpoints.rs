@@ -6,7 +6,7 @@
 
 mod common;
 
-use common::machine;
+use common::{cgb_machine, machine};
 use gbcli_core::{Budget, BudgetKind, Region, Registers};
 use gbcli_engine::cond::EvalWarning;
 use gbcli_engine::{FrameSink, Machine, RunOptions, Symbols};
@@ -16,6 +16,10 @@ const PROFILE: &[u8] = include_bytes!("roms/profile.gb");
 const PROFILE_SYM: &str = include_str!("roms/profile.sym");
 /// Executes STOP with neither joypad row selected; PC is then $015D.
 const STOP: &[u8] = include_bytes!("../../sameboy/tests/roms/stop.gb");
+/// Switches a CGB to double speed and back with STOP, IE = 0: each STOP
+/// pauses the CPU in a HALT that ends on its own countdown.
+const SPEED_SWITCH: &[u8] = include_bytes!("../../sameboy/tests/roms/speed_switch.gb");
+const SPEED_SWITCH_SYM: &str = include_str!("../../sameboy/tests/roms/speed_switch.sym");
 
 fn addr(name: &str) -> u16 {
     Symbols::parse(PROFILE_SYM).unwrap().get(name).unwrap().addr
@@ -109,4 +113,73 @@ fn a_run_ending_in_halt_has_no_stop_warning() {
     }
     assert!(m.core().registers().halted);
     assert_eq!(outcome.warnings, vec![]);
+}
+
+fn speed_switch_addr(name: &str) -> u16 {
+    Symbols::parse(SPEED_SWITCH_SYM)
+        .unwrap()
+        .get(name)
+        .unwrap()
+        .addr
+}
+
+fn wram(m: &Machine, offset: usize) -> u8 {
+    m.core().region(Region::Wram).unwrap().bytes[offset]
+}
+
+#[test]
+fn a_run_through_a_speed_switch_with_interrupts_off_is_not_halt_forever() {
+    let mut m = cgb_machine(SPEED_SWITCH, Some(SPEED_SWITCH_SYM));
+    let stop = m
+        .run(&RunOptions::new(Budget::frames(30)))
+        .expect("run")
+        .stop;
+    assert_eq!(
+        stop.reason,
+        StopReason::BudgetExhausted {
+            kind: BudgetKind::Frames
+        }
+    );
+    assert_eq!(wram(&m, 0), 0x99, "never resumed after the first switch");
+    assert_eq!(wram(&m, 1), 0x99, "never resumed after the second switch");
+    assert!(!m.core().registers().double_speed);
+}
+
+#[test]
+fn a_breakpoint_after_each_speed_switch_fires_before_its_instruction_runs() {
+    let mut m = cgb_machine(SPEED_SWITCH, Some(SPEED_SWITCH_SYM));
+    for (name, offset, double_speed) in [("ToDouble", 0, true), ("ToNormal", 1, false)] {
+        let id = m.add_breakpoint(at(speed_switch_addr(name)), None).unwrap();
+        let stop = m
+            .run(&RunOptions::new(Budget::frames(30)))
+            .expect("run")
+            .stop;
+        assert_eq!(stop.reason, StopReason::Breakpoint { id }, "{name}");
+        assert_eq!(stop.pc, speed_switch_addr(name));
+        assert_eq!(
+            wram(&m, offset),
+            0x00,
+            "the instruction after {name}'s STOP ran"
+        );
+        assert_eq!(m.core().registers().double_speed, double_speed);
+        m.delete(id);
+    }
+}
+
+#[test]
+fn the_engines_own_check_catches_a_breakpoint_after_a_speed_switch() {
+    // A predicate on a register makes the engine stop the core after every
+    // instruction, so the core's own filter, skipped at the first step of
+    // each call, never sees the boundary; the engine's check must.
+    let mut m = cgb_machine(SPEED_SWITCH, Some(SPEED_SWITCH_SYM));
+    let id = m
+        .add_breakpoint(at(speed_switch_addr("ToDouble")), None)
+        .unwrap();
+    let stop = m
+        .run_until("a == $42", &RunOptions::new(Budget::frames(30)))
+        .expect("run")
+        .stop;
+    assert_eq!(stop.reason, StopReason::Breakpoint { id });
+    assert_eq!(stop.pc, speed_switch_addr("ToDouble"));
+    assert_eq!(wram(&m, 0), 0x00, "the instruction after STOP ran");
 }

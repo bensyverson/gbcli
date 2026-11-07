@@ -21,6 +21,21 @@ pub struct Registers {
     pub double_speed: bool,
 }
 
+/// What ends the CPU's HALT ([`Core::halt_wake`](crate::Core::halt_wake)).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HaltWake {
+    /// An interrupt enabled in IE and requested in IF; with none enabled,
+    /// nothing does.
+    Interrupt,
+    /// The CGB speed switch's pause, which STOP with KEY1 bit 0 set enters
+    /// (with no joypad line low): it ends on its own about 2^17 T-cycles
+    /// later, or sooner on an interrupt.
+    SpeedSwitch,
+    /// That pause ending in the next instruction step, which then also runs
+    /// the instruction at PC: a breakpoint there is due now.
+    SpeedSwitchEnding,
+}
+
 /// Held joypad buttons, one bit each.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Keys(pub u8);

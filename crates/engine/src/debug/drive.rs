@@ -4,8 +4,8 @@
 use std::sync::atomic::Ordering;
 
 use gbcli_core::{
-    Access, AddrFilter, BankSel, Core, EventSink, Region, RunRequest, StopReason as CoreReason,
-    StoreFilter, Usage,
+    Access, AddrFilter, BankSel, Core, EventSink, HaltWake, Region, RunRequest,
+    StopReason as CoreReason, StoreFilter, Usage,
 };
 use gbcli_protocol::{Location, StepKind, StopReason, WatchAccess};
 
@@ -84,9 +84,15 @@ fn bank_sel(at: &Location) -> BankSel {
     at.bank.map_or(BankSel::Any, BankSel::Bank)
 }
 
-/// HALT that nothing can end: no interrupt enabled in IE.
+/// HALT that nothing can end: no interrupt enabled in IE, and not the CGB
+/// speed switch's pause, which ends on its own. A core that can't say what
+/// ends its HALT is taken to wait for an interrupt.
 fn halted_forever(core: &dyn Core) -> bool {
     core.registers().halted
+        && !matches!(
+            core.halt_wake(),
+            Ok(Some(HaltWake::SpeedSwitch | HaltWake::SpeedSwitchEnding))
+        )
         && core
             .region(Region::Ie)
             .is_ok_and(|ie| ie.bytes.first().is_some_and(|&ie| ie & 0x1F == 0))

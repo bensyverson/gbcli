@@ -8,7 +8,7 @@ use std::path::Path;
 
 use crate::common::Project;
 
-const EVERY_EFFECT: &str = include_str!("../../../build/tests/data/every_effect.song");
+const TEST_SONG: &str = include_str!("../../../build/tests/data/every_effect_but_6xx.song");
 
 /// The starter's song (the help topic's example) plays: its first square-1
 /// notes are triggered in order, at the driver's periods for C-5, E-5, G-5.
@@ -46,14 +46,14 @@ fn a_new_projects_song_plays_in_the_audio_log() {
     assert_eq!(periods, ["1546", "1650", "1714"], "{}", run.stdout);
 }
 
-/// `data/every_effect.song` built into the starter and played to its end:
-/// the piano roll and spectrogram of the run are goldens (bless with
+/// `data/every_effect_but_6xx.song` built into the starter and played to its
+/// end: the piano roll and spectrogram of the run are goldens (bless with
 /// `GBCLI_BLESS=1`, then look at them).
 #[test]
 fn the_test_songs_piano_roll_and_spectrogram_are_pinned() {
     let p = Project::new("music-goldens");
     assert_eq!(p.rgbds(&["new", "game"]).code, 0);
-    fs::write(p.path("game/assets/music/theme.song"), EVERY_EFFECT).unwrap();
+    fs::write(p.path("game/assets/music/theme.song"), TEST_SONG).unwrap();
     let built = p.rgbds(&["build", "game"]);
     assert_eq!(built.code, 0, "{}", built.stderr);
     assert!(
@@ -61,14 +61,15 @@ fn the_test_songs_piano_roll_and_spectrogram_are_pinned() {
         "{}",
         built.stdout
     );
-    // About 150 frames of boot, then 128 rows of 4 ticks at 64 Hz (8 s).
+    // About 150 frames of boot, then 688 ticks at 64 Hz (10.75 s): orders
+    // 0 and 1 at 4 ticks a row, then order 2's 48 rows, 16 of them at 3.
     let run = p.rgbds(&[
         "run",
         "game/build/game.gb",
         "--session",
         "game",
         "--frames",
-        "660",
+        "820",
         "--piano",
         "piano.png",
         "--spectrogram",
@@ -76,8 +77,8 @@ fn the_test_songs_piano_roll_and_spectrogram_are_pinned() {
     ]);
     assert_eq!(run.code, 0, "{}", run.stderr);
     for (made, golden) in [
-        ("piano.png", "every_effect_piano.png"),
-        ("spectrogram.png", "every_effect_spectrogram.png"),
+        ("piano.png", "every_effect_but_6xx_piano.png"),
+        ("spectrogram.png", "every_effect_but_6xx_spectrogram.png"),
     ] {
         png_golden(&fs::read(p.path(made)).unwrap(), golden);
     }

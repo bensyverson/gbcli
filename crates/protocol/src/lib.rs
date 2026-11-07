@@ -69,8 +69,8 @@ pub use stop::{
     TimeBase, vblank_name,
 };
 pub use toolchain::{
-    BuildArgs, BuildMade, CheckMade, CheckName, CheckStatus, Diagnostic, DoctorMade, NewArgs,
-    NewMade, OutputKind, OutputMade, Severity, SongBuilt, SourceLine, Tool,
+    BankOverflow, BuildArgs, BuildMade, CheckMade, CheckName, CheckStatus, Diagnostic, DoctorMade,
+    NewArgs, NewMade, OutputKind, OutputMade, PlacedSection, Severity, SongBuilt, SourceLine, Tool,
 };
 pub use video::{
     AddressingView, ImageMade, ImageOut, MapAreaView, MapSel, OamView, TileView, VideoData,

@@ -160,6 +160,31 @@ pub struct BuildMade {
     /// assembled with the sources.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub songs: Vec<SongBuilt>,
+    /// The sections a cartridge with no MBC can't reach: set when the build
+    /// failed because the link placed sections past bank 1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub overflow: Option<BankOverflow>,
+}
+
+/// A link past 32 KB for a header that names no MBC (cartridge type $00,
+/// $08 or $09): such a cartridge maps banks 0 and 1 only, so whatever reads
+/// a section in bank 2 or later reads bank 1's bytes instead.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BankOverflow {
+    /// The header's cartridge type byte ($0147).
+    pub cart_type: u8,
+    /// Every section the `.map` places in a ROMX bank past 1, in map order.
+    pub sections: Vec<PlacedSection>,
+}
+
+/// A section as the linker placed it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlacedSection {
+    pub name: String,
+    pub bank: u32,
+    /// Its first address in the bank's window ($4000–$7FFF for ROMX).
+    pub start: u16,
+    pub bytes: u32,
 }
 
 /// A song file `build` converted: hUGETracker's `.uge` or gbcli's song text,

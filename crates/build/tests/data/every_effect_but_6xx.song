@@ -1,14 +1,21 @@
 format gbcli-song 1
 # A test song for gbcli's hUGEDriver checks: four channels, a wave
-# instrument, noise drums, arpeggio, vibrato, portamento, pitch slides,
-# volume slides, a note cut, an order change and a timer tempo.
-name "Every Effect"
+# instrument with a wave change, noise drums, a subpattern instrument, a
+# timer tempo, three orders, and every effect hUGEDriver plays but 6xx:
+# arpeggio, pitch slides, portamento, vibrato, master volume, note delay,
+# panning, duty and wave changes, volume slides, a position jump, set
+# volume, a pattern break, a note cut and a speed change. 6xx is left out
+# because hUGETracker's RGBDS export can't play it (it writes the routines'
+# code where hUGEDriver reads their addresses); see
+# project/2026-11-07-music-build.md.
+name "Every Effect but 6xx"
 artist "gbcli"
 comment "CC0 1.0: dedicated to the public domain"
 ticks_per_row 4
 timer on 192
 
 wave 0 0123456789ABCDEFFEDCBA9876543210
+wave 1 FFFFFFFFFFFFFFFF0000000000000000
 
 instrument square 1 "Lead"
   envelope 12 down 0
@@ -17,6 +24,14 @@ instrument square 1 "Lead"
 instrument square 2 "Pad"
   envelope 8 down 0
   duty 25%
+
+instrument square 3 "Arp"
+  envelope 10 down 1
+  duty 12.5%
+  subpattern on
+  00 +00 .. ... ...
+  01 +04 .. ... ...
+  02 +07 .. J01 ...
 
 instrument wave 1 "Bass"
   level 100%
@@ -36,6 +51,7 @@ instrument noise 3 "Hat"
 orders
 00 P0 P1 P2 P3
 01 P4 P5 P2 P6
+02 P7 P8 P9 P10
 
 pattern P0 P1 P2 P3
 00 C-5 01 ... 047 | E-4 02 ... ... | C-3 01 ... ... | C-5 01 ... ...
@@ -73,3 +89,18 @@ pattern P4 P5 P2 P6
 56 ... .. ... ... | ... .. ... ... | F-4 01 ... E02 | C-6 02 ... ...
 60 ... .. ... ... | ... .. ... ... | ... .. ... ... | C-6 02 ... E01
 63 ... .. ... B00 | ... .. ... ... | ... .. ... ... | ... .. ... ...
+
+pattern P7 P8 P9 P10
+00 C-5 03 ... 577 | E-4 02 ... 980 | C-3 01 ... 901 | C-5 01 ... 8FF
+04 ... .. ... ... | ... .. ... ... | ... .. ... ... | F-7 03 ... ...
+08 E-5 01 ... C0A | G-4 02 ... 702 | C-4 01 ... ... | C-6 02 ... ...
+12 ... .. ... ... | ... .. ... ... | ... .. ... ... | F-7 03 ... 8ED
+16 G-5 03 ... F03 | ... .. ... 940 | G-3 01 ... 900 | C-5 01 ... ...
+20 ... .. ... ... | ... .. ... ... | ... .. ... ... | F-7 03 ... ...
+24 C-6 01 ... C1F | B-4 02 ... 703 | G-4 01 ... ... | C-6 02 ... 908
+28 ... .. ... ... | ... .. ... ... | ... .. ... ... | F-7 03 ... ...
+32 A-5 03 ... F04 | C-5 02 ... 9C0 | A-3 01 ... 901 | C-5 01 ... ...
+36 ... .. ... ... | ... .. ... ... | ... .. ... ... | F-7 03 ... ...
+40 F-5 01 ... 533 | ... .. ... ... | A-4 01 ... ... | C-6 02 ... ...
+44 ... .. ... ... | ... .. ... 8FF | ... .. ... ... | F-7 03 ... ...
+47 D-5 01 ... 577 | ... .. ... ... | ... .. ... 900 | ... .. ... D01

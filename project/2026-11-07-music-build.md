@@ -1,6 +1,6 @@
 # Music in the build: the emitter, hUGEDriver in `new`, and the reference export
 
-2026-11-07, leaf pukTN6. A song an agent writes now goes into a ROM in one loop: you edit `assets/music/theme.song`, run `gbcli build`, then `gbcli run --frames 600 --audio-log --piano roll.png`. This note records what was built, the driver pin (the brief's pin was wrong), how the emitter is checked, and the open decision about getting hUGETracker's own export.
+2026-11-07, leaf pukTN6. A song an agent writes now goes into a ROM in one loop: you edit `assets/music/theme.song`, run `gbcli build`, then `gbcli run --frames 600 --audio-log --piano roll.png`. This note records what was built, the driver pin (the brief's pin was wrong), how the emitter is checked against hUGETracker's own export (every sample gives identical sound-register writes), and where the emitter departs from that export. Updated the same day by leaf pruzN6 (the review's fixes) and pukTN6's second part (the reference comparison).
 
 ## What was built
 
@@ -10,13 +10,16 @@
   - waves are written up to the highest one anything names;
   - a subpattern is its first 32 rows, and the last row jumps to row 1.
   
-  There are two departures, and neither changes a byte the driver reads. First, every label except the descriptor is scoped to it (`song_theme.P0`). hUGETracker's `order1`, `waves` and the like are also hUGEDriver's own WRAM labels, so the `.sym` held each of those names twice. The rebuilt-ROM check (`build --restore`) treated an ambiguous name as gone, and refused every restore. Second, the emitter exports `<descriptor>_TIMER` and `<descriptor>_TMA` as constants (no ROM space), so a player can set up the timer from the song it links. Tests: `crates/music/tests/asm.rs` (one per rule, plus a golden of the help example, `tests/golden/example.asm`).
-- **`build` by convention** (`crates/build/src/music.rs`). Every `.song` or `.uge` directly under `assets/music` becomes `build/music/<name>.asm` with the label `song_<name>`. That file is assembled with the sources, and the result lists it (`BuildMade.songs`: path, asm, descriptor, and the TMA when the timer drives the song; rows `song path= asm= descriptor= [tma=]`). The build refuses three cases before any tool runs, each with a remedy:
+  There are three departures (see "Departures" below for the full list and why). First, every data label is scoped to the descriptor (`song_theme.P0`). hUGETracker's `order1`, `waves` and the like are also hUGEDriver's own WRAM labels, so the `.sym` held each of those names twice. The rebuilt-ROM check (`build --restore`) treated an ambiguous name as gone, and refused every restore. Second, the emitter exports `<descriptor>_TIMER` and `<descriptor>_TMA` as constants (no ROM space), so a player can set up the timer from the song it links. Third (added by leaf pruzN6), `routines:` is a table of routine addresses, so 6xx works. Tests: `crates/music/tests/asm.rs` (one per rule, plus a golden of the help example, `tests/golden/example.asm`).
+
+  > **Correction, 2026-11-07 (leaf pruzN6): this note first said the scoping "doesn't change a byte the driver reads". That was wrong in effect.** Scoping the routine labels under the descriptor (`song_theme.__hUGE_Routine_0`) opened no new scope, so every routine's local labels landed in one scope, and two routines that both used `.loop` didn't assemble. Each routine now opens a global label of its own, `song_theme__hUGE_Routine_N`, as hUGETracker's `__hUGE_Routine_N` does. The bytes of a song that assembled before are unchanged by that fix; which songs assemble is not.
+- **`build` by convention** (`crates/build/src/music.rs`). Every `.song` or `.uge` directly under `assets/music` becomes `build/music/<stem>.asm` (a dotted stem keeps its dots: `theme.v2.song` → `theme.v2.asm`) with the label `song_<name>`. That file is assembled with the sources, and the result lists it (`BuildMade.songs`: path, asm, descriptor, and the TMA when the timer drives the song; rows `song path= asm= descriptor= [tma=]`). The build refuses three cases before any tool runs, each with a remedy:
   - a song that doesn't parse: `song_unreadable`, with the line and column (or the byte of a `.uge`);
-  - two files that would get the same label;
+  - two files that would define one global symbol: the descriptor, `_TIMER`, `_TMA` or a routine label (`gbcli_music::global_symbols`), so `theme_TIMER.song` beside `theme.song` is refused by name;
   - songs with no `hUGE.inc` on the include path.
   
-  Tests: `crates/build/tests/music.rs`.
+  Tests: `crates/build/tests/music.rs`, and the review's regressions in `crates/build/tests/music_regressions.rs`.
+- **A ROM-only link past bank 1 fails the build** (leaf pruzN6; `crates/build/src/project/banks.rs`). Each song is its own `ROMX` section and the starter is ROM-only, so songs past 16 KB put one in bank 2, which a cartridge with no MBC can't map: the driver read bank 1's bytes as the song, silently. The check is not about songs: after rgbfix, when the header's cartridge type is $00, $08 or $09 and the `.map` places any section in a ROMX bank past 1, the build fails with `build_failed`, the sections named (bank, start, size), and the remedy (shrink to 32 KB, or name an MBC at $0147 and switch banks around the code that reads them). The result carries them as `BuildMade.overflow` (rows `past_bank_1 section= bank= start= bytes=`). The starter stays ROM-only. Tests: `crates/build/tests/rom_banks.rs`.
 - **`new`** adds three things to every starter:
   - hUGEDriver (`src/hUGEDriver.asm`, `include/hUGE.inc`, `include/hUGE_note_table.inc`, pinned in `crates/build/data/hUGEDriver/SOURCE`);
   - a player, `src/music.asm`. `MusicInit` turns the APU on and calls `hUGE_init`. When the song has the timer on, it also sets TMA, starts TAC at 4096 Hz and adds the timer interrupt. `MusicVBlank`, called from the VBlank handler, ticks the driver unless the timer drives it. The timer vector calls `hUGE_dosound` itself;
@@ -34,16 +37,47 @@ hUGETracker 1.0.11 (0623f3f7, the latest release, whose codegen.pas is byte-iden
 
 ## Checking the emitter
 
-The criteria call for a register-write comparison against hUGETracker's own export. The harness (`crates/build/tests/music_equiv.rs`) builds two starter ROMs, each with one song's data in `src/song.asm`. It runs them side by side with `equiv::compare`, comparing each frame's sound-register writes (`AudioCompare::Writes`). Both ROMs share one driver and one player, so any difference comes from the data. The harness is checked against itself on the committed test song `crates/build/tests/data/every_effect.song` (CC0, written for this). The song uses four channels, a wave instrument, noise drums, arpeggio, vibrato, portamento, pitch slides, volume slides, a note cut, an order change and a timer tempo (TMA 192, 64 Hz). The song with its patterns stored in reverse plays identically over its whole length. One changed note diverges in the frame it plays, about 6.0 s in. The test song's piano roll and spectrogram from a real run are committed as goldens for a person to look at (`crates/gbcli/tests/cli/golden/every_effect_{piano,spectrogram}.png`).
+The criteria call for a register-write comparison against hUGETracker's own export. The harness (`crates/build/tests/music_equiv.rs`) builds two starter ROMs, each with one song's data in `src/song.asm`. It runs them side by side with `equiv::compare`, comparing each frame's sound-register writes (`AudioCompare::Writes`). Both ROMs share one driver (a3cbd0ce) and one player, so any difference comes from the data. The harness is checked against itself on the committed test song: the song with its patterns stored in reverse plays identically over its whole length, and one changed note diverges in the frame it plays, about 6.0 s in. The test song's piano roll and spectrogram from a real run are committed as goldens for a person to look at (`crates/gbcli/tests/cli/golden/every_effect_but_6xx_{piano,spectrogram}.png`).
 
-**Evidence against a real hUGETracker export (not committed).** hUGEDriver's `rgbds_example/sample_song.asm` is a hUGETracker export of the fetched sample "Coffee Bat - Wyrmhole". It was made by an older hUGETracker that wrote all 15 instruments of each bank and all 16 waves. Its orders, patterns, and every instrument, subpattern and wave our emitter writes are byte-identical to ours, apart from label names. Linked with the same driver and player, the two ROMs gave **identical sound-register writes over the whole song: 4,712 frames, `Verdict::Same`, about 8.7 writes per frame**. That check ran once, from a throwaway test. It isn't in the suite, because the file comes from an unlicensed song (see below).
+> **Update, 2026-11-07 (leaf pukTN6, second part): the test song was renamed and extended.** It was `every_effect.song` but used only effects 0–4, A, B and E. It is now `crates/build/tests/data/every_effect_but_6xx.song` (CC0): four channels, a wave instrument with a wave change (9xx on the wave channel, two waves), noise drums, a square instrument with a subpattern, a timer tempo (TMA 192, 64 Hz), three orders, and every effect group the driver has but 6: 0, 1, 2, 3, 4, 5, 7, 8, 9 (duty and wave), A, B, C, D, E and F. A test checks that coverage (`the_test_song_uses_every_effect_but_6xx`). 6xx is left out because hUGETracker's RGBDS export can't play it (see "Departures"); it has its own test against our emitter (`effect_6xx_runs_its_routine`).
 
-## Open: hUGETracker's own export, for every sample (the user's call)
+**Evidence against a real hUGETracker export (not committed).** hUGEDriver's `rgbds_example/sample_song.asm` is a hUGETracker export of the fetched sample "Coffee Bat - Wyrmhole". It was made by an older hUGETracker that wrote all 15 instruments of each bank and all 16 waves. Its orders, patterns, and every instrument, subpattern and wave our emitter writes are byte-identical to ours, apart from label names. Linked with the same driver and player, the two ROMs gave **identical sound-register writes over the whole song: 4,712 frames, `Verdict::Same`, about 8.7 writes per frame**. That check ran once, from a throwaway test. It was superseded by the comparison below.
 
-Criteria Nt1 (every sample over 600 frames) and r4P (the test song over its full length) need the `.asm` hUGETracker itself writes. There are three ways to get it, and each needs a decision:
+## hUGETracker's own export, for every sample (done)
 
-1. **The release's `uge2source`, fetched like the corpus.** The hUGETracker 1.0.11 macOS zip holds `uge2source`, a headless converter (Mach-O x86_64, so it runs under Rosetta on Apple silicon). Its codegen is the code we port. A corpus script would fetch the zip (pinned by sha256), run `uge2source` on each sample into `tests/corpus/fetched/hugetracker-exports/` (gitignored, since the outputs derive from unlicensed songs), and a test would compare each one to ours. For the CC0 test song, its export can be committed, so r4P then runs without the tool. Costs: it adds a fetched artifact, it runs a downloaded binary on this machine, and it needs Rosetta. Not done here, and the binary was not run.
-2. **Build `uge2source` from source.** This needs Free Pascal and Lazarus (`lazbuild`), a toolchain the machine doesn't have.
-3. **Commit hUGEDriver's `sample_song.asm`** (or fetch it as a corpus file) as the one reference. It comes from the public-domain driver repository, but it is derived from Coffee Bat's song, whose license is unstated. The user's ruling keeps those songs out of git.
+> This section replaces "Open: hUGETracker's own export", which listed three ways to get the reference. Ben ruled that installing hUGETracker was fine; the main thread then built `uge2source` from hUGETracker 1.0.11's source natively (option 2, with Free Pascal 3.2.2 and Lazarus 3.0's LazUtils, no Rosetta): `scripts/music/export-reference.sh` (commit 21780eb).
 
-Recommendation: option 1. It covers every sample and the test song with the exact code we port, it keeps unlicensed material out of git, and a corpus fetch is a pattern the project already has. Option 3 is a cheap stopgap for one song if the user prefers.
+**How.** `scripts/music/export-reference.sh` builds `uge2source` from hUGETracker 1.0.11 (0623f3f7, whose codegen is the one we port) and exports each fetched sample, with descriptor `song_theme`, into `tests/corpus/fetched/hugetracker-exports/` (gitignored: the songs' license is unstated). `crates/build/tests/music_equiv.rs` links each export and our emitter's output for the same `.uge` into the starter, with the same driver and player, and compares sound-register writes frame by frame. The harness adds one thing to the export: the `song_theme_TIMER` and `song_theme_TMA` constants the player reads, appended from the song's timer setting, since hUGETracker leaves the timer to the player. The export's unscoped labels (`order1`, `waves`) are hUGEDriver's WRAM names too, but neither object exports them, so the link keeps them apart and no rename is needed. When the exports are missing the tests fail and name the two commands (the corpus fetch, then the script).
+
+The test song's export is committed (`crates/build/tests/data/every_effect_but_6xx.asm`, with a provenance header: the script, hUGETracker 0623f3f7, 2026-11-07), so r4P runs without Free Pascal. It was made from the `.uge` our writer produced (`gbcli song every_effect_but_6xx.song --uge`). Remake it the same way after changing the song.
+
+**Results.** Every comparison gave `Verdict::Same`. "Whole" is every order's 64 rows once at the song's starting speed, plus 300 frames of boot; a pattern break or a faster Fxx makes a song shorter, so the run goes into its repeat (`cargo test -p gbcli-build --test music_equiv`, and `-- --ignored` for the whole songs; 2026-11-07).
+
+| Song | Normal suite | Pre-release suite (whole) |
+|---|---|---|
+| every_effect_but_6xx (committed export) | whole, 1,017 frames: Same | — |
+| Arachno - A Sad Touch | 600: Same | 5,420: Same |
+| Chavez - Monkeys on Mars | 600: Same | 18,668: Same |
+| Coffee Bat - Blue Ocean | 600: Same | 4,524: Same |
+| Coffee Bat - Pilgrim's Peril Menu | 600: Same | 4,396: Same |
+| Coffee Bat - Wyrmhole | 600: Same | 4,652: Same |
+| FADE - Microplastics in the Air | 600: Same | 11,308: Same |
+| FADE - Strap in and Suit Up | 600: Same | 10,540: Same |
+| Jester - FishNChips | 600: Same | 7,468: Same |
+| Maktone - Softworld | 600: Same | 3,180: Same |
+| MelonadeM - Boatship for Rent | 600: Same | 3,500: Same |
+| raphaelgoulart - The Murderous Funk Machine (intro) | 600: Same | 3,884: Same |
+| Reed - Funkabeer's Revenge | 600: Same | 4,524: Same |
+| SVL - UwU | 600: Same | 8,364: Same |
+| SVL - Yyna | 600: Same | 8,364: Same |
+| Tempest - Kekri | 600: Same | 9,900: Same |
+
+The comparison does catch a difference: with one note of the Wyrmhole export changed (the first `dn C_5,1,$2FF` to `D_5`, through `GBCLI_TEST_ROMS` pointed at a copy), its 600-frame test failed. No sample uses 6xx, so none meets the routine departure.
+
+Cost: the 15 sample tests run in parallel, one test each; with the test song's whole-length comparison they took the `music_equiv` binary from about 6 s to about 11 s wall (Apple M1, `cargo test -p gbcli-build --test music_equiv`). The pre-release whole songs take about 91 s.
+
+## Departures from hUGETracker's RGBDS export
+
+1. **Labels.** Data labels are scoped to the descriptor (`song_theme.P0`); each routine opens its own global label, `song_theme__hUGE_Routine_N`. Names never reach the bytes.
+2. **`routines:` is a table of addresses** (leaf pruzN6). hUGEDriver's `fx_call_routine` (hUGEDriver.asm:719–743) reads a pointer from `routines + 2 × n` and jumps to it. hUGETracker's RGBDS export (codegen.pas:618–627) writes the routines' code at `routines:`, so 6xx in an exported song jumps to an address made of the first routine's code bytes, and the game freezes. hUGETracker's own preview and ROM export don't use that path: they assemble hUGEDriver's `song.asm` template (codegen.pas:758 writes `routineN.htt`), which writes the 16 routines through a `loadRoutine` macro, then `routines:` as `dw __hUGE_Routine_0, …` (eight to a line), then the waves. The emitter follows the template. The table moves the waves 32 bytes later than the export puts them, which only a 6xx, or a read running past the routines' code, would see. Songs that use 6xx therefore can't be compared with the export; the committed test song leaves 6xx out, and `crates/build/tests/music_regressions.rs` (`effect_6xx_runs_its_routine`) checks that a routine runs.
+3. **Timer constants.** `<descriptor>_TIMER` and `<descriptor>_TMA` are exported constants with no ROM bytes.

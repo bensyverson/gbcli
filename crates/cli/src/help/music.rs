@@ -16,6 +16,13 @@ hUGEDriver data (build/music/NAME.asm, label song_NAME); `gbcli new` makes
 assets/music/theme.song (the example below) and src/music.asm, which plays
 it. Then `gbcli run --frames 600 --audio-log --piano roll.png` to hear it.
 
+A song with `timer on` ticks the driver from the timer interrupt, about
+2,500-5,900 T a tick, and a tick that fires just before VBlank holds the
+VBlank handler back until it returns: with `timer on 192` in the starter,
+its OAM DMA ran on lines 145-153, past the start of VBlank, in 16 of 600
+frames (`run --frames 600 --raster`). Keep VBlank work short, or call
+hUGE_dosound once a frame (`timer off`) if that matters.
+
 Each line's first word says what it is; # starts a comment line.
 
   format gbcli-song 1           the first line

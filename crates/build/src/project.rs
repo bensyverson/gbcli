@@ -8,6 +8,7 @@
 //! build never leaves a stale or half-written ROM where a session would load
 //! it. Every tool runs with `--color never` and under a time limit.
 
+mod banks;
 mod layout;
 mod staging;
 pub(crate) mod tool;
@@ -17,7 +18,8 @@ use std::path::{Component, Path, PathBuf};
 use std::time::Duration;
 
 use gbcli_protocol::{
-    BuildMade, Diagnostic, ErrorBody, ErrorCode, OutputKind, OutputMade, ResultBody, Severity, Tool,
+    BankOverflow, BuildMade, Diagnostic, ErrorBody, ErrorCode, OutputKind, OutputMade, ResultBody,
+    Severity, Tool,
 };
 
 use crate::diagnostics;
@@ -115,6 +117,18 @@ impl BuildError {
                     }));
                     return body;
                 }
+                if let Some(o) = &made.overflow {
+                    let mut body = ErrorBody::new(
+                        ErrorCode::BuildFailed,
+                        format!("the build failed: {}", overflow_message(o)),
+                        OVERFLOW_REMEDY,
+                    );
+                    body.result = Some(Box::new(ResultBody {
+                        build: Some((**made).clone()),
+                        ..ResultBody::default()
+                    }));
+                    return body;
+                }
                 let errors: Vec<&Diagnostic> = made
                     .diagnostics
                     .iter()
@@ -185,6 +199,7 @@ pub fn build(tools: &Toolchain, options: &BuildOptions) -> Result<BuildMade, Bui
             diagnostics: Vec::new(),
             images: None,
             songs: songs.made,
+            overflow: None,
         },
     };
     if let Some(images) = images {
@@ -255,6 +270,10 @@ pub fn build(tools: &Toolchain, options: &BuildOptions) -> Result<BuildMade, Bui
         )?
     };
     if !fixed {
+        return Err(run.failed());
+    }
+    run.check_banks(&staged[0], &staged[2])?;
+    if run.made.overflow.is_some() {
         return Err(run.failed());
     }
     // The `.sym` and `.map` first and the ROM last: the ROM's arrival marks
@@ -369,6 +388,23 @@ impl Run<'_> {
         Ok(true)
     }
 
+    /// Records the overflow, with an error naming it, when the header names
+    /// no MBC and the link at `rom` (its map at `map`) went past bank 1.
+    fn check_banks(&mut self, rom: &Path, map: &Path) -> Result<(), BuildError> {
+        let read = |path: &Path| {
+            fs::read(path).map_err(|error| BuildError::Io {
+                path: path.to_path_buf(),
+                error,
+            })
+        };
+        let map_text = String::from_utf8_lossy(&read(map)?).into_owned();
+        if let Some(overflow) = banks::overflow(&read(rom)?, &map_text) {
+            self.error(Tool::Rgblink, None, overflow_message(&overflow));
+            self.made.overflow = Some(overflow);
+        }
+        Ok(())
+    }
+
     /// A file as a tool printed it (relative to the project, where it ran),
     /// as the caller reads it.
     fn show(&self, file: &str) -> String {
@@ -389,6 +425,34 @@ impl Run<'_> {
         }
     }
 }
+
+fn overflow_message(o: &BankOverflow) -> String {
+    let sections: Vec<String> = o
+        .sections
+        .iter()
+        .map(|s| {
+            format!(
+                "\"{}\" in bank {} (${:04X}, {} bytes)",
+                s.name, s.bank, s.start, s.bytes
+            )
+        })
+        .collect();
+    format!(
+        "the header names no MBC (cartridge type ${:02X}), so the cartridge maps banks 0 and 1 \
+         only, but the link placed {} past bank 1: {}",
+        o.cart_type,
+        match sections.len() {
+            1 => "a section".to_string(),
+            n => format!("{n} sections"),
+        },
+        sections.join(", ")
+    )
+}
+
+/// What to do about a link past bank 1 on a cartridge with no MBC.
+const OVERFLOW_REMEDY: &str = "shrink the sections until everything fits in 32 KB (banks 0 and \
+     1), or name an MBC in the header (the byte at $0147, e.g. $01 for MBC1) and switch banks \
+     (write the bank number to $2000) around the code that reads each section past bank 1";
 
 /// The command that builds the project shown as `dir` with `options`' layout
 /// again, each word quoted for a shell.

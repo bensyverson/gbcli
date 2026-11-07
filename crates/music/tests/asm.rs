@@ -6,7 +6,8 @@
 //! export is checked by register writes in `crates/build/tests/music_equiv.rs`.
 
 use gbcli_music::{
-    BLANK_ROWS, Cell, EXAMPLE, NO_NOTE, Pattern, Song, descriptor_for, parse_text, rgbds_asm,
+    BLANK_ROWS, Cell, EXAMPLE, NO_NOTE, Pattern, Song, descriptor_for, global_symbols, parse_text,
+    rgbds_asm,
 };
 
 fn text(song: &Song, descriptor: &str) -> String {
@@ -294,26 +295,64 @@ fn a_wave_is_16_bytes_of_two_samples_each() {
     assert_eq!(w0, format!("song_t.wave0: db {}", bytes.join(",")));
 }
 
+/// Each routine opens a global label of its own, unique to the song, so a
+/// routine's local labels (`.loop`) are scoped to it, as in hUGETracker's
+/// export, where each opens `__hUGE_Routine_N:`.
 #[test]
-fn every_routine_is_written_with_its_labels_and_a_ret() {
+fn every_routine_is_written_under_its_own_global_label_with_a_ret() {
     let mut s = song([0, 1, 2, 3]);
     s.routines[2] = b"  ld a, 1\n  ld [$C000], a".to_vec();
     let all = lines(&s);
     let at = all
         .iter()
-        .position(|l| l == "song_t.__hUGE_Routine_2:")
+        .position(|l| l == "song_t__hUGE_Routine_2:")
         .unwrap();
     assert_eq!(
         all[at..at + 5],
         [
-            "song_t.__hUGE_Routine_2:",
+            "song_t__hUGE_Routine_2:",
             "  ld a, 1",
             "  ld [$C000], a",
-            "song_t.__end_hUGE_Routine_2:",
+            "song_t__end_hUGE_Routine_2:",
             "ret",
         ]
     );
-    assert!(all.contains(&"song_t.__hUGE_Routine_15:".to_string()));
+    assert!(all.contains(&"song_t__hUGE_Routine_15:".to_string()));
+}
+
+/// hUGEDriver's 6xx reads a pointer from `routines + 2 * x` and jumps to
+/// it, so `routines:` is a table of the 16 routines' addresses after the
+/// routines, as hUGETracker's own preview builds it (hUGEDriver's
+/// `song.asm`), not the routines' code as its RGBDS export writes it.
+#[test]
+fn routines_is_a_table_of_the_sixteen_routines_addresses() {
+    let s = song([0, 1, 2, 3]);
+    let all = lines(&s);
+    let table = block(&s, "song_t.routines:");
+    let names = |range: std::ops::Range<usize>| {
+        let n: Vec<String> = range.map(|i| format!("song_t__hUGE_Routine_{i}")).collect();
+        format!("dw {}", n.join(", "))
+    };
+    assert_eq!(table, [names(0..8), names(8..16)]);
+    let at = |l: &str| all.iter().position(|x| x == l).unwrap();
+    assert!(at("song_t__end_hUGE_Routine_15:") < at("song_t.routines:"));
+    assert!(at("song_t.routines:") < at("song_t.waves:"));
+}
+
+/// Every global symbol a song's `.asm` defines, for `build`'s check that no
+/// two songs define one name.
+#[test]
+fn a_songs_global_symbols_are_its_descriptor_constants_and_routines() {
+    let symbols = global_symbols("song_t");
+    assert_eq!(symbols.len(), 3 + 32);
+    for name in ["song_t", "song_t_TIMER", "song_t_TMA"] {
+        assert!(symbols.contains(&name.to_string()), "{name}");
+    }
+    let out = text(&song([0, 1, 2, 3]), "song_t");
+    for name in &symbols {
+        let defined = out.contains(&format!("\n{name}:")) || out.contains(&format!("DEF {name} "));
+        assert!(defined || out.contains(&format!("\n{name}::")), "{name}");
+    }
 }
 
 #[test]

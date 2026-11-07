@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use gbcli_music::{SongError, descriptor_for, read_song, rgbds_asm};
+use gbcli_music::{SongError, descriptor_for, global_symbols, read_song, rgbds_asm};
 use gbcli_protocol::{ErrorBody, ErrorCode, ResultBody, SongBuilt, SongProblem};
 
 use crate::project::BuildError;
@@ -59,15 +59,25 @@ pub(crate) fn convert(
                 .into(),
         });
     }
-    let mut by_name: BTreeMap<String, Vec<&PathBuf>> = BTreeMap::new();
+    // Every global symbol a song's `.asm` defines (its descriptor, its
+    // timer constants, its routines) is named after its file, so two files
+    // can clash on any of them, not only the descriptor.
+    let mut by_symbol: BTreeMap<String, Vec<&PathBuf>> = BTreeMap::new();
     for file in &files {
-        by_name.entry(descriptor(file)).or_default().push(file);
+        for symbol in global_symbols(&descriptor(file)) {
+            by_symbol.entry(symbol).or_default().push(file);
+        }
     }
-    if let Some((name, clash)) = by_name.iter().find(|(_, f)| f.len() > 1) {
+    let clash = files.iter().find_map(|file| {
+        global_symbols(&descriptor(file))
+            .into_iter()
+            .find_map(|s| by_symbol.get_key_value(&s).filter(|(_, f)| f.len() > 1))
+    });
+    if let Some((symbol, clash)) = clash {
         let names: Vec<String> = clash.iter().map(|f| shown(f)).collect();
         return Err(BuildError::Layout {
             message: format!(
-                "{} would all be {name}: a song's label comes from its file name",
+                "{} would all define {symbol}: a song's labels come from its file name",
                 names.join(" and ")
             ),
             remedy: "rename all but one, or move the others out of assets/music".into(),
@@ -88,8 +98,10 @@ pub(crate) fn convert(
             error,
         })?;
         let name = descriptor(&file);
+        // `with_extension` would take a dotted stem's last part for the
+        // extension (theme.v2 → theme.asm).
         let stem = file.file_stem().expect("a song file has a name");
-        let asm = out_dir.join(stem).with_extension("asm");
+        let asm = out_dir.join(format!("{}.asm", stem.to_string_lossy()));
         fs::write(&asm, rgbds_asm(&loaded.song, &name)).map_err(|error| BuildError::Io {
             path: asm.clone(),
             error,

@@ -37,6 +37,16 @@ pub fn rows(r: &ResultBody) -> String {
                 }
             }
         }
+        if let Some(o) = &b.overflow {
+            for s in &o.sections {
+                out += &Row::new("past_bank_1")
+                    .field("section", &s.name)
+                    .field("bank", s.bank)
+                    .field("start", format!("${:04X}", s.start))
+                    .field("bytes", s.bytes)
+                    .line();
+            }
+        }
         if let Some(images) = &b.images {
             out += &super::images::rows(images);
         }

@@ -17,15 +17,25 @@
 //! - subpatterns are their first 32 rows, the last jumping to row 1 when it
 //!   jumps nowhere.
 //!
-//! Every label but the descriptor is scoped to it (`song_theme.P0`, where
-//! hUGETracker writes `P0`), so the `.sym` has no name twice: hUGETracker's
-//! `order1` and `waves` are also hUGEDriver's own WRAM labels, and two songs
-//! would share every name. Names never reach the bytes.
+//! Departures from the export:
 //!
-//! One addition: `<descriptor>_TIMER` and `<descriptor>_TMA`, exported
-//! constants saying how the song wants `hUGE_dosound` called (hUGETracker's
-//! export leaves that to the player), so a player can set the timer from
-//! the song it links. They take no ROM space.
+//! - Every data label is scoped to the descriptor (`song_theme.P0`, where
+//!   hUGETracker writes `P0`), so the `.sym` has no name twice:
+//!   hUGETracker's `order1` and `waves` are also hUGEDriver's own WRAM
+//!   labels, and two songs would share every name. Each routine opens a
+//!   global label of its own, `song_theme__hUGE_Routine_0` (hUGETracker's
+//!   `__hUGE_Routine_0` behind the descriptor), so a routine's local labels
+//!   are scoped to it as in the export.
+//! - `routines:` is a table of the 16 routines' addresses, after the
+//!   routines, as hUGETracker's preview builds it (hUGEDriver's `song.asm`):
+//!   hUGEDriver's 6xx reads a pointer there. The RGBDS export writes the
+//!   routines' code at `routines:`, so 6xx in an exported song jumps to an
+//!   address made of code bytes. The table moves the waves 32 bytes later,
+//!   which only a 6xx, or a read running past the routines' code, sees.
+//! - `<descriptor>_TIMER` and `<descriptor>_TMA`, exported constants saying
+//!   how the song wants `hUGE_dosound` called (hUGETracker's export leaves
+//!   that to the player), so a player can set the timer from the song it
+//!   links. They take no ROM space.
 
 use std::collections::HashSet;
 use std::fmt::Write as _;
@@ -106,15 +116,24 @@ pub fn rgbds_asm(song: &Song, descriptor: &str) -> Vec<u8> {
         line(&mut out, "");
     }
 
-    line(&mut out, &format!("{d}.routines:"));
+    // The routines, then `routines:` as the table of their addresses that
+    // hUGEDriver's 6xx reads, as hUGETracker's preview lays them out
+    // (hUGEDriver's song.asm). Its RGBDS export writes the code at
+    // `routines:` instead, which 6xx jumps into as if it were the table.
     for (i, routine) in song.routines.iter().enumerate() {
-        line(&mut out, &format!("{d}.__hUGE_Routine_{i}:"));
+        line(&mut out, &format!("{}:", routine_label(d, i)));
         out.extend_from_slice(routine);
         out.push(b'\n');
-        line(&mut out, &format!("{d}.__end_hUGE_Routine_{i}:"));
+        line(&mut out, &format!("{d}__end_hUGE_Routine_{i}:"));
         line(&mut out, "ret");
         line(&mut out, "");
     }
+    line(&mut out, &format!("{d}.routines:"));
+    for half in (0..song.routines.len()).collect::<Vec<_>>().chunks(8) {
+        let names: Vec<String> = half.iter().map(|i| routine_label(d, *i)).collect();
+        line(&mut out, &format!("dw {}", names.join(", ")));
+    }
+    line(&mut out, "");
 
     line(&mut out, &format!("{d}.waves:"));
     let mut waves = String::new();
@@ -145,6 +164,23 @@ pub fn rgbds_asm(song: &Song, descriptor: &str) -> Vec<u8> {
         &format!("EXPORT {descriptor}_TIMER, {descriptor}_TMA"),
     );
     out
+}
+
+/// Every global symbol [`rgbds_asm`] defines for `descriptor`.
+pub fn global_symbols(descriptor: &str) -> Vec<String> {
+    let d = descriptor;
+    let mut names = vec![d.to_string(), format!("{d}_TIMER"), format!("{d}_TMA")];
+    for i in 0..crate::model::ROUTINES {
+        names.push(routine_label(d, i));
+        names.push(format!("{d}__end_hUGE_Routine_{i}"));
+    }
+    names
+}
+
+/// Routine `i`'s label: global, so the routine's own local labels are
+/// scoped to it, and unique to the song.
+fn routine_label(descriptor: &str, i: usize) -> String {
+    format!("{descriptor}__hUGE_Routine_{i}")
 }
 
 /// `song_` and `stem` with every character an RGBDS symbol can't hold as

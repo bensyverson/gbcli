@@ -2,6 +2,15 @@
 
 Re-runnable measurements behind figures in `project/2026-11-06-backend-evaluation.md` and, for `workspace-build`, the head of `AGENTS.md`.
 
+## test-times.py
+
+The warm test suite, timed per test binary (wall and CPU) and then per test inside any binary over a threshold, each test run alone. Builds first, so compile time is excluded. The warm suite must stay under 30 s; figures and the policy are in `project/2026-11-06-test-suite-speed.md`. Wall time on a loaded machine is inflated, so the script prints the load average; compare CPU seconds across runs.
+
+```sh
+python3 -I scripts/bench/test-times.py                      # per-test breakdown for binaries over 2 s
+python3 -I scripts/bench/test-times.py --per-test-over 1.0
+```
+
 ## sameboy-throughput
 
 Headless SameBoy (DMG_B, turbo uncapped, no boot ROM via the FF50 write) running a ROM for N frames' worth of 8 MHz ticks; also times in-memory state save/load (mean of 10,000).

@@ -12,4 +12,14 @@ print -u2 "pre-commit: cargo clippy"
 cargo clippy --quiet --workspace --all-targets -- -D warnings
 
 print -u2 "pre-commit: cargo test"
+# Build first so the timing below is the suite alone. The warm suite must stay
+# under 30 s (project/2026-11-06-test-suite-speed.md); host load can push one
+# run past it, so this warns rather than fails.
+cargo test --quiet --workspace --no-run
+zmodload zsh/datetime
+start=$EPOCHREALTIME
 cargo test --quiet --workspace
+elapsed=$(( EPOCHREALTIME - start ))
+if (( elapsed > 30 )); then
+    printf 'pre-commit: WARNING: the test suite took %.1f s, over the 30 s budget. Find the slow tests with python3 -I scripts/bench/test-times.py\n' $elapsed >&2
+fi

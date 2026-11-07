@@ -31,3 +31,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 png = "0.17"
 lexopt = "0.3"
+
+# The tests drive an emulator for thousands of frames, and debug-build Rust
+# made the warm suite 3x slower (38 s of CPU against 12.5 s). opt-level 1
+# keeps incremental rebuilds the same and costs about 6 s on a clean build;
+# see project/2026-11-06-test-suite-speed.md. Debug info and assertions stay.
+[profile.dev]
+opt-level = 1

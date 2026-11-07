@@ -8,6 +8,26 @@ use std::process::{Command, Stdio};
 pub const V1: &[u8] = include_bytes!("../../../engine/tests/roms/rebuild_v1.gb");
 pub const V1_SYM: &[u8] = include_bytes!("../../../engine/tests/roms/rebuild_v1.sym");
 pub const V2: &[u8] = include_bytes!("../../../engine/tests/roms/rebuild_v2.gb");
+/// A file from the pinned test corpus (`$GBCLI_TEST_ROMS`, else
+/// `tests/corpus/fetched/` at the repo root) by its path inside it, naming
+/// the suite to fetch when it is missing. Fails loudly, never skips.
+pub fn corpus_file(path: &str) -> Vec<u8> {
+    let dir = match std::env::var_os("GBCLI_TEST_ROMS") {
+        Some(dir) => PathBuf::from(dir),
+        None => PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus/fetched"),
+    };
+    let suite = path.split('/').next().unwrap_or(path);
+    let full = dir.join(path);
+    fs::read(&full).unwrap_or_else(|err| {
+        panic!(
+            "corpus file {} is missing ({err}). Fetch it from the repo root with:\n    \
+             python3 -I scripts/corpus/fetch.py --only {suite}\n\
+             (or point GBCLI_TEST_ROMS at a directory holding {path})",
+            full.display()
+        )
+    })
+}
+
 pub const V2_SYM: &[u8] = include_bytes!("../../../engine/tests/roms/rebuild_v2.sym");
 
 /// A project directory holding `demo.gb` and `demo.sym`, removed on drop.

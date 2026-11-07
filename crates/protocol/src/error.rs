@@ -39,6 +39,9 @@ pub enum ErrorCode {
     /// RGBDS refused the sources, or a step wrote no output (DX 10); the
     /// diagnostics are in the error's `result`.
     BuildFailed,
+    /// A song file (`.uge` or song text) is missing or malformed; the problem,
+    /// located to a line and column or a byte offset, is in the error's `result`.
+    SongUnreadable,
     Unsupported,
     NoSession,
     BootRomMissing,
@@ -71,7 +74,8 @@ impl ErrorCode {
             | ErrorCode::CheckpointMismatch
             | ErrorCode::SymbolsUnreadable
             | ErrorCode::SessionUnreadable
-            | ErrorCode::BuildFailed => 4,
+            | ErrorCode::BuildFailed
+            | ErrorCode::SongUnreadable => 4,
             ErrorCode::Unsupported
             | ErrorCode::NoSession
             | ErrorCode::BootRomMissing
@@ -121,6 +125,9 @@ impl ErrorCode {
             ErrorCode::BuildFailed => {
                 "fix the first error at its file and line, then `gbcli build` again"
             }
+            ErrorCode::SongUnreadable => {
+                "fix the song at the line and column given; `gbcli help music` has the format"
+            }
             ErrorCode::Unsupported => {
                 "the core can't do this; `gbcli gaps` lists every such gap this project hit"
             }
@@ -160,6 +167,7 @@ impl fmt::Display for ErrorCode {
             ErrorCode::SymbolsUnreadable => "symbols_unreadable",
             ErrorCode::SessionUnreadable => "session_unreadable",
             ErrorCode::BuildFailed => "build_failed",
+            ErrorCode::SongUnreadable => "song_unreadable",
             ErrorCode::Unsupported => "unsupported",
             ErrorCode::NoSession => "no_session",
             ErrorCode::BootRomMissing => "boot_rom_missing",
@@ -244,6 +252,7 @@ mod tests {
         ErrorCode::BootRomMissing,
         ErrorCode::ToolchainMissing,
         ErrorCode::BuildFailed,
+        ErrorCode::SongUnreadable,
         ErrorCode::SessionUnreadable,
         ErrorCode::IoFailed,
         ErrorCode::Internal,
@@ -275,6 +284,7 @@ mod tests {
             | ErrorCode::BootRomMissing
             | ErrorCode::ToolchainMissing
             | ErrorCode::BuildFailed
+            | ErrorCode::SongUnreadable
             | ErrorCode::IoFailed
             | ErrorCode::Internal => EVERY.contains(&code),
         }
@@ -325,6 +335,7 @@ mod tests {
             (ErrorCode::SymbolsUnreadable, 4),
             (ErrorCode::SessionUnreadable, 4),
             (ErrorCode::BuildFailed, 4),
+            (ErrorCode::SongUnreadable, 4),
             (ErrorCode::Unsupported, 5),
             (ErrorCode::NoSession, 5),
             (ErrorCode::BootRomMissing, 5),

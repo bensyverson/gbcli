@@ -12,6 +12,7 @@ mod help;
 mod render;
 mod rgbds;
 mod serve_cmd;
+mod song;
 mod usage;
 mod values;
 mod verbs;
@@ -81,6 +82,7 @@ pub fn run(args: Vec<OsString>, env: &Env, io: Io) -> u8 {
         Command::Serve(target) => return serve_cmd::serve(&target, env, io),
         Command::Batch { target, file } => return batch::batch(&target, &file, env, io),
         Command::Request { target, op } => return exec::request(&target, *op, env, io),
+        Command::Song(song) => return song::song(*song, io),
     };
     match printed {
         Ok(()) => 0,

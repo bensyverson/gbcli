@@ -6,6 +6,7 @@ mod flags;
 mod table;
 mod table_build;
 mod table_read;
+mod table_song;
 
 pub use flags::{CHANGE, OUTPUT, SESSION, SHOT_OPTIONS};
 pub use table::VERBS;
@@ -54,7 +55,7 @@ impl Class {
             Class::Configure => "changes the session's settings, not the machine; needs a session",
             Class::Build => {
                 "runs RGBDS from PATH, checked against the pinned version (`gbcli doctor`); \
-                 a session only to reload the build into"
+                 a session only to reload the build into; `song` needs neither"
             }
             Class::Server => "speaks the JSON Lines protocol; a session is optional",
             Class::Help => "no preconditions: works with no session, no ROM and no network",
@@ -91,6 +92,7 @@ pub enum Verb {
     Delete,
     New,
     Build,
+    Song,
     Serve,
     Batch,
     Help,

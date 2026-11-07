@@ -4,7 +4,7 @@ A tool that helps AI assistants build and test Game Boy games.
 
 gbcli runs a Game Boy emulator in the background with no window, so an AI agent can load a game, save and restore moments in it, pause on any instruction, read every byte of memory, measure exactly how long code takes, and look at the screen or listen to the sound. It also builds games from RGBDS assembly and teaches an agent the Game Boy basics through its own help. It aims to match the original Game Boy as faithfully as possible, and it supports the Game Boy Color too.
 
-**Status: early, usable from source.** The emulator session, debugger, checkpoints, screenshots, audio views, cycle profiler, A/B equivalence check and the RGBDS build loop work today; onboarding content and the agent eval come next. The plan is [project/2026-11-06-plan.md](project/2026-11-06-plan.md), the design is [project/2026-11-06-design.md](project/2026-11-06-design.md), and the research behind them is [project/2026-11-06-backend-evaluation.md](project/2026-11-06-backend-evaluation.md).
+**Status: early, usable from source.** The emulator session, debugger, checkpoints, screenshots, audio views, cycle profiler, A/B equivalence check, the RGBDS build loop and hUGETracker songs as editable text (`gbcli song`, `gbcli help music`) work today; onboarding content and the agent eval come next. The plan is [project/2026-11-06-plan.md](project/2026-11-06-plan.md), the design is [project/2026-11-06-design.md](project/2026-11-06-design.md), and the research behind them is [project/2026-11-06-backend-evaluation.md](project/2026-11-06-backend-evaluation.md).
 
 ## Install
 

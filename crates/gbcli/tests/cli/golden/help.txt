@@ -12,8 +12,8 @@ its machine, saves it and prints rows; --json prints the response line.
              look without changing the head
   configure  sessions prune, sessions rm, break, watch, delete
              change the session's settings
-  build      new, build
-             RGBDS from PATH: edit, build, restore, measure
+  build      new, build, song
+             RGBDS from PATH: edit, build, restore, measure; song files
   server     serve, batch
              the JSON Lines protocol, for harnesses
   help       help, recipes, schema, doctor, version
@@ -26,7 +26,7 @@ New:    gbcli doctor, then gbcli new game (a starter that builds and runs)
 Help:   gbcli VERB --help (one worked example each)
         gbcli recipes (goal → command)
         gbcli help TOPIC: addresses expressions time checkpoints writes budgets
-                          exit-codes hardware optimize build
+                          exit-codes hardware optimize build music
         gbcli schema (the JSON request grammar for serve and batch)
 Exit:   0 ok, 1 no, 2 usage, 3 budget/conflict, 4 unreadable, 5 environment
 $ gbcli run --help

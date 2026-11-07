@@ -1,8 +1,8 @@
 //! Every error code a CLI invocation can reach, through the binary: its exit
 //! code, its name on stderr and the remedy it teaches (cli-design ▸ Errors
 //! that teach). `build_failed` and `toolchain_missing` are tested with the
-//! RGBDS loop in `rgbds.rs`; `internal` has no way to make the handler panic
-//! on purpose.
+//! RGBDS loop in `rgbds.rs`, and `song_unreadable` with `song` in `song.rs`;
+//! `internal` has no way to make the handler panic on purpose.
 
 use std::fs;
 

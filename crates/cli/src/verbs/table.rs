@@ -8,6 +8,7 @@ use super::table_build::{BUILD_VERB, DOCTOR_VERB, NEW_VERB};
 use super::table_read::{
     CHECKPOINTS_VERB, EQUIV_VERB, MEASURE_VERB, SHOT_VERB, SYM_VERB, VIEW_VERB,
 };
+use super::table_song::SONG_VERB;
 use super::{Arity, Class, Verb, VerbSpec};
 
 const NONE: Arity = Arity {
@@ -344,6 +345,7 @@ pub const VERBS: &[VerbSpec] = &[
     },
     NEW_VERB,
     BUILD_VERB,
+    SONG_VERB,
     VerbSpec {
         verb: Verb::Serve,
         name: "serve",

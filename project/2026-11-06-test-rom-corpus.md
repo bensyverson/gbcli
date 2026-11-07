@@ -2,6 +2,8 @@
 
 2026-11-06. **Decision: every suite is fetched by a pinned script, none is committed.** The corpus is 12 suites, 3,855 manifest rows over 4,728 files (190.9 MB), reproduced from four pinned sources and checked file by file with SHA-256. Blargg's ROMs have no license at all, so they could never be committed; the MIT suites could be, but one fetch path for everything keeps the repo code-only and gives CI one cache key. Leaf `ZGHaOP`; the runner that consumes this is stage 1 (`runner`).
 
+> **Update 2026-11-07 (leaf U2rLOt):** a 13th suite, `hugetracker-samples`, holds no test ROMs: it is 15 of hUGETracker's sample songs (`.uge`) plus the README that carries the dedication, which `gbcli-music`'s tests round-trip (0 manifest rows; 16 files, 1.0 MB, from a fifth source, SuperDisk/hUGETracker at `3fedced`). Fetch only, never commit, by the user's ruling: the README dedicates "hUGETracker and hUGEDriver" to the public domain, which covers the software, not each composer's song, and no song states a license. Only the original compositions are taken; covers of commercial game music, songs of unclear authorship and the `Incomplete/` fragments are left out. The corpus is now 13 suites over 4,744 files (191.9 MB, `fetch.py --verify-only`). `cargo test` needs it: `python3 -I scripts/corpus/fetch.py --only hugetracker-samples`.
+
 **Flagged for the user:**
 
 - **Blargg's test ROMs carry no license.** retrio/gb-test-roms at `c240dd7` has no LICENSE file (GitHub's API reports no license) and the readme.txt files say nothing about terms. Fetched only; never commit them.
@@ -42,6 +44,7 @@ To move a pin: edit `SOURCES` or `SUITES` in `build_manifest.py`, run `python3 -
 | Mooneye upstream CI build, [gekkio.fi](https://gekkio.fi/files/mooneye-test-suite/) | `mts-20260714-0944-31510e1.zip` (commit `31510e1`, 2026-07-14) | SHA-256 `18aa2946…7d3f2` | mooneye ROMs, `.sym` files, LICENSE |
 | aappleby/GBMicrotest | commit `463eb6b` (codeload tarball) | none (see below) | 513 prebuilt ROMs from `bin/`, LICENSE |
 | Docheinstein/docboy | commit `01e04d3` (codeload tarball, 15 MB) | none (see below) | `tests/config/dmg.json`, `tests/roms/dmg/`, `tests/results/dmg/`, LICENSE |
+| SuperDisk/hUGETracker (added 2026-11-07) | commit `3fedced` (codeload tarball) | none (see below) | 15 songs from `sample-songs/`, README.md |
 
 c-sp's release is the one prebuilt, versioned bundle with stable URLs and reference screenshots converted to a common palette; it is MIT (`LICENSE: 'MIT License / Copyright (c) 2020 Christoph Sprenger'`). Its per-suite howto files (copied into each suite directory) are where the run times and screenshot rules below come from. Mooneye comes from upstream instead because c-sp's copy is from 2022 (`8d742b9d55`) and Gekkio publishes his own CI builds; the 115 ROM names are identical between the two.
 
@@ -67,6 +70,7 @@ License evidence was read from each upstream LICENSE file at the pinned commit (
 | bully | 2 | 68 KB | Ashiepaws/BullyGB `e24fe6f` | MIT: "Copyright (c) 2020 Optix" | yes | fetch |
 | strikethrough | 2 | 48 KB | Ashiepaws/strikethrough.gb `7cd01bf` | MIT: "Copyright (c) 2021 Optix" | yes | fetch |
 | docboy | 2,949 | 137 MB | Docheinstein/docboy `01e04d3` | MIT: "Copyright (c) 2025 Docheinstein"; its own ROMs come from docboy-test-suite, MIT "Copyright (c) 2026 Docheinstein"; third-party ROMs keep theirs (per row) | **no** (mixed) | fetch, flagged |
+| hugetracker-samples (2026-11-07) | 0 (songs, not ROMs) | 1.0 MB | SuperDisk/hUGETracker `3fedced` | none per song: README.md dedicates "hUGETracker and hUGEDriver" to the public domain, which covers the software, not each composer's song | **no** | fetch only, never commit (user ruling 2026-11-07) |
 
 Sizes are `du -sk` of each suite directory in the fetched tree.
 

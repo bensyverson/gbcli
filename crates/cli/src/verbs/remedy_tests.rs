@@ -11,7 +11,7 @@ use super::{VERBS, by_name};
 
 /// The crates whose strings reach a user: errors, remedies, help.
 const CRATES: &[&str] = &[
-    "protocol", "bundle", "engine", "server", "cli", "view", "audio", "build",
+    "protocol", "bundle", "engine", "server", "cli", "view", "audio", "build", "music",
 ];
 
 /// Text a user reads whole, not as string literals: the files `gbcli new`

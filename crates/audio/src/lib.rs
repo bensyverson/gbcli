@@ -21,7 +21,7 @@ mod wav;
 pub use decode::{ApuSnapshot, Change, DecodedWrite, decode};
 pub use error::AudioError;
 pub use notes::{NoteSpan, note_spans};
-pub use piano::{MAX_WIDTH, PianoRoll, piano_roll};
+pub use piano::{MAX_WIDTH, PianoRoll, SpanSource, piano_roll};
 pub use pitch::{Note, NoteName, Pitch, midi_of, nearest_note, noise_hz};
 pub use reg::{Direction, Duty, Envelope, LfsrWidth, SoundReg, Sweep, WaveLevel, channel_name};
 pub use replay::{Takes, record_takes, record_takes_with};

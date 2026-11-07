@@ -15,6 +15,7 @@ use crate::request::WriteKind;
 use crate::rev::Rev;
 use crate::session::{EventLogLine, GapCount, SessionRow};
 use crate::shot::{FilmstripMade, ShotMade};
+use crate::song::{SongMade, SongProblem};
 use crate::stop::StopRecord;
 use crate::toolchain::{BuildMade, DoctorMade, NewMade};
 use crate::video::ViewMade;
@@ -209,6 +210,12 @@ pub struct ResultBody {
     /// `new`: the project it scaffolded.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub created: Option<NewMade>,
+    /// `song`: the song read and the files written.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub song: Option<SongMade>,
+    /// `song`: why the song file didn't load (with `song_unreadable`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub song_problem: Option<SongProblem>,
 }
 
 /// One `--read` result.

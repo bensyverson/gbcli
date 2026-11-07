@@ -53,3 +53,7 @@ In an isolated worktree, `cat crates/engine/data/gb-opcodes/SOURCE` was refused 
 ## 2026-11-07 — the hook's suite time is noise under low-power mode or parallel agents
 
 The pre-commit hook warned 103–142 s against the 30 s budget all session, while the Mac was in low-power mode and several agents (and other sessions' Go builds, load average 48–167) were compiling. No single test was slow (largest about 6 s alone). Don't chase a hook warning taken under load; re-time with `python3 -I scripts/bench/test-times.py` on an idle machine, out of low-power mode (`pmset -g | grep lowpowermode`), before moving tests to the pre-release suite.
+
+## 2026-11-07 — `git add -A` after a squash conflict commits the markers in files you didn't resolve
+
+A `git merge --squash` that conflicted in two files was resolved in one (crates/server/src/handle/mod.rs), then `git add -A` staged the other (project/2026-11-06-design.md) with its `<<<<<<<` markers, and the hook passed because nothing compiles Markdown; commit e3ca2be shipped them. After resolving, run `git diff --name-only --diff-filter=U` and `git grep -n '^<<<<<<< '` before staging.

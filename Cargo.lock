@@ -72,6 +72,7 @@ dependencies = [
  "gbcli-bundle",
  "gbcli-cli",
  "gbcli-core",
+ "gbcli-music",
  "gbcli-protocol",
  "png",
  "serde_json",
@@ -111,6 +112,7 @@ version = "0.1.0"
 dependencies = [
  "gbcli-bundle",
  "gbcli-core",
+ "gbcli-music",
  "gbcli-protocol",
  "gbcli-server",
  "lexopt",
@@ -143,6 +145,16 @@ dependencies = [
  "gbcli-sameboy",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "gbcli-music"
+version = "0.1.0"
+dependencies = [
+ "gbcli-audio",
+ "gbcli-core",
+ "gbcli-engine",
+ "gbcli-view",
 ]
 
 [[package]]

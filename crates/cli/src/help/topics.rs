@@ -14,10 +14,11 @@ pub enum Topic {
     Hardware,
     Optimize,
     Build,
+    Music,
 }
 
 impl Topic {
-    pub const ALL: [Topic; 10] = [
+    pub const ALL: [Topic; 11] = [
         Topic::Addresses,
         Topic::Expressions,
         Topic::Time,
@@ -28,6 +29,7 @@ impl Topic {
         Topic::Hardware,
         Topic::Optimize,
         Topic::Build,
+        Topic::Music,
     ];
 
     pub fn name(self) -> &'static str {
@@ -42,6 +44,7 @@ impl Topic {
             Topic::Hardware => "hardware",
             Topic::Optimize => "optimize",
             Topic::Build => "build",
+            Topic::Music => "music",
         }
     }
 
@@ -61,6 +64,7 @@ impl Topic {
             Topic::Hardware => HARDWARE,
             Topic::Optimize => OPTIMIZE,
             Topic::Build => BUILD,
+            Topic::Music => super::music::text(),
         }
     }
 }
@@ -178,6 +182,7 @@ Exit codes — one table for every command; errors print to stderr as
   4  something didn't load: rom_unreadable checkpoint_unreadable
      checkpoint_mismatch symbols_unreadable session_unreadable
      build_failed (RGBDS rejected the sources: see the diagnostic rows)
+     song_unreadable (a song file is missing or malformed: see the problem row)
   5  environment: unsupported no_session boot_rom_missing toolchain_missing
      io_failed internal
 ";
@@ -282,6 +287,18 @@ mod tests {
                 }
             }
         }
-        assert_eq!(seen, 25, "every code in the closed set");
+        assert_eq!(seen, 26, "every code in the closed set");
+    }
+
+    #[test]
+    fn the_music_topic_lists_every_effect_and_carries_the_worked_example() {
+        let text = Topic::from_name("music").expect("a music topic").text();
+        for effect in gbcli_music::EFFECTS {
+            let line = format!("  {} {}", effect.spelling, effect.name);
+            assert!(text.contains(&line), "{line:?} missing");
+        }
+        assert!(text.contains(gbcli_music::EXAMPLE), "the example, verbatim");
+        assert!(text.contains(gbcli_music::FORMAT_LINE));
+        assert!(text.lines().all(|l| l.chars().count() <= 80), "{text}");
     }
 }

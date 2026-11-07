@@ -30,6 +30,7 @@ pub enum Command {
     Batch { target: Target, file: String },
     // Boxed: an Op is several hundred bytes and the other commands are small.
     Request { target: Target, op: Box<Op> },
+    Song(Box<crate::song::SongCommand>),
 }
 
 /// Where a request goes and how its answer is printed: the flags every
@@ -83,6 +84,7 @@ pub fn build(inv: Invocation, env: &Env) -> Result<Command, Usage> {
         Verb::Doctor => return Ok(crate::rgbds::doctor(&inv)),
         Verb::New => return Ok(crate::rgbds::new(&inv)),
         Verb::Build => return crate::rgbds::build(&inv, env),
+        Verb::Song => return Ok(crate::song::command(&inv, env)),
         Verb::Serve => return Ok(Command::Serve(target(&inv, env, None)?)),
         Verb::Batch => {
             let Some(file) = inv.one("file") else {

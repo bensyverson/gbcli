@@ -12,6 +12,7 @@ gbcli-cli.workspace = true
 [dev-dependencies]
 gbcli-bundle.workspace = true
 gbcli-core.workspace = true
+gbcli-music.workspace = true
 gbcli-protocol.workspace = true
 png.workspace = true
 serde_json.workspace = true

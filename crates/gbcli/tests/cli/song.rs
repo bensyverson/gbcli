@@ -1,0 +1,111 @@
+//! `gbcli song` through the binary: a hUGETracker sample to text and back,
+//! a piano roll from a song file with no build, and a malformed song's
+//! structured error.
+
+use std::fs;
+
+use crate::common::{Project, corpus_file, golden};
+
+/// A v5 hUGETracker sample song from the corpus's `hugetracker-samples` suite.
+fn peril() -> Vec<u8> {
+    corpus_file("hugetracker-samples/Coffee Bat - Pilgrim's Peril Menu.uge")
+}
+/// gbcli-music's pinned roll of its example song.
+const EXAMPLE_PIANO: &[u8] = include_bytes!("../../../music/tests/golden/example_piano.png");
+
+fn project(name: &str) -> Project {
+    let p = Project::new(name);
+    fs::write(p.path("peril.uge"), peril()).unwrap();
+    fs::write(p.path("example.song"), gbcli_music::EXAMPLE).unwrap();
+    p
+}
+
+#[test]
+fn song_converts_both_ways_and_draws_a_piano_roll() {
+    let p = project("song");
+    let mut transcript = String::new();
+    let steps: &[&[&str]] = &[
+        &["song", "peril.uge"],
+        &["song", "peril.uge", "--text", "peril.song"],
+        &[
+            "song",
+            "peril.song",
+            "--uge",
+            "back.uge",
+            "--piano",
+            "peril.png",
+        ],
+        &["song", "example.song", "--piano", "example.png", "--json"],
+    ];
+    for args in steps {
+        let run = p.gbcli(args);
+        assert_eq!(run.code, 0, "{args:?}: {}", run.stderr);
+        transcript += &run.transcript(args, &p.dir);
+    }
+    golden("song.txt", &transcript);
+
+    let text = fs::read_to_string(p.path("peril.song")).unwrap();
+    assert!(
+        text.starts_with(gbcli_music::FORMAT_LINE),
+        "{}",
+        &text[..80]
+    );
+    // The v5 file comes back as v6 with the same song.
+    let back = gbcli_music::read_uge(&fs::read(p.path("back.uge")).unwrap()).unwrap();
+    assert_eq!(back.version, 6);
+    assert!(back.song == gbcli_music::read_uge(&peril()).unwrap().song);
+    // The CLI draws exactly the library's pinned roll.
+    assert!(fs::read(p.path("example.png")).unwrap() == EXAMPLE_PIANO);
+}
+
+#[test]
+fn a_malformed_song_is_song_unreadable_located_to_its_line_and_column() {
+    let p = project("song-bad");
+    let bad = gbcli_music::EXAMPLE.replace("04 E-5 01", "04 H-5 01");
+    fs::write(p.path("bad.song"), bad).unwrap();
+    let run = p.gbcli(&["song", "bad.song", "--uge", "bad.uge"]);
+    run.fails(4, "song_unreadable", "C-3 to B-8");
+    assert!(
+        run.stderr.contains("bad.song:32:4: `H-5` is not a note"),
+        "{}",
+        run.stderr
+    );
+    assert!(
+        run.stdout
+            .starts_with("problem path=bad.song line=32 column=4 "),
+        "{}",
+        run.stdout
+    );
+    assert!(!p.path("bad.uge").exists(), "nothing is written");
+
+    let json = p.gbcli(&["song", "bad.song", "--json"]);
+    assert_eq!(json.code, 4);
+    let line: serde_json::Value = serde_json::from_str(json.stdout.trim()).unwrap();
+    let problem = &line["error"]["result"]["song_problem"];
+    assert_eq!(
+        (problem["line"].as_u64(), problem["column"].as_u64()),
+        (Some(32), Some(4))
+    );
+}
+
+#[test]
+fn a_damaged_uge_names_the_byte_it_ran_out_at() {
+    let p = project("song-cut");
+    fs::write(p.path("cut.uge"), &peril()[..5000]).unwrap();
+    let run = p.gbcli(&["song", "cut.uge"]);
+    run.fails(4, "song_unreadable", "hUGETracker");
+    assert!(run.stderr.contains("cut.uge: byte 5000:"), "{}", run.stderr);
+}
+
+#[test]
+fn a_missing_song_file_is_song_unreadable() {
+    let p = project("song-missing");
+    p.gbcli(&["song", "nope.uge"])
+        .fails(4, "song_unreadable", "check the path");
+}
+
+#[test]
+fn song_needs_its_file() {
+    let p = project("song-usage");
+    p.gbcli(&["song"]).fails(2, "bad_request", "gbcli song");
+}

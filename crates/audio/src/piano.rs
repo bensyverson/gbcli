@@ -27,13 +27,42 @@ const CHANNEL_COLORS: [u32; 4] = [0xF05050, 0xF0B040, 0x50A8F0, 0x90D860];
 pub struct PianoRoll {
     /// Emulated time per pixel column.
     pub ticks_per_px: u64,
+    /// Where the spans came from, which the label states.
+    pub source: SpanSource,
 }
 
 impl Default for PianoRoll {
-    /// Four columns per frame.
+    /// Four columns per frame, spans from the register log.
     fn default() -> Self {
         PianoRoll {
             ticks_per_px: Ticks::PER_FRAME / 4,
+            source: SpanSource::Registers,
+        }
+    }
+}
+
+/// Where a roll's note spans came from.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SpanSource {
+    /// The sound-register write log ([`crate::note_spans`]).
+    #[default]
+    Registers,
+    /// A song file, read without playing it (gbcli-music).
+    Song,
+}
+
+impl SpanSource {
+    /// How the spans' ends were found, for the label.
+    fn ends(self) -> &'static str {
+        match self {
+            SpanSource::Registers => {
+                "note ends from length, envelope and sweep are computed from the registers"
+            }
+            SpanSource::Song => {
+                "notes from the song file as written: each lasts until its channel's next note \
+                 or a note cut (E), with no instrument length, envelope, subpattern or pitch \
+                 effect applied; noise notes are plotted at their written pitch"
+            }
         }
     }
 }
@@ -101,11 +130,12 @@ pub fn piano_roll(
     }
     let detail = format!(
         "lanes top to bottom: {}; {ROW_PX} px per semitone; {} ticks per px from tick {} to {}; \
-         note ends from length, envelope and sweep are computed from the registers",
+         {}",
         details.join(", "),
         layout.ticks_per_px,
         from.0,
-        to.0
+        to.0,
+        layout.source.ends()
     );
     image
         .labels

@@ -12,4 +12,5 @@ mod honesty;
 mod profile;
 mod raster;
 mod rgbds;
+mod song;
 mod verbs;

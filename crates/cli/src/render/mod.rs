@@ -5,6 +5,7 @@ mod audio;
 mod equiv;
 mod profile;
 mod row;
+mod song;
 mod stop;
 mod toolchain;
 mod video;
@@ -144,6 +145,7 @@ pub fn rows(r: &ResultBody) -> String {
         out += &audio::rows(sound);
     }
     out += &toolchain::rows(r);
+    out += &song::rows(r);
     if let Some(cp) = &r.checkpoint {
         out += &Row::new("checkpoint")
             .field("name", &cp.name)

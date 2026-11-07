@@ -33,6 +33,17 @@ CSP = "c-sp-game-boy-test-roms-v7.0"
 MTS = "mooneye-test-suite-mts-20260714-0944-31510e1"
 GBMT = "gbmicrotest-463eb6b"
 DOCBOY = "docboy-01e04d3"
+HUGE = "hugetracker-3fedced"
+
+# hUGETracker's sample songs used by gbcli-music's tests: the original compositions only
+# (covers of commercial game music and songs of unclear authorship are left out).
+HUGE_SONGS = [
+    "Jester - FishNChips", "Reed - Funkabeer's Revenge", "SVL - UwU", "Arachno - A Sad Touch",
+    "Maktone - Softworld", "MelonadeM - Boatship for Rent", "SVL - Yyna",
+    "raphaelgoulart - The Murderous Funk Machine (intro)", "Coffee Bat - Blue Ocean",
+    "Coffee Bat - Pilgrim's Peril Menu", "Coffee Bat - Wyrmhole", "Chavez - Monkeys on Mars",
+    "FADE - Microplastics in the Air", "FADE - Strap in and Suit Up", "Tempest - Kekri",
+]
 
 SOURCES = [
     {
@@ -103,6 +114,19 @@ SOURCES = [
             {"suite": "docboy", "from": "tests/config/dmg.json", "to": "docboy/config/dmg.json"},
             {"suite": "docboy", "from": "LICENSE", "to": "docboy/LICENSE"},
         ],
+    },
+    {
+        "id": HUGE,
+        "url": "https://codeload.github.com/SuperDisk/hUGETracker/tar.gz/3fedced393807bdc5d818fd39be59f6de0e84b60",
+        "kind": "tar.gz",
+        "cache_name": "hugetracker-3fedced.tar.gz",
+        "archive_sha256": None,
+        "strip_components": 1,
+        "note": "GitHub-generated tarball; only the extracted files are pinned. Sample songs live in sample-songs/.",
+        "extract": [
+            {"suite": "hugetracker-samples", "from": f"sample-songs/{name}.uge", "to": f"hugetracker-samples/{name}.uge"}
+            for name in HUGE_SONGS
+        ] + [{"suite": "hugetracker-samples", "from": "README.md", "to": "hugetracker-samples/README.md"}],
     },
 ]
 
@@ -190,6 +214,14 @@ SUITES = {
         "commit": "01e04d3d9fcb4ea28d05f468771127b2f6bd3549", "source": DOCBOY,
         "license": lic("MIT", "https://github.com/Docheinstein/docboy/blob/01e04d3/LICENSE",
                        "LICENSE: 'MIT License / Copyright (c) 2025 Docheinstein'; docboy's own ROMs come from docboy-test-suite (LICENSE: 'MIT License / Copyright (c) 2026 Docheinstein'). Third-party ROMs inside keep their upstream licenses: see each row.",
+                       False),
+    },
+    "hugetracker-samples": {
+        "title": "hUGETracker's sample songs (.uge, original compositions only), for gbcli-music's tests",
+        "upstream": "https://github.com/SuperDisk/hUGETracker",
+        "commit": "3fedced393807bdc5d818fd39be59f6de0e84b60", "source": HUGE,
+        "license": lic("NOASSERTION", "https://github.com/SuperDisk/hUGETracker/blob/3fedced/README.md",
+                       "README.md, under 'License': 'hUGETracker and hUGEDriver are dedicated to the public domain.' That names the tracker and the driver, not each composer's song; no LICENSE file, and no song carries a license of its own. User ruling 2026-11-07: fetch only, never commit.",
                        False),
     },
 }

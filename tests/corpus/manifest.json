@@ -211,6 +211,97 @@
           "to": "docboy/LICENSE"
         }
       ]
+    },
+    {
+      "id": "hugetracker-3fedced",
+      "url": "https://codeload.github.com/SuperDisk/hUGETracker/tar.gz/3fedced393807bdc5d818fd39be59f6de0e84b60",
+      "kind": "tar.gz",
+      "cache_name": "hugetracker-3fedced.tar.gz",
+      "archive_sha256": null,
+      "strip_components": 1,
+      "note": "GitHub-generated tarball; only the extracted files are pinned. Sample songs live in sample-songs/.",
+      "extract": [
+        {
+          "suite": "hugetracker-samples",
+          "from": "sample-songs/Jester - FishNChips.uge",
+          "to": "hugetracker-samples/Jester - FishNChips.uge"
+        },
+        {
+          "suite": "hugetracker-samples",
+          "from": "sample-songs/Reed - Funkabeer's Revenge.uge",
+          "to": "hugetracker-samples/Reed - Funkabeer's Revenge.uge"
+        },
+        {
+          "suite": "hugetracker-samples",
+          "from": "sample-songs/SVL - UwU.uge",
+          "to": "hugetracker-samples/SVL - UwU.uge"
+        },
+        {
+          "suite": "hugetracker-samples",
+          "from": "sample-songs/Arachno - A Sad Touch.uge",
+          "to": "hugetracker-samples/Arachno - A Sad Touch.uge"
+        },
+        {
+          "suite": "hugetracker-samples",
+          "from": "sample-songs/Maktone - Softworld.uge",
+          "to": "hugetracker-samples/Maktone - Softworld.uge"
+        },
+        {
+          "suite": "hugetracker-samples",
+          "from": "sample-songs/MelonadeM - Boatship for Rent.uge",
+          "to": "hugetracker-samples/MelonadeM - Boatship for Rent.uge"
+        },
+        {
+          "suite": "hugetracker-samples",
+          "from": "sample-songs/SVL - Yyna.uge",
+          "to": "hugetracker-samples/SVL - Yyna.uge"
+        },
+        {
+          "suite": "hugetracker-samples",
+          "from": "sample-songs/raphaelgoulart - The Murderous Funk Machine (intro).uge",
+          "to": "hugetracker-samples/raphaelgoulart - The Murderous Funk Machine (intro).uge"
+        },
+        {
+          "suite": "hugetracker-samples",
+          "from": "sample-songs/Coffee Bat - Blue Ocean.uge",
+          "to": "hugetracker-samples/Coffee Bat - Blue Ocean.uge"
+        },
+        {
+          "suite": "hugetracker-samples",
+          "from": "sample-songs/Coffee Bat - Pilgrim's Peril Menu.uge",
+          "to": "hugetracker-samples/Coffee Bat - Pilgrim's Peril Menu.uge"
+        },
+        {
+          "suite": "hugetracker-samples",
+          "from": "sample-songs/Coffee Bat - Wyrmhole.uge",
+          "to": "hugetracker-samples/Coffee Bat - Wyrmhole.uge"
+        },
+        {
+          "suite": "hugetracker-samples",
+          "from": "sample-songs/Chavez - Monkeys on Mars.uge",
+          "to": "hugetracker-samples/Chavez - Monkeys on Mars.uge"
+        },
+        {
+          "suite": "hugetracker-samples",
+          "from": "sample-songs/FADE - Microplastics in the Air.uge",
+          "to": "hugetracker-samples/FADE - Microplastics in the Air.uge"
+        },
+        {
+          "suite": "hugetracker-samples",
+          "from": "sample-songs/FADE - Strap in and Suit Up.uge",
+          "to": "hugetracker-samples/FADE - Strap in and Suit Up.uge"
+        },
+        {
+          "suite": "hugetracker-samples",
+          "from": "sample-songs/Tempest - Kekri.uge",
+          "to": "hugetracker-samples/Tempest - Kekri.uge"
+        },
+        {
+          "suite": "hugetracker-samples",
+          "from": "README.md",
+          "to": "hugetracker-samples/README.md"
+        }
+      ]
     }
   ],
   "suites": {
@@ -381,6 +472,20 @@
       },
       "rows": 2949,
       "dir": "docboy/"
+    },
+    "hugetracker-samples": {
+      "title": "hUGETracker's sample songs (.uge, original compositions only), for gbcli-music's tests",
+      "upstream": "https://github.com/SuperDisk/hUGETracker",
+      "commit": "3fedced393807bdc5d818fd39be59f6de0e84b60",
+      "source": "hugetracker-3fedced",
+      "license": {
+        "spdx": "NOASSERTION",
+        "url": "https://github.com/SuperDisk/hUGETracker/blob/3fedced/README.md",
+        "evidence": "README.md, under 'License': 'hUGETracker and hUGEDriver are dedicated to the public domain.' That names the tracker and the driver, not each composer's song; no LICENSE file, and no song carries a license of its own. User ruling 2026-11-07: fetch only, never commit.",
+        "commit_permitted": false
+      },
+      "rows": 0,
+      "dir": "hugetracker-samples/"
     }
   },
   "rows": [

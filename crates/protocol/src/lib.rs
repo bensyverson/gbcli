@@ -17,6 +17,7 @@ mod response;
 mod rev;
 mod session;
 mod shot;
+mod song;
 mod stop;
 mod strict;
 mod toolchain;
@@ -56,6 +57,7 @@ pub use session::{
     UndoWalk, is_session_name,
 };
 pub use shot::{Crop, FilmstripArgs, FilmstripMade, ShotArgs, ShotFrame, ShotMade, ShotReadArgs};
+pub use song::{SongFileFormat, SongMade, SongOutput, SongOutputKind, SongProblem};
 pub use stop::{
     BudgetLimits, BudgetUse, Cadence, FrameShown, StepKind, StopReason, StopRecord, StopTime,
     TimeBase, vblank_name,

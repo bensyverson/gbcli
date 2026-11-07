@@ -12,6 +12,9 @@ Why won't it build?
 Rebuild after an edit and carry on where you were
   gbcli build --session dx --restore start (the checkpoint, in the new ROM;
   refused with what moved if its routine or variables moved; gbcli help build)
+Read or write music (hUGETracker songs)
+  gbcli song theme.uge --text theme.song (a grid an agent can edit; gbcli help
+  music), then gbcli song theme.song --uge theme.uge --piano theme.png
 Run until something is true
   gbcli run --until 'u16[wFrame] >= 60'
 Run to a routine

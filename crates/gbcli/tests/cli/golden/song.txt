@@ -1,0 +1,15 @@
+$ gbcli song peril.uge
+exit 0
+song path=peril.uge format=uge version=5 name="Pilgrim's Peril - Menu theme" instruments=33 patterns=14 orders=16
+$ gbcli song peril.uge --text peril.song
+exit 0
+song path=peril.uge format=uge version=5 name="Pilgrim's Peril - Menu theme" instruments=33 patterns=14 orders=16
+text path=peril.song bytes=49998
+$ gbcli song peril.song --uge back.uge --piano peril.png
+exit 0
+song path=peril.song format=text name="Pilgrim's Peril - Menu theme" instruments=33 patterns=14 orders=16
+uge path=back.uge bytes=79262
+piano path=peril.png bytes=1285 width=3584 height=153 notes=356 rows=1024
+$ gbcli song example.song --piano example.png --json
+exit 0
+{"id":"cli","ok":true,"result":{"song":{"path":"example.song","format":"text","name":"Example","instruments":5,"patterns":5,"orders":2,"wrote":[{"kind":"piano","path":"example.png","bytes":897,"width":768,"height":201,"notes":90,"rows":128}]}},"warnings":[]}

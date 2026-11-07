@@ -1,6 +1,7 @@
 //! The primer, each verb's `--help`, the topics, recipes and the schema.
 //! None of it needs a session, a ROM or the network (cli-design ▸ Grammar).
 
+mod music;
 mod recipes;
 mod schema;
 mod topics;
@@ -45,7 +46,7 @@ pub fn primer() -> String {
         Help:   gbcli VERB --help (one worked example each)\n\
         \x20       gbcli recipes (goal → command)\n\
         \x20       gbcli help TOPIC: addresses expressions time checkpoints writes budgets\n\
-        \x20                         exit-codes hardware optimize build\n\
+        \x20                         exit-codes hardware optimize build music\n\
         \x20       gbcli schema (the JSON request grammar for serve and batch)\n\
         Exit:   0 ok, 1 no, 2 usage, 3 budget/conflict, 4 unreadable, 5 environment\n";
     out
@@ -57,7 +58,7 @@ fn title(class: Class) -> &'static str {
         Class::Act => "advance or change the machine; the stop becomes the head",
         Class::Read => "look without changing the head",
         Class::Configure => "change the session's settings",
-        Class::Build => "RGBDS from PATH: edit, build, restore, measure",
+        Class::Build => "RGBDS from PATH: edit, build, restore, measure; song files",
         Class::Server => "the JSON Lines protocol, for harnesses",
         Class::Help => "no session, ROM or network needed",
     }

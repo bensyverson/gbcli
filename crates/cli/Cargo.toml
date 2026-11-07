@@ -9,6 +9,7 @@ publish.workspace = true
 [dependencies]
 gbcli-bundle.workspace = true
 gbcli-core.workspace = true
+gbcli-music.workspace = true
 gbcli-protocol.workspace = true
 gbcli-server.workspace = true
 lexopt.workspace = true

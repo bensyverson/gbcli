@@ -22,10 +22,14 @@ int gbcli_battery_kind(GB_gameboy_t *gb)
     }
 }
 
-// Whether the cart has a clock that advance_rtc can move.
-bool gbcli_has_clock(GB_gameboy_t *gb)
+// The clock advance_rtc can move: 0 none, 1 MBC3's, 2 HuC3's, 3 TPP1's.
+int gbcli_clock_kind(GB_gameboy_t *gb)
 {
-    return gb->cartridge_type->has_rtc || gb->cartridge_type->mbc_type == GB_HUC3;
+    switch (gb->cartridge_type->mbc_type) {
+        case GB_HUC3: return 2;
+        case GB_TPP1: return 3;
+        default: return gb->cartridge_type->has_rtc ? 1 : 0;
+    }
 }
 
 // The cart RAM's size in bytes.

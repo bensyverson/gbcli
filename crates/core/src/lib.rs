@@ -20,7 +20,7 @@ pub use audio::{
     ApuWrite, ApuWriteEffect, AudioCapture, AudioSamples, SOUND_REGISTERS, StereoSample, WAVE_RAM,
     is_sound_addr,
 };
-pub use battery::{MAX_RTC_ADVANCE_S, SavClock};
+pub use battery::{CartClock, SavClock};
 pub use display::{ColorMode, LiveFrame, PixelBuf};
 pub use error::{CoreError, Feature, Gap, Support};
 pub use filter::{AddrFilter, BankSel, StoreFilter, canonical_addr};
@@ -227,12 +227,20 @@ pub trait Core {
     }
     /// Moves the cart's clock on by whole seconds at once, as if the machine
     /// had been off that long; a halted clock stays put, as on hardware.
-    /// `InvalidState` on a cart without a clock, or past
-    /// [`MAX_RTC_ADVANCE_S`].
+    /// `InvalidState` on a cart without a clock, or past the clock's
+    /// [`CartClock::max_advance_s`].
     fn advance_rtc(&mut self, _seconds: u64) -> Result<(), CoreError> {
         Err(CoreError::Unsupported {
             feature: Feature::BatterySave,
             reason: "this core doesn't advance the cart clock",
+        })
+    }
+    /// The cart's clock, which [`advance_rtc`](Core::advance_rtc) moves, or
+    /// `None` when the cart has none.
+    fn cart_clock(&self) -> Result<Option<CartClock>, CoreError> {
+        Err(CoreError::Unsupported {
+            feature: Feature::BatterySave,
+            reason: "this core doesn't report the cart's clock",
         })
     }
     /// Never-written tracking for WRAM, HRAM or cart RAM (design §9).

@@ -6,7 +6,7 @@ use std::fs;
 use std::path::Path;
 
 use gbcli_bundle::{SessionStore, parse_duration};
-use gbcli_core::{MAX_RTC_ADVANCE_S, SavClock};
+use gbcli_core::{CartClock, SavClock};
 use gbcli_engine::{Battery, LoadOptions, Machine};
 use gbcli_protocol::{
     BatteryFrom, ErrorBody, ErrorCode, PowerCycleArgs, PowerCycleMade, ResultBody, SavArgs,
@@ -38,23 +38,21 @@ impl Handler {
                 .as_secs(),
             None => 0,
         };
-        if rtc_advance > MAX_RTC_ADVANCE_S {
-            return Err(Failure::new(ErrorBody::new(
-                ErrorCode::BadRequest,
-                format!(
-                    "--rtc-advance {} is past 1024 days, the most a cart clock moves at once: an \
-                     MBC3 clock counts 512 days and then only flags the overflow, so a longer \
-                     advance reads like one 512 days shorter",
-                    args.rtc_advance.as_deref().unwrap_or_default()
-                ),
-                "advance by at most 1024d; 512d from day 0 is enough to overflow the day \
-                 counter and set its carry flag",
-            )));
-        }
         let file = args.sav.as_deref().map(read_sav).transpose()?;
         self.forget_warm(store.name());
         let stored = |e| Failure::from_store(&e);
         let mut machine = store.machine(meta).map_err(stored)?;
+        if rtc_advance > 0 {
+            // The ROM on disk decides the clock: it builds the new core.
+            let clock = machine
+                .core()
+                .cart_clock()
+                .map_err(|e| Failure::from_core(&e))?;
+            if let Some(clock) = clock.filter(|c| rtc_advance > c.max_advance_s()) {
+                let text = args.rtc_advance.as_deref().unwrap_or_default();
+                return Err(advance_too_far(clock, text));
+            }
+        }
         // Breakpoints and watches are the session's, not the machine's, and
         // save_head writes back whatever the machine holds.
         *machine.debugger_config_mut() = meta.debugger.clone();
@@ -162,6 +160,33 @@ impl Handler {
             ..ResultBody::default()
         })
     }
+}
+
+/// The refusal of an advance past `clock`'s bound, in that cart's terms.
+fn advance_too_far(clock: CartClock, text: &str) -> Failure {
+    let remedy = match clock {
+        CartClock::Mbc3 => {
+            "advance by at most 1024d; 512d from day 0 is enough to overflow the day counter and \
+             set its carry flag"
+        }
+        CartClock::Tpp1 => {
+            "advance by at most 3584d; 1792d from week 0 is enough to overflow the week counter \
+             and set MR4's overflow flag"
+        }
+        CartClock::Huc3 => {
+            "advance by at most 65536d; 65535d from day 0 reaches the last day before the day \
+             counter wraps"
+        }
+    };
+    Failure::new(ErrorBody::new(
+        ErrorCode::BadRequest,
+        format!(
+            "--rtc-advance {text} is past {} days, the most this cart's clock moves at once: {}",
+            clock.max_advance_days(),
+            clock.bound_reason()
+        ),
+        remedy,
+    ))
 }
 
 /// The ROM header's disagreements, as warnings with their fix.

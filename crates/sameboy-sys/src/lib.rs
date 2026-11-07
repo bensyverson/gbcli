@@ -292,6 +292,12 @@ pub const GBCLI_BATTERY_RAM: c_int = 1;
 pub const GBCLI_BATTERY_RAM_AND_MBC3_CLOCK: c_int = 2;
 pub const GBCLI_BATTERY_OTHER_CLOCK: c_int = 3;
 
+/// The clock `gbcli_advance_rtc` moves on a cart (`gbcli_clock_kind`).
+pub const GBCLI_CLOCK_NONE: c_int = 0;
+pub const GBCLI_CLOCK_MBC3: c_int = 1;
+pub const GBCLI_CLOCK_HUC3: c_int = 2;
+pub const GBCLI_CLOCK_TPP1: c_int = 3;
+
 // Battery saves (gb.h), and gbcli's loader without host time
 // (`shim/gbcli_battery.c`).
 unsafe extern "C" {
@@ -304,7 +310,8 @@ unsafe extern "C" {
     pub fn GB_save_battery(gb: *mut GB_gameboy_t, path: *const c_char) -> c_int;
     /// One of the `GBCLI_BATTERY_*` codes.
     pub fn gbcli_battery_kind(gb: *mut GB_gameboy_t) -> c_int;
-    pub fn gbcli_has_clock(gb: *mut GB_gameboy_t) -> bool;
+    /// One of the `GBCLI_CLOCK_*` codes.
+    pub fn gbcli_clock_kind(gb: *mut GB_gameboy_t) -> c_int;
     pub fn gbcli_cart_ram_size(gb: *mut GB_gameboy_t) -> u32;
     /// `real` and `latched` are five registers each, or both null.
     pub fn gbcli_load_battery(

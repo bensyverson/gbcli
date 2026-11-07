@@ -1,7 +1,7 @@
 //! Battery saves in SameBoy's `.sav` format, read without host time (design
 //! §6, the 2026-11-07 battery-save ruling).
 
-use gbcli_core::{CoreError, Feature, MAX_RTC_ADVANCE_S, SavClock};
+use gbcli_core::{CartClock, CoreError, Feature, SavClock};
 use sameboy_sys as sb;
 
 use crate::SameBoy;
@@ -90,28 +90,42 @@ impl SameBoy {
     }
 
     pub(crate) fn advance_clock(&mut self, seconds: u64) -> Result<(), CoreError> {
-        let gb = self.raw();
-        // SAFETY: a plain query, then a clock update outside GB_run.
-        unsafe {
-            if !sb::gbcli_has_clock(gb) {
-                return Err(CoreError::InvalidState {
-                    reason: "this cart has no clock to advance (only MBC3 with a timer, HuC3 \
-                             and TPP1 have one)"
-                        .into(),
-                });
-            }
-            if seconds > MAX_RTC_ADVANCE_S || !sb::gbcli_advance_rtc(gb, seconds) {
-                return Err(CoreError::InvalidState {
-                    reason: format!(
-                        "an advance of {seconds} s is past the most a cart clock moves at once, \
-                         1024 days ({MAX_RTC_ADVANCE_S} s): an MBC3 clock counts 512 days and \
-                         then only flags the overflow, so a longer advance reads like one 512 \
-                         days shorter"
-                    ),
-                });
-            }
+        let Some(clock) = self.clock_kind() else {
+            return Err(CoreError::InvalidState {
+                reason: "this cart has no clock to advance (only MBC3 with a timer, HuC3 and \
+                         TPP1 have one)"
+                    .into(),
+            });
+        };
+        if seconds > clock.max_advance_s() {
+            return Err(CoreError::InvalidState {
+                reason: format!(
+                    "an advance of {seconds} s is past {} days ({} s), the most this cart's clock \
+                     moves at once: {}",
+                    clock.max_advance_days(),
+                    clock.max_advance_s(),
+                    clock.bound_reason()
+                ),
+            });
+        }
+        // SAFETY: a clock update outside GB_run.
+        if !unsafe { sb::gbcli_advance_rtc(self.raw(), seconds) } {
+            return Err(CoreError::InvalidState {
+                reason: format!("the clock's count can't move another {seconds} s"),
+            });
         }
         Ok(())
+    }
+
+    /// The cart's clock, from its mapper.
+    pub(crate) fn clock_kind(&self) -> Option<CartClock> {
+        // SAFETY: a plain query on a live instance.
+        match unsafe { sb::gbcli_clock_kind(self.raw()) } {
+            sb::GBCLI_CLOCK_MBC3 => Some(CartClock::Mbc3),
+            sb::GBCLI_CLOCK_HUC3 => Some(CartClock::Huc3),
+            sb::GBCLI_CLOCK_TPP1 => Some(CartClock::Tpp1),
+            _ => None,
+        }
     }
 
     pub(crate) fn export_battery_state(&mut self) -> Result<Option<Vec<u8>>, CoreError> {

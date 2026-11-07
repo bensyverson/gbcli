@@ -250,13 +250,21 @@ pub struct ObjectAttributes {
     pub priority: bool,
     pub y_flip: bool,
     pub x_flip: bool,
-    /// Bit 4: OBP0 or OBP1, the palette outside CGB mode.
-    pub palette: u8,
-    /// Bits 3 and 0–2, which only CGB mode reads.
-    pub cgb: Option<CgbObjectAttributes>,
+    /// The palette bits the PPU reads in its color mode.
+    pub palette: ObjectPalette,
 }
 
-/// The attribute bits CGB mode adds.
+/// Which attribute bits choose an object's palette: bit 4 outside CGB mode,
+/// bits 3 and 0–2 in it, never both (Pan Docs, OAM).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ObjectPalette {
+    /// Bit 4: OBP0 or OBP1, on a DMG and a CGB running a DMG cartridge.
+    Dmg(u8),
+    /// CGB mode, which ignores bit 4.
+    Cgb(CgbObjectAttributes),
+}
+
+/// The attribute bits CGB mode reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CgbObjectAttributes {
     /// The VRAM bank of the tile.
@@ -265,8 +273,11 @@ pub struct CgbObjectAttributes {
     pub palette: u8,
 }
 
-/// OAM entry `index` (0–39), decoded; the CGB bits only when the PPU is in
-/// CGB mode, since a DMG, and a CGB running a DMG cartridge, ignores them.
+/// OAM entry `index` (0–39) as it is in OAM, decoded for the PPU's color
+/// mode: the CGB palette bits in CGB mode, bit 4 otherwise, since each mode
+/// ignores the other's. A core that can't say its color mode is refused
+/// rather than guessed at. The bytes are raw OAM, not what the CPU reads
+/// (it reads $FF in PPU modes 2 and 3).
 pub fn object_attributes(core: &dyn Core, index: u8) -> Result<ObjectAttributes, CoreError> {
     let i = usize::from(index);
     if i >= OBJECTS {
@@ -281,7 +292,15 @@ pub fn object_attributes(core: &dyn Core, index: u8) -> Result<ObjectAttributes,
     let [y, x, tile, attr] = bytes[4 * i..4 * i + 4] else {
         unreachable!("OAM holds 40 four-byte entries");
     };
-    let cgb_mode = matches!(core.color_mode(), Ok(ColorMode::CgbPalettes));
+    let palette = match core.color_mode()? {
+        ColorMode::CgbPalettes => ObjectPalette::Cgb(CgbObjectAttributes {
+            bank: (attr >> 3) & 1,
+            palette: attr & 7,
+        }),
+        ColorMode::DmgShades | ColorMode::CgbDmgCompat | ColorMode::Sgb => {
+            ObjectPalette::Dmg((attr >> 4) & 1)
+        }
+    };
     Ok(ObjectAttributes {
         index,
         y,
@@ -291,11 +310,7 @@ pub fn object_attributes(core: &dyn Core, index: u8) -> Result<ObjectAttributes,
         priority: attr & 0x80 != 0,
         y_flip: attr & 0x40 != 0,
         x_flip: attr & 0x20 != 0,
-        palette: (attr >> 4) & 1,
-        cgb: cgb_mode.then_some(CgbObjectAttributes {
-            bank: (attr >> 3) & 1,
-            palette: attr & 7,
-        }),
+        palette,
     })
 }
 

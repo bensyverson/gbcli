@@ -5,8 +5,8 @@ mod common;
 use common::*;
 use gbcli_core::{Core, Region};
 use gbcli_engine::inspect::video::{
-    CgbObjectAttributes, MapArea, ObjectHeight, PaletteSet, TileAddressing, cgb_palettes, oam,
-    object_attributes, object_height, rgb555, tile, tilemap,
+    CgbObjectAttributes, MapArea, ObjectHeight, ObjectPalette, PaletteSet, TileAddressing,
+    cgb_palettes, oam, object_attributes, object_height, rgb555, tile, tilemap,
 };
 
 /// A tile whose row y has color y % 4 in every pixel except pixel 0, which is 3.
@@ -121,8 +121,11 @@ fn one_oam_entry_reads_as_its_bytes_and_decoded_attributes() {
     let e = object_attributes(&core, 3).unwrap();
     assert_eq!((e.index, e.y, e.x, e.tile, e.attr), (3, 80, 40, 7, 0xAD));
     assert!(e.priority && !e.y_flip && e.x_flip);
-    assert_eq!(e.palette, 0);
-    assert_eq!(e.cgb, None, "a DMG has no OAM bank or color palette");
+    assert_eq!(
+        e.palette,
+        ObjectPalette::Dmg(0),
+        "a DMG has no OAM bank or color palette"
+    );
     assert!(
         object_attributes(&core, 40).is_err(),
         "OAM holds 40 entries"
@@ -135,10 +138,11 @@ fn on_a_cgb_in_cgb_mode_an_oam_entry_names_its_vram_bank_and_palette() {
     core.poke(Region::Oam, 0, &[16, 8, 1, 0b0101_1101]).unwrap();
     let e = object_attributes(&core, 0).unwrap();
     assert!(!e.priority && e.y_flip && !e.x_flip);
-    assert_eq!(e.palette, 1, "the DMG palette bit, read as written");
+    // Bit 4 (set here) is the DMG palette, which CGB mode ignores (Pan Docs,
+    // "Non CGB Mode only"), so it is not reported: review of e65e509.
     assert_eq!(
-        e.cgb,
-        Some(CgbObjectAttributes {
+        e.palette,
+        ObjectPalette::Cgb(CgbObjectAttributes {
             bank: 1,
             palette: 5
         })

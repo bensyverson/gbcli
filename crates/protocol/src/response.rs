@@ -253,8 +253,9 @@ pub struct OamEntryRead {
     pub priority: bool,
     pub yflip: bool,
     pub xflip: bool,
-    /// Bit 4: OBP0 or OBP1, the palette outside CGB mode.
-    pub palette: u8,
+    /// Outside CGB mode only: bit 4, OBP0 or OBP1. CGB mode ignores it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub palette: Option<u8>,
     /// CGB mode only: the tile's VRAM bank (bit 3).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cgb_bank: Option<u8>,

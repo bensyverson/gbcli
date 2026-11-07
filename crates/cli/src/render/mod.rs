@@ -135,7 +135,7 @@ pub fn rows(r: &ResultBody) -> String {
                 .flag("priority", o.priority)
                 .flag("yflip", o.yflip)
                 .flag("xflip", o.xflip)
-                .field("palette", o.palette)
+                .opt("palette", o.palette)
                 .opt("cgb_bank", o.cgb_bank)
                 .opt("cgb_palette", o.cgb_palette),
             None => row,

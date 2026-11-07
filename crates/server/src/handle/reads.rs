@@ -1,6 +1,6 @@
 use gbcli_bundle::SessionStore;
 use gbcli_engine::cond::{Condition, EvalCtx, EvalWarning, ExprError, oam_entry};
-use gbcli_engine::inspect::video::{ObjectAttributes, object_attributes};
+use gbcli_engine::inspect::video::{ObjectAttributes, ObjectPalette, object_attributes};
 use gbcli_engine::{Machine, Since};
 use gbcli_protocol::{
     EventsArgs, OamEntryRead, PpuView, ReadArgs, ReadValue, RegistersView, ResultBody, SessionFile,
@@ -126,6 +126,10 @@ pub(super) fn compile_reads(
 }
 
 fn oam_view(e: &ObjectAttributes) -> OamEntryRead {
+    let cgb = match e.palette {
+        ObjectPalette::Cgb(c) => Some(c),
+        ObjectPalette::Dmg(_) => None,
+    };
     OamEntryRead {
         index: e.index,
         y: e.y,
@@ -135,9 +139,12 @@ fn oam_view(e: &ObjectAttributes) -> OamEntryRead {
         priority: e.priority,
         yflip: e.y_flip,
         xflip: e.x_flip,
-        palette: e.palette,
-        cgb_bank: e.cgb.map(|c| c.bank),
-        cgb_palette: e.cgb.map(|c| c.palette),
+        palette: match e.palette {
+            ObjectPalette::Dmg(p) => Some(p),
+            ObjectPalette::Cgb(_) => None,
+        },
+        cgb_bank: cgb.map(|c| c.bank),
+        cgb_palette: cgb.map(|c| c.palette),
     }
 }
 

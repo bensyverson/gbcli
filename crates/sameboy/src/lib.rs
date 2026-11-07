@@ -18,11 +18,11 @@ use std::ptr::NonNull;
 use std::sync::Mutex;
 
 use gbcli_core::{
-    ApuState, ApuWrite, AudioCapture, AudioSamples, BootRom, Budget, BudgetKind, ColorMode, Core,
-    CoreConfig, CoreError, CoreInfo, Feature, FrameRef, HaltWake, IoReg, JoypadBounce, Keys,
-    LayerMap, LcdOff, LiveFrame, Model, PpuMode, PpuStatus, Region, RegionView, Registers,
-    Rendering, RtcMode, RunRequest, SavClock, StepUnit, Stop, StopReason, Support, Ticks,
-    WriteTracking, WrittenView,
+    ApuState, ApuWrite, AudioCapture, AudioSamples, BootRom, Budget, BudgetKind, CartClock,
+    ColorMode, Core, CoreConfig, CoreError, CoreInfo, Feature, FrameRef, HaltWake, IoReg,
+    JoypadBounce, Keys, LayerMap, LcdOff, LiveFrame, Model, PpuMode, PpuStatus, Region, RegionView,
+    Registers, Rendering, RtcMode, RunRequest, SavClock, StepUnit, Stop, StopReason, Support,
+    Ticks, WriteTracking, WrittenView,
 };
 use sameboy_sys as sb;
 
@@ -464,6 +464,10 @@ impl Core for SameBoy {
 
     fn advance_rtc(&mut self, seconds: u64) -> Result<(), CoreError> {
         self.advance_clock(seconds)
+    }
+
+    fn cart_clock(&self) -> Result<Option<CartClock>, CoreError> {
+        Ok(self.clock_kind())
     }
 
     fn written(&self, region: Region) -> Result<WrittenView<'_>, CoreError> {

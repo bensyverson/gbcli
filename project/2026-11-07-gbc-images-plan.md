@@ -1,0 +1,190 @@
+# Plan: GBC images in dual mode (`build --gbc`)
+
+2026-11-07, leaf `k5Afkg`. **Status: draft for Ben's review. Not imported.** Once Ben approves, the `tasks:` block is imported under the root `9b5RBA` as its own stage. After that, the tracker is the plan.
+
+The evidence is in [2026-11-07-gbc-images-research.md](2026-11-07-gbc-images-research.md).
+
+## Goal
+
+An agent making a Game Boy Color game draws its art in color. `gbcli build --gbc` turns that art into a GBC-enhanced ROM that still runs on the original Game Boy (`rgbfix -c`, header $80). Without `--gbc`, the build is unchanged.
+
+## Rulings already made (Ben, 2026-11-07)
+
+- A flag chooses the target: `gbcli build --gbc`. User-facing names say "GBC". The docs map that to Pan Docs' "CGB" and to rgbfix's `-c` (dual mode) and `-C` (GBC only).
+- The goal is dual mode, so every image needs a color version and a 4-shade DMG version.
+- DMG shades (leaf `ygc9bb`): each color takes the shade nearest its lightness, even when two colors share a shade. The build then warns. More colors than the hardware takes is an error.
+
+## Recommended design (the questions below can change it)
+
+**Where the DMG version comes from: a hybrid.**
+- By default, the DMG version is **derived from the color image**, each color taking its nearest DMG shade by Ben's ruling.
+- An optional **`name.dmg.png`** beside the color image overrides the derived version.
+
+**The tile data is separate for each target, behind one shared tilemap and frame list.**
+- gbcli deduplicates tiles on the pair (DMG tile, GBC tile), without flips. Two tiles count as one only if both versions match.
+- So the map and the frame lists are the same on both machines. The GBC adds an attribute map and palettes.
+- The program copies `TownTiles` on a DMG or `TownTilesGbc` on a GBC; nothing else differs.
+
+**Why not GB Studio's single shared tile data?**
+- In GB Studio, a pixel's index in the GBC palette *is* its DMG shade index, read through the DMG's one global BGP.
+- Two colors in one tile that share a nearest shade then can't be represented: they need different indices on the GBC and the same shade on the DMG.
+- GB Studio gets around that by spreading shades within each palette. That is the rule Ben just retired for DMG art.
+- The cost of separate data is about 4 KB more ROM for a full 256-tile screen. The map isn't duplicated.
+
+**Palettes are packed automatically by gbcli, deterministically.**
+- rgbgfx can't name the tiles that force a ninth palette, and the answer isn't unique anyway (research §3).
+- So gbcli packs the palettes itself and passes them to rgbgfx with `-c`. Then it checks rgbgfx's output pixel by pixel, as `rgbgfx_agrees` does today.
+- Each background gets up to 8 BG palettes, with one background resident at a time, as `vram_tiles` counts today.
+- All sheets share the 8 OBJ palettes.
+
+**When the shared-shade warning fires in `--gbc`.** Color art routinely maps many colors onto one shade, so ygc9bb's warning would fire on every image. In `--gbc`, it fires only when two colors **in the same tile or object** fall to one shade, since detail is lost there. The remedy names `name.dmg.png`.
+
+**Sessions.**
+- `run` gets a `gbc` model alias. A dual ROM is checked in two sessions, one per model, because restore refuses a model change.
+
+## Questions for Ben
+
+Each question gives the recommended answer first and names the leaf that waits on it.
+
+1. **Tile data.** Separate data per target behind a joint map (recommended), or GB Studio's single shared data: half the image ROM, but it breaks the nearest-shade ruling inside a tile. Leaf `joint`.
+2. **The shared-shade warning with color art.** Warn only within a tile or object (recommended), give one summary per image, or stay silent. Leaf `derive`.
+3. **The override's name.** `.dmg.png` (recommended, matching gbcli's "DMG" naming), GB Studio's `.mono.png`, or both. Leaf `derive`.
+4. **Palette assignment.** Automatic only for now, with explicit assignment in the backlog (recommended). Leaf `pack`.
+5. **The OBJ palette budget.** All sheets share 8 (recommended, consistent with `vram_tiles`), or the program swaps palettes per scene. Leaf `pack`.
+6. **`run`'s model for a $80 or $C0 ROM.**
+   - The default: keep DMG, with a `--model gbc` alias (recommended: explicit, and it keeps today's sessions as they are), or choose GBC from the header.
+   - The `cgb` name: should it stop meaning Cgb0, an early revision? Recommended: `gbc` → CgbE, with `cgb` unchanged.
+   - Leaf `model`.
+7. **Scope.** GBC-only ROMs (`-C`, VRAM bank 1, BG flips) go to the backlog (recommended).
+8. **Previews.** They match gbcli's SameBoy setup (no color correction), not the look of a real GBC LCD. Acceptable? (Recommended: yes, since previews must match screenshots.) Leaf `api`.
+9. **`.dmg.png` without `--gbc`.** Recommended: an error, naming `--gbc`, so a stray file isn't silently ignored. Leaf `derive`.
+
+## Order and why
+
+- The header and the model alias come first: they are small, and every later test needs a GBC session.
+- Next come palette packing, the derived DMG version, and the joint conversion, in that order: each one consumes the one before.
+- Then the include API and previews, then the starter, which consumes the API.
+- Docs and the review come last.
+
+## Tasks
+
+```yaml
+tasks:
+  - title: 'Stage 7: GBC images in dual mode (build --gbc)'
+    desc: |
+      Color art in, a dual-mode ROM out (rgbfix -c, header $80, still runs on DMG). Design, rulings and Ben's answers: project/2026-11-07-gbc-images-plan.md. Evidence: project/2026-11-07-gbc-images-research.md.
+    children:
+      - title: 'build --gbc writes the dual-mode header'
+        ref: header
+        desc: |
+          Why: everything after this needs a target flag to hang on. What: a --gbc flag on `gbcli build` (crates/build, wired in crates/cli). rgbfix gets -c, and the build result records the target. Without the flag nothing changes: today's call is `rgbfix -v -p 0xFF` at crates/build/src/project.rs:263.
+
+          Decided (Ben, 2026-11-07): user-facing names say "GBC". The help maps that to Pan Docs' "CGB" and to rgbfix's -c (dual mode) and -C (GBC only; out of scope here). No image changes in this leaf.
+        criteria:
+          - $0143 is $80 with --gbc and $00 without (test)
+          - gbcli help names the GBC/CGB and -c/-C mapping (help golden)
+      - title: 'Sessions run a ROM as GBC: the gbc model alias'
+        ref: model
+        desc: |
+          Why: verifying a dual ROM takes one session per model (restore refuses a model change: ModelConflict, crates/engine/src/machine.rs:287-291). What: model_from_name (crates/protocol/src/checkpoint.rs:209-223) gains `gbc` → CgbE. Today `cgb` means Cgb0, an early revision.
+
+          Ben's answer to plan question 6 sets the default model for a $80 ROM and whether `cgb` changes. If he hasn't answered, keep the DMG default and leave `cgb` as it is.
+        criteria:
+          - a $80 ROM under --model gbc reports CGB mode, and its shot shows palette-RAM colors (test)
+          - the DMG default and ModelConflict are unchanged (test)
+      - title: 'Color census and deterministic palette packing'
+        ref: pack
+        blockedBy: [header]
+        desc: |
+          Why: rgbgfx can't name the tiles that force a ninth palette, and the answer isn't unique (research §3), so gbcli packs palettes itself. What: a library module in crates/build/src/images:
+          - the set of RGB555 colors in each tile (backgrounds) and each object (sheets);
+          - deduplicate the sets and drop subsets;
+          - deterministic first-fit-decreasing packing with a small bounded search;
+          - a lower bound of ⌈colors/4⌉ (⌈colors/3⌉ for sprites).
+
+          Problems, in the shape of the existing ImageLimit problems (crates/protocol/src/images.rs):
+          - `gbc_palettes`, an error naming the tiles that landed in palette 9 or later, their colors, and the lower bound;
+          - `gbc_tile_colors`, 5 colors in one tile, or 4 opaque colors in one object, named by tile coordinates.
+
+          Budgets (subject to plan questions 4-5): up to 8 BG palettes per background, and 8 OBJ palettes shared by all sheets. The packing is automatic; explicit assignment goes to the backlog.
+        criteria:
+          - 'unit tests replay research §3: nine disjoint 4-color tiles and seventeen 2-color tiles both error with bound 9; sixteen 2-color tiles pack into 8'
+          - the eight-plus-bridge case's error names the bridge tile (test)
+          - a 5-color tile is named by its coordinates (test)
+          - the same input always gives the same palettes (test)
+      - title: 'Derived DMG version, and the .dmg.png override'
+        ref: derive
+        blockedBy: [pack]
+        desc: |
+          Why: dual mode needs a 4-shade version of every image. What:
+          - Under --gbc, the DMG version is derived from the color image: each color takes its nearest DMG shade by lightness. This is Ben's rule from leaf ygc9bb; reuse its code in crates/build/src/images/shades.rs.
+          - ygc9bb's shared-shade warning is scoped to colors within one tile or object (plan question 2), with the remedy naming the override.
+          - An optional sibling `name.dmg.png` (question 3) overrides the derived version. It must be the same size as the color image (`dmg_override_size` error).
+          - A derived sheet that comes out with 4 opaque shades is a dmg_palette error, with the override as the remedy.
+          - A .dmg.png in a build without --gbc is an error naming --gbc (question 9).
+        criteria:
+          - derived shades match the nearest-shade rule (test)
+          - an override wins over the derived version, and a size mismatch is an error (tests)
+          - two colors in one tile that share a shade warn, naming the tile; across tiles they don't (tests)
+      - title: 'Joint conversion: per-target tiles behind one map and frame list'
+        ref: joint
+        blockedBy: [derive]
+        desc: |
+          Why: separate tile data per target keeps Ben's shade ruling inside tiles; a shared map keeps the program simple (plan question 1). What:
+          - Deduplicate tiles on (DMG tile, GBC tile) pairs, with no flips (the DMG has no BG flip), into one tilemap or frame list.
+          - Make the GBC tiles with `rgbgfx -c <packed palettes>` in gbcli's slot order, plus an attribute map (palette in bits 0-2).
+          - The agreement check (crates/build/src/images/agree.rs) compares pixel colors, never palette numbers: rgbgfx may choose another palette that fits (research §3).
+          - The limits bg_tiles_map, vram_tiles and obj_tiles count joint tiles.
+        criteria:
+          - rebuilding both versions from the generated data reproduces both PNGs pixel for pixel (test)
+          - a tile identical in gray but different in color is kept twice (test)
+          - the agreement check fails a GBC conversion that disagrees with the plan (test)
+      - title: 'Include API and GBC previews'
+        ref: api
+        blockedBy: [joint]
+        desc: |
+          What: next to today's labels in the generated images.inc and images.asm:
+          - per background: TownTilesGbc..End (same count and order as TownTiles), TownAttrmap..End (one byte per map entry), TownPalettes..End (RGB555 dw, 8 bytes per palette) and TOWN_PALETTES;
+          - per sheet: HeroTilesGbc;
+          - for all sheets: ObjPalettesGbc..End and OBJ_PALETTES;
+          - frame-list attribute bytes carry the CGB palette in bits 0-2 beside the DMG OBP bit (each machine ignores the other's bits);
+          - GBCLI_GBC EQU 1 when built with --gbc.
+
+          Previews: `*.gbc.preview.png` beside today's DMG preview, with a palette swatch strip. Draw it with SameBoy's channel scaling, (x<<3)|(x>>2) with no color correction (research §4), so it matches screenshots (plan question 8).
+        criteria:
+          - a program using every new label assembles, and the constants appear in the .sym (test)
+          - the GBC preview goldens pass, and a preview pixel equals the screenshot pixel for the same color (test)
+      - title: 'Dual-mode starter: detect GBC, load palettes and the attribute map'
+        ref: starter
+        blockedBy: [api, model]
+        desc: |
+          What: the starter (crates/build/templates/main.asm) does the following.
+          - It saves `a == BOOTUP_A_CGB` to an HRAM flag at Start, before `ldh a,[rLY]` overwrites A (lines 19-30).
+          - On a GBC, with the LCD off, it loads the BG and OBJ palettes through BCPS/BCPD and OCPS/OCPD with autoincrement.
+          - It writes the attribute map with VBK=1, then sets VBK back to 0.
+          - It copies the GBC tiles.
+
+          The DMG path must not touch VBK. A DMG has no VBK, so the attribute writes would overwrite the tilemap. Decide whether `new --gbc` or `build --gbc` brings the color path into the starter, and say which in the report.
+        criteria:
+          - one ROM in two sessions (--model dmg, --model gbc) gives the expected shot in each (goldens)
+          - run --raster on the DMG session shows no VBK, BCPS or attribute-map writes (test)
+      - title: 'GBC images: help, design and backlog'
+        ref: docs
+        blockedBy: [starter]
+        desc: |
+          What:
+          - A GBC section in `gbcli help images`: the convention, the override, the limits, the labels, and a recipe that verifies a ROM in two sessions.
+          - A dated update to design §12.
+          - In obj_no_transparency, a hint naming GB Studio's #65ff00 when a sheet has no alpha-0 pixel but has GB Studio's key green (g>249, r<180, b<20). No automatic keying.
+          - Backlog entries, each with its un-park condition: GBC-only (-C) builds, VRAM bank 1 tiles and BG flips, explicit palette assignment, and per-scene OBJ palette budgets.
+        criteria:
+          - the help golden is updated, and scripts/help/check-doc-links.py passes
+          - backlog.md carries the four entries
+      - title: 'Independent review of the GBC images stage'
+        ref: review
+        blockedBy: [docs]
+        desc: |
+          Review leaves pack, derive, joint, api and starter by project/agents/review.md. The new wire variants and the generated-include ABI are the risk points.
+        criteria:
+          - the confirmed findings are filed as leaves or fixed, and the reviewed leaves carry the reviewed label
+```

@@ -110,8 +110,10 @@ bus, so evaluating one has no side effects.
               address form (gbcli help addresses) or an expression: [hl]
   sprites     oam[N].y, .x, .tile, .attr: a byte of OAM entry N (0-39);
               oam[N] alone, in --read and `gbcli read`, prints the entry as
-              fields: y x tile attr priority yflip xflip palette (and
-              cgb_bank cgb_palette in CGB mode)
+              fields: y x tile attr priority yflip xflip, then palette, or
+              cgb_bank cgb_palette in CGB mode. Both read OAM itself, not
+              what the CPU sees: during PPU modes 2 and 3 (and OAM DMA) the
+              program reads $FF there, but oam[N] shows the stored byte
   machine    frame, t (T-cycles since the time base), ly, bank
   watches     old and new: the byte before and after the write
   operators   + - * / % & | ^ ~ << >>  == != < <= > >=  && || !  (C precedence)

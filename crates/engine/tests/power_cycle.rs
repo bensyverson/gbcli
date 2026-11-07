@@ -176,3 +176,48 @@ fn a_power_cycle_keeps_the_rom_patches() {
     assert_eq!(&region(&m, Region::Rom)[0x200..0x202], &[0x12, 0x34]);
     assert_eq!(m.patches().len(), 1);
 }
+
+/// Review of e65e509: a power cycle keeping the battery and a fresh machine
+/// given the same battery state end up in one machine, and stay so as the
+/// clock runs and through a checkpoint.
+#[test]
+fn kept_and_carried_power_cycles_agree_and_stay_agreed() {
+    for kind in [MBC3_TIMER_RAM_BATTERY, HUC3] {
+        let mut a = used(kind);
+        a.set_keys(Keys::NONE);
+        a.core_mut().advance_rtc(3 * 86_400 + 77).unwrap();
+        let state = a.core_mut().battery_state().unwrap().unwrap();
+        a.power_cycle(Battery::Keep, 0).unwrap();
+        let mut b = machine(&cart(kind), None);
+        b.power_cycle(Battery::Carried(&state), 0).unwrap();
+        assert_eq!(a.core_mut().save(), b.core_mut().save(), "kind {kind:#x}");
+        for m in [&mut a, &mut b] {
+            m.run(&RunOptions::new(Budget::frames(200))).unwrap();
+        }
+        assert_eq!(
+            a.core_mut().battery_state().unwrap(),
+            b.core_mut().battery_state().unwrap(),
+            "kind {kind:#x} after running"
+        );
+        assert_eq!(a.core_mut().save(), b.core_mut().save(), "kind {kind:#x}");
+        let blob = a.core_mut().save();
+        let mut c = machine(&cart(kind), None);
+        c.core_mut().load(&blob).unwrap();
+        for m in [&mut a, &mut c] {
+            m.run(&RunOptions::new(Budget::frames(120))).unwrap();
+        }
+        assert_eq!(a.core_mut().save(), c.core_mut().save(), "kind {kind:#x}");
+    }
+}
+
+/// Review of e65e509: carried cart RAM counts as written, as a `.sav`
+/// import does, so a game reading its save is not an uninitialized read.
+#[test]
+fn carried_cart_ram_counts_as_written() {
+    let mut m = used(MBC3_TIMER_RAM_BATTERY);
+    m.power_cycle(Battery::Keep, 0).unwrap();
+    let written = m.core().written(Region::Sram).unwrap();
+    for offset in [0, 0x100, 0x1FFF] {
+        assert!(!written.never_written(offset), "{offset:#x}");
+    }
+}

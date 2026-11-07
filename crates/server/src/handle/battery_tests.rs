@@ -258,6 +258,41 @@ fn an_rtc_advance_past_1024_days_is_refused_with_the_fix() {
     assert_eq!(body.power_cycle.unwrap().rtc_advanced_s, 1024 * 86_400);
 }
 
+/// Review of e65e509: the bound was MBC3's 1024 days on every cart, and the
+/// refusal explained a HuC3 or TPP1 clock in MBC3's terms.
+#[test]
+fn a_huc3_rtc_advance_is_bounded_by_its_own_clock_and_explained_in_its_terms() {
+    let f = Fixture::with_rom("cycle-huc3-far", &as_cart(V1, HUC3, RAM_8K));
+    let mut h = handler(&f);
+    ok(run_frames(&mut h, 2));
+    let (body, _) = ok(power_cycle(
+        &mut h,
+        PowerCycleArgs {
+            sav: None,
+            rtc_advance: Some("1500d".into()),
+        },
+    ));
+    assert_eq!(body.power_cycle.unwrap().rtc_advanced_s, 1500 * 86_400);
+    let error = power_cycle(
+        &mut h,
+        PowerCycleArgs {
+            sav: None,
+            rtc_advance: Some("65537d".into()),
+        },
+    )
+    .outcome
+    .unwrap_err();
+    assert_eq!(error.code, ErrorCode::BadRequest);
+    assert!(
+        error.message.contains("HuC3") && error.message.contains("65536 days"),
+        "{}",
+        error.message
+    );
+    assert!(error.remedy.contains("65536d"), "{}", error.remedy);
+    let all = format!("{} {}", error.message, error.remedy);
+    assert!(!all.contains("MBC3") && !all.contains("1024"), "{all}");
+}
+
 /// Review of a066271: on HuC3 (and TPP1) every power cycle was refused,
 /// because keeping the battery went through the `.sav` import.
 #[test]

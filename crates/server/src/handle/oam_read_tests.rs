@@ -6,9 +6,11 @@ use gbcli_protocol::{
     WriteArgs, WriteKind,
 };
 
+use gbcli_core::Model;
+
 use super::Handler;
 use super::test_support::{handler, request, run_frames};
-use crate::fixture::Fixture;
+use crate::fixture::{Fixture, V1};
 
 fn read(h: &mut Handler, exprs: &[&str]) -> Response {
     h.handle(&request(Op::Read(ReadArgs {
@@ -28,7 +30,11 @@ fn values(response: Response) -> Vec<ReadValue> {
 
 /// A session past the boot ROM with OAM entry 2 set to a known sprite.
 fn with_sprite(name: &str) -> (Fixture, Handler) {
-    let f = Fixture::new(name);
+    sprite_in(Fixture::new(name))
+}
+
+/// The session of `f` past the boot ROM with OAM entry 2 set to a known sprite.
+fn sprite_in(f: Fixture) -> (Fixture, Handler) {
     let mut h = handler(&f);
     run_frames(&mut h, 2).outcome.unwrap();
     h.handle(&request(Op::Write(WriteArgs {
@@ -52,7 +58,7 @@ const SPRITE: OamEntryRead = OamEntryRead {
     priority: true,
     yflip: false,
     xflip: true,
-    palette: 1,
+    palette: Some(1),
     cgb_bank: None,
     cgb_palette: None,
 };
@@ -68,6 +74,28 @@ fn a_whole_entry_reads_as_its_fields() {
             value: None,
             oam: Some(SPRITE),
         }]
+    );
+}
+
+/// Review of e65e509: in CGB mode the row printed bit 4 as `palette` beside
+/// `cgb_palette`, though CGB mode ignores it (Pan Docs: "Non CGB Mode only").
+#[test]
+fn in_cgb_mode_an_entry_reads_its_cgb_bank_and_palette_and_no_dmg_palette() {
+    let mut rom = V1.to_vec();
+    rom[0x143] = 0x80; // runs in CGB mode on a CGB
+    rom[0x14D] = rom[0x134..0x14D]
+        .iter()
+        .fold(0u8, |x, b| x.wrapping_sub(*b).wrapping_sub(1));
+    let (_f, mut h) = sprite_in(Fixture::with_model("oam-entry-cgb", &rom, Model::CgbE));
+    let reads = values(read(&mut h, &["oam[2]"]));
+    assert_eq!(
+        reads[0].oam,
+        Some(OamEntryRead {
+            palette: None,
+            cgb_bank: Some(0),
+            cgb_palette: Some(0),
+            ..SPRITE
+        })
     );
 }
 

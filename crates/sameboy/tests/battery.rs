@@ -6,7 +6,7 @@ mod common;
 
 use common::cart::*;
 use common::run;
-use gbcli_core::{Budget, Core, CoreError, Feature, MAX_RTC_ADVANCE_S, Region, SavClock};
+use gbcli_core::{Budget, CartClock, Core, CoreError, Feature, Region, SavClock};
 use gbcli_sameboy::SameBoy;
 
 const RAM_32K_BYTES: usize = 32 * 1024;
@@ -214,13 +214,15 @@ fn an_advance_too_large_to_add_is_refused_not_silently_dropped() {
 fn an_advance_past_the_longest_the_clock_can_tell_apart_is_refused() {
     let mut core = core(cart(MBC3_TIMER_RAM_BATTERY, 4, RAM_32K));
     set_rtc(&mut core, [0, 0, 0, 0, 0], false);
-    let refused = core.advance_rtc(MAX_RTC_ADVANCE_S + 1).unwrap_err();
+    let refused = core
+        .advance_rtc(CartClock::Mbc3.max_advance_s() + 1)
+        .unwrap_err();
     assert!(
         matches!(&refused, CoreError::InvalidState { reason } if reason.contains("1024 days")),
         "{refused:?}"
     );
     assert_eq!(read_rtc(&mut core), [0, 0, 0, 0, 0], "unchanged");
-    core.advance_rtc(MAX_RTC_ADVANCE_S).unwrap();
+    core.advance_rtc(CartClock::Mbc3.max_advance_s()).unwrap();
     // 1024 days: the 9-bit day counter wrapped twice, and its carry is set.
     assert_eq!(read_rtc(&mut core), [0, 0, 0, 0, 0x80]);
 }
@@ -318,4 +320,60 @@ fn a_battery_state_of_the_wrong_size_is_refused_and_changes_nothing() {
     let ram = core.region(Region::Sram).unwrap().bytes.to_vec();
     assert!(core.load_battery_state(&[0; 10]).is_err());
     assert_eq!(core.region(Region::Sram).unwrap().bytes, &ram[..]);
+}
+
+/// Review of e65e509: for every cart shape, the battery state is the
+/// `.sav`'s size, round-trips exactly, and a byte short or long is refused.
+#[test]
+fn every_cart_shapes_battery_state_has_the_savs_size_and_round_trips() {
+    let mut tpp1_no_ram = tpp1_cart();
+    tpp1_no_ram[0x152] = 0;
+    let mut tpp1_no_battery = tpp1_cart();
+    tpp1_no_battery[0x153] = 0;
+    let shapes: Vec<(&str, Vec<u8>, Option<usize>)> = vec![
+        ("MBC3+TIMER+BATTERY no RAM", cart(0x0F, 4, NO_RAM), Some(48)),
+        (
+            "MBC3+TIMER+RAM+BATTERY 8K",
+            cart(0x10, 4, RAM_8K),
+            Some(8192 + 48),
+        ),
+        ("MBC3+RAM+BATTERY 8K", cart(0x13, 4, RAM_8K), Some(8192)),
+        ("HuC3 8K", cart(HUC3, 4, RAM_8K), Some(8192 + 17)),
+        ("HuC3 no RAM", cart(HUC3, 4, NO_RAM), Some(17)),
+        ("TPP1 8K", tpp1_cart(), Some(8192 + 20)),
+        ("TPP1 no RAM", tpp1_no_ram, Some(20)),
+        ("TPP1 no battery bit", tpp1_no_battery, None),
+        ("MBC2+BATTERY", cart(0x06, 4, NO_RAM), Some(512)),
+        ("MBC5+RAM no battery", cart(MBC5_RAM, 4, RAM_8K), None),
+        ("ROM only", cart(ROM_ONLY, 2, NO_RAM), None),
+        ("MBC1+BATTERY no RAM", cart(0x03, 4, NO_RAM), None),
+    ];
+    for (name, rom, size) in shapes {
+        let mut from = core(rom.clone());
+        let sram = from.region(Region::Sram).map_or(0, |r| r.bytes.len());
+        if sram > 0 {
+            let pattern: Vec<u8> = (0..sram).map(|i| (i * 3 + 1) as u8).collect();
+            let _ = from.poke(Region::Sram, 0, &pattern);
+        }
+        let state = from.battery_state().unwrap();
+        assert_eq!(state.as_ref().map(Vec::len), size, "{name}");
+        let sav = from.battery_sav().unwrap();
+        assert_eq!(
+            state.as_ref().map(Vec::len),
+            sav.as_ref().map(Vec::len),
+            "{name}"
+        );
+        let Some(state) = state else { continue };
+        let mut to = core(rom);
+        let clock = to.load_battery_state(&state).unwrap();
+        assert!(
+            matches!(clock, SavClock::Restored | SavClock::NotClocked),
+            "{name}"
+        );
+        assert_eq!(to.battery_state().unwrap().unwrap(), state, "{name}");
+        assert!(to.load_battery_state(&state[1..]).is_err(), "{name}: short");
+        let mut long = state.clone();
+        long.push(0);
+        assert!(to.load_battery_state(&long).is_err(), "{name}: long");
+    }
 }

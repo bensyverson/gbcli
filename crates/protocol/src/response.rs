@@ -15,6 +15,7 @@ use crate::rev::Rev;
 use crate::session::{EventLogLine, GapCount, SessionRow};
 use crate::shot::{FilmstripMade, ShotMade};
 use crate::stop::StopRecord;
+use crate::toolchain::{BuildMade, DoctorMade, NewMade};
 use crate::video::ViewMade;
 use crate::views::{PpuView, RegistersView};
 
@@ -197,6 +198,14 @@ pub struct ResultBody {
     pub busy: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub removed: Option<String>,
+    /// `build`: what it assembled, wrote and reported.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build: Option<BuildMade>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub doctor: Option<DoctorMade>,
+    /// `new`: the project it scaffolded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created: Option<NewMade>,
 }
 
 /// One `--read` result.

@@ -11,8 +11,12 @@ use super::{VERBS, by_name};
 
 /// The crates whose strings reach a user: errors, remedies, help.
 const CRATES: &[&str] = &[
-    "protocol", "bundle", "engine", "server", "cli", "view", "audio",
+    "protocol", "bundle", "engine", "server", "cli", "view", "audio", "build",
 ];
+
+/// Text a user reads whole, not as string literals: the files `gbcli new`
+/// writes (crates/build/templates).
+const TEMPLATES: &str = "build/templates";
 
 /// Flags every verb takes, or that come before a verb.
 const ALWAYS: &[&str] = &["help", "version"];
@@ -105,10 +109,19 @@ fn every_command_and_flag_a_message_names_exists() {
         sources(&root.join(krate).join("src"), &mut files);
     }
     assert!(files.len() > 50, "found only {} sources", files.len());
+    let templates: Vec<PathBuf> = fs::read_dir(root.join(TEMPLATES))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    assert!(templates.len() >= 4, "{templates:?}");
     let known = |f: &str| ALWAYS.contains(&f) || VERBS.iter().any(|s| s.flag(f).is_some());
     let mut wrong = Vec::new();
-    for file in &files {
-        let text = code(file);
+    for file in files.iter().chain(&templates) {
+        let text = if templates.contains(file) {
+            fs::read_to_string(file).unwrap()
+        } else {
+            code(file)
+        };
         let at = file.strip_prefix(&root).unwrap().display();
         for command in commands(&text) {
             if let Some(problem) = check_command(&command) {

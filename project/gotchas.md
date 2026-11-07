@@ -45,3 +45,7 @@ The worktree guard refused plain commands that only *mentioned* a path under `/U
 ## 2026-11-06 — the CLI goldens mask every ` at=` and `"at":` as wall-clock time
 
 `crates/gbcli/tests/cli/common.rs` (`mask`) replaces the value after ` at=` and `"at":` in every transcript, because event rows carry host time there. A new field named `at` holding emulated time is silently masked, so its golden pins nothing. Name emulated times something else (the audio log's `elapsed`, leaf vd3ulF), or narrow the mask.
+
+## 2026-11-07 — the worktree guard reads a file named `SOURCE` as the shell's `source`
+
+In an isolated worktree, `cat crates/engine/data/gb-opcodes/SOURCE` was refused ("runs a string through SOURCE, which can't be verified"), as was a heredoc piped into a command next to `cargo`. Read such files with the Read tool, and keep each Bash call to one plain command (leaf 7qzbqc).

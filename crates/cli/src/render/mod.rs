@@ -6,6 +6,7 @@ mod equiv;
 mod profile;
 mod row;
 mod stop;
+mod toolchain;
 mod video;
 
 use std::io::Write;
@@ -139,6 +140,7 @@ pub fn rows(r: &ResultBody) -> String {
     if let Some(sound) = &r.audio {
         out += &audio::rows(sound);
     }
+    out += &toolchain::rows(r);
     if let Some(cp) = &r.checkpoint {
         out += &Row::new("checkpoint")
             .field("name", &cp.name)

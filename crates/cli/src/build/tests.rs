@@ -12,6 +12,7 @@ fn env() -> Env {
         actor: Some("envactor".into()),
         gbcli_dir: None,
         cwd: PathBuf::from("/work"),
+        path: None,
     }
 }
 

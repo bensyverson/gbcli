@@ -18,6 +18,7 @@ mod session;
 mod shot;
 mod stop;
 mod strict;
+mod toolchain;
 mod video;
 mod views;
 
@@ -55,6 +56,10 @@ pub use shot::{Crop, FilmstripArgs, FilmstripMade, ShotArgs, ShotFrame, ShotMade
 pub use stop::{
     BudgetLimits, BudgetUse, Cadence, FrameShown, StepKind, StopReason, StopRecord, StopTime,
     TimeBase, vblank_name,
+};
+pub use toolchain::{
+    BuildMade, CheckMade, CheckName, CheckStatus, Diagnostic, DoctorMade, NewMade, OutputKind,
+    OutputMade, Severity, Tool,
 };
 pub use video::{
     AddressingView, ImageMade, ImageOut, MapAreaView, MapSel, OamView, TileView, VideoData,

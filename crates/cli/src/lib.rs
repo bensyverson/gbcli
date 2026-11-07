@@ -10,6 +10,7 @@ mod build;
 mod exec;
 mod help;
 mod render;
+mod rgbds;
 mod serve_cmd;
 mod usage;
 mod values;
@@ -32,6 +33,8 @@ pub struct Env {
     pub gbcli_dir: Option<PathBuf>,
     /// The working directory: relative paths and the `.gbcli/` search start here.
     pub cwd: PathBuf,
+    /// `PATH`: where `build` and `doctor` look for RGBDS.
+    pub path: Option<OsString>,
 }
 
 impl Env {
@@ -44,6 +47,7 @@ impl Env {
                 .filter(|v| !v.is_empty())
                 .map(PathBuf::from),
             cwd: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            path: std::env::var_os("PATH"),
         }
     }
 }
@@ -77,6 +81,9 @@ pub fn run(args: Vec<OsString>, env: &Env, io: Io) -> u8 {
         Command::Serve(target) => return serve_cmd::serve(&target, env, io),
         Command::Batch { target, file } => return batch::batch(&target, &file, env, io),
         Command::Request { target, op } => return exec::request(&target, *op, env, io),
+        Command::Doctor { json } => return rgbds::doctor(json, env, io),
+        Command::New { dir, json } => return rgbds::new(&dir, json, env, io),
+        Command::Build(build) => return rgbds::build(*build, env, io),
     };
     match printed {
         Ok(()) => 0,

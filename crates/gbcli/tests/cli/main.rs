@@ -10,4 +10,5 @@ mod filmstrip;
 mod help;
 mod honesty;
 mod profile;
+mod rgbds;
 mod verbs;

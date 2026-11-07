@@ -1,0 +1,17 @@
+hardware.inc is gbdev's Game Boy hardware constant definitions for RGBDS:
+
+  repository: https://github.com/gbdev/hardware.inc
+  release:    v6.0.0 (published 2026-10-06, the latest release when fetched)
+  file:       https://raw.githubusercontent.com/gbdev/hardware.inc/f8c7a649fe663c4550db6c86a31644852c2dd080/hardware.inc
+  commit:     f8c7a649fe663c4550db6c86a31644852c2dd080 (the v6.0.0 tag)
+  sha256:     0fdc838feed0911844610ba229912e08f3ddec4a93b1a0a7ae320bd80bc1f4f9
+  fetched:    2026-11-07, with curl
+  license:    CC0-1.0 (LICENSE, copied from the same commit; sha256
+              36ffd9dc085d529a7e60e1276d73ae5a030b020313e6c5408593a6ae2af39673)
+
+It is committed unmodified. `gbcli new` writes it to a new project's
+include/hardware.inc (crates/build/src/scaffold.rs embeds it with
+include_str!), and crates/build/tests/scaffold.rs checks the embedded bytes
+against the sha256 above. To update: fetch a newer release's file and LICENSE
+the same way, update this file, and check that `gbcli new` still builds
+(the starter uses the v6 names: LCDC_ON, IE_VBLANK, TILEMAP0, OAM_Y_OFS).

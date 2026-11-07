@@ -73,6 +73,7 @@ dependencies = [
  "gbcli-cli",
  "gbcli-core",
  "gbcli-protocol",
+ "png",
  "serde_json",
 ]
 
@@ -83,6 +84,14 @@ dependencies = [
  "gbcli-core",
  "gbcli-sameboy",
  "gbcli-view",
+]
+
+[[package]]
+name = "gbcli-build"
+version = "0.1.0"
+dependencies = [
+ "gbcli-engine",
+ "gbcli-protocol",
 ]
 
 [[package]]
@@ -100,6 +109,7 @@ dependencies = [
 name = "gbcli-cli"
 version = "0.1.0"
 dependencies = [
+ "gbcli-build",
  "gbcli-bundle",
  "gbcli-core",
  "gbcli-protocol",

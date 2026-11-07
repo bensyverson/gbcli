@@ -3,7 +3,7 @@
 
 use super::FlagSpec;
 
-const fn value(long: &'static str, value: &'static str, help: &'static str) -> FlagSpec {
+pub(super) const fn value(long: &'static str, value: &'static str, help: &'static str) -> FlagSpec {
     FlagSpec {
         long,
         short: None,
@@ -13,7 +13,7 @@ const fn value(long: &'static str, value: &'static str, help: &'static str) -> F
     }
 }
 
-const fn switch(long: &'static str, help: &'static str) -> FlagSpec {
+pub(super) const fn switch(long: &'static str, help: &'static str) -> FlagSpec {
     FlagSpec {
         long,
         short: None,
@@ -23,7 +23,11 @@ const fn switch(long: &'static str, help: &'static str) -> FlagSpec {
     }
 }
 
-const fn repeated(long: &'static str, value: &'static str, help: &'static str) -> FlagSpec {
+pub(super) const fn repeated(
+    long: &'static str,
+    value: &'static str,
+    help: &'static str,
+) -> FlagSpec {
     FlagSpec {
         long,
         short: None,
@@ -79,18 +83,13 @@ pub const SEED: FlagSpec = value(
     "the RAM seed for a new session (default 0); an existing session refuses another",
 );
 
+pub const ALLOW_ROM_CHANGE: FlagSpec = switch(
+    "allow-rom-change",
+    "load a stored state even though the ROM was rebuilt and the check refuses it",
+);
+
 /// Taken by every verb that works on one session.
-pub const SESSION: &[FlagSpec] = &[
-    SESSION_FLAG,
-    ROM,
-    SYM,
-    MODEL,
-    SEED,
-    switch(
-        "allow-rom-change",
-        "load a stored state even though the ROM was rebuilt and the check refuses it",
-    ),
-];
+pub const SESSION: &[FlagSpec] = &[SESSION_FLAG, ROM, SYM, MODEL, SEED, ALLOW_ROM_CHANGE];
 
 /// Taken by every verb that changes the session: its head, checkpoints,
 /// breakpoints or watches. A verb that changes nothing has no `--rev`.

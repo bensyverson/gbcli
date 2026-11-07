@@ -36,6 +36,9 @@ pub enum ErrorCode {
     SymbolsUnreadable,
     /// The session's own files (`session.json`) don't parse.
     SessionUnreadable,
+    /// RGBDS refused the sources, or a step wrote no output (DX 10); the
+    /// diagnostics are in the error's `result`.
+    BuildFailed,
     Unsupported,
     NoSession,
     BootRomMissing,
@@ -67,7 +70,8 @@ impl ErrorCode {
             | ErrorCode::CheckpointUnreadable
             | ErrorCode::CheckpointMismatch
             | ErrorCode::SymbolsUnreadable
-            | ErrorCode::SessionUnreadable => 4,
+            | ErrorCode::SessionUnreadable
+            | ErrorCode::BuildFailed => 4,
             ErrorCode::Unsupported
             | ErrorCode::NoSession
             | ErrorCode::BootRomMissing
@@ -114,6 +118,9 @@ impl ErrorCode {
             ErrorCode::SessionUnreadable => {
                 "remove the session with `gbcli sessions rm <name>`, then create it again"
             }
+            ErrorCode::BuildFailed => {
+                "fix the first error at its file and line, then `gbcli build` again"
+            }
             ErrorCode::Unsupported => {
                 "the core can't do this; `gbcli gaps` lists every such gap this project hit"
             }
@@ -152,6 +159,7 @@ impl fmt::Display for ErrorCode {
             ErrorCode::CheckpointMismatch => "checkpoint_mismatch",
             ErrorCode::SymbolsUnreadable => "symbols_unreadable",
             ErrorCode::SessionUnreadable => "session_unreadable",
+            ErrorCode::BuildFailed => "build_failed",
             ErrorCode::Unsupported => "unsupported",
             ErrorCode::NoSession => "no_session",
             ErrorCode::BootRomMissing => "boot_rom_missing",
@@ -235,6 +243,7 @@ mod tests {
         ErrorCode::NoSession,
         ErrorCode::BootRomMissing,
         ErrorCode::ToolchainMissing,
+        ErrorCode::BuildFailed,
         ErrorCode::SessionUnreadable,
         ErrorCode::IoFailed,
         ErrorCode::Internal,
@@ -265,6 +274,7 @@ mod tests {
             | ErrorCode::NoSession
             | ErrorCode::BootRomMissing
             | ErrorCode::ToolchainMissing
+            | ErrorCode::BuildFailed
             | ErrorCode::IoFailed
             | ErrorCode::Internal => EVERY.contains(&code),
         }
@@ -314,6 +324,7 @@ mod tests {
             (ErrorCode::CheckpointMismatch, 4),
             (ErrorCode::SymbolsUnreadable, 4),
             (ErrorCode::SessionUnreadable, 4),
+            (ErrorCode::BuildFailed, 4),
             (ErrorCode::Unsupported, 5),
             (ErrorCode::NoSession, 5),
             (ErrorCode::BootRomMissing, 5),

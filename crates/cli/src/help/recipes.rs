@@ -5,6 +5,13 @@ Recipes — goal → command. Add --session NAME to each, or set GBCLI_SESSION.
 
 Start a session on a ROM
   gbcli run game.gb --session dx --frames 120
+Start a new game from scratch
+  gbcli doctor (is the pinned RGBDS on PATH?), gbcli new game, gbcli build game
+Why won't it build?
+  gbcli build: one diagnostic row per message, with file= and line=
+Rebuild after an edit and carry on where you were
+  gbcli build --session dx --restore start (the checkpoint, in the new ROM;
+  refused with what moved if its routine or variables moved; gbcli help build)
 Run until something is true
   gbcli run --until 'u16[wFrame] >= 60'
 Run to a routine

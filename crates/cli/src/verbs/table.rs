@@ -4,6 +4,7 @@ use super::flags::{
     BATCH, BREAK, CHANGE, CREATE, EVENTS, OUTPUT, PRUNE, READ, RM, RUN, SERVE, SESSION,
     SHOT_OPTIONS, WATCH,
 };
+use super::table_build::{BUILD_VERB, DOCTOR_VERB, NEW_VERB};
 use super::table_read::{
     CHECKPOINTS_VERB, EQUIV_VERB, MEASURE_VERB, SHOT_VERB, SYM_VERB, VIEW_VERB,
 };
@@ -341,6 +342,8 @@ pub const VERBS: &[VerbSpec] = &[
                 printed it.",
         example: ("gbcli delete 1 --session dx", "removes breakpoint 1"),
     },
+    NEW_VERB,
+    BUILD_VERB,
     VerbSpec {
         verb: Verb::Serve,
         name: "serve",
@@ -389,7 +392,7 @@ pub const VERBS: &[VerbSpec] = &[
         flags: &[],
         groups: &[],
         about: "Topics: addresses, expressions, time, checkpoints, writes, budgets, \
-                exit-codes, hardware, optimize. `gbcli help VERB` is `gbcli VERB --help`.",
+                exit-codes, hardware, optimize, build. `gbcli help VERB` is `gbcli VERB --help`.",
         example: ("gbcli help addresses", "explains the address forms"),
     },
     VerbSpec {
@@ -416,6 +419,7 @@ pub const VERBS: &[VerbSpec] = &[
         about: "Every op and its arguments, with an example request line for each.",
         example: ("gbcli schema", "prints the request grammar"),
     },
+    DOCTOR_VERB,
     VerbSpec {
         verb: Verb::Version,
         name: "version",

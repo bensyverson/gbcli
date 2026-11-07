@@ -1,0 +1,303 @@
+//! The RGBDS loop through the binary: `new`, `build` (and `build --restore`)
+//! and `doctor`, with the pinned RGBDS from `PATH`. A machine without it
+//! fails these tests naming the install command; none skips.
+
+use std::fs;
+use std::path::Path;
+use std::process::Command;
+
+use crate::common::{Project, golden};
+
+/// The directory holding the pinned rgbasm (and, by the install, rgblink and
+/// rgbfix): the only `PATH` the loop is given, so nothing else on this
+/// machine can be what makes it work.
+fn rgbds_dir() -> String {
+    let found = std::env::var_os("PATH").and_then(|path| {
+        std::env::split_paths(&path)
+            .map(|dir| dir.join("rgbasm"))
+            .find(|p| p.is_file())
+    });
+    let Some(rgbasm) = found else {
+        panic!(
+            "these tests need RGBDS 1.0.4 on PATH: install it with `brew install rgbds`, or \
+             the release at https://github.com/gbdev/rgbds/releases/tag/v1.0.4"
+        );
+    };
+    let version = Command::new(&rgbasm).arg("--version").output().unwrap();
+    let version = String::from_utf8_lossy(&version.stdout);
+    assert!(
+        version.trim() == "rgbasm v1.0.4",
+        "these tests need RGBDS 1.0.4; {} is {version}",
+        rgbasm.display()
+    );
+    rgbasm.parent().unwrap().display().to_string()
+}
+
+impl Project {
+    /// `gbcli args…` with only the pinned RGBDS on `PATH`.
+    fn rgbds(&self, args: &[&str]) -> crate::common::Run {
+        self.gbcli_with(args, &[("PATH", &rgbds_dir())], None)
+    }
+
+    /// `gbcli new game` then `gbcli build game`, both asserted to pass.
+    fn game(name: &str) -> Project {
+        let p = Project::new(name);
+        let made = p.rgbds(&["new", "game"]);
+        assert_eq!(made.code, 0, "{}", made.stderr);
+        let built = p.rgbds(&["build", "game"]);
+        assert_eq!(built.code, 0, "{}{}", built.stdout, built.stderr);
+        p
+    }
+}
+
+/// The number of distinct colors in a PNG and the color of pixel (x, y),
+/// as 8-bit samples (the screenshot may be gray or indexed).
+fn colors(path: &Path, x: usize, y: usize) -> (usize, Vec<u8>) {
+    let mut decoder = png::Decoder::new(fs::File::open(path).unwrap());
+    decoder.set_transformations(png::Transformations::EXPAND);
+    let mut reader = decoder.read_info().unwrap();
+    let mut buf = vec![0; reader.output_buffer_size()];
+    let info = reader.next_frame(&mut buf).unwrap();
+    let channels = info.color_type.samples();
+    let pixel = |i: usize| buf[i * channels..(i + 1) * channels].to_vec();
+    let mut seen: Vec<Vec<u8>> = (0..(info.width * info.height) as usize)
+        .map(pixel)
+        .collect();
+    seen.sort();
+    seen.dedup();
+    (seen.len(), pixel(y * info.width as usize + x))
+}
+
+#[test]
+fn new_then_build_then_a_screenshot_works_with_only_the_pinned_rgbds() {
+    let p = Project::new("rgbds-first-try");
+    let made = p.rgbds(&["new", "game"]);
+    assert_eq!(made.code, 0, "{}", made.stderr);
+    assert!(
+        made.stdout.contains("created path=game/src/main.asm\n"),
+        "{}",
+        made.stdout
+    );
+    assert!(
+        made.stdout.contains("next command=\"gbcli build game\"\n"),
+        "{}",
+        made.stdout
+    );
+
+    let built = p.rgbds(&["build", "game"]);
+    assert_eq!(built.code, 0, "{}", built.stderr);
+    assert!(
+        built
+            .stdout
+            .contains("output kind=rom path=game/build/game.gb bytes=32768\n"),
+        "{}",
+        built.stdout
+    );
+    assert!(built.stderr.is_empty(), "{}", built.stderr);
+
+    // The command `new` said to run next, as it said it.
+    let next = "gbcli run game/build/game.gb --session game --frames 120 --shot first.png";
+    assert!(made.stdout.contains(next), "{}", made.stdout);
+    let args: Vec<&str> = next.split(' ').skip(1).collect();
+    let shot = p.rgbds(&args);
+    assert_eq!(shot.code, 0, "{}", shot.stderr);
+    assert!(
+        shot.stdout.contains("vblank normal"),
+        "a normal frame: {}",
+        shot.stdout
+    );
+    // The row of faces across the middle (tile row 8, from x = 32) is on
+    // screen at 4x: the face's outline is dark at its top-middle.
+    let (count, top_of_face) = colors(&p.path("first.png"), (32 + 3) * 4, 8 * 8 * 4);
+    assert!(count >= 2, "the screen isn't blank: {count} color(s)");
+    let (_, background) = colors(&p.path("first.png"), 0, 0);
+    assert_ne!(top_of_face, background);
+}
+
+#[test]
+fn a_syntax_error_comes_back_with_its_file_and_line() {
+    let p = Project::game("rgbds-syntax");
+    let main = p.path("game/src/main.asm");
+    let text = fs::read_to_string(&main).unwrap();
+    let broken = text.replacen("\tld sp, $E000", "\tld sp,", 1);
+    fs::write(&main, &broken).unwrap();
+    let line = broken
+        .lines()
+        .position(|l| l.starts_with("\tld sp, "))
+        .unwrap()
+        + 1;
+
+    let rows = p.rgbds(&["build", "game"]);
+    rows.fails(
+        4,
+        "build_failed",
+        "fix the first error at its file and line",
+    );
+    let expected = format!(
+        "diagnostic severity=error tool=rgbasm file=game/src/main.asm line={line} \
+         message=\"syntax error, unexpected end of line\"\n"
+    );
+    assert!(rows.stdout.starts_with(&expected), "{}", rows.stdout);
+    assert!(
+        rows.stderr
+            .contains(&format!("game/src/main.asm:{line}: syntax error")),
+        "{}",
+        rows.stderr
+    );
+
+    let json = p.rgbds(&["build", "game", "--json"]);
+    assert_eq!(json.code, 4);
+    let line_json: serde_json::Value = serde_json::from_str(json.stdout.trim()).unwrap();
+    assert_eq!(line_json["ok"], false);
+    assert_eq!(line_json["error"]["code"], "build_failed");
+    let first = &line_json["error"]["result"]["build"]["diagnostics"][0];
+    assert_eq!(first["file"], "game/src/main.asm");
+    assert_eq!(first["line"], line);
+    assert_eq!(first["tool"], "rgbasm");
+    assert_eq!(first["severity"], "error");
+}
+
+#[test]
+fn without_rgbds_build_and_doctor_name_the_install_command() {
+    let p = Project::new("rgbds-missing");
+    let made = p.rgbds(&["new", "game"]);
+    assert_eq!(made.code, 0, "{}", made.stderr);
+    let empty = p.path("no-tools");
+    fs::create_dir(&empty).unwrap();
+    let path = empty.display().to_string();
+    let build = p.gbcli_with(&["build", "game"], &[("PATH", &path)], None);
+    build.fails(5, "toolchain_missing", "`brew install rgbds`");
+    assert!(
+        build.stderr.contains("rgbasm is not on PATH"),
+        "{}",
+        build.stderr
+    );
+
+    let doctor = p.gbcli_with(&["doctor"], &[("PATH", &path)], None);
+    doctor.fails(5, "toolchain_missing", "releases/tag/v1.0.4");
+    assert!(
+        doctor.stdout.starts_with("check name=rgbasm status=fail "),
+        "{}",
+        doctor.stdout
+    );
+}
+
+#[test]
+fn doctor_passes_with_the_pinned_rgbds_and_needs_no_session() {
+    let p = Project::new("rgbds-doctor");
+    let run = p.rgbds(&["doctor"]);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    for name in ["rgbasm", "rgblink", "rgbfix"] {
+        assert!(
+            run.stdout
+                .contains(&format!("check name={name} status=ok detail=\"1.0.4 at ")),
+            "{}",
+            run.stdout
+        );
+    }
+    assert!(run.stdout.contains("check name=boot_roms status=ok "));
+    assert!(run.stdout.contains("check name=core_support status=skip "));
+    assert!(!p.path(".gbcli").exists(), "doctor leaves no trace");
+}
+
+#[test]
+fn build_restore_reloads_a_checkpoint_unless_what_it_ran_moved() {
+    let p = Project::game("rgbds-restore");
+    let run = p.rgbds(&[
+        "run",
+        "game/build/game.gb",
+        "--session",
+        "game",
+        "--frames",
+        "30",
+        "--checkpoint",
+        "start",
+    ]);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    let main = p.path("game/src/main.asm");
+    let text = fs::read_to_string(&main).unwrap();
+
+    // A new palette moves nothing: the checkpoint loads into the rebuild.
+    fs::write(&main, text.replacen("%11_10_01_00", "%00_01_10_11", 1)).unwrap();
+    let restore = &["build", "game", "--session", "game", "--restore", "start"];
+    let same = p.rgbds(restore);
+    assert_eq!(same.code, 0, "{}{}", same.stdout, same.stderr);
+    assert!(same.stdout.contains("output kind=rom "), "{}", same.stdout);
+    assert!(
+        same.stdout.contains("restored name=start "),
+        "{}",
+        same.stdout
+    );
+    assert!(same.stdout.ends_with("rev s2\n"), "{}", same.stdout);
+
+    // An instruction before the main loop moves the routine the checkpoint
+    // was running: refused by the rebuilt-ROM rule, the build still reported.
+    fs::write(&main, text.replacen("MainLoop:\n", "\tnop\nMainLoop:\n", 1)).unwrap();
+    let moved = p.rgbds(restore);
+    moved.fails(3, "rom_changed", "--allow-rom-change");
+    assert!(
+        moved.stdout.contains("output kind=rom "),
+        "{}",
+        moved.stdout
+    );
+    let forced = p.rgbds(&[
+        "build",
+        "game",
+        "--session",
+        "game",
+        "--restore",
+        "start",
+        "--allow-rom-change",
+    ]);
+    assert_eq!(forced.code, 0, "{}", forced.stderr);
+    assert!(forced.stderr.starts_with("warning: "), "{}", forced.stderr);
+}
+
+#[test]
+fn build_restore_needs_a_session_over_the_rom_it_built() {
+    let p = Project::game("rgbds-restore-errors");
+    p.rgbds(&["build", "game", "--restore", "start"])
+        .fails(2, "bad_request", "--session NAME");
+    p.rgbds(&["build", "game", "--session", "game"])
+        .fails(2, "bad_request", "--restore NAME");
+    // --dir only finds the session to reload into: alone, it would be ignored.
+    p.rgbds(&["build", "game", "--dir", "."])
+        .fails(2, "bad_request", "--restore NAME");
+    // A session over another ROM would restore into that ROM, not the build.
+    let other = p.rgbds(&["show", "--session", "demo", "--rom", "demo.gb"]);
+    assert_eq!(other.code, 0, "{}", other.stderr);
+    let wrong = p.rgbds(&["build", "game", "--session", "demo", "--restore", "start"]);
+    wrong.fails(2, "bad_request", "gbcli run game/build/game.gb --session");
+    assert!(wrong.stderr.contains("demo.gb"), "{}", wrong.stderr);
+}
+
+#[test]
+fn new_refuses_a_directory_that_holds_files() {
+    let p = Project::new("rgbds-new-full");
+    fs::create_dir(p.path("game")).unwrap();
+    fs::write(p.path("game/keep.txt"), "mine").unwrap();
+    p.rgbds(&["new", "game"])
+        .fails(2, "bad_request", "gbcli new my-game");
+    p.rgbds(&["new"]).fails(2, "bad_request", "gbcli new DIR");
+}
+
+#[test]
+fn the_loop_in_rows_and_json() {
+    let p = Project::new("rgbds-golden");
+    let mut transcript = String::new();
+    let scripts: &[&[&str]] = &[
+        &["new", "game"],
+        &["build", "game"],
+        &["build", "game", "--json"],
+    ];
+    for args in scripts {
+        transcript += &p.rgbds(args).transcript(args, &p.dir);
+    }
+    let main = p.path("game/src/main.asm");
+    let text = fs::read_to_string(&main).unwrap();
+    fs::write(&main, text.replacen("\tld sp, $E000", "\tld sp,", 1)).unwrap();
+    for args in [&["build", "game"][..], &["build", "game", "--json"]] {
+        transcript += &p.rgbds(args).transcript(args, &p.dir);
+    }
+    golden("rgbds.txt", &transcript);
+}

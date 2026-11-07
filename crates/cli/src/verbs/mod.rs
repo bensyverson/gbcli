@@ -4,6 +4,7 @@
 
 mod flags;
 mod table;
+mod table_build;
 mod table_read;
 
 pub use flags::{CHANGE, OUTPUT, SESSION, SHOT_OPTIONS};
@@ -15,16 +16,18 @@ pub enum Class {
     Read,
     Act,
     Configure,
+    Build,
     Server,
     Help,
 }
 
 impl Class {
     /// Every class, in the order the primer lists them.
-    pub const ALL: [Class; 5] = [
+    pub const ALL: [Class; 6] = [
         Class::Act,
         Class::Read,
         Class::Configure,
+        Class::Build,
         Class::Server,
         Class::Help,
     ];
@@ -34,6 +37,7 @@ impl Class {
             Class::Read => "read",
             Class::Act => "act",
             Class::Configure => "configure",
+            Class::Build => "build",
             Class::Server => "server",
             Class::Help => "help",
         }
@@ -48,6 +52,10 @@ impl Class {
                  (name one with a ROM to create it)"
             }
             Class::Configure => "changes the session's settings, not the machine; needs a session",
+            Class::Build => {
+                "runs RGBDS from PATH, checked against the pinned version (`gbcli doctor`); \
+                 a session only to reload the build into"
+            }
             Class::Server => "speaks the JSON Lines protocol; a session is optional",
             Class::Help => "no preconditions: works with no session, no ROM and no network",
         }
@@ -81,11 +89,14 @@ pub enum Verb {
     Break,
     Watch,
     Delete,
+    New,
+    Build,
     Serve,
     Batch,
     Help,
     Recipes,
     Schema,
+    Doctor,
     Version,
 }
 

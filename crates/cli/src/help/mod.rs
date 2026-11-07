@@ -40,11 +40,12 @@ pub fn primer() -> String {
     out += "\n\
         First:  gbcli run game.gb --session demo --frames 120 --shot first.png\n\
         Then:   gbcli show --session demo    gbcli read pc frame --session demo\n\
+        New:    gbcli doctor, then gbcli new game (a starter that builds and runs)\n\
         \n\
         Help:   gbcli VERB --help (one worked example each)\n\
         \x20       gbcli recipes (goal → command)\n\
         \x20       gbcli help TOPIC: addresses expressions time checkpoints writes budgets\n\
-        \x20                         exit-codes hardware optimize\n\
+        \x20                         exit-codes hardware optimize build\n\
         \x20       gbcli schema (the JSON request grammar for serve and batch)\n\
         Exit:   0 ok, 1 no, 2 usage, 3 budget/conflict, 4 unreadable, 5 environment\n";
     out
@@ -56,6 +57,7 @@ fn title(class: Class) -> &'static str {
         Class::Act => "advance or change the machine; the stop becomes the head",
         Class::Read => "look without changing the head",
         Class::Configure => "change the session's settings",
+        Class::Build => "RGBDS from PATH: edit, build, restore, measure",
         Class::Server => "the JSON Lines protocol, for harnesses",
         Class::Help => "no session, ROM or network needed",
     }

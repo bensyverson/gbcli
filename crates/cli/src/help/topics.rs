@@ -13,10 +13,11 @@ pub enum Topic {
     ExitCodes,
     Hardware,
     Optimize,
+    Build,
 }
 
 impl Topic {
-    pub const ALL: [Topic; 9] = [
+    pub const ALL: [Topic; 10] = [
         Topic::Addresses,
         Topic::Expressions,
         Topic::Time,
@@ -26,6 +27,7 @@ impl Topic {
         Topic::ExitCodes,
         Topic::Hardware,
         Topic::Optimize,
+        Topic::Build,
     ];
 
     pub fn name(self) -> &'static str {
@@ -39,6 +41,7 @@ impl Topic {
             Topic::ExitCodes => "exit-codes",
             Topic::Hardware => "hardware",
             Topic::Optimize => "optimize",
+            Topic::Build => "build",
         }
     }
 
@@ -57,6 +60,7 @@ impl Topic {
             Topic::ExitCodes => EXIT_CODES,
             Topic::Hardware => HARDWARE,
             Topic::Optimize => OPTIMIZE,
+            Topic::Build => BUILD,
         }
     }
 }
@@ -173,6 +177,7 @@ Exit codes — one table for every command; errors print to stderr as
      rom_changed uninitialized_read
   4  something didn't load: rom_unreadable checkpoint_unreadable
      checkpoint_mismatch symbols_unreadable session_unreadable
+     build_failed (RGBDS rejected the sources: see the diagnostic rows)
   5  environment: unsupported no_session boot_rom_missing toolchain_missing
      io_failed internal
 ";
@@ -216,9 +221,32 @@ Optimize — measure, patch, measure again.
        gbcli run --session dx --patch 00:0165=0 --frames 1 --measure Work..Work.done
   4. Rebuild with the winner and hold the gain with an assertion that exits 1:
        gbcli measure Work..Work.done --session dx --iterations 60 --max 90
-  5. Check the rebuild still behaves: gbcli equiv --rom fast.gb --frames 600
+  5. Check the rebuild still behaves: gbcli equiv fast.gb --frames 600
 
 A frame is 70,224 T-cycles; `gbcli help budgets` if a run never arrives.
+";
+
+const BUILD: &str = "\
+Build — edit, build, restore, measure, with RGBDS from PATH.
+
+  gbcli doctor                 RGBDS at the pinned version? (exit 5 names the
+                               install command)
+  gbcli new game               a starter: header, VBlank handler, OAM DMA in
+                               HRAM, hardware.inc, a sprite on screen
+  gbcli build game             rgbasm every src/**/*.asm (include/ on the
+                               path), rgblink to build/game.gb + .sym + .map,
+                               rgbfix -v -p 0xFF. No build file: the layout
+                               is the build; --src, --include, --out change it
+  The loop, from inside game/:
+    gbcli run build/game.gb --session game --frames 60 --checkpoint start
+    (edit src/)
+    gbcli build --session game --restore start
+    gbcli measure VBlank..VBlank.done --session game
+
+Each error is a `diagnostic` row with file= and line=; build_failed exits 4
+and leaves the last good ROM in place. --restore loads the checkpoint into the
+rebuilt ROM only if nothing it was running moved; rom_changed (exit 3) lists
+what did, and --allow-rom-change loads it anyway.
 ";
 
 #[cfg(test)]
@@ -254,6 +282,6 @@ mod tests {
                 }
             }
         }
-        assert_eq!(seen, 24, "every code in the closed set");
+        assert_eq!(seen, 25, "every code in the closed set");
     }
 }

@@ -34,6 +34,8 @@ All are CPU-bound, Rust-side loops over emulator state, which opt-level 1 speeds
 - `gbcli-sameboy::stdout`, 1.5 s;
 - `gbcli-sameboy::state`, 1.1 s. Nearly all of it is a deliberate 1.1 s sleep in `host_time_does_not_reach_the_state`, which proves host time doesn't leak into the state.
 
+> **Update, 2026-11-06 (sixth session): the hook's 37.8–41.0 s warnings were host load, not the suite.** On a quiet machine (load 2.6 on 8 CPUs, after commit `7baaaf0`), `python3 -I scripts/bench/test-times.py` measured 48 binaries at a sum of 14.5 s wall and 19.9 s CPU. The slowest: `gbcli-sameboy::save_load_property` 1.5 s, `gbcli-sameboy::state` 1.2 s, `gbcli-server::gbcli_server` 1.2 s (6.5 s CPU), `gbcli-sameboy::stdout` 1.2 s, `gbcli-server::wall_guard_threads` 1.1 s. Nothing needed moving to the pre-release suite.
+
 ## Why opt-level 1 for the whole dev profile, not just tests
 
 `cargo build` and `cargo test` share artifacts when they share a profile. An optimized `[profile.test]` alone would compile the workspace twice. It would also leave `cargo run` of the server and benchmarks slow.

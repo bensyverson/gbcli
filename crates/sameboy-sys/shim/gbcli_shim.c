@@ -30,6 +30,14 @@ bool gbcli_frame_scrubbed(GB_gameboy_t *gb) { return gb->frame_skip_state == GB_
 // the save state; in accurate mode only its increments matter, so pin it.
 void gbcli_clear_rtc_epoch(GB_gameboy_t *gb) { gb->last_rtc_second = 0; }
 
+// The PPU draws CGB colors from a converted cache that only BCPD/OCPD writes
+// refresh, so a direct write to palette RAM must refresh it too. `index` is a
+// byte offset into palette RAM; either byte of a color refreshes that color.
+void gbcli_refresh_palette_color(GB_gameboy_t *gb, bool background, uint8_t index)
+{
+    GB_palette_changed(gb, background, index);
+}
+
 // Whether the PPU has batched cycles it hasn't run yet (mode 3 batching), in
 // which case PPU-synced registers in the IO array may lag.
 bool gbcli_ppu_batched(GB_gameboy_t *gb) { return gb->display_cycles > 0; }

@@ -9,7 +9,7 @@
 
 use std::path::PathBuf;
 
-use gbcli_core::{BootRom, Budget, Core, CoreConfig, IoReg, Model, RunRequest, StopReason};
+use gbcli_core::{BootRom, Budget, Core, CoreConfig, IoReg, Model, Region, RunRequest, StopReason};
 use gbcli_sameboy::SameBoy;
 
 pub const LAYERS: &[u8] = include_bytes!("../../../sameboy/tests/roms/layers.gb");
@@ -61,8 +61,7 @@ pub fn dmg_scene() -> SameBoy {
     // A diagonal of tiles 1-5 down the $9800 map.
     for i in 0..32u32 {
         let tile = (i % 5 + 1) as u8;
-        core.poke(gbcli_core::Region::Vram, 0x1800 + 33 * i, &[tile])
-            .unwrap();
+        core.poke(Region::Vram, 0x1800 + 33 * i, &[tile]).unwrap();
     }
     core.bus_write(0xFF43, 200).unwrap(); // SCX
     core.bus_write(0xFF42, 150).unwrap(); // SCY
@@ -77,42 +76,27 @@ pub const CGB_BG: [[u16; 4]; 2] = [
 ];
 pub const CGB_OBJ0: [u16; 4] = [0x7FFF, 0x7E00, 0x03FF, 0x1084];
 
-/// Writes palette `index` of a set through BCPS/BCPD (or OCPS/OCPD).
-pub fn write_palette(core: &mut dyn Core, object: bool, index: u8, colors: [u16; 4]) {
-    let (spec, data) = if object {
-        (0xFF6A, 0xFF6B)
+/// Sets palette `index` of a set by poking palette RAM.
+pub fn set_palette(core: &mut dyn Core, object: bool, index: u8, colors: [u16; 4]) {
+    let region = if object {
+        Region::ObjPalette
     } else {
-        (0xFF68, 0xFF69)
+        Region::BgPalette
     };
-    core.bus_write(spec, 0x80 | (index * 8)).unwrap();
-    for c in colors {
-        let [lo, hi] = c.to_le_bytes();
-        core.bus_write(data, lo).unwrap();
-        core.bus_write(data, hi).unwrap();
-    }
+    let bytes: Vec<u8> = colors.iter().flat_map(|c| c.to_le_bytes()).collect();
+    core.poke(region, u32::from(index) * 8, &bytes).unwrap();
 }
 
 /// layers_cgb.gb in CGB mode with real palettes, at a frame end.
 pub fn cgb_scene() -> SameBoy {
-    use gbcli_core::Region;
     let mut core = fast_cgb(LAYERS_CGB);
     run(&mut core, Budget::frames(2)); // the ROM's setup
-    write_palette(&mut core, false, 0, CGB_BG[0]);
-    write_palette(&mut core, false, 1, CGB_BG[1]);
-    write_palette(&mut core, true, 0, CGB_OBJ0);
-    // The ROM writes OAM and the attributes with the LCD on, which the fast
-    // boot ROM leaves on, so some writes land in mode 2 or 3 and are dropped:
-    // put its tables in place directly (layers_cgb.asm).
-    #[rustfmt::skip]
-    let objects = [
-        16, 24, 2, 0x00,  16, 40, 2, 0x00,  16, 56, 2, 0x80,
-        24, 32, 2, 0x00,  24, 28, 2, 0x00,
-    ];
-    core.poke(Region::Oam, 0, &objects).unwrap();
-    // Attributes of row 0: priority at x=16 and x=32, and (ours) BG palette 1
-    // at x=8, so the map shows two palettes.
-    core.poke(Region::Vram, 0x2000 + 0x1800, &[0, 1, 0x80, 0, 0x80])
-        .unwrap();
+    set_palette(&mut core, false, 0, CGB_BG[0]);
+    set_palette(&mut core, false, 1, CGB_BG[1]);
+    set_palette(&mut core, true, 0, CGB_OBJ0);
+    // BG palette 1 for row 0's cell at x=8 (not in layers_cgb.asm), so the
+    // map shows two palettes.
+    core.poke(Region::Vram, 0x2000 + 0x1800 + 1, &[1]).unwrap();
     run(&mut core, Budget::frames(2));
     to_frame_end(&mut core);
     core

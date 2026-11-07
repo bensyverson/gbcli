@@ -5,7 +5,7 @@ mod common;
 use common::*;
 use gbcli_core::{
     BootRom, Budget, ColorMode, Core, CoreConfig, CoreError, Feature, IoReg, Model, PixelBuf,
-    Pixels, RunRequest, StopReason, Ticks,
+    Pixels, Region, RunRequest, StopReason, Ticks,
 };
 use gbcli_sameboy::SameBoy;
 
@@ -104,11 +104,13 @@ fn a_cgb_color_converts_as_the_frame_shows_it() {
     let mut core = cgb(LAYERS_CGB);
     let color: u16 = 0b0_00111_10101_01010; // blue 7, green 21, red 10
     let [lo, hi] = color.to_le_bytes();
-    // Through BCPS/BCPD: SameBoy renders from a cache those writes update.
+    // Through BCPS/BCPD, as a game sets it.
     core.bus_write(0xFF68, 0x80).unwrap();
     core.bus_write(0xFF69, lo).unwrap();
     core.bus_write(0xFF69, hi).unwrap();
-    run(&mut core, Budget::frames(2));
+    // The ROM turns the LCD off for its setup; SameBoy blanks the first frame
+    // after it turns back on.
+    run(&mut core, Budget::frames(3));
     let Pixels::Rgb(frame) = core.last_complete_frame().unwrap().pixels else {
         panic!("expected RGB")
     };
@@ -118,6 +120,30 @@ fn a_cgb_color_converts_as_the_frame_shows_it() {
         panic!("CGB live frame came out as shades")
     };
     assert_eq!(live.len(), 160 * 144);
+}
+
+#[test]
+fn a_poked_cgb_palette_color_appears_in_the_next_frame() {
+    let mut core = cgb(LAYERS_CGB);
+    run(&mut core, Budget::frames(3)); // the ROM's setup
+    let bg: u16 = 0b0_00111_10101_01010;
+    let obj: u16 = 0b0_10100_00011_11001;
+    // BG palette 0, color 0; object palette 0, color 3 (tile 2's color).
+    core.poke(Region::BgPalette, 0, &bg.to_le_bytes()).unwrap();
+    core.poke(Region::ObjPalette, 6, &obj.to_le_bytes())
+        .unwrap();
+    to_frame_end(&mut core);
+    let Pixels::Rgb(frame) = core.last_complete_frame().unwrap().pixels else {
+        panic!("expected RGB")
+    };
+    // Line 0, x=0: background tile 0, color 0, palette 0 (layers_cgb.asm).
+    assert_eq!(frame[0], core.rgb555_color(bg).unwrap(), "background");
+    // Line 8, x=26: object 3, tile 2, color 3, palette 0.
+    assert_eq!(
+        frame[8 * 160 + 26],
+        core.rgb555_color(obj).unwrap(),
+        "object"
+    );
 }
 
 #[test]

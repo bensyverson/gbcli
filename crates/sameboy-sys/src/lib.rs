@@ -232,6 +232,9 @@ unsafe extern "C" {
     pub fn gbcli_is_mmm01(gb: *mut GB_gameboy_t) -> bool;
     pub fn gbcli_clear_rtc_epoch(gb: *mut GB_gameboy_t);
     pub fn gbcli_ppu_batched(gb: *mut GB_gameboy_t) -> bool;
+    /// Re-converts the CGB color holding palette-RAM byte `index` (0-63) into
+    /// the cache the PPU draws from; a no-op on DMG.
+    pub fn gbcli_refresh_palette_color(gb: *mut GB_gameboy_t, background: bool, index: u8);
     /// Attaches (or with null, detaches) the per-pixel layer buffer; SameBoy
     /// keeps the pointer, so it must outlive the instance.
     pub fn gbcli_set_layer_buffer(gb: *mut GB_gameboy_t, buffer: *mut u8);

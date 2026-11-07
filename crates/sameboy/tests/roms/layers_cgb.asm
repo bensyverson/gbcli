@@ -28,6 +28,21 @@ SECTION "Main", ROM0[$150]
 Main:
     di
     ld sp, $FFFE
+
+    ; Some boot ROMs (SameBoy's fast CGB boot) hand over with the LCD on, and
+    ; VRAM and OAM writes in modes 2 and 3 are dropped: turn it off, which is
+    ; only allowed in vblank. LY reads 0 while the LCD is off, so check first.
+    ldh a, [$FF40]      ; LCDC
+    bit 7, a
+    jr z, .lcdOff
+.waitVBlank:
+    ldh a, [$FF44]      ; LY
+    cp 144
+    jr c, .waitVBlank
+    xor a
+    ldh [$FF40], a      ; LCDC: LCD off
+.lcdOff:
+
     xor a
     ldh [$FF4F], a      ; VBK: bank 0
 

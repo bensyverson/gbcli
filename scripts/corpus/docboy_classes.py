@@ -15,10 +15,11 @@ import sys
 # (class, why, id pattern). Patterns match the part of the id after "docboy/roms/dmg/";
 # the first match wins, so the specific ones come first.
 CLASSES = [
-    ("unexplained: after STOP", "the key wakes the core (job Jwo9sg), then the case writes its fail value; not investigated",
-     r"^docboy/(cpu|ppu|dma)/interactive(_visual)?/(stop_read_(ly|stat)\w*|"
-     r"dma_stop_during_transfer_timing_round1|stop_trigger_interrupt)\.gb$|"
+    ("harness: no time passes in STOP", "the runner skips its clock while the core sits in STOP, so the RTC doesn't run; passes when SameBoy steps through STOP (job RU4MNT)",
      r"^docboy/mbc/mbc3/interactive/mbc3_rtc_gb_stopped_recover\.gb$"),
+    ("disputed: docboy after STOP", "SameBoy's DMG PPU stays put in STOP (LY 21 read whenever the key comes); OAM DMA ends earlier after the wake (job RU4MNT)",
+     r"^docboy/(ppu|dma)/interactive/(stop_read_(ly|stat)\w*|"
+     r"dma_stop_during_transfer_timing_round1|stop_trigger_interrupt)\.gb$"),
     ("harness: STOP, unexplained", "the key is held into STOP and released; the case times out",
      r"^docboy/cpu/interactive_visual/stop_immediate_exit_joypad_interrupt\.gb$"),
     ("harness: power-on OAM seed", "SameBoy's seed 0 leaves $FF at $FE35, which these tests read as 'OAM locked'",

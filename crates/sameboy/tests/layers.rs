@@ -238,34 +238,69 @@ fn busy_rom_takes_the_per_pixel_path() {
     );
 }
 
+/// A CGB core on `rom` with the fast CGB boot ROM, handed over; unlike the
+/// quick boot ROM, it hands over with the LCD on.
+fn fast_cgb(rom: &[u8]) -> SameBoy {
+    let mut config = CoreConfig::new(Model::CgbE, rom.to_vec());
+    config.boot_rom = BootRom::Custom(sameboy_sys::boot_roms::CGB_FAST.to_vec());
+    let mut core = SameBoy::new(config).expect("construct core");
+    let mut frames = 0;
+    while core.io_register(IoReg::BANK).unwrap() & 1 == 0 {
+        assert!(frames < 600, "no handover after {frames} frames");
+        run(&mut core, Budget::frames(1));
+        frames += 1;
+    }
+    core
+}
+
 #[test]
 fn cgb_priorities_attribute_bit_oam_flag_and_index() {
-    let mut core = quick_cgb(LAYERS_CGB);
+    for (boot, core) in [
+        ("quick", quick_cgb(LAYERS_CGB)),
+        ("fast", fast_cgb(LAYERS_CGB)),
+    ] {
+        assert_cgb_priorities(core, boot);
+    }
+}
+
+fn assert_cgb_priorities(mut core: SameBoy, boot: &str) {
     core.set_pixel_layers(true).unwrap();
     run(&mut core, Budget::frames(SETTLE_FRAMES));
     let map = core.pixel_layers().unwrap();
     for y in 0..8 {
         for x in 16..24 {
             // The BG attribute's priority bit hides object 0 (BG color 2).
-            assert_eq!(tag(&map, x, y), Layer::Background, "({x},{y})");
+            assert_eq!(tag(&map, x, y), Layer::Background, "{boot} boot: ({x},{y})");
         }
         for x in 32..40 {
             // The attribute priority bit loses to an object over BG color 0.
-            assert_eq!(tag(&map, x, y), Layer::Object { index: 1 }, "({x},{y})");
+            assert_eq!(
+                tag(&map, x, y),
+                Layer::Object { index: 1 },
+                "{boot} boot: ({x},{y})"
+            );
         }
         for x in 48..56 {
             // Object 2's own BG-priority flag, over BG color 2.
-            assert_eq!(tag(&map, x, y), Layer::Background, "({x},{y})");
+            assert_eq!(tag(&map, x, y), Layer::Background, "{boot} boot: ({x},{y})");
         }
     }
     for y in 8..16 {
         for x in 20..24 {
-            assert_eq!(tag(&map, x, y), Layer::Object { index: 4 }, "({x},{y})");
+            assert_eq!(
+                tag(&map, x, y),
+                Layer::Object { index: 4 },
+                "{boot} boot: ({x},{y})"
+            );
         }
         for x in 24..32 {
             // CGB priority is by OAM index alone: object 3 beats object 4,
             // whose X is lower.
-            assert_eq!(tag(&map, x, y), Layer::Object { index: 3 }, "({x},{y})");
+            assert_eq!(
+                tag(&map, x, y),
+                Layer::Object { index: 3 },
+                "{boot} boot: ({x},{y})"
+            );
         }
     }
 }

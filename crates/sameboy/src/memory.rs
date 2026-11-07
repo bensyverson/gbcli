@@ -154,6 +154,14 @@ pub(crate) fn poke(
     check_range("poke offset", offset, bytes.len(), size)?;
     // SAFETY: in bounds by the check above; `&mut core` excludes other borrows.
     unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), ptr.add(offset as usize), bytes.len()) };
+    if matches!(region, Region::BgPalette | Region::ObjPalette) {
+        let background = region == Region::BgPalette;
+        // In range by check_range: palette RAM is 64 bytes.
+        for index in offset..offset + bytes.len() as u32 {
+            // SAFETY: a live instance; the index is inside palette RAM.
+            unsafe { sb::gbcli_refresh_palette_color(core.raw(), background, index as u8) };
+        }
+    }
     if let Some(tracking) = &mut core.hooks_mut().tracking {
         tracking.mark_poke(region, offset as usize, bytes.len());
     }

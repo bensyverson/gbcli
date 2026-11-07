@@ -4,6 +4,8 @@
 
 > **Update 2026-11-06 (leaf `Jwo9sg`): 166 fail now, not 173.** The STOP wake bug below is fixed: `gbcli_pre_run` now lets `GB_run` take its STOP step while SameBoy's joypad has unapplied input (`inputs_changed`) or is still settling (`!joypad_is_stable`), so a key pressed in STOP wakes the core as SameBoy would. Of the 19 cases it held, 7 now pass (`stop_joypad0_interrupt0/1`, `stop_hello_world`, `stop_read_tima_round1/2`, `stop_tima_falling_edge`, `dma_stop_during_transfer_timing_round2`). The other 12 now wake and then write their own fail value ($02 at $FFF0); they are reclassified "Unexplained: after STOP" below. So 7 of the 166 are runner artifacts (6 power-on OAM seed, 1 STOP unexplained), not 26. The counts in the tables below are updated in place; the 2,765 / 173 line is the original result.
 
+> **Update 2026-11-06 (leaf `RU4MNT`): the 12 "after STOP" cases are classified; 1 is ours, 11 are disputed.** Measured by letting SameBoy step through STOP itself (`gbcli_pre_run` never returning `GBCLI_PRE_STOPPED`, so emulated time passes until the key, as in SameBoy's own frontend) and re-running `--suite docboy --id stop`: `mbc3_rtc_gb_stopped_recover` passes, and the other 11 fail exactly as before. So one case is a runner artifact (no emulated time, hence no RTC time, passes in STOP) and the clock skip plays no part in the other 11, which disagree with docboy under SameBoy's own STOP behavior. Details under "Harness: no time passes in STOP" and "Disputed: docboy after STOP" below. Not fixed: letting time pass in STOP needs the core to run through it, a `Core` contract change queued for a decision. Counts: runner artifacts are 8 of the 166 (6 power-on OAM seed, 1 STOP unexplained, 1 no time in STOP); disputed are 147.
+
 ## Re-running it
 
 ```
@@ -57,7 +59,9 @@ Only docboy rows use it. `judge::run` boots every other row with the model's bui
 | Class | Cases | Evidence |
 |---|---|---|
 | ~~Harness: STOP wake bug~~ | ~~19~~ 0 | fixed, job `Jwo9sg`: 7 now pass, 12 moved to the next row |
-| Unexplained: after STOP | 12 | below |
+| ~~Unexplained: after STOP~~ | ~~12~~ 0 | classified, job `RU4MNT`: split into the next two rows |
+| Harness: no time passes in STOP | 1 | below |
+| Disputed: docboy after STOP | 11 | below |
 | Harness: STOP, unexplained | 1 | below |
 | Harness: power-on OAM seed | 6 | below |
 | Reference problem, probable | 1 | below |
@@ -68,7 +72,20 @@ Only docboy rows use it. `judge::run` boots every other row with the model's bui
 
 **Harness: a STOPped core never wakes on a key (19).** These are `stop_read_ly*` (6), `stop_read_stat*` (3), `stop_read_tima*` (2), `stop_tima_falling_edge`, `stop_joypad0_interrupt0/1`, `dma_stop_during_transfer_timing_round1/2`, `stop_trigger_interrupt`, `stop_hello_world` and `mbc3_rtc_gb_stopped_recover`. Each enters STOP and expects a key press scheduled later to wake it; each ends "the CPU stopped with no wake source". The cases where the key is already down when STOP runs (`stop_joypad1_*`) pass. Cause: `gbcli_pre_run` (`crates/sameboy-sys/shim/gbcli_shim.c:276`) reports STOP while JOYP's low nibble is $F, and `run` returns before calling `GB_run`. But `set_keys` (`GB_set_key_mask`) only marks the inputs changed, and SameBoy recomputes JOYP in `GB_joypad_run`, inside `GB_run`. Observed with a scratch test on `stop_joypad0_interrupt0` from docboy's state: STOP at 8,464 ticks, `set_keys(UP)`, JOYP still reads $EF, `run` stops again. After a P1 write that changes the select bits, which calls `GB_update_joyp`, the next `run` proceeds. This is a gbcli-sameboy bug, not a SameBoy gap and not docboy's. It is filed as `Jwo9sg` and not fixed here: the leaf's scope is classification, and the fix changes the backend.
 
+> **Corrected 2026-11-06 (leaf `RU4MNT`):** the paragraph below left these unexplained and guessed at the RTC case; both are now measured, in the two paragraphs after it. The guess was right for `mbc3_rtc_gb_stopped_recover` only.
+
 **Unexplained: after STOP (12).** `stop_read_ly*` (6), `stop_read_stat*` (3), `stop_trigger_interrupt`, `dma_stop_during_transfer_timing_round1` and `mbc3_rtc_gb_stopped_recover`. With the wake fixed they leave STOP on the scheduled key and then write $02 to $FFF0, the test's own fail value. Not investigated. Two facts bound it. The runner skips the judge's clock to the next scheduled input while the core sits in STOP (`Drive::idle_until`, `crates/corpus/src/drive.rs`), so no emulated time passes inside STOP. For LY and STAT that matches SameBoy, whose DMG PPU does not advance in STOP (`display.c`, "The PPU does not advance while in STOP mode on the DMG"), and timers also stop in STOP (`timers_run`), which fits the three TIMA cases now passing. SameBoy's RTC does run in STOP (`rtc_run`), so the skip may explain `mbc3_rtc_gb_stopped_recover`; that is a guess, not a measurement. docboy's sources are not in the corpus, so what each case expects is unknown here.
+
+**Harness: no time passes in STOP (1).** `mbc3_rtc_gb_stopped_recover`. The runner skips its judge clock to the next input while the core reports `Stopped` (`Drive::idle_until`), and the core runs no cycles in STOP, so the cartridge RTC, which SameBoy advances with emulated cycles (`rtc_run`), loses the whole wait. Measured: with SameBoy stepping through STOP until the key (the experiment in the update at the top), the case passes; with the skip it writes $02. It is ours, not SameBoy's. The fix needs a core that can run through STOP with time passing (for example a run option the corpus runner sets while an input is pending), which changes the `Core` contract's "no time passes in STOP" (`crates/sameboy/tests/run.rs`); it is queued as a decision rather than made here.
+
+**Disputed: docboy after STOP (11).** Under SameBoy's own STOP behavior, with the key pressed when docboy schedules it, each reads a value docboy's test rejects. Measured with a scratch probe (from docboy's hand-over state, stepping through STOP, the value in A after the test's read):
+
+- `stop_read_ly*` (6): LCD on, a delay loop, STOP at line 20 (`_alt_alt`: line 30), then a NOP sled and `ldh a,[LY]`. Probed: `stop_read_ly_round1` and `_round2` read 21 where docboy expects 0 and 1, and `_alt_alt_round1` reads 31 where docboy expects 10 (the other three, which expect 0/1 and 11, were not probed). With the key at 20,000, 40,000, 65,536 or 100,000 T-cycles, `stop_read_ly_round1` reads 21 every time: SameBoy's DMG PPU does not advance in STOP (its `display.c` says so), so no key timing the runner could choose changes the value.
+- `stop_read_stat_round1/2/3` (3): the same setup reading STAT. Probed in round 1 only: SameBoy reads $83 (mode 3) where docboy expects $85; rounds 2 and 3 expect $84 and $86.
+- `stop_trigger_interrupt` (1): STAT's LYC interrupt is armed for line 30, STOP comes at line 20, and a 16-NOP sled after STOP falls through to the fail path unless the interrupt has fired. SameBoy falls through: from line 20, LY can't reach 30 within the sled unless the PPU moved during STOP.
+- `dma_stop_during_transfer_timing_round1` (1): OAM DMA starts, STOP comes on the next instruction, and after the wake a delay loop reads OAM $FE00. docboy expects $FF (DMA still running) in round 1 and the copied byte one M-cycle later in round 2. SameBoy reads the copied byte ($24) in both (the DMA source is $24/$2C throughout, never $00), so round 2 passes. While stopped, OAM's last byte was still $00 and its first already copied, so SameBoy's DMA also pauses in STOP; it finishes at least an M-cycle sooner after the wake than docboy expects. Which part (wake latency or DMA) differs is not measured. Every key time from 65,530 to 65,541 T-cycles gave the same read, so the runner's input timing is not the cause.
+
+As with the 136 below, docboy states no hardware verification, so these are disagreements, not SameBoy gaps. `stop_immediate_exit_joypad_interrupt` ("Harness: STOP, unexplained") also times out when SameBoy steps through STOP, so the clock skip doesn't explain it either.
 
 **Harness: STOP, unexplained (1).** `stop_immediate_exit_joypad_interrupt` presses A before STOP and releases it at 131,072 T-cycles, then times out. It is STOP-adjacent but does not end in "stopped", so the bug above does not obviously explain it. Not investigated further.
 
@@ -101,6 +118,6 @@ Only docboy rows use it. `judge::run` boots every other row with the model's bui
 ## What would change these results
 
 - ~~Fixing `Jwo9sg` should flip some or all of the 19 STOP cases.~~ Done: 7 flipped (see the update at the top).
-- Letting emulated time pass in STOP (a core that runs through STOP until a budget, rather than stopping with `Stopped`) would test the RTC guess above.
+- ~~Letting emulated time pass in STOP (a core that runs through STOP until a budget, rather than stopping with `Stopped`) would test the RTC guess above.~~ Tested (job `RU4MNT`): it flips `mbc3_rtc_gb_stopped_recover` and nothing else. Shipping it needs the `Core` change described under "Harness: no time passes in STOP".
 - A per-row seed, or seeding OAM the way docboy does, would flip the six `poweron_oam` cases in both suites. Deliberately not done: the runner's fixed seed is a determinism choice, and tuning it to pass tests would hide what it does.
 - Hardware evidence for any disputed family would move it to "SameBoy gap" or "reference problem".

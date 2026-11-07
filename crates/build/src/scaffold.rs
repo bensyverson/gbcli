@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use gbcli_protocol::{ErrorBody, ErrorCode, NewMade, SESSION_NAME_RULE, is_session_name};
 
-use crate::paths::{display, normalize};
+use crate::paths::{display, normalize, quote};
 
 /// gbdev's hardware.inc, pinned (`data/hardware.inc/SOURCE`).
 pub const HARDWARE_INC: &str = include_str!("../data/hardware.inc/hardware.inc");
@@ -44,7 +44,10 @@ impl NewError {
                     "`{name}` can't name a project: it names the ROM and the session, and a \
                      session name is {SESSION_NAME_RULE}"
                 ),
-                format!("name the directory like a session: `gbcli new {offer}`"),
+                format!(
+                    "name the directory like a session: `gbcli new {}`",
+                    quote(offer)
+                ),
             ),
             NewError::NotEmpty { dir } => ErrorBody::new(
                 ErrorCode::BadRequest,
@@ -99,14 +102,17 @@ pub fn new_project(dir: &Path, display_base: &Path) -> Result<NewMade, NewError>
         ("gbcli build".to_string(), format!("build/{name}.gb"))
     } else {
         (
-            format!("gbcli build {shown}"),
+            format!("gbcli build {}", quote(&shown)),
             format!("{shown}/build/{name}.gb"),
         )
     };
     Ok(NewMade {
         next: vec![
             build,
-            format!("gbcli run {rom} --session {name} --frames 120 --shot first.png"),
+            format!(
+                "gbcli run {} --session {name} --frames 120 --shot first.png",
+                quote(&rom)
+            ),
         ],
         name,
         dir: shown,

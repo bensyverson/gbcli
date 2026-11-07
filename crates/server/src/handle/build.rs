@@ -1,8 +1,10 @@
 //! `build`, `doctor` and `new` (design §12): the RGBDS loop as ops, answered
 //! through `gbcli-build`. None needs a session except a build's `restore`,
-//! which the server decides here: the session's ROM must be the file just
-//! built, and the restore is an ordinary `restore` request, logged and
-//! guarded by `rev` like any other.
+//! which the server decides here: the session must exist before any tool
+//! runs, its ROM must be the file just built, and the restore is an
+//! ordinary `restore` request, logged and guarded by `rev` like any other.
+//! A build that restores nothing refuses the fields only a restore uses
+//! (`session`, `rev`, `allow_rom_change`), rather than ignore them.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -63,7 +65,7 @@ impl Answer for Tooling {
                     "start one with `gbcli run game.gb --session NAME`",
                 ),
             ),
-            Op::Build(args) => match build(&self.host, &id, args) {
+            Op::Build(args) => match build(&self.host, request, args) {
                 Ok(built) => built.response(id),
                 Err(response) => *response,
             },
@@ -99,12 +101,21 @@ impl Handler {
     /// when the build is good and the session runs the ROM it wrote.
     fn build(&mut self, request: &Request, args: &BuildArgs) -> Response {
         let id = request.id.clone();
-        let built = match build(&self.host, &id, args) {
+        let Some(name) = &args.restore else {
+            return match build(&self.host, request, args) {
+                Ok(built) => built.response(id),
+                Err(response) => *response,
+            };
+        };
+        // The session to restore into is checked before any tool runs, so a
+        // refusal leaves the ROM as it was.
+        let session = match self.restore_target(request) {
+            Ok(session) => session,
+            Err(body) => return Response::failed(id, None, *body),
+        };
+        let built = match build(&self.host, request, args) {
             Ok(built) => built,
             Err(response) => return *response,
-        };
-        let Some(name) = &args.restore else {
-            return built.response(id);
         };
         let Built {
             mut result,
@@ -116,18 +127,6 @@ impl Handler {
             // The build still happened: its report rides with the refusal.
             body.result = Some(Box::new(result));
             Response::failed(id.clone(), None, body).with_warnings(warnings)
-        };
-        let Some(session) = request
-            .session
-            .clone()
-            .or_else(|| self.default_session.clone())
-        else {
-            let body = ErrorBody::new(
-                ErrorCode::BadRequest,
-                "restoring a build needs the session to restore into",
-                "add --session NAME, or name the session in the request",
-            );
-            return refuse(body, result, warnings);
         };
         if let Err(body) = self.runs_rom(&session, &rom.path, &rom.shown) {
             return refuse(*body, result, warnings);
@@ -152,6 +151,26 @@ impl Handler {
                 Response::failed(id, restored.rev, body).with_warnings(warnings)
             }
         }
+    }
+
+    /// The session a build's restore goes into: the request's, or the
+    /// server's default, and one that exists.
+    fn restore_target(&self, request: &Request) -> Result<String, Box<ErrorBody>> {
+        let Some(session) = request
+            .session
+            .clone()
+            .or_else(|| self.default_session.clone())
+        else {
+            return Err(Box::new(ErrorBody::new(
+                ErrorCode::BadRequest,
+                "restoring a build needs the session to restore into",
+                "add --session NAME, or name the session in the request",
+            )));
+        };
+        let store_error = |e| Box::new(convert::store(&e));
+        let store = self.bundle.session(&session).map_err(store_error)?;
+        store.read_meta().map_err(store_error)?;
+        Ok(session)
     }
 
     /// Whether `session` runs the ROM at `rom`: restoring into any other
@@ -205,8 +224,20 @@ impl Built {
 }
 
 /// Builds the project `args` names, as `host` sees it; a failure is the
-/// response that says so.
-fn build(host: &Host, id: &str, args: &BuildArgs) -> Result<Built, Box<Response>> {
+/// response that says so. A request without `restore` that carries a field
+/// only a restore uses is refused before any tool runs.
+fn build(host: &Host, request: &Request, args: &BuildArgs) -> Result<Built, Box<Response>> {
+    let id = request.id.as_str();
+    if args.restore.is_none()
+        && let Some(field) = restore_only_field(request)
+    {
+        let body = ErrorBody::new(
+            ErrorCode::BadRequest,
+            format!("{field} only applies when the build restores a checkpoint (`restore`)"),
+            "add --restore NAME (a checkpoint of the session), or drop it",
+        );
+        return Err(Box::new(Response::failed(id, None, body)));
+    }
     let tools = Toolchain::discover(host.path.as_deref(), &host.cwd)
         .map_err(|e| Box::new(Response::failed(id, None, e.body())))?;
     let warnings = tools.warnings();
@@ -231,6 +262,20 @@ fn build(host: &Host, id: &str, args: &BuildArgs) -> Result<Built, Box<Response>
         warnings,
         rom,
     })
+}
+
+/// The first field of `request` that only a build's restore uses, as the
+/// wire and the CLI name it.
+fn restore_only_field(request: &Request) -> Option<&'static str> {
+    if request.session.is_some() {
+        Some("`session` (--session)")
+    } else if request.rev.is_some() {
+        Some("`rev` (--rev)")
+    } else if request.allow_rom_change {
+        Some("`allow_rom_change` (--allow-rom-change)")
+    } else {
+        None
+    }
 }
 
 fn doctor(host: &Host, id: String) -> Response {

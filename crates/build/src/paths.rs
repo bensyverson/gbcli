@@ -31,9 +31,30 @@ pub fn normalize(path: &Path) -> PathBuf {
     out
 }
 
+/// `word` as a POSIX shell reads it back as one word: as it is when every
+/// character is one a shell leaves alone, else in single quotes. For the
+/// commands a result prints for the caller to run.
+pub fn quote(word: &str) -> String {
+    let plain = |c: char| c.is_ascii_alphanumeric() || "@%+=:,./_-".contains(c);
+    if !word.is_empty() && word.chars().all(plain) {
+        return word.to_string();
+    }
+    format!("'{}'", word.replace('\'', r"'\''"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_word_is_quoted_only_when_a_shell_would_split_or_expand_it() {
+        assert_eq!(quote("demo/build/demo.gb"), "demo/build/demo.gb");
+        assert_eq!(quote("my games/demo"), "'my games/demo'");
+        assert_eq!(quote("it's"), r"'it'\''s'");
+        assert_eq!(quote("$HOME"), "'$HOME'");
+        assert_eq!(quote("a*"), "'a*'");
+        assert_eq!(quote(""), "''");
+    }
 
     #[test]
     fn inside_the_base_is_relative_and_outside_is_absolute() {

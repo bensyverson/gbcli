@@ -8,21 +8,23 @@
 //! build never leaves a stale or half-written ROM where a session would load
 //! it. Every tool runs with `--color never` and under a time limit.
 
-use std::collections::HashSet;
+mod layout;
+mod staging;
+mod tool;
+
 use std::fs;
-use std::io::Read;
 use std::path::{Component, Path, PathBuf};
-use std::process::{Child, Command, ExitStatus, Stdio};
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use gbcli_protocol::{
     BuildMade, Diagnostic, ErrorBody, ErrorCode, OutputKind, OutputMade, ResultBody, Severity, Tool,
 };
 
 use crate::diagnostics;
-use crate::paths::display;
+use crate::paths::{display, quote};
 use crate::toolchain::Toolchain;
+use layout::Layout;
+use staging::Staging;
 
 /// What to build, and how paths are printed. Relative paths are relative to
 /// `project`.
@@ -69,8 +71,8 @@ pub enum BuildError {
     /// or there is nothing to assemble.
     Layout { message: String, remedy: String },
     /// A tool reported errors or wrote no output; the report says which.
-    /// `dir` is the project as the caller reads it, for the remedy.
-    Failed { made: Box<BuildMade>, dir: String },
+    /// `again` is the command that builds the same way, for the remedy.
+    Failed { made: Box<BuildMade>, again: String },
     Io {
         path: PathBuf,
         error: std::io::Error,
@@ -83,7 +85,7 @@ impl BuildError {
             BuildError::Layout { message, remedy } => {
                 ErrorBody::new(ErrorCode::BadRequest, message, remedy)
             }
-            BuildError::Failed { made, dir } => {
+            BuildError::Failed { made, again } => {
                 let errors: Vec<&Diagnostic> = made
                     .diagnostics
                     .iter()
@@ -103,10 +105,6 @@ impl BuildError {
                 let count = match errors.len() {
                     1 => "1 error".to_string(),
                     n => format!("{n} errors, the first"),
-                };
-                let again = match dir.as_str() {
-                    "." => "gbcli build".to_string(),
-                    dir => format!("gbcli build {dir}"),
                 };
                 let mut body = ErrorBody::new(
                     ErrorCode::BuildFailed,
@@ -140,6 +138,7 @@ pub fn build(tools: &Toolchain, options: &BuildOptions) -> Result<BuildMade, Bui
         project: &project,
         shown: &shown,
         timeout: options.tool_timeout,
+        again: again(&shown(&project), options),
         made: BuildMade {
             rgbds: tools.version().to_string(),
             sources: layout.sources.iter().map(|s| shown(s)).collect(),
@@ -184,7 +183,7 @@ pub fn build(tools: &Toolchain, options: &BuildOptions) -> Result<BuildMade, Bui
     ];
     let staged: Vec<PathBuf> = finals
         .iter()
-        .map(|(_, p)| staging.0.join(p.file_name().expect("a file name")))
+        .map(|(_, p)| staging.path().join(p.file_name().expect("a file name")))
         .collect();
     let mut args: Vec<String> = Vec::new();
     for (flag, path) in ["-o", "-n", "-m"].iter().zip(&staged) {
@@ -232,138 +231,6 @@ pub fn build(tools: &Toolchain, options: &BuildOptions) -> Result<BuildMade, Bui
     Ok(run.made)
 }
 
-/// A directory beside the final outputs that this build made and alone
-/// removes, however the build ends. Its name is gbcli's and unique to the
-/// build, so a directory of the user's or a concurrent build's is never
-/// touched.
-struct Staging(PathBuf);
-
-impl Staging {
-    fn new(beside: &Path) -> Result<Staging, BuildError> {
-        static NEXT: AtomicU32 = AtomicU32::new(0);
-        loop {
-            let n = NEXT.fetch_add(1, Ordering::Relaxed);
-            let dir = beside.join(format!(".gbcli-staging-{}-{n}", std::process::id()));
-            match fs::create_dir(&dir) {
-                Ok(()) => return Ok(Staging(dir)),
-                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
-                Err(error) => return Err(BuildError::Io { path: dir, error }),
-            }
-        }
-    }
-}
-
-impl Drop for Staging {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
-    }
-}
-
-/// Where everything is, checked before any tool runs.
-struct Layout {
-    sources: Vec<PathBuf>,
-    /// Relative to the project, as rgbasm is given them.
-    include: Vec<PathBuf>,
-    objects: PathBuf,
-    out: PathBuf,
-}
-
-impl Layout {
-    fn of(
-        project: &Path,
-        options: &BuildOptions,
-        shown: &dyn Fn(&Path) -> String,
-    ) -> Result<Layout, BuildError> {
-        let missing = |what: &str, dir: &Path, flag: &str| BuildError::Layout {
-            message: format!("no {what} directory at {}", shown(dir)),
-            remedy: format!(
-                "make it, or pass --{flag} DIR; `gbcli new DIR` scaffolds a project with the \
-                 conventional layout"
-            ),
-        };
-        let src_dirs: Vec<PathBuf> = if options.src.is_empty() {
-            vec![PathBuf::from("src")]
-        } else {
-            options.src.clone()
-        };
-        let mut sources = Vec::new();
-        let mut seen = HashSet::new();
-        for dir in &src_dirs {
-            let dir = project.join(dir);
-            if !dir.is_dir() {
-                return Err(missing("source", &dir, "src"));
-            }
-            asm_files(&dir, &mut sources, &mut seen).map_err(|error| BuildError::Io {
-                path: dir.clone(),
-                error,
-            })?;
-        }
-        sources.sort();
-        sources.dedup();
-        if sources.is_empty() {
-            let dirs: Vec<String> = src_dirs.iter().map(|d| shown(&project.join(d))).collect();
-            return Err(BuildError::Layout {
-                message: format!(
-                    "nothing to assemble: no .asm file under {}",
-                    dirs.join(", ")
-                ),
-                remedy: "add one, pass --src DIR, or scaffold a starter with `gbcli new DIR`"
-                    .into(),
-            });
-        }
-        let include = if options.include.is_empty() {
-            let conventional = PathBuf::from("include");
-            if project.join(&conventional).is_dir() {
-                vec![conventional]
-            } else {
-                Vec::new()
-            }
-        } else {
-            for dir in &options.include {
-                if !project.join(dir).is_dir() {
-                    return Err(missing("include", &project.join(dir), "include"));
-                }
-            }
-            options.include.clone()
-        };
-        let name = project
-            .file_name()
-            .map_or("game".into(), |n| n.to_string_lossy().into_owned());
-        let out = match &options.out {
-            Some(out) => project.join(out),
-            None => project.join("build").join(format!("{name}.gb")),
-        };
-        Ok(Layout {
-            sources,
-            include,
-            objects: project.join("build").join("obj"),
-            out,
-        })
-    }
-}
-
-/// Every `.asm` under `dir`, recursively. A directory reached twice (a
-/// symlink back up the tree, or to a directory already walked) is walked
-/// once.
-fn asm_files(
-    dir: &Path,
-    out: &mut Vec<PathBuf>,
-    seen: &mut HashSet<PathBuf>,
-) -> std::io::Result<()> {
-    if !seen.insert(fs::canonicalize(dir)?) {
-        return Ok(());
-    }
-    for entry in fs::read_dir(dir)? {
-        let path = entry?.path();
-        if path.is_dir() {
-            asm_files(&path, out, seen)?;
-        } else if path.extension().is_some_and(|e| e == "asm") {
-            out.push(path);
-        }
-    }
-    Ok(())
-}
-
 fn create_dir(dir: &Path) -> Result<(), BuildError> {
     fs::create_dir_all(dir).map_err(|error| BuildError::Io {
         path: dir.to_path_buf(),
@@ -377,6 +244,8 @@ struct Run<'a> {
     project: &'a Path,
     shown: &'a dyn Fn(&Path) -> String,
     timeout: Duration,
+    /// The command that builds the same way, for a failure's remedy.
+    again: String,
     made: BuildMade,
 }
 
@@ -393,30 +262,15 @@ impl Run<'_> {
         outputs: &[&PathBuf],
     ) -> Result<bool, BuildError> {
         let path = self.tools.path(tool);
-        let io = |error| BuildError::Io {
-            path: path.to_path_buf(),
-            error,
-        };
-        let mut child = Command::new(path)
-            // RGBDS colors its diagnostics when FORCE_COLOR is set, even
-            // into a pipe, and colored text doesn't parse.
-            .args(["--color", "never"])
-            .args(args)
-            .current_dir(self.project)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(io)?;
-        let mut pipe = child.stderr.take().expect("stderr is piped");
-        let reader = std::thread::spawn(move || {
-            let mut bytes = Vec::new();
-            let _ = pipe.read_to_end(&mut bytes);
-            bytes
-        });
-        let status = wait(&mut child, self.timeout).map_err(io)?;
-        let stderr = reader.join().unwrap_or_default();
-        let stderr = String::from_utf8_lossy(&stderr);
+        // RGBDS colors its diagnostics when FORCE_COLOR is set, even into a
+        // pipe, and colored text doesn't parse.
+        let args = [&["--color".to_string(), "never".to_string()], args].concat();
+        let ran =
+            tool::run(path, &args, self.project, self.timeout).map_err(|error| BuildError::Io {
+                path: path.to_path_buf(),
+                error,
+            })?;
+        let stderr = ran.stderr;
         let mut found = diagnostics::parse(tool, &stderr);
         for d in &mut found {
             if let Some(file) = &d.file {
@@ -429,7 +283,7 @@ impl Run<'_> {
         let reported = found.iter().any(|d| d.severity == Severity::Error);
         self.made.diagnostics.extend(found);
         let file = source.map(|s| (self.shown)(s));
-        let Some(status) = status else {
+        let Some(status) = ran.status else {
             let message = format!(
                 "{} ran past {:.1} s and was stopped",
                 tool.name(),
@@ -482,24 +336,29 @@ impl Run<'_> {
 
     fn failed(self) -> BuildError {
         BuildError::Failed {
-            dir: (self.shown)(self.project),
+            again: self.again,
             made: Box::new(self.made),
         }
     }
 }
 
-/// Waits for `child` up to `timeout`; past it, kills it and answers `None`.
-fn wait(child: &mut Child, timeout: Duration) -> std::io::Result<Option<ExitStatus>> {
-    let deadline = Instant::now() + timeout;
-    loop {
-        if let Some(status) = child.try_wait()? {
-            return Ok(Some(status));
-        }
-        if Instant::now() >= deadline {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Ok(None);
-        }
-        std::thread::sleep(Duration::from_millis(2));
+/// The command that builds the project shown as `dir` with `options`' layout
+/// again, each word quoted for a shell.
+fn again(dir: &str, options: &BuildOptions) -> String {
+    let mut words = vec!["gbcli".to_string(), "build".to_string()];
+    if dir != "." {
+        words.push(quote(dir));
     }
+    let flags = [
+        ("--src", options.src.iter().collect::<Vec<_>>()),
+        ("--include", options.include.iter().collect()),
+        ("--out", options.out.iter().collect()),
+    ];
+    for (flag, paths) in flags {
+        for path in paths {
+            words.push(flag.to_string());
+            words.push(quote(&path.display().to_string()));
+        }
+    }
+    words.join(" ")
 }

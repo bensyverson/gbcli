@@ -9,8 +9,12 @@ use crate::argv::Invocation;
 use crate::build::{Command, Target, target};
 use crate::usage::Usage;
 
+/// The server refuses `--session`, `--rev` and `--allow-rom-change` without
+/// `--restore`, and a restore with no session or one that doesn't exist,
+/// exactly as it does for a `serve` client; argv adds only what never
+/// reaches the wire.
 pub fn build(inv: &Invocation, env: &Env) -> Result<Command, Usage> {
-    let target = target(inv, env, None)?;
+    let mut target = target(inv, env, None)?;
     let args = BuildArgs {
         dir: inv.positionals.first().cloned(),
         src: inv.all("src").map(str::to_string).collect(),
@@ -19,19 +23,19 @@ pub fn build(inv: &Invocation, env: &Env) -> Result<Command, Usage> {
         restore: inv.one("restore").map(str::to_string),
     };
     if args.restore.is_none() {
-        let reload = ["session", "allow-rom-change", "rev", "dir", "as"];
-        if let Some(flag) = reload.into_iter().find(|f| inv.has(f)) {
+        // --dir and --as only steer the restore's session; neither changes
+        // a build that restores nothing, so either is a mistake.
+        if let Some(flag) = ["dir", "as"].into_iter().find(|f| inv.has(f)) {
             return Err(Usage::new(
                 format!("--{flag} only applies when --restore reloads the build"),
                 "add --restore NAME (a checkpoint of the session), or drop it",
             ));
         }
-    } else if target.session.is_none() {
-        return Err(Usage::new(
-            "--restore needs the session to restore into",
-            "add --session NAME (or set GBCLI_SESSION), e.g. \
-             `gbcli build --session game --restore start`",
-        ));
+        // GBCLI_SESSION is a default, like `serve --session`, not a session
+        // this build names: only the flag reaches the server.
+        if !inv.has("session") {
+            target.session = None;
+        }
     }
     Ok(request(target, Op::Build(args)))
 }

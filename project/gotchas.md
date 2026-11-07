@@ -57,3 +57,7 @@ The pre-commit hook warned 103–142 s against the 30 s budget all session, whil
 ## 2026-11-07 — `git add -A` after a squash conflict commits the markers in files you didn't resolve
 
 A `git merge --squash` that conflicted in two files was resolved in one (crates/server/src/handle/mod.rs), then `git add -A` staged the other (project/2026-11-06-design.md) with its `<<<<<<<` markers, and the hook passed because nothing compiles Markdown; commit e3ca2be shipped them. After resolving, run `git diff --name-only --diff-filter=U` and `git grep -n '^<<<<<<< '` before staging.
+
+## 2026-11-07 — a worktree has no corpus, and `GBCLI_TEST_ROMS` doesn't reach every test
+
+`tests/corpus/fetched/` is gitignored, so a fresh worktree's `cargo test --workspace` fails on missing corpus files. `GBCLI_TEST_ROMS=/Users/ben/git/gbcli/tests/corpus/fetched` fixes the CLI's song tests, but `crates/corpus/tests/docboy_boot.rs` reads `<repo>/tests/corpus/fetched` directly and ignores the variable. A symlink from the worktree's `tests/corpus/fetched` to the main checkout's (remove it afterwards) makes the whole suite run (leaf 3KQ8fO).

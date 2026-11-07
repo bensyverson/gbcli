@@ -285,6 +285,9 @@ fn build_restore_reloads_a_checkpoint_unless_what_it_ran_moved() {
 #[test]
 fn build_restore_needs_a_session_over_the_rom_it_built() {
     let p = Project::game("rgbds-restore-errors");
+    // A project bundle, so the server (not a missing `.gbcli/`) answers.
+    let other = p.rgbds(&["show", "--session", "demo", "--rom", "demo.gb"]);
+    assert_eq!(other.code, 0, "{}", other.stderr);
     p.rgbds(&["build", "game", "--restore", "start"])
         .fails(2, "bad_request", "--session NAME");
     p.rgbds(&["build", "game", "--session", "game"])
@@ -293,8 +296,6 @@ fn build_restore_needs_a_session_over_the_rom_it_built() {
     p.rgbds(&["build", "game", "--dir", "."])
         .fails(2, "bad_request", "--restore NAME");
     // A session over another ROM would restore into that ROM, not the build.
-    let other = p.rgbds(&["show", "--session", "demo", "--rom", "demo.gb"]);
-    assert_eq!(other.code, 0, "{}", other.stderr);
     let wrong = p.rgbds(&["build", "game", "--session", "demo", "--restore", "start"]);
     wrong.fails(2, "bad_request", "gbcli run game/build/game.gb --session");
     assert!(wrong.stderr.contains("demo.gb"), "{}", wrong.stderr);
@@ -412,6 +413,89 @@ fn the_clis_build_is_the_serve_op() {
         Some(&format!("{input}\n")),
     );
     assert_eq!(cli.stdout, theirs.stdout);
+}
+
+/// `gbcli build ARGS --json` and `gbcli serve` given the CLI's request line
+/// (`id` "cli"): the same answer, and the ROM as it was. A palette change in
+/// the source means a build that ran would have rewritten the ROM.
+fn same_refusal(p: &Project, args: &[&str], line: &str, code: &str) {
+    let rom = p.path("game/build/game.gb");
+    let before = fs::read(&rom).unwrap();
+    let cli = p.rgbds(&[args, &["--json"]].concat());
+    let answers = served(p, &["serve"], &[line]);
+    let ours: serde_json::Value = serde_json::from_str(&cli.stdout)
+        .unwrap_or_else(|e| panic!("{args:?} printed no response ({e}): {}", cli.stderr));
+    assert_eq!(ours, answers[0], "{args:?}");
+    assert_eq!(
+        answers[0]["error"]["code"], code,
+        "{args:?}: {}",
+        answers[0]
+    );
+    assert_eq!(fs::read(&rom).unwrap(), before, "{args:?} rebuilt the ROM");
+}
+
+/// A project with a session `game` on its build, and a source change that
+/// a build would pick up.
+fn game_with_session(name: &str) -> Project {
+    let p = Project::game(name);
+    let run = p.rgbds(&["show", "--rom", "game/build/game.gb", "--session", "game"]);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    let main = p.path("game/src/main.asm");
+    let text = fs::read_to_string(&main).unwrap();
+    fs::write(&main, text.replacen("%11_10_01_00", "%00_01_10_11", 1)).unwrap();
+    p
+}
+
+#[test]
+fn build_restore_into_a_missing_session_is_refused_before_building_by_cli_and_serve_alike() {
+    let p = game_with_session("rgbds-restore-missing");
+    same_refusal(
+        &p,
+        &["build", "game", "--session", "nope", "--restore", "start"],
+        r#"{"id":"cli","session":"nope","op":"build","args":{"dir":"game","restore":"start"}}"#,
+        "no_session",
+    );
+    same_refusal(
+        &p,
+        &["build", "game", "--restore", "start"],
+        r#"{"id":"cli","op":"build","args":{"dir":"game","restore":"start"}}"#,
+        "bad_request",
+    );
+}
+
+#[test]
+fn restore_only_fields_without_restore_are_refused_by_cli_and_serve_alike() {
+    let p = game_with_session("rgbds-restore-only");
+    let cases: [(&[&str], &str); 3] = [
+        (
+            &["build", "game", "--session", "game"],
+            r#"{"id":"cli","session":"game","op":"build","args":{"dir":"game"}}"#,
+        ),
+        (
+            &["build", "game", "--rev", "s1"],
+            r#"{"id":"cli","rev":"s1","op":"build","args":{"dir":"game"}}"#,
+        ),
+        (
+            &["build", "game", "--allow-rom-change"],
+            r#"{"id":"cli","allow_rom_change":true,"op":"build","args":{"dir":"game"}}"#,
+        ),
+    ];
+    for (args, line) in cases {
+        same_refusal(&p, args, line, "bad_request");
+    }
+}
+
+/// GBCLI_SESSION is a default, as `serve --session` is: it doesn't make a
+/// build that restores nothing name a session.
+#[test]
+fn a_build_with_gbcli_session_set_still_builds() {
+    let p = game_with_session("rgbds-env-session");
+    let run = p.gbcli_with(
+        &["build", "game"],
+        &[("PATH", &rgbds_dir()), ("GBCLI_SESSION", "game")],
+        None,
+    );
+    assert_eq!(run.code, 0, "{}{}", run.stdout, run.stderr);
 }
 
 #[test]

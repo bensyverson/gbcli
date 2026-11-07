@@ -76,6 +76,31 @@ fn new_into_an_existing_empty_directory_is_fine() {
     assert!(made.next[1].starts_with("gbcli run build/game.gb --session game"));
 }
 
+/// Only the last component must be a session name; the rest of the path may
+/// hold anything, so every command `new` prints quotes it for a shell.
+#[test]
+fn new_prints_commands_a_shell_can_run() {
+    let temp = Temp::new("new-space");
+    fs::create_dir_all(temp.path("my games")).unwrap();
+    let made = new_project(&temp.path("my games/demo"), &temp.0).unwrap();
+    assert_eq!(
+        made.next,
+        [
+            "gbcli build 'my games/demo'",
+            "gbcli run 'my games/demo/build/demo.gb' --session demo --frames 120 --shot first.png",
+        ]
+    );
+    let refused = new_project(&temp.path("my games/Demo Two"), &temp.0).unwrap_err();
+    assert!(
+        refused
+            .body()
+            .remedy
+            .contains("`gbcli new 'my games/demo-two'`"),
+        "{}",
+        refused.body().remedy
+    );
+}
+
 #[test]
 fn new_refuses_a_directory_that_holds_anything_and_writes_nothing() {
     let temp = Temp::new("new-full");

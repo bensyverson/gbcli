@@ -14,7 +14,10 @@ pub fn request(target: &Target, op: Op, env: &Env, io: Io) -> u8 {
     // `doctor`, `new` and a build that restores nothing need no `.gbcli/`,
     // so they go to the server's bundle-less side and never make one.
     let response = if request.op.needs_bundle() {
-        let mut handler = match handler(target, env) {
+        // A build's restore target is the server's to check, before it
+        // builds, so the CLI answers it as `serve` does.
+        let opens = !matches!(request.op, Op::Build(_));
+        let mut handler = match open_handler(target, env, opens) {
             Ok(handler) => handler,
             Err(body) => return render::error(io.err, &body),
         };
@@ -41,6 +44,11 @@ fn host(env: &Env) -> Host {
 /// handler's defaults are the target's session and actor, for the request
 /// lines of `serve` and `batch`.
 pub fn handler(target: &Target, env: &Env) -> Result<Handler, Box<ErrorBody>> {
+    open_handler(target, env, true)
+}
+
+/// [`handler`], opening the target's session first only when `opens`.
+fn open_handler(target: &Target, env: &Env, opens: bool) -> Result<Handler, Box<ErrorBody>> {
     let source = target.create.as_ref().map(|create| RomSource {
         rom: create.rom.clone(),
         sym: create.sym.clone(),
@@ -68,7 +76,7 @@ pub fn handler(target: &Target, env: &Env) -> Result<Handler, Box<ErrorBody>> {
         Bundle::open_in(&start, gbcli_dir)
     }
     .map_err(|e| Box::new(store(e)))?;
-    if let Some(name) = &target.session {
+    if let Some(name) = target.session.as_ref().filter(|_| opens) {
         bundle
             .open_session(name, source.as_ref())
             .map_err(|e| Box::new(store(e)))?;

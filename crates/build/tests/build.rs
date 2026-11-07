@@ -76,7 +76,7 @@ fn a_syntax_error_is_a_structured_error_with_file_and_line() {
     assert!(error.message.contains("syntax error"), "{}", error.message);
     let body = BuildError::Failed {
         made: Box::new(made.clone()),
-        dir: "demo".into(),
+        again: "gbcli build demo".into(),
     }
     .body();
     assert_eq!(body.code, ErrorCode::BuildFailed);
@@ -243,6 +243,25 @@ fn nothing_to_assemble_or_a_missing_directory_is_a_layout_error() {
     let body = build(&tools, &options).unwrap_err().body();
     assert_eq!(body.code, ErrorCode::BadRequest);
     assert!(body.message.contains("demo/headers"), "{}", body.message);
+}
+
+/// The `.sym` and `.map` sit beside the ROM with its name, so a ROM named
+/// `.sym` or `.map` would be linked into the same file as one of them:
+/// refused before any tool runs.
+#[test]
+fn an_out_that_is_its_own_sym_or_map_is_refused_before_any_tool_runs() {
+    for out in ["build/demo.sym", "build/demo.map"] {
+        let (temp, mut options) = starter("out-collides");
+        options.out = Some(PathBuf::from(out));
+        let body = match build(&rgbds(), &options) {
+            Err(e @ BuildError::Layout { .. }) => e.body(),
+            other => panic!("{out}: expected a layout refusal, got {other:?}"),
+        };
+        assert_eq!(body.code, ErrorCode::BadRequest);
+        assert!(body.message.contains(out), "{}", body.message);
+        assert!(body.remedy.contains("--out"), "{}", body.remedy);
+        assert!(!temp.path("demo/build").exists(), "{out}: a tool ran");
+    }
 }
 
 #[test]

@@ -3,6 +3,20 @@
 pub const RECIPES: &str = "\
 Recipes — goal → command. Add --session NAME to each, or set GBCLI_SESSION.
 
+The dev loop, from an empty directory (gbcli's tests run these lines in order)
+  gbcli doctor
+  gbcli new game
+  cd game
+  gbcli build
+  gbcli run build/game.gb --session game --frames 60 --checkpoint start
+  gbcli shot first.png --session game
+  gbcli read 'u16[wFrame]' '[rLCDC]' --session game
+  gbcli view oam --session game
+  gbcli run --session game --frames 30 --audio-log
+  (edit src/main.asm, then rebuild and carry on from the checkpoint)
+  gbcli build --session game --restore start
+  gbcli measure VBlank..VBlank.done --session game
+
 Start a session on a ROM
   gbcli run game.gb --session dx --frames 120
 Start a new game from scratch
@@ -11,7 +25,7 @@ Why won't it build?
   gbcli build: one diagnostic row per message, with file= and line=
 Rebuild after an edit and carry on where you were
   gbcli build --session dx --restore start (the checkpoint, in the new ROM;
-  refused with what moved if its routine or variables moved; gbcli help build)
+  refused with what moved if its routine or variables moved; gbcli help rgbds)
 Read or write music (hUGETracker songs)
   gbcli song theme.uge --text theme.song (a grid an agent can edit; gbcli help
   music), then gbcli song theme.song --uge theme.uge --piano theme.png
@@ -59,6 +73,10 @@ Step through code
 How many cycles does X take?
   gbcli measure Work..Work.done --iterations 60 (T, M and share of a frame;
   --max T makes it an assertion that exits 1); gbcli help optimize for the loop
+How many bytes and cycles is an instruction, and which flags does it set?
+  gbcli opcode 'ld a, [hl+]', gbcli opcode jr nz, gbcli opcode '$CB37'
+A write, a HALT or a DMA does nothing, or the code runs wild
+  gbcli help traps (VRAM in mode 3, LCD off, the HALT bug, OAM DMA, old RGBDS)
 Where does my frame time go?
   gbcli run --frames 60 --profile --top 10 (cycles per routine), and
   --frame-budget (each frame's busy and HALT time; lag frames never halted)

@@ -1,10 +1,12 @@
 //! The primer, each verb's `--help`, the topics, recipes and the schema.
 //! None of it needs a session, a ROM or the network (cli-design ▸ Grammar).
 
+mod hardware;
 mod music;
 mod recipes;
 mod schema;
 mod topics;
+mod traps;
 
 pub use recipes::RECIPES;
 pub use schema::SCHEMA;
@@ -42,11 +44,14 @@ pub fn primer() -> String {
         First:  gbcli run game.gb --session demo --frames 120 --shot first.png\n\
         Then:   gbcli show --session demo    gbcli read pc frame --session demo\n\
         New:    gbcli doctor, then gbcli new game (a starter that builds and runs)\n\
+        Learn:  gbcli help hardware (the DMG on one page), gbcli help traps,\n\
+        \x20       gbcli opcode 'jr nz' (bytes, cycles, flags)\n\
         \n\
         Help:   gbcli VERB --help (one worked example each)\n\
         \x20       gbcli recipes (goal → command)\n\
-        \x20       gbcli help TOPIC: addresses expressions time checkpoints writes budgets\n\
-        \x20                         exit-codes hardware optimize build music\n\
+        \x20       gbcli help TOPIC: addresses expressions time checkpointing writes\n\
+        \x20                         budgets exit-codes hardware traps optimize rgbds\n\
+        \x20                         music\n\
         \x20       gbcli schema (the JSON request grammar for serve and batch)\n\
         Exit:   0 ok, 1 no, 2 usage, 3 budget/conflict, 4 unreadable, 5 environment\n";
     out

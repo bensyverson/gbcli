@@ -3,6 +3,7 @@
 
 mod audio;
 mod equiv;
+mod opcode;
 mod profile;
 mod row;
 mod song;
@@ -146,6 +147,7 @@ pub fn rows(r: &ResultBody) -> String {
     }
     out += &toolchain::rows(r);
     out += &song::rows(r);
+    out += &opcode::rows(r);
     if let Some(cp) = &r.checkpoint {
         out += &Row::new("checkpoint")
             .field("name", &cp.name)

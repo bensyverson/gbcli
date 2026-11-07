@@ -35,7 +35,7 @@ fn rgbds_dir() -> String {
 
 impl Project {
     /// `gbcli args…` with only the pinned RGBDS on `PATH`.
-    fn rgbds(&self, args: &[&str]) -> crate::common::Run {
+    pub(crate) fn rgbds(&self, args: &[&str]) -> crate::common::Run {
         self.gbcli_with(args, &[("PATH", &rgbds_dir())], None)
     }
 

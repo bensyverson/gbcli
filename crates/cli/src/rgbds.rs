@@ -1,8 +1,8 @@
-//! `doctor`, `new` and `build`: argv to the protocol's ops, which the server
-//! answers (design §12), so `serve` and `batch` build exactly as the CLI
-//! does. Only what argv alone can say is checked here.
+//! `doctor`, `new`, `build` and `opcode`: argv to the protocol's ops,
+//! which the server answers (design §12), so `serve` and `batch` build
+//! exactly as the CLI does. Only what argv alone can say is checked here.
 
-use gbcli_protocol::{BuildArgs, NewArgs, Op};
+use gbcli_protocol::{BuildArgs, NewArgs, Op, OpcodeArgs};
 
 use crate::Env;
 use crate::argv::Invocation;
@@ -47,6 +47,13 @@ pub fn new(inv: &Invocation) -> Command {
 
 pub fn doctor(inv: &Invocation) -> Command {
     request(only_json(inv), Op::Doctor)
+}
+
+/// `opcode`: the words of the query, joined, so `gbcli opcode jr nz` needs
+/// no quotes.
+pub fn opcode(inv: &Invocation) -> Command {
+    let query = inv.positionals.join(" ");
+    request(only_json(inv), Op::Opcode(OpcodeArgs { query }))
 }
 
 /// A verb with `--json` as its only flag sends no session or actor.

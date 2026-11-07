@@ -57,8 +57,9 @@ def entry(code, op, prefix_len):
         f"{str(o.get('increment', False)).lower()}, {str(o.get('decrement', False)).lower()})"
         for i, o in enumerate(op["operands"])
     )
+    flags = "".join(op["flags"][f] for f in "ZNHC")
     return (
-        f"    op(M::{variant}, {op['bytes']}, {cycles[0]}, {not_taken}, &[{specs}]), "
+        f"    op(M::{variant}, {op['bytes']}, {cycles[0]}, {not_taken}, \"{flags}\", &[{specs}]), "
         f"// {code} {mnemonic}"
     )
 

@@ -3,9 +3,11 @@
 //! by `scripts/disasm/gen_opcodes.py`). Symbols come from an injected
 //! [`SymbolLookup`], so this module never parses a `.sym` file.
 
+mod lookup;
 mod table;
 mod types;
 
+pub use lookup::{Form, LookupError, form, lookup};
 pub use types::{Cycles, Mnemonic, OperandKind, Spec};
 
 use crate::inspect::hwreg;

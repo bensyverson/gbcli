@@ -1,7 +1,7 @@
 //! The disassembler against the sourced opcode table (crates/engine/data/
 //! gb-opcodes/Opcodes.json) for all 256 base and 256 CB-prefixed opcodes.
 
-use gbcli_engine::disasm::{Mnemonic, NoSymbols, Opcode, decode};
+use gbcli_engine::disasm::{Mnemonic, NoSymbols, Opcode, decode, form};
 use serde_json::Value;
 
 const TABLE: &str = include_str!("../data/gb-opcodes/Opcodes.json");
@@ -32,6 +32,11 @@ fn check(entry: &Value, bytes: &[u8], what: &str) {
         .map(u64::from)
         .collect();
     assert_eq!(ours, cycles, "{what} cycles");
+    let flags: String = ["Z", "N", "H", "C"]
+        .iter()
+        .map(|f| entry["flags"][f].as_str().unwrap())
+        .collect();
+    assert_eq!(form(ins.opcode).flags, flags, "{what} flags");
     let operands = entry["operands"].as_array().unwrap();
     assert_eq!(ins.operands.len(), operands.len(), "{what} operand count");
     for (ours, theirs) in ins.operands.iter().zip(operands) {

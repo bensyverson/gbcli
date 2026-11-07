@@ -82,6 +82,7 @@ pub fn build(inv: Invocation, env: &Env) -> Result<Command, Usage> {
         Verb::Schema => return Ok(Command::Schema),
         Verb::Version => return Ok(Command::Version),
         Verb::Doctor => return Ok(crate::rgbds::doctor(&inv)),
+        Verb::Opcode => return Ok(crate::rgbds::opcode(&inv)),
         Verb::New => return Ok(crate::rgbds::new(&inv)),
         Verb::Build => return crate::rgbds::build(&inv, env),
         Verb::Song => return Ok(crate::song::command(&inv, env)),

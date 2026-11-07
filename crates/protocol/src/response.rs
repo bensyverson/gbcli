@@ -9,6 +9,7 @@ use crate::equiv::EquivMade;
 use crate::error::ErrorBody;
 use crate::keys::KeyEvent;
 use crate::listing::{CheckpointRow, SymbolRow};
+use crate::opcode::OpcodeRow;
 use crate::profile::{FrameBudgetMade, MeasureMade, ProfileMade};
 use crate::raster::RasterMade;
 use crate::request::WriteKind;
@@ -210,6 +211,9 @@ pub struct ResultBody {
     /// `new`: the project it scaffolded.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub created: Option<NewMade>,
+    /// `opcode`: every opcode the query names, in opcode order.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub opcodes: Option<Vec<OpcodeRow>>,
     /// `song`: the song read and the files written.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub song: Option<SongMade>,

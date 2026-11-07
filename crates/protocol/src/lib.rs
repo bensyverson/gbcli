@@ -9,6 +9,7 @@ mod error;
 mod hex;
 mod keys;
 mod listing;
+mod opcode;
 mod parse;
 mod profile;
 mod raster;
@@ -37,6 +38,7 @@ pub use equiv::{
 pub use error::{ErrorBody, ErrorCode};
 pub use keys::{Button, KEY_GRAMMAR, KeyAction, KeyError, KeyEvent, parse_keys};
 pub use listing::{CheckpointRow, SymArgs, SymbolArea, SymbolRow};
+pub use opcode::{OpcodeArgs, OpcodeRow};
 pub use parse::{RequestError, parse_request};
 pub use profile::{
     CpuSpeedName, CycleStats, FrameBudgetMade, FrameBudgetRow, MeasureArgs, MeasureMade,

@@ -10,6 +10,7 @@ mod head;
 mod history;
 mod listing;
 mod log;
+mod opcode;
 mod reads;
 mod run;
 mod shot;
@@ -244,7 +245,8 @@ impl Handler {
             | Op::Rm(_)
             | Op::Build(_)
             | Op::Doctor
-            | Op::New(_) => Err(Failure::new(ErrorBody::new(
+            | Op::New(_)
+            | Op::Opcode(_) => Err(Failure::new(ErrorBody::new(
                 ErrorCode::BadRequest,
                 "that op doesn't name a session",
                 ErrorCode::BadRequest.default_remedy(),

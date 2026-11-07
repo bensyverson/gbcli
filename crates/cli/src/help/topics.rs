@@ -7,28 +7,30 @@ pub enum Topic {
     Addresses,
     Expressions,
     Time,
-    Checkpoints,
+    Checkpointing,
     Writes,
     Budgets,
     ExitCodes,
     Hardware,
+    Traps,
     Optimize,
-    Build,
+    Rgbds,
     Music,
 }
 
 impl Topic {
-    pub const ALL: [Topic; 11] = [
+    pub const ALL: [Topic; 12] = [
         Topic::Addresses,
         Topic::Expressions,
         Topic::Time,
-        Topic::Checkpoints,
+        Topic::Checkpointing,
         Topic::Writes,
         Topic::Budgets,
         Topic::ExitCodes,
         Topic::Hardware,
+        Topic::Traps,
         Topic::Optimize,
-        Topic::Build,
+        Topic::Rgbds,
         Topic::Music,
     ];
 
@@ -37,13 +39,14 @@ impl Topic {
             Topic::Addresses => "addresses",
             Topic::Expressions => "expressions",
             Topic::Time => "time",
-            Topic::Checkpoints => "checkpoints",
+            Topic::Checkpointing => "checkpointing",
             Topic::Writes => "writes",
             Topic::Budgets => "budgets",
             Topic::ExitCodes => "exit-codes",
             Topic::Hardware => "hardware",
+            Topic::Traps => "traps",
             Topic::Optimize => "optimize",
-            Topic::Build => "build",
+            Topic::Rgbds => "rgbds",
             Topic::Music => "music",
         }
     }
@@ -57,13 +60,14 @@ impl Topic {
             Topic::Addresses => ADDRESSES,
             Topic::Expressions => EXPRESSIONS,
             Topic::Time => TIME,
-            Topic::Checkpoints => CHECKPOINTS,
+            Topic::Checkpointing => CHECKPOINTING,
             Topic::Writes => WRITES,
             Topic::Budgets => BUDGETS,
             Topic::ExitCodes => EXIT_CODES,
-            Topic::Hardware => HARDWARE,
+            Topic::Hardware => super::hardware::HARDWARE,
+            Topic::Traps => super::traps::TRAPS,
             Topic::Optimize => OPTIMIZE,
-            Topic::Build => BUILD,
+            Topic::Rgbds => RGBDS,
             Topic::Music => super::music::text(),
         }
     }
@@ -121,8 +125,8 @@ The first run of a ROM runs the real boot ROM once and caches the handoff in
 .gbcli/cache/; later runs start there. --from power-on starts cold instead.
 ";
 
-const CHECKPOINTS: &str = "\
-Checkpoints — saved machine states, in the session.
+const CHECKPOINTING: &str = "\
+Checkpointing — saved machine states, in the session.
 
   gbcli checkpoint NAME            save the head as NAME
   gbcli run --checkpoint NAME …    save a run's stop as NAME
@@ -187,33 +191,6 @@ Exit codes — one table for every command; errors print to stderr as
      io_failed internal
 ";
 
-const HARDWARE: &str = "\
-Hardware — the DMG in one screen; Pan Docs (https://gbdev.io/pandocs/) has the
-rest.
-
-  Memory     $0000-$3FFF ROM bank 0, $4000-$7FFF switchable ROM, $8000-$9FFF
-             VRAM, $A000-$BFFF cart RAM, $C000-$DFFF WRAM, $FE00-$FE9F OAM,
-             $FF00-$FF7F IO, $FF80-$FFFE HRAM, $FFFF IE
-             https://gbdev.io/pandocs/Memory_Map.html
-  Frame      154 lines of 456 dots: 70,224 T-cycles, about 59.7 Hz. Lines
-             0-143 draw (modes 2, 3, 0), 144-153 are vblank (mode 1)
-             https://gbdev.io/pandocs/Rendering.html
-  LCD        rLCDC turns the LCD and layers on; turn it off only in vblank
-             https://gbdev.io/pandocs/LCDC.html  …/STAT.html
-  VRAM, OAM  unwritable while the PPU reads them (mode 3; OAM also mode 2)
-             https://gbdev.io/pandocs/Accessing_VRAM_and_OAM.html
-  Sprites    40 OAM entries, 10 per line; copy them with OAM DMA (rDMA)
-             https://gbdev.io/pandocs/OAM.html  …/OAM_DMA_Transfer.html
-  Interrupts IE ($FFFF), IF (rIF), ei/di; vblank is bit 0
-             https://gbdev.io/pandocs/Interrupts.html
-  Input      rP1 selects buttons or the d-pad, low bits read them active-low
-             https://gbdev.io/pandocs/Joypad_Input.html
-  Timers     rDIV counts up always; rTIMA/rTMA/rTAC raise the timer interrupt
-             https://gbdev.io/pandocs/Timer_and_Divider_Registers.html
-  Banks      MBCs switch ROM and RAM banks by writes to ROM space
-             https://gbdev.io/pandocs/MBCs.html
-";
-
 const OPTIMIZE: &str = "\
 Optimize — measure, patch, measure again.
 
@@ -231,8 +208,8 @@ Optimize — measure, patch, measure again.
 A frame is 70,224 T-cycles; `gbcli help budgets` if a run never arrives.
 ";
 
-const BUILD: &str = "\
-Build — edit, build, restore, measure, with RGBDS from PATH.
+const RGBDS: &str = "\
+RGBDS — the loop: edit, build, restore, measure, with RGBDS from PATH.
 
   gbcli doctor                 RGBDS at the pinned version? (exit 5 names the
                                install command)

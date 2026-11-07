@@ -36,8 +36,8 @@ impl Host {
     }
 }
 
-/// Answers the RGBDS loop's ops without a project bundle, for a client
-/// with no `.gbcli/` yet: `doctor`, `new`, and `build` without `restore`.
+/// Answers the ops that need no project bundle, for a client with no
+/// `.gbcli/` yet: `doctor`, `new`, `opcode`, and `build` without `restore`.
 /// Anything else needs a session, and so a [`Handler`].
 pub struct Tooling {
     host: Host,
@@ -71,6 +71,7 @@ impl Answer for Tooling {
             },
             Op::Doctor => doctor(&self.host, id),
             Op::New(args) => new(&self.host, id, args),
+            Op::Opcode(args) => super::opcode::opcode(id, args),
             op => unreachable!("{} needs a bundle", op.name()),
         }
     }
@@ -86,13 +87,14 @@ fn op_name(op: &Op) -> String {
 }
 
 impl Handler {
-    /// The RGBDS loop's ops, or `None` for any other.
+    /// The RGBDS loop's ops and `opcode`, or `None` for any other.
     pub(super) fn toolchain_op(&mut self, request: &Request) -> Option<Response> {
         let id = request.id.clone();
         Some(match &request.op {
             Op::Build(args) => self.build(request, args),
             Op::Doctor => doctor(&self.host, id),
             Op::New(args) => new(&self.host, id, args),
+            Op::Opcode(args) => super::opcode::opcode(id, args),
             _ => return None,
         })
     }

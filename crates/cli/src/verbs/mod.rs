@@ -5,6 +5,7 @@
 mod flags;
 mod table;
 mod table_build;
+mod table_opcode;
 mod table_read;
 mod table_song;
 
@@ -99,6 +100,7 @@ pub enum Verb {
     Recipes,
     Schema,
     Doctor,
+    Opcode,
     Version,
 }
 

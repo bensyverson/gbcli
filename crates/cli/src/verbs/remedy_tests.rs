@@ -50,12 +50,20 @@ fn code(path: &Path) -> String {
         .join("\n")
 }
 
-/// The words after `--` in `text`: `--frames`, not `--` or `--{flag}`.
+/// The words after `--` in `text`: `--frames`, not `--` or `--{flag}`, nor
+/// the `--` inside a word, as in a Pan Docs anchor (`#ff41--stat`).
 fn flags(text: &str) -> Vec<String> {
     let mut found = Vec::new();
     let mut rest = text;
     while let Some(i) = rest.find("--") {
+        let in_word = rest[..i]
+            .chars()
+            .next_back()
+            .is_some_and(|c| c.is_ascii_alphanumeric());
         rest = &rest[i + 2..];
+        if in_word {
+            continue;
+        }
         let word: String = rest
             .chars()
             .take_while(|c| c.is_ascii_lowercase() || *c == '-')
@@ -153,4 +161,5 @@ fn the_checker_catches_a_missing_verb_and_a_missing_flag() {
         flags("pass --boot-rom <file>, not -- or --{x}"),
         ["boot-rom"]
     );
+    assert!(flags("https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status").is_empty());
 }

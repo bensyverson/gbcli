@@ -49,8 +49,9 @@ build   dir?: PATH  src?: [PATH]  include?: [PATH]  out?: PATH
         restore?: CHECKPOINT  (into session, whose ROM must be the build's)
 doctor  —
 new     dir: PATH
-        (build, doctor and new need no session; paths are relative to the
-        server's working directory)
+opcode  query: TEXT  ("$20", "$CB37", "jr nz", "ld a, [hl+]")
+        (build, doctor, new and opcode need no session; paths are relative
+        to the server's working directory)
 
 Response, one line per request:
   {"id", "ok": true, "rev"?: "sN", "result": {…}, "warnings": [TEXT]}
@@ -60,7 +61,7 @@ result holds only the fields the op fills: stop, reads, shot, measure, profile,
 frame_budget, raster, equiv, view, symbols,
 checkpoints, keys_unapplied, writes, checkpoint, restored, breakpoint, watch,
 deleted, registers, ppu, sessions, events, gaps, pruned, kept, busy, removed,
-build, doctor, created.
+build, doctor, created, song, song_problem, opcodes.
 `gbcli VERB --json` prints the whole response line, as serve writes it.
 
 Examples:
@@ -93,6 +94,7 @@ Examples:
   {"id":"27","session":"game","op":"build","args":{"dir":"game","restore":"start"}}
   {"id":"28","op":"doctor"}
   {"id":"29","op":"new","args":{"dir":"game"}}
+  {"id":"30","op":"opcode","args":{"query":"jr nz"}}
 "#;
 
 #[cfg(test)]
@@ -114,6 +116,6 @@ mod tests {
         }
         ops.sort();
         ops.dedup();
-        assert_eq!(ops.len(), 25, "one example per op: {ops:?}");
+        assert_eq!(ops.len(), 26, "one example per op: {ops:?}");
     }
 }

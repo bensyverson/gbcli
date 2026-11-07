@@ -214,6 +214,9 @@ pub(super) struct OpInfo {
     pub mnemonic: Mnemonic,
     pub len: u8,
     pub cycles: Cycles,
+    /// Z, N, H and C in that order, as the table writes them: the flag's
+    /// letter when the result sets it, 0 or 1 when forced, - when untouched.
+    pub flags: &'static str,
     pub operands: &'static [Spec],
 }
 
@@ -222,12 +225,14 @@ pub(super) const fn op(
     len: u8,
     taken: u8,
     not_taken: Option<u8>,
+    flags: &'static str,
     operands: &'static [Spec],
 ) -> OpInfo {
     OpInfo {
         mnemonic,
         len,
         cycles: Cycles { taken, not_taken },
+        flags,
         operands,
     }
 }

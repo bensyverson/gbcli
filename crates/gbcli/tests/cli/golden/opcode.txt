@@ -1,0 +1,32 @@
+$ gbcli opcode jr nz
+exit 0
+opcode code=$20 asm="jr nz, e8" bytes=2 t=12 t_not_taken=8 m=3 m_not_taken=2 flags=----
+$ gbcli opcode $CB7E
+exit 0
+opcode code=$CB7E asm="bit 7, [hl]" bytes=2 t=12 m=3 flags=Z01-
+$ gbcli opcode ld a, [hl+]
+exit 0
+opcode code=$2A asm="ld a, [hl+]" bytes=1 t=8 m=2 flags=----
+$ gbcli opcode ld a, [wSpeed]
+exit 0
+opcode code=$FA asm="ld a, [a16]" bytes=3 t=16 m=4 flags=----
+$ gbcli opcode ret
+exit 0
+opcode code=$C0 asm="ret nz" bytes=1 t=20 t_not_taken=8 m=5 m_not_taken=2 flags=----
+opcode code=$C8 asm="ret z" bytes=1 t=20 t_not_taken=8 m=5 m_not_taken=2 flags=----
+opcode code=$C9 asm=ret bytes=1 t=16 m=4 flags=----
+opcode code=$D0 asm="ret nc" bytes=1 t=20 t_not_taken=8 m=5 m_not_taken=2 flags=----
+opcode code=$D8 asm="ret c" bytes=1 t=20 t_not_taken=8 m=5 m_not_taken=2 flags=----
+$ gbcli opcode call nz, Update --json
+exit 0
+{"id":"cli","ok":true,"result":{"opcodes":[{"code":"$C4","asm":"call nz, a16","bytes":3,"t":24,"t_not_taken":12,"flags":"----"}]},"warnings":[]}
+$ gbcli opcode lda a, 5
+exit 2
+--- stderr
+gbcli: bad_request: no instruction `lda`
+remedy: did you mean `gbcli opcode ld`?
+$ gbcli opcode $1FF
+exit 2
+--- stderr
+gbcli: bad_request: `$1FF` is not an opcode: one byte, or $CB and the byte after it
+remedy: give a byte or an instruction: `gbcli opcode '$20'`, `gbcli opcode '$CB37'`, `gbcli opcode 'ld a, [hl+]'`

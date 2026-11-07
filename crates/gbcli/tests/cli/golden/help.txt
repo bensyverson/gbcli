@@ -16,17 +16,20 @@ its machine, saves it and prints rows; --json prints the response line.
              RGBDS from PATH: edit, build, restore, measure; song files
   server     serve, batch
              the JSON Lines protocol, for harnesses
-  help       help, recipes, schema, doctor, version
+  help       help, recipes, schema, doctor, opcode, version
              no session, ROM or network needed
 
 First:  gbcli run game.gb --session demo --frames 120 --shot first.png
 Then:   gbcli show --session demo    gbcli read pc frame --session demo
 New:    gbcli doctor, then gbcli new game (a starter that builds and runs)
+Learn:  gbcli help hardware (the DMG on one page), gbcli help traps,
+        gbcli opcode 'jr nz' (bytes, cycles, flags)
 
 Help:   gbcli VERB --help (one worked example each)
         gbcli recipes (goal → command)
-        gbcli help TOPIC: addresses expressions time checkpoints writes budgets
-                          exit-codes hardware optimize build music
+        gbcli help TOPIC: addresses expressions time checkpointing writes
+                          budgets exit-codes hardware traps optimize rgbds
+                          music
         gbcli schema (the JSON request grammar for serve and batch)
 Exit:   0 ok, 1 no, 2 usage, 3 budget/conflict, 4 unreadable, 5 environment
 $ gbcli run --help

@@ -5,6 +5,7 @@ use super::flags::{
     SHOT_OPTIONS, WATCH,
 };
 use super::table_build::{BUILD_VERB, DOCTOR_VERB, NEW_VERB};
+use super::table_opcode::OPCODE_VERB;
 use super::table_read::{
     CHECKPOINTS_VERB, EQUIV_VERB, MEASURE_VERB, SHOT_VERB, SYM_VERB, VIEW_VERB,
 };
@@ -393,8 +394,9 @@ pub const VERBS: &[VerbSpec] = &[
         },
         flags: &[],
         groups: &[],
-        about: "Topics: addresses, expressions, time, checkpoints, writes, budgets, \
-                exit-codes, hardware, optimize, build. `gbcli help VERB` is `gbcli VERB --help`.",
+        about: "Topics: addresses, expressions, time, checkpointing, writes, budgets, \
+                exit-codes, hardware, traps, optimize, rgbds, music. No topic shares a verb's \
+                name: `gbcli help VERB` is `gbcli VERB --help`.",
         example: ("gbcli help addresses", "explains the address forms"),
     },
     VerbSpec {
@@ -422,6 +424,7 @@ pub const VERBS: &[VerbSpec] = &[
         example: ("gbcli schema", "prints the request grammar"),
     },
     DOCTOR_VERB,
+    OPCODE_VERB,
     VerbSpec {
         verb: Verb::Version,
         name: "version",

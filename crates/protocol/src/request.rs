@@ -8,6 +8,7 @@ use crate::checkpoint::WatchAccess;
 use crate::equiv::EquivArgs;
 use crate::keys::KeyEvent;
 use crate::listing::SymArgs;
+use crate::opcode::OpcodeArgs;
 use crate::parse::WireRequest;
 use crate::profile::{MeasureArgs, ProfileArgs, RunMeasure};
 use crate::rev::Rev;
@@ -70,6 +71,8 @@ pub enum Op {
     Build(BuildArgs),
     Doctor,
     New(NewArgs),
+    /// An instruction's size, cycles and flags; needs no session.
+    Opcode(OpcodeArgs),
 }
 
 impl Op {
@@ -101,6 +104,7 @@ impl Op {
             Op::Build(_) => "build",
             Op::Doctor => "doctor",
             Op::New(_) => "new",
+            Op::Opcode(_) => "opcode",
         }
     }
 
@@ -116,11 +120,11 @@ impl Op {
     }
 
     /// Whether answering it needs the project's bundle: every op but
-    /// `doctor`, `new` and a `build` that restores nothing, which a client
-    /// with no `.gbcli/` yet can still send.
+    /// `doctor`, `new`, `opcode` and a `build` that restores nothing,
+    /// which a client with no `.gbcli/` yet can still send.
     pub fn needs_bundle(&self) -> bool {
         match self {
-            Op::Doctor | Op::New(_) => false,
+            Op::Doctor | Op::New(_) | Op::Opcode(_) => false,
             Op::Build(args) => args.restore.is_some(),
             _ => true,
         }

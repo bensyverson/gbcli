@@ -195,6 +195,28 @@ fn help_routes_topics_verbs_recipes_and_schema() {
 }
 
 #[test]
+fn every_help_topic_is_reachable_by_gbcli_help() {
+    // A topic named like a verb (or `recipes`, `schema`) is shadowed: `help
+    // WORD` resolves those first.
+    for topic in Topic::ALL {
+        let routed = command(&["help", topic.name()]);
+        assert!(
+            matches!(routed, Ok(Command::Topic(t)) if t == topic),
+            "`gbcli help {}` doesn't print the topic",
+            topic.name()
+        );
+    }
+}
+
+#[test]
+fn the_help_verb_names_every_topic() {
+    let about = by_name("help").unwrap().about;
+    for topic in Topic::ALL {
+        assert!(about.contains(topic.name()), "{} missing", topic.name());
+    }
+}
+
+#[test]
 fn run_takes_a_shot_with_its_options_and_refuses_them_without_one() {
     let Op::Run(args) = request(&[
         "run",

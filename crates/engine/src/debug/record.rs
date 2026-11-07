@@ -26,7 +26,8 @@ pub fn record(m: &Machine, reason: StopReason, used: Usage, since: &Since) -> St
     let bank = mem::bank_at(core, regs.pc);
     let symbol = m
         .symbols()
-        .and_then(|s| s.containing(bank, regs.pc))
+        .zip(mem::cart_bank_at(core, regs.pc))
+        .and_then(|(s, bank)| s.containing(bank, regs.pc))
         .map(|s| label(&s.name, i64::from(regs.pc - s.addr)));
     let (since, mark) = base(m, since);
     let ticks = core.now().0;

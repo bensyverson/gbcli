@@ -15,7 +15,8 @@ pub enum Target {
 }
 
 /// The region whose bank is switched at `addr`: ROM0 (on mappers that switch
-/// it), ROMX, VRAM, cart RAM and WRAMX. Everywhere else the mapping is fixed.
+/// it, and where the boot ROM overlays it until FF50 is written), ROMX, VRAM,
+/// cart RAM and WRAMX. Everywhere else the mapping is fixed.
 fn switchable(addr: u16) -> Option<Region> {
     match Area::of(canonical_addr(addr)) {
         Area::Rom0 | Area::RomX => Some(Region::Rom),
@@ -33,6 +34,33 @@ pub fn bank_at(core: &dyn Core, addr: u16) -> u16 {
         return core.rom0_bank();
     }
     switchable(addr).map_or(0, |region| core.region(region).map_or(0, |v| v.bank))
+}
+
+/// The cart bank mapped at `addr`, as [`bank_at`], or `None` where the boot
+/// ROM overlays it: the address then reads no cart byte, so no `.sym`
+/// symbol names it.
+pub fn cart_bank_at(core: &dyn Core, addr: u16) -> Option<u16> {
+    match boot_rom_target(core, addr) {
+        Some(_) => None,
+        None => Some(bank_at(core, addr)),
+    }
+}
+
+/// The boot ROM byte the CPU reads at `addr`, while the boot ROM is mapped
+/// (rBANK bit 0 clear): 0000-00FF, and 0200-08FF where the boot ROM is that
+/// long (CGB); 0100-01FF is always the cart header. Read through
+/// `io_register` and the boot ROM's own size, so no model table is needed.
+fn boot_rom_target(core: &dyn Core, addr: u16) -> Option<Target> {
+    let offset = usize::from(addr);
+    if (0x100..0x200).contains(&offset) || offset >= 0x900 {
+        return None;
+    }
+    let mapped = core.io_register(IoReg::BANK).is_ok_and(|v| v & 1 == 0);
+    let len = core.region(Region::BootRom).map_or(0, |v| v.bytes.len());
+    (mapped && offset < len).then_some(Target::Backing {
+        region: Region::BootRom,
+        offset,
+    })
 }
 
 /// The sizes cart memory aliases through: a mapper drives only as many
@@ -90,8 +118,12 @@ pub fn effective_bank(core: &dyn Core, bank: u16, addr: u16) -> u16 {
     }
 }
 
-/// Resolves a CPU address to its backing byte or register.
+/// Resolves a CPU address to its backing byte or register: the boot ROM
+/// where it is mapped over ROM0, else the mapped banks.
 pub fn target(core: &dyn Core, addr: u16) -> Result<Target, CoreError> {
+    if let Some(boot) = boot_rom_target(core, addr) {
+        return Ok(boot);
+    }
     match fixed_target(addr) {
         Some(target) => target,
         None => target_in_bank(core, bank_at(core, addr), addr),

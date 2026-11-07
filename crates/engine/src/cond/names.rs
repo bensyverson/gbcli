@@ -1,8 +1,8 @@
-//! Names an expression knows without a `.sym`: registers, flags, machine
-//! values and the hardware registers by inspection's names for them.
+//! Names an expression knows without a `.sym`: registers, flags and machine
+//! values. Hardware register names come from `inspect::hwreg::address_of`,
+//! which the address grammar shares.
 
 use super::{Expr, Flag, Reg, Width};
-use crate::inspect::hwreg::HW_REGISTERS;
 
 /// A keyword's meaning, if `name` is one.
 pub fn keyword(name: &str) -> Option<Expr> {
@@ -44,15 +44,4 @@ pub fn width(name: &str) -> Option<Width> {
         "s16" => Width::S16,
         _ => return None,
     })
-}
-
-/// A hardware register's address by its name or an alias, from inspection's
-/// table (`inspect::hwreg`), so the two can't drift. Matched as spelled, as
-/// RGBDS matches symbols, so a register never shadows a symbol that differs
-/// only in case.
-pub fn hardware(name: &str) -> Option<u16> {
-    HW_REGISTERS
-        .iter()
-        .find(|r| r.name == name || r.aliases.contains(&name))
-        .map(|r| r.addr)
 }

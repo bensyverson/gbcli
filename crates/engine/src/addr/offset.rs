@@ -5,6 +5,7 @@ use gbcli_core::canonical_addr;
 use gbcli_protocol::Location;
 
 use super::{AddrError, hex};
+use crate::inspect::hwreg;
 use crate::sym::{Area, Symbol};
 
 /// A switchable area: its name and its CPU span. A symbol there carries its
@@ -85,6 +86,33 @@ pub(crate) fn resolve(
         bank,
         symbol: Some(label(name, delta)),
     })
+}
+
+/// A hardware register name, alone or with an offset (`rLCDC+1`), from
+/// inspection's table; `None` when `text` names no register. The whole text
+/// is tried first: hardware.inc names wave RAM bytes `_AUD3WAVERAM+10` in
+/// decimal, where the grammar's offsets are hex. The hardware fixes the
+/// address, not a `.sym`, so the location names no symbol for a checkpoint's
+/// ROM check to look up again.
+pub(crate) fn hardware(text: &str) -> Result<Option<Location>, AddrError> {
+    let fixed = |addr| Location {
+        addr,
+        bank: None,
+        symbol: None,
+    };
+    if let Some(addr) = hwreg::address_of(text) {
+        return Ok(Some(fixed(addr)));
+    }
+    let (name, delta) = split_offset(text)?;
+    let Some(addr) = hwreg::address_of(name) else {
+        return Ok(None);
+    };
+    let reg = Symbol {
+        name: name.to_string(),
+        bank: 0,
+        addr,
+    };
+    resolve(text, name, delta, &reg).map(|at| Some(fixed(at.addr)))
 }
 
 /// The message and remedy for a [`AddrError::SymbolOffset`].

@@ -1,10 +1,12 @@
 //! The §7 address grammar outside expressions: what a breakpoint, a watch,
 //! `--to`, `--at` and a write target accept.
 //!
-//! Symbols resolve when the command runs, so a stale `.sym` fails there, not
-//! later; near misses and ambiguous candidates are named. Region offsets are
-//! checked against the region's size, so an address that doesn't exist on the
-//! machine is refused rather than wrapped onto one that does.
+//! Hardware register names (`rDMA`) need no `.sym` and win over a symbol of
+//! the same spelling, as in conditions. Symbols resolve when the command
+//! runs, so a stale `.sym` fails there, not later; near misses and ambiguous
+//! candidates are named. Region offsets are checked against the region's
+//! size, so an address that doesn't exist on the machine is refused rather
+//! than wrapped onto one that does.
 
 use std::fmt;
 
@@ -235,6 +237,10 @@ pub fn parse_on(
             symbol: None,
         });
     }
+    // A hardware register name wins over a `.sym` symbol, as in conditions.
+    if let Some(at) = offset::hardware(text)? {
+        return Ok(at);
+    }
     let (name, delta) = offset::split_offset(text)?;
     let symbols = symbols.ok_or_else(|| AddrError::UnknownSymbol {
         name: name.to_string(),
@@ -425,5 +431,7 @@ fn hex(text: &str) -> Option<u64> {
     u64::from_str_radix(digits, 16).ok()
 }
 
+#[cfg(test)]
+mod hwreg_tests;
 #[cfg(test)]
 mod tests;

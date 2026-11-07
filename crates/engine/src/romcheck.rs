@@ -35,7 +35,8 @@ pub fn live_symbols(core: &dyn Core, syms: &Symbols) -> Vec<LiveSymbol> {
     };
     let regs = core.registers();
     if Area::of(regs.pc).is_rom()
-        && let Some(s) = syms.containing(mem::bank_at(core, regs.pc), regs.pc)
+        && let Some(bank) = mem::cart_bank_at(core, regs.pc)
+        && let Some(s) = syms.containing(bank, regs.pc)
     {
         add(&s.name, s.bank, s.addr, SymbolRole::Pc);
     }
@@ -44,7 +45,8 @@ pub fn live_symbols(core: &dyn Core, syms: &Symbols) -> Vec<LiveSymbol> {
     }
     for word in stack_words(core, syms) {
         if Area::of(word).is_rom()
-            && let Some(s) = syms.containing(mem::bank_at(core, word), word)
+            && let Some(bank) = mem::cart_bank_at(core, word)
+            && let Some(s) = syms.containing(bank, word)
         {
             add(&s.name, s.bank, s.addr, SymbolRole::Stack);
         }

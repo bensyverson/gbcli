@@ -48,7 +48,8 @@ pub fn backtrace(core: &dyn Core, syms: Option<&Symbols>) -> Vec<CallFrame> {
         if Area::of(word).is_rom() && after_call(core, word) {
             let bank = mem::bank_at(core, word);
             let symbol = syms
-                .and_then(|s| s.containing(bank, word))
+                .zip(mem::cart_bank_at(core, word))
+                .and_then(|(s, bank)| s.containing(bank, word))
                 .map(|s| label(&s.name, i64::from(word - s.addr)));
             frames.push(CallFrame {
                 sp: lo,

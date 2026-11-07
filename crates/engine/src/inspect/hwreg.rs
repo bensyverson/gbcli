@@ -55,6 +55,18 @@ pub fn find(name: &str) -> Option<&'static HwReg> {
     })
 }
 
+/// A register's address by its name or an alias, matched as spelled, as
+/// RGBDS matches symbols. Conditions and the address grammar share it, and
+/// in both a register name wins over a `.sym` symbol spelled the same
+/// (design §7). Unlike [`find`], case matters, so a register never shadows a
+/// symbol that differs only in case.
+pub fn address_of(name: &str) -> Option<u16> {
+    HW_REGISTERS
+        .iter()
+        .find(|r| r.name == name || r.aliases.contains(&name))
+        .map(|r| r.addr)
+}
+
 pub fn by_addr(addr: u16) -> Option<&'static HwReg> {
     HW_REGISTERS.iter().find(|r| r.addr == addr)
 }

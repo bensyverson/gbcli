@@ -4,6 +4,7 @@ use super::lex::{Tok, lex};
 use super::names;
 use super::{BinOp, Expr, ExprError, Place, UnOp, Width};
 use crate::addr::banked_area;
+use crate::inspect::hwreg;
 use crate::inspect::regions::parse_region;
 use crate::sym::{Area, Symbols};
 
@@ -136,7 +137,7 @@ impl Parser<'_> {
                 if let Some(e) = names::keyword(&name) {
                     return Ok(e);
                 }
-                if let Some(addr) = names::hardware(&name) {
+                if let Some(addr) = hwreg::address_of(&name) {
                     return Ok(Expr::Num(i64::from(addr)));
                 }
                 self.symbol(name)

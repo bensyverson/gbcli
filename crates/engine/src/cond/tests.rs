@@ -212,6 +212,14 @@ fn hardware_registers_are_always_available() {
     assert_eq!(parse("rIE"), Expr::Num(0xFFFF));
 }
 
+/// The address grammar takes the same order (`addr::hwreg_tests`).
+#[test]
+fn a_hardware_register_shadows_a_sym_symbol_of_the_same_name() {
+    let s = Symbols::parse("00:C000 rDMA\n").unwrap();
+    let cond = Condition::compile("rDMA", Some(&s)).unwrap();
+    assert_eq!(cond.expr, Expr::Num(0xFF46));
+}
+
 #[test]
 fn a_bare_ram_symbol_compared_suggests_a_read() {
     let err = Condition::compile("wFrame >= 60", Some(&syms())).unwrap_err();
@@ -248,6 +256,18 @@ fn unknown_and_ambiguous_symbols_list_candidates() {
         Condition::compile("[wFrame]", None),
         Err(ExprError::UnknownSymbol { .. })
     ));
+}
+
+/// The boot ROM overlays 0000-00FF and 0200-08FF until a write to FF50
+/// unmaps it, and that write lands in neither range, so a read there must
+/// be re-evaluated after every instruction.
+#[test]
+fn a_read_the_boot_rom_overlays_is_switchable() {
+    for addr in ["$0000", "$00FF", "$0200", "$08FF"] {
+        let expr = parse(&format!("[{addr}] == 1"));
+        let cadence = cadence::analyze(&expr, Support::Yes, CartSizes::default()).cadence();
+        assert_eq!(cadence, Cadence::EveryInstruction, "{addr}");
+    }
 }
 
 #[test]

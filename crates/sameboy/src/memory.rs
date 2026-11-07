@@ -143,6 +143,13 @@ pub(crate) fn poke(
                 .into(),
         });
     }
+    if region == Region::BootRom {
+        // The engine resolves 0000-00FF to the boot ROM while it is mapped, so
+        // a poke there would otherwise change bytes no save state carries.
+        return Err(CoreError::InvalidState {
+            reason: "pokes can't change the boot ROM; choose another boot ROM instead".into(),
+        });
+    }
     let (ptr, size, _) = backing(core, region)?;
     check_range("poke offset", offset, bytes.len(), size)?;
     // SAFETY: in bounds by the check above; `&mut core` excludes other borrows.

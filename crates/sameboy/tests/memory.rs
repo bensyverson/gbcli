@@ -148,6 +148,17 @@ fn a_poke_to_rom_is_refused_with_the_patch_remedy() {
     }
 }
 
+/// A poke at a CPU address the boot ROM overlays lands in the boot ROM, so
+/// it must be refused as a ROM poke is: a save state doesn't carry it.
+#[test]
+fn a_poke_to_the_boot_rom_is_refused() {
+    let mut core = quick_dmg(BUSY);
+    let before = core.region(Region::BootRom).unwrap().bytes[0];
+    let err = core.poke(Region::BootRom, 0, &[!before]).unwrap_err();
+    assert!(matches!(err, CoreError::InvalidState { .. }), "{err:?}");
+    assert_eq!(core.region(Region::BootRom).unwrap().bytes[0], before);
+}
+
 #[test]
 fn a_poke_past_the_region_is_out_of_range() {
     let mut core = quick_dmg(BUSY);

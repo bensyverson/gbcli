@@ -92,7 +92,8 @@ pub trait Core {
     /// A real bus read, with its side effects (open bus, the OAM bug). Never
     /// used by inspection.
     fn bus_read(&mut self, addr: u16) -> Result<u8, CoreError>;
-    /// Writes backing memory with no side effects. Refuses ROM: see `patch_rom`.
+    /// Writes backing memory with no side effects. Refuses ROM (see
+    /// `patch_rom`) and the boot ROM.
     fn poke(&mut self, region: Region, offset: u32, bytes: &[u8]) -> Result<(), CoreError>;
     /// Changes the ROM at a file offset. Refuses the header (0x100–0x14F).
     fn patch_rom(&mut self, offset: u32, bytes: &[u8]) -> Result<(), CoreError>;

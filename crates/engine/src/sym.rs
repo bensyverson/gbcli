@@ -215,7 +215,7 @@ impl Symbols {
 
 impl SymbolLookup for MappedSymbols<'_> {
     fn symbol(&self, addr: u16) -> Option<SymbolRef> {
-        let bank = crate::mem::bank_at(self.core, addr);
+        let bank = crate::mem::cart_bank_at(self.core, addr)?;
         self.symbols
             .containing(bank, addr)
             .map(|s| symbol_ref(s, addr))

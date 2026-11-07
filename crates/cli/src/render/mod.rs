@@ -1,0 +1,228 @@
+//! Responses as rows (the default) or as the protocol's result object
+//! (`--json`). stdout carries the answer; warnings and errors go to stderr.
+
+mod row;
+mod stop;
+
+use std::io::Write;
+
+use gbcli_protocol::{ErrorBody, EventLogLine, Response, ResultBody};
+
+use crate::exec::emit;
+pub use row::Row;
+use row::{addr, byte, bytes, hex, utc};
+
+/// Prints a response and returns the exit code: 0, or the error's own.
+pub fn response(response: &Response, json: bool, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    for warning in &response.warnings {
+        emit(err, &format!("warning: {warning}\n"));
+    }
+    match &response.outcome {
+        Ok(result) => {
+            if json {
+                let text = serde_json::to_string(result).expect("a result always serializes");
+                emit(out, &format!("{text}\n"));
+            } else {
+                emit(out, &rows(result));
+                if let Some(rev) = response.rev {
+                    emit(out, &Row::new("rev").word(&rev.to_string()).line());
+                }
+            }
+            0
+        }
+        Err(body) => {
+            if json {
+                let text = serde_json::to_string(body).expect("an error always serializes");
+                emit(out, &format!("{text}\n"));
+            } else if let Some(stop) = &body.stop {
+                // The state the failure left is still the answer's data.
+                emit(out, &stop::rows(stop));
+                if let Some(rev) = response.rev {
+                    emit(out, &Row::new("rev").word(&rev.to_string()).line());
+                }
+            }
+            error(err, body)
+        }
+    }
+}
+
+/// Prints an error's code, message and remedy; returns its exit code.
+pub fn error(err: &mut dyn Write, body: &ErrorBody) -> u8 {
+    emit(
+        err,
+        &format!(
+            "gbcli: {}: {}\nremedy: {}\n",
+            body.code, body.message, body.remedy
+        ),
+    );
+    body.exit
+}
+
+/// The rows for a result, in a fixed order; a field the op didn't fill is
+/// absent and prints nothing.
+pub fn rows(r: &ResultBody) -> String {
+    let mut out = String::new();
+    if let Some(regs) = &r.registers {
+        let f = &regs.flags;
+        let flags: String = [(f.z, 'Z'), (f.n, 'N'), (f.h, 'H'), (f.c, 'C')]
+            .iter()
+            .map(|&(set, c)| if set { c } else { '-' })
+            .collect();
+        out += &Row::new("registers")
+            .field("a", byte(regs.a))
+            .field("f", byte(regs.f))
+            .field("b", byte(regs.b))
+            .field("c", byte(regs.c))
+            .field("d", byte(regs.d))
+            .field("e", byte(regs.e))
+            .field("h", byte(regs.h))
+            .field("l", byte(regs.l))
+            .field("sp", addr(regs.sp))
+            .field("pc", addr(regs.pc))
+            .field("flags", flags)
+            .flag("ime", regs.ime)
+            .flag("halted", regs.halted)
+            .flag("double_speed", regs.double_speed)
+            .line();
+    }
+    if let Some(ppu) = &r.ppu {
+        let json = serde_json::to_value(ppu).expect("serializes");
+        out += &Row::new("ppu")
+            .field("ly", ppu.ly)
+            .field("mode", json["mode"].as_str().unwrap_or("?"))
+            .flag("lcd_on", ppu.lcd_on)
+            .opt("dot", ppu.dot)
+            .line();
+    }
+    for w in r.writes.iter().flatten() {
+        let json = serde_json::to_value(w).expect("serializes");
+        out += &Row::new("write")
+            .field("kind", json["kind"].as_str().unwrap_or("?"))
+            .field("target", &w.target)
+            .field("bytes", bytes(&w.bytes))
+            .opt("addr", w.addr.map(addr))
+            .line();
+    }
+    if let Some(stop) = &r.stop {
+        out += &stop::rows(stop);
+    }
+    for read in r.reads.iter().flatten() {
+        out += &Row::new("read")
+            .field("expr", &read.expr)
+            .field("value", read.value)
+            .opt("hex", hex(read.value))
+            .line();
+    }
+    if let Some(cp) = &r.checkpoint {
+        out += &Row::new("checkpoint")
+            .field("name", &cp.name)
+            .field("path", &cp.path)
+            .opt("frame", cp.frame)
+            .field("rev", cp.rev)
+            .line();
+    }
+    if let Some(restored) = &r.restored {
+        out += &Row::new("restored")
+            .opt("name", restored.name.as_deref())
+            .opt("frame", restored.frame)
+            .field("rev", restored.rev)
+            .line();
+    }
+    if let Some(b) = &r.breakpoint {
+        out += &location(Row::new("breakpoint").field("id", b.id), &b.at).line();
+    }
+    if let Some(w) = &r.watch {
+        let json = serde_json::to_value(w).expect("serializes");
+        let row = Row::new("watch")
+            .field("id", w.id)
+            .field("access", json["access"].as_str().unwrap_or("?"));
+        out += &location(row, &w.at).line();
+    }
+    if let Some(d) = &r.deleted {
+        out += &Row::new("deleted")
+            .field("id", d.id)
+            .flag("found", d.found)
+            .line();
+    }
+    if let Some(sessions) = &r.sessions {
+        for s in sessions {
+            out += &Row::new("session")
+                .field("name", &s.name)
+                .field("rom", &s.rom)
+                .field("rev", s.rev)
+                .opt("head_frame", s.head_frame)
+                .field("checkpoints", s.checkpoints)
+                .field("size_bytes", s.size_bytes)
+                .field("last_used", utc(s.last_used))
+                .line();
+        }
+        out += none_if_empty(sessions.is_empty());
+    }
+    if let Some(events) = &r.events {
+        for e in events {
+            out += &event(e);
+        }
+        out += none_if_empty(events.is_empty());
+    }
+    if let Some(gaps) = &r.gaps {
+        for g in gaps {
+            out += &Row::new("gap")
+                .field("feature", &g.feature)
+                .field("count", g.count)
+                .line();
+        }
+        out += none_if_empty(gaps.is_empty());
+    }
+    let pruned = [("pruned", &r.pruned), ("kept", &r.kept), ("busy", &r.busy)];
+    for (kind, names) in pruned {
+        for name in names.iter().flatten() {
+            out += &Row::new(kind).field("name", name).line();
+        }
+    }
+    if r.pruned.is_some() && pruned.iter().all(|(_, n)| n.iter().flatten().count() == 0) {
+        out += "pruned none\n";
+    }
+    if let Some(name) = &r.removed {
+        out += &Row::new("removed").field("name", name).line();
+    }
+    out
+}
+
+fn none_if_empty(empty: bool) -> &'static str {
+    if empty { "none\n" } else { "" }
+}
+
+fn location(row: Row, at: &gbcli_protocol::Location) -> Row {
+    row.field("addr", addr(at.addr))
+        .opt("bank", at.bank)
+        .opt("symbol", at.symbol.as_deref())
+}
+
+fn event(e: &EventLogLine) -> String {
+    // The op and its args as the request spelled them (design §10).
+    let json = serde_json::to_value(e).expect("serializes");
+    let mut row = Row::new("event")
+        .field("at", utc(e.at))
+        .opt("as", e.actor.as_deref())
+        .field("op", json["op"].as_str().unwrap_or("?"))
+        .flag("ok", e.ok)
+        .opt("code", e.code)
+        .field("rev_before", e.rev_before)
+        .field("rev_after", e.rev_after);
+    if e.allow_rom_change {
+        row = row.flag("allow_rom_change", true);
+    }
+    if let Some(stop) = &e.stop {
+        row = row
+            .field("stop", json["stop"]["reason"].as_str().unwrap_or("?"))
+            .field("pc", addr(stop.pc))
+            .field("frame", stop.frame);
+    }
+    for (feature, count) in &e.gaps {
+        row = row.field(&format!("gap.{feature}"), count);
+    }
+    if let Some(args) = json.get("args").filter(|a| !a.is_null()) {
+        row = row.json("args", args);
+    }
+    row.line()
+}

@@ -70,12 +70,9 @@ name = "gbcli"
 version = "0.1.0"
 dependencies = [
  "gbcli-bundle",
+ "gbcli-cli",
  "gbcli-core",
- "gbcli-engine",
  "gbcli-protocol",
- "gbcli-server",
- "lexopt",
- "sameboy-sys",
  "serde_json",
 ]
 
@@ -87,6 +84,19 @@ dependencies = [
  "gbcli-engine",
  "gbcli-protocol",
  "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "gbcli-cli"
+version = "0.1.0"
+dependencies = [
+ "gbcli-bundle",
+ "gbcli-core",
+ "gbcli-protocol",
+ "gbcli-server",
+ "lexopt",
+ "sameboy-sys",
  "serde_json",
 ]
 

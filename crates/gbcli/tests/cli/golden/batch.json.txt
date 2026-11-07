@@ -1,0 +1,11 @@
+$ gbcli batch -F ops.jsonl --session b --rom demo.gb --json
+exit 2
+{"id":"a","ok":true,"rev":"s1","result":{"stop":{"reason":"budget_exhausted","kind":"frames","pc":358,"bank":0,"symbol":"Work+$3","time":{"ticks":11902312,"t":70048,"since":{"kind":"boot"},"frame":1,"ly":144,"dot":null},"frame_shown":{"n":1,"vblank":"normal"},"budget":{"ticks":140096,"instructions":5630,"frames":1,"limits":{"frames":1},"defaulted":false}},"reads":[]},"warnings":[]}
+{"id":"b","ok":true,"rev":"s1","result":{"reads":[{"expr":"u16[wFrame]","value":624}]},"warnings":[]}
+{"id":"c","ok":false,"rev":"s1","error":{"code":"unknown_symbol","exit":2,"message":"unknown symbol \"wNope\"","remedy":"check the name against `gbcli sym <pattern>`, or load the ROM's .sym"},"warnings":[]}
+{"id":"","ok":false,"error":{"code":"bad_request","exit":2,"message":"not a request: expected ident at line 1 column 2","remedy":"one JSON object per line; see `gbcli help schema`"},"warnings":[]}
+{"id":"d","ok":true,"rev":"s1","result":{"checkpoint":{"name":"one","path":".gbcli/sessions/b/checkpoints/one.gbck","frame":1,"rev":"s1"}},"warnings":[]}
+$ gbcli batch -F - --session b
+exit 0
+line n=1 id=e op=show ok=1 rev=s1
+batch applied=1 failed=0

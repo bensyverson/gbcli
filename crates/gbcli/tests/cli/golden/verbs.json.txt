@@ -1,0 +1,81 @@
+$ gbcli run demo.gb --frames 2 --read u16[wFrame] --session demo --json
+exit 0
+{"stop":{"reason":"budget_exhausted","kind":"frames","pc":355,"bank":0,"symbol":"Work","time":{"ticks":12042792,"t":140288,"since":{"kind":"boot"},"frame":2,"ly":144,"dot":null},"frame_shown":{"n":2,"vblank":"normal"},"budget":{"ticks":280576,"instructions":11276,"frames":2,"limits":{"frames":2},"defaulted":false}},"reads":[{"expr":"u16[wFrame]","value":1251}]}
+$ gbcli step --session demo --json
+exit 0
+{"stop":{"reason":"step_done","unit":"instruction","pc":358,"bank":0,"symbol":"Work+$3","time":{"ticks":12042824,"t":140304,"since":{"kind":"boot"},"frame":2,"ly":144,"dot":null},"frame_shown":{"n":2,"vblank":"normal"},"budget":{"ticks":32,"instructions":1,"frames":0,"limits":{},"defaulted":false}}}
+$ gbcli step frame --session demo --json
+exit 0
+{"stop":{"reason":"step_done","unit":"frame","pc":364,"bank":0,"symbol":"Work+$9","time":{"ticks":12183208,"t":210496,"since":{"kind":"boot"},"frame":3,"ly":144,"dot":null},"frame_shown":{"n":3,"vblank":"normal"},"budget":{"ticks":140384,"instructions":5644,"frames":1,"limits":{},"defaulted":false}}}
+$ gbcli show --session demo --json
+exit 0
+{"stop":{"reason":"step_done","unit":"frame","pc":364,"bank":0,"symbol":"Work+$9","time":{"ticks":12183208,"t":210496,"since":{"kind":"boot"},"frame":3,"ly":144,"dot":null},"frame_shown":{"n":3,"vblank":"normal"},"budget":{"ticks":140384,"instructions":5644,"frames":1,"limits":{},"defaulted":false}},"registers":{"a":0,"f":0,"b":0,"c":19,"d":0,"e":216,"h":192,"l":0,"sp":49186,"pc":364,"af":0,"bc":19,"de":216,"hl":49152,"flags":{"z":false,"n":false,"h":false,"c":false},"ime":false,"halted":false,"double_speed":false},"ppu":{"ly":144,"mode":"vblank","lcd_on":true}}
+$ gbcli read u16[wFrame] pc frame --session demo --json
+exit 0
+{"reads":[{"expr":"u16[wFrame]","value":1878},{"expr":"pc","value":364},{"expr":"frame","value":3}]}
+$ gbcli break Work --session demo --json
+exit 0
+{"breakpoint":{"id":1,"at":{"addr":355,"bank":null,"symbol":"Work"}}}
+$ gbcli watch write wFrame --once --session demo --json
+exit 0
+{"watch":{"id":2,"access":"write","at":{"addr":49152,"bank":null,"symbol":"wFrame"}}}
+$ gbcli run --session demo --json
+exit 0
+{"stop":{"reason":"breakpoint","id":1,"pc":355,"bank":0,"symbol":"Work","time":{"ticks":12183336,"t":210560,"since":{"kind":"boot"},"frame":3,"ly":144,"dot":null},"frame_shown":{"n":3,"vblank":"normal"},"budget":{"ticks":128,"instructions":4,"frames":0,"limits":{"frames":600},"defaulted":true}},"reads":[]}
+$ gbcli delete 1 --session demo --json
+exit 0
+{"deleted":{"id":1,"found":true}}
+$ gbcli run --session demo --json
+exit 0
+{"stop":{"reason":"watchpoint","id":2,"access":"write","addr":49152,"old":86,"new":87,"writer_pc":363,"pc":364,"bank":0,"symbol":"Work+$9","time":{"ticks":12183432,"t":210608,"since":{"kind":"boot"},"frame":3,"ly":144,"dot":null},"frame_shown":{"n":3,"vblank":"normal"},"budget":{"ticks":96,"instructions":5,"frames":0,"limits":{"frames":600},"defaulted":true}},"reads":[]}
+$ gbcli checkpoint before --session demo --json
+exit 0
+{"checkpoint":{"name":"before","path":".gbcli/sessions/demo/checkpoints/before.gbck","frame":3,"rev":"s5"}}
+$ gbcli poke wSpeed=2 --session demo --json
+exit 0
+{"writes":[{"kind":"poke","target":"wSpeed","bytes":"02","addr":49154}]}
+$ gbcli write wSpeed=3,4 --session demo --json
+exit 0
+{"writes":[{"kind":"bus","target":"wSpeed","bytes":"0304","addr":49154}]}
+$ gbcli patch 00:0200=0 --session demo --json
+exit 0
+{"writes":[{"kind":"patch","target":"00:0200","bytes":"00"}]}
+$ gbcli restore before --session demo --json
+exit 0
+{"restored":{"name":"before","rev":"s9","frame":3}}
+$ gbcli undo --session demo --json
+exit 0
+{"restored":{"name":null,"rev":"s10","frame":3}}
+$ gbcli run --until u16[wFrame] >= 2500 --read u16[wFrame] --session demo --json
+exit 0
+{"stop":{"reason":"predicate","text":"u16[wFrame] >= 2500","cadence":"writes","pc":364,"bank":0,"symbol":"Work+$9","time":{"ticks":12322600,"t":280192,"since":{"kind":"boot"},"frame":3,"ly":142,"dot":null},"frame_shown":{"n":3,"vblank":"normal"},"budget":{"ticks":139168,"instructions":5593,"frames":0,"limits":{"frames":600},"defaulted":true}},"reads":[{"expr":"u16[wFrame]","value":2500}]}
+$ gbcli events --limit 2 --session demo --json
+exit 0
+{"events":[{"at":*,"op":"undo","ok":true,"rev_before":"s9","rev_after":"s10"},{"at":*,"op":"run","args":{"until":"u16[wFrame] >= 2500","read":["u16[wFrame]"]},"ok":true,"rev_before":"s10","rev_after":"s11","stop":{"reason":"predicate","text":"u16[wFrame] >= 2500","cadence":"writes","pc":364,"frame":3,"ticks":12322600}}]}
+$ gbcli read [$FEA0] --session demo --json
+exit 5
+{"code":"unsupported","exit":5,"message":"unsupported (ExtraOam): FEA0-FEFF has no backing store to read without a bus read","remedy":"the core can't extra_oam: FEA0-FEFF has no backing store to read without a bus read — see `gbcli doctor --core`"}
+--- stderr
+gbcli: unsupported: unsupported (ExtraOam): FEA0-FEFF has no backing store to read without a bus read
+remedy: the core can't extra_oam: FEA0-FEFF has no backing store to read without a bus read — see `gbcli doctor --core`
+$ gbcli gaps --json
+exit 0
+{"gaps":[{"feature":"extra_oam","count":1}]}
+$ gbcli sessions --json
+exit 0
+{"sessions":[{"name":"demo","rom":"demo.gb","head_frame":87,"rev":"s11","size_bytes":*,"last_used":*,"checkpoints":1}]}
+$ gbcli sessions prune --unused-for 7d --json
+exit 0
+{"pruned":[],"kept":[],"busy":[]}
+$ gbcli sessions rm demo --json
+exit 2
+{"code":"refused","exit":2,"message":"session \"demo\" has 1 named checkpoint(s): before","remedy":"delete them first, or pass --with-checkpoints (before would go)"}
+--- stderr
+gbcli: refused: session "demo" has 1 named checkpoint(s): before
+remedy: delete them first, or pass --with-checkpoints (before would go)
+$ gbcli sessions rm demo --with-checkpoints --json
+exit 0
+{"removed":"demo"}
+$ gbcli sessions --json
+exit 0
+{"sessions":[]}

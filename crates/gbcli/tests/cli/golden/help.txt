@@ -1,0 +1,147 @@
+$ gbcli 
+exit 0
+gbcli — a headless, deterministic Game Boy emulator for agents.
+
+Each command opens a named session (.gbcli/sessions/NAME/), does one thing to
+its machine, saves it and prints rows; --json prints the protocol's result.
+
+  act        run, step, checkpoint, restore, undo, write, poke, patch
+             advance or change the machine; the stop becomes the head
+  read       show, read, events, gaps, sessions
+             look without changing the head
+  configure  sessions prune, sessions rm, break, watch, delete
+             change the session's settings
+  server     serve, batch
+             the JSON Lines protocol, for harnesses
+  help       help, recipes, schema, version
+             no session, ROM or network needed
+
+First:  gbcli run game.gb --session demo --frames 120
+Then:   gbcli show --session demo    gbcli read pc frame --session demo
+
+Help:   gbcli VERB --help (one worked example each)
+        gbcli recipes (goal → command)
+        gbcli help TOPIC: addresses expressions time checkpoints writes budgets
+                          exit-codes hardware optimize
+        gbcli schema (the JSON request grammar for serve and batch)
+Exit:   0 ok, 1 no, 2 usage, 3 budget/conflict, 4 unreadable, 5 environment
+$ gbcli run --help
+exit 0
+gbcli run — advance the machine to a stop, then read and save
+
+USAGE
+  gbcli run [ROM] [--frames N | --until EXPR | --to ADDR] [--read EXPR]… [flags]
+
+The experiment verb. In this order, whatever the order of the flags: start
+from --at, the head, or the boot handoff; apply --patch, --poke and --write in
+the order given; run until --until holds, --to is reached, a breakpoint or
+watch fires, or the budget ends; evaluate --read; save --checkpoint. The stop
+becomes the session's new head. A ROM argument is the same as --rom.
+
+CLASS
+  act: advances or changes the machine and saves the new head; needs a session (name one with a ROM to create it).
+
+FLAGS
+  --at NAME|~N            start from a named checkpoint or the head N changes back
+  --from boot|power-on    with no head, start at the boot handoff (default) or at power-on
+  --since BASE            what frame and t count from: boot (default), power-on or a checkpoint name
+  --until EXPR            stop when this condition holds
+  --to ADDR               stop before the instruction at this address executes
+  --frames N              frame budget (default 600 with --until or --to)
+  --instructions N        instruction budget
+  --ticks N               tick budget
+  --write TARGET=BYTES…   bus write before the run, as the CPU would
+  --poke TARGET=BYTES…    write backing memory before the run, no side effects
+  --patch TARGET=BYTES…   patch the ROM before the run (recorded in checkpoints)
+  --read EXPR…            evaluate at the stop; repeat for more
+  --checkpoint NAME       save the stop state under this name
+  --allow-uninit          read never-written bytes as their power-on values, with a warning
+
+MORE FLAGS
+  -s, --session NAME      the session to use (default: GBCLI_SESSION); naming a new one with a ROM creates it
+  --rom FILE              the ROM a new session is created from; an existing session refuses another ROM
+  --sym FILE              the .sym for a new session (default: the ROM's name with .sym, if it exists)
+  --model MODEL           the model for a new session: dmg-b (default), cgb-e, …
+  --seed N                the RAM seed for a new session (default 0)
+  --rev sN                refuse a change if the session is no longer at this revision
+  --allow-rom-change      load a stored state even though the ROM was rebuilt and the check refuses it
+
+MORE FLAGS
+  --json                  print the protocol's result object instead of rows
+  --dir PATH              find .gbcli/ from PATH instead of the working directory (GBCLI_DIR overrides both)
+  --as NAME               who is asking, for the event log (default: GBCLI_AS)
+
+EXAMPLE
+  gbcli run game.gb --session dx --until 'u16[wFrame] >= 60' --read wSpriteX
+    creates session dx from game.gb, runs to the frame where wFrame reaches
+    60, and prints the stop and wSpriteX
+$ gbcli sessions rm -h
+exit 0
+gbcli sessions rm — remove one session
+
+USAGE
+  gbcli sessions rm NAME [--with-checkpoints] [flags]
+
+Remove a session and its history. A session with named checkpoints is refused
+unless --with-checkpoints.
+
+CLASS
+  configure: changes the session's settings, not the machine; needs a session.
+
+FLAGS
+  --with-checkpoints      remove the session even though it holds named checkpoints
+
+MORE FLAGS
+  --json                  print the protocol's result object instead of rows
+  --dir PATH              find .gbcli/ from PATH instead of the working directory (GBCLI_DIR overrides both)
+  --as NAME               who is asking, for the event log (default: GBCLI_AS)
+
+EXAMPLE
+  gbcli sessions rm dx
+    removes the session dx
+$ gbcli help watch
+exit 0
+gbcli watch — add a watchpoint on reads, writes or both
+
+USAGE
+  gbcli watch read|write|access ADDR [--if EXPR] [--once] [flags]
+
+Stop every later run at an access to ADDR. In --if, `old` and `new` are the
+byte before and after a write. --once deletes it after it fires.
+
+CLASS
+  configure: changes the session's settings, not the machine; needs a session.
+
+FLAGS
+  --if EXPR               stop only when this condition holds
+  --once                  delete the watch after it fires once
+
+MORE FLAGS
+  -s, --session NAME      the session to use (default: GBCLI_SESSION); naming a new one with a ROM creates it
+  --rom FILE              the ROM a new session is created from; an existing session refuses another ROM
+  --sym FILE              the .sym for a new session (default: the ROM's name with .sym, if it exists)
+  --model MODEL           the model for a new session: dmg-b (default), cgb-e, …
+  --seed N                the RAM seed for a new session (default 0)
+  --rev sN                refuse a change if the session is no longer at this revision
+  --allow-rom-change      load a stored state even though the ROM was rebuilt and the check refuses it
+
+MORE FLAGS
+  --json                  print the protocol's result object instead of rows
+  --dir PATH              find .gbcli/ from PATH instead of the working directory (GBCLI_DIR overrides both)
+  --as NAME               who is asking, for the event log (default: GBCLI_AS)
+
+EXAMPLE
+  gbcli watch write rDMA --session dx --once
+    stops the next run when OAM DMA starts
+$ gbcli help time
+exit 0
+Time — every frame and cycle count says what it counts from.
+
+  boot        the default: the boot ROM's handoff to the cartridge (PC=$0100).
+              Before it, counts come from power-on and say so.
+  power-on    tick 0
+  NAME        a named checkpoint
+
+--since BASE changes the base for run and read; stop rows print since=.
+The first run of a ROM runs the real boot ROM once and caches the handoff in
+.gbcli/cache/; later runs start there. --from power-on starts cold instead.

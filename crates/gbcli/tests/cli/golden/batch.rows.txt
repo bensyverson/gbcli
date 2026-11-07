@@ -1,0 +1,12 @@
+$ gbcli batch -F ops.jsonl --session b --rom demo.gb
+exit 2
+line n=1 id=a op=run ok=1 rev=s1
+line n=3 id=b op=read ok=1 rev=s1
+line n=4 id=c op=read ok=0 code=unknown_symbol exit=2 rev=s1 message="unknown symbol \"wNope\"" remedy="check the name against `gbcli sym <pattern>`, or load the ROM's .sym"
+line n=5 ok=0 code=bad_request exit=2 message="not a request: expected ident at line 1 column 2" remedy="one JSON object per line; see `gbcli help schema`"
+line n=6 id=d op=checkpoint ok=1 rev=s1
+batch applied=3 failed=2
+$ gbcli batch -F - --session b
+exit 0
+line n=1 id=e op=show ok=1 rev=s1
+batch applied=1 failed=0

@@ -1,0 +1,111 @@
+$ gbcli run demo.gb --frames 2 --read u16[wFrame] --session demo
+exit 0
+stop budget_exhausted kind=frames pc=$0163 bank=0 symbol=Work frame=2 t=140288 since=boot ticks=12042792 ly=144 shown=2 vblank=normal
+budget frames=2/2 instructions=11276 ticks=280576
+read expr=u16[wFrame] value=1251 hex=$04E3
+rev s1
+$ gbcli step --session demo
+exit 0
+stop step_done unit=instruction pc=$0166 bank=0 symbol=Work+$3 frame=2 t=140304 since=boot ticks=12042824 ly=144 shown=2 vblank=normal
+budget frames=0 instructions=1 ticks=32
+rev s2
+$ gbcli step frame --session demo
+exit 0
+stop step_done unit=frame pc=$016C bank=0 symbol=Work+$9 frame=3 t=210496 since=boot ticks=12183208 ly=144 shown=3 vblank=normal
+budget frames=1 instructions=5644 ticks=140384
+rev s3
+$ gbcli show --session demo
+exit 0
+registers a=$00 f=$00 b=$00 c=$13 d=$00 e=$D8 h=$C0 l=$00 sp=$C022 pc=$016C flags=---- ime=0 halted=0 double_speed=0
+ppu ly=144 mode=vblank lcd_on=1
+stop step_done unit=frame pc=$016C bank=0 symbol=Work+$9 frame=3 t=210496 since=boot ticks=12183208 ly=144 shown=3 vblank=normal
+budget frames=1 instructions=5644 ticks=140384
+rev s3
+$ gbcli read u16[wFrame] pc frame --session demo
+exit 0
+read expr=u16[wFrame] value=1878 hex=$0756
+read expr=pc value=364 hex=$016C
+read expr=frame value=3 hex=$03
+rev s3
+$ gbcli break Work --session demo
+exit 0
+breakpoint id=1 addr=$0163 symbol=Work
+rev s3
+$ gbcli watch write wFrame --once --session demo
+exit 0
+watch id=2 access=write addr=$C000 symbol=wFrame
+rev s3
+$ gbcli run --session demo
+exit 0
+stop breakpoint id=1 pc=$0163 bank=0 symbol=Work frame=3 t=210560 since=boot ticks=12183336 ly=144 shown=3 vblank=normal
+budget frames=0/600 instructions=4 ticks=128 defaulted
+rev s4
+$ gbcli delete 1 --session demo
+exit 0
+deleted id=1 found=1
+rev s4
+$ gbcli run --session demo
+exit 0
+stop watchpoint id=2 access=write addr=$C000 old=$56 new=$57 writer_pc=$016B pc=$016C bank=0 symbol=Work+$9 frame=3 t=210608 since=boot ticks=12183432 ly=144 shown=3 vblank=normal
+budget frames=0/600 instructions=5 ticks=96 defaulted
+rev s5
+$ gbcli checkpoint before --session demo
+exit 0
+checkpoint name=before path=.gbcli/sessions/demo/checkpoints/before.gbck frame=3 rev=s5
+rev s5
+$ gbcli poke wSpeed=2 --session demo
+exit 0
+write kind=poke target=wSpeed bytes=$02 addr=$C002
+rev s6
+$ gbcli write wSpeed=3,4 --session demo
+exit 0
+write kind=bus target=wSpeed bytes=$03,$04 addr=$C002
+rev s7
+$ gbcli patch 00:0200=0 --session demo
+exit 0
+write kind=patch target=00:0200 bytes=$00
+rev s8
+$ gbcli restore before --session demo
+exit 0
+restored name=before frame=3 rev=s9
+rev s9
+$ gbcli undo --session demo
+exit 0
+restored frame=3 rev=s10
+rev s10
+$ gbcli run --until u16[wFrame] >= 2500 --read u16[wFrame] --session demo
+exit 0
+stop predicate cadence=writes pc=$016C bank=0 symbol=Work+$9 frame=3 t=280192 since=boot ticks=12322600 ly=142 shown=3 vblank=normal text="u16[wFrame] >= 2500"
+budget frames=0/600 instructions=5593 ticks=139168 defaulted
+read expr=u16[wFrame] value=2500 hex=$09C4
+rev s11
+$ gbcli events --limit 2 --session demo
+exit 0
+event at=* op=undo ok=1 rev_before=s9 rev_after=s10
+event at=* op=run ok=1 rev_before=s10 rev_after=s11 stop=predicate pc=$016C frame=3 args={"read":["u16[wFrame]"],"until":"u16[wFrame] >= 2500"}
+rev s11
+$ gbcli read [$FEA0] --session demo
+exit 5
+--- stderr
+gbcli: unsupported: unsupported (ExtraOam): FEA0-FEFF has no backing store to read without a bus read
+remedy: the core can't extra_oam: FEA0-FEFF has no backing store to read without a bus read — see `gbcli doctor --core`
+$ gbcli gaps
+exit 0
+gap feature=extra_oam count=1
+$ gbcli sessions
+exit 0
+session name=demo rom=demo.gb rev=s11 head_frame=87 checkpoints=1 size_bytes=* last_used=*
+$ gbcli sessions prune --unused-for 7d
+exit 0
+pruned none
+$ gbcli sessions rm demo
+exit 2
+--- stderr
+gbcli: refused: session "demo" has 1 named checkpoint(s): before
+remedy: delete them first, or pass --with-checkpoints (before would go)
+$ gbcli sessions rm demo --with-checkpoints
+exit 0
+removed name=demo
+$ gbcli sessions
+exit 0
+none

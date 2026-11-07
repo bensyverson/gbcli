@@ -11,6 +11,15 @@ python3 -I scripts/bench/test-times.py                      # per-test breakdown
 python3 -I scripts/bench/test-times.py --per-test-over 1.0
 ```
 
+## cli-latency
+
+Wall time of one `gbcli` process answering a request against a live session: process start, argv parsing, bundle open, the session lock, the head load, the request and the reply. Builds the release binary, creates a session over the committed V1 test ROM, runs it one frame so it has a head, then times N runs each of `version`, `show`, `read` and `step` and prints min, median and p95. The leaf criterion is under 50 ms (leaf LUax7P); the figure is in `project/2026-11-06-design.md` §12.
+
+```sh
+python3 -I scripts/bench/cli-latency/run.py        # N = 200 per request
+python3 -I scripts/bench/cli-latency/run.py 50
+```
+
 ## sameboy-throughput
 
 Headless SameBoy (DMG_B, turbo uncapped, no boot ROM via the FF50 write) running a ROM for N frames' worth of 8 MHz ticks; also times in-memory state save/load (mean of 10,000).

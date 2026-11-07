@@ -10,7 +10,10 @@
 //!
 //! - **A RET that reads a slot above the root's stack** (one pushed before
 //!   the profile began) returns from the root: any open frames unwind, and
-//!   the routine it returns into becomes the root.
+//!   the routine it returns into becomes the root. The root's stack starts at
+//!   SP when the profile began and rises with SP whenever no frame is open
+//!   (`ld sp`, a `pop` at the root's level): at power-on SP is $0000, and
+//!   only the boot ROM's `ld sp` says where the stack is.
 //! - **A RET that reads no frame's slot** otherwise (`push hl; ret`, a
 //!   computed jump) is a jump: nothing is popped (`ret_jumps`).
 //! - **A RET that reads a deeper frame's slot** pops the frames above it as
@@ -180,6 +183,12 @@ impl EventSink for Routines {
             while self.stack.last().is_some_and(|f| f.sp < sp_after) {
                 self.shadow.unwound += 1;
                 self.pop();
+            }
+            // SP rising with no frame open (`ld sp`, a `pop` at the root's
+            // level) moves the root's stack up: slots below it are the
+            // root's own from here, so a RET reading one is a jump.
+            if self.stack.is_empty() && sp_after > self.root_sp {
+                self.root_sp = sp_after;
             }
         }
     }

@@ -118,7 +118,7 @@ fn a_reti_above_the_root_hands_the_root_to_the_interrupted_code() {
     );
 }
 
-fn spec(from: &str, to: &str) -> MeasureSpec {
+fn spec(from: &str, to: &str) -> MeasureSpec<'static> {
     let at = |name: &str| Location {
         addr: addr(name),
         bank: None,
@@ -129,6 +129,7 @@ fn spec(from: &str, to: &str) -> MeasureSpec {
         to: at(to),
         iterations: 3,
         budget: Budget::instructions(1_000),
+        interrupt: None,
     }
 }
 

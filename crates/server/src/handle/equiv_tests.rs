@@ -93,6 +93,40 @@ fn a_divergence_exits_1_naming_the_frame_and_the_byte() {
         (d.a.checkpoint.name.as_str(), d.b.checkpoint.name.as_str()),
         ("equiv-a", "equiv-b")
     );
+    // A patched side runs the session's ROM, so restoring it works (the
+    // next test restores both).
+    assert!(
+        error.remedy.contains("`gbcli restore equiv-b`"),
+        "{}",
+        error.remedy
+    );
+}
+
+#[test]
+fn a_divergence_on_another_rom_doesnt_send_the_reader_to_restore_it() {
+    // Side B is a build of its own: V1 with Work's `inc [hl]` made a `nop` in
+    // the file. This session restores onto its own ROM, so equiv-b would run
+    // B's state on A's code, or be refused as rom_changed.
+    let f = Fixture::with_sym("equiv-rom-b");
+    let mut rom = crate::fixture::V1.to_vec();
+    rom[0x016B] = 0x00;
+    std::fs::write(f.dir.join("b.gb"), rom).expect("rom b");
+    std::fs::write(f.dir.join("b.sym"), crate::fixture::V1_SYM).expect("sym b");
+    let mut args = frame_counter(20, false);
+    args.b.rom = Some("b.gb".into());
+    let error = equiv(&mut handler(&f), args).outcome.expect_err("diverged");
+    assert_eq!(error.code, ErrorCode::PredicateFalse);
+    assert!(
+        !error.remedy.contains("restore equiv-b"),
+        "{}",
+        error.remedy
+    );
+    assert!(
+        error.remedy.contains("`gbcli restore equiv-a`"),
+        "{}",
+        error.remedy
+    );
+    assert!(error.remedy.contains("b.gb"), "{}", error.remedy);
 }
 
 #[test]
@@ -162,6 +196,7 @@ fn the_wall_guard_ends_the_check() {
         .expect_err("the guard fired");
     assert_eq!(error.code, ErrorCode::BudgetExhausted);
     assert!(error.message.contains("wall guard"), "{}", error.message);
+    assert_eq!(error.remedy, "compare fewer --frames per call");
 }
 
 #[test]

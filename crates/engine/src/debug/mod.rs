@@ -25,6 +25,7 @@ use crate::machine::Machine;
 
 pub use backtrace::CallFrame;
 pub use code::{core_code, eval_code, expr_code};
+pub(crate) use drive::CHUNK;
 use drive::Goal;
 pub(crate) use keys::Schedule;
 pub use keys::unapplied_keys;

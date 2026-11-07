@@ -22,6 +22,8 @@ use super::reads::{CompiledRead, compile_reads, eval_reads, warning_text};
 use super::writes::{apply_writes, parse_location};
 use super::{Failure, Handler, HeadChange, Need, save_head, shot};
 use crate::convert;
+#[cfg(test)]
+pub(super) use budget::WALL_GUARD_REMEDY;
 use budget::{DEFAULT_FRAMES, budget_of, unanswered, wall_guard_error};
 #[cfg(test)]
 pub(super) use equiv::equiv_failure;
@@ -194,7 +196,9 @@ impl Handler {
         let shot = args.shot.as_ref().map(|s| shot::take(&machine, s, &since));
         let answered = self.answered(args, defaulted, guarded, &stop);
         // Step 5, on a copy of the stop; and what the run's sinks collected.
-        let measured = plan.probes.measure(&mut machine);
+        let measured = plan
+            .probes
+            .measure(&mut machine, &interrupt, self.wall_guard);
         let (profile, frame_budget) = plan.probes.finish(&machine);
         // The files after the shot are written only when everything before
         // them succeeded: the filmstrip, then the audio, whose per-channel

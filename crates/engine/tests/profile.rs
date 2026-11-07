@@ -4,7 +4,7 @@
 
 mod common;
 
-use common::{cgb_machine, machine, step_to};
+use common::{cgb_machine, machine, step_to, steps};
 use gbcli_core::{Budget, Registers, StopReason};
 use gbcli_engine::disasm::{NoSymbols, decode};
 use gbcli_engine::profile::{CpuSpeed, Leg, MeasureError, MeasureSpec, Profile, RoutineCost};
@@ -75,12 +75,13 @@ fn at_main_loop() -> Machine {
     m
 }
 
-fn spec(from: &str, to: &str, iterations: u32) -> MeasureSpec {
+fn spec(from: &str, to: &str, iterations: u32) -> MeasureSpec<'static> {
     MeasureSpec {
         from: at(from),
         to: at(to),
         iterations,
         budget: Budget::instructions(10_000),
+        interrupt: None,
     }
 }
 
@@ -226,6 +227,41 @@ fn the_profile_charges_each_routine_its_table_cost() {
 }
 
 #[test]
+fn a_profile_from_power_on_reads_a_push_ret_as_a_jump() {
+    // At power-on SP is $0000, so every slot is at or above the SP the
+    // profile began with; the boot ROM's `ld sp` moves the root's stack up.
+    // Trampoline's `push hl; ret` must stay a jump, not a root return.
+    let power_on = || {
+        Machine::new(
+            gbcli_engine::Backend::sameboy(),
+            common::config(ROM),
+            Some(SYM),
+        )
+        .unwrap()
+    };
+    let mut m = power_on();
+    assert_eq!(m.core().registers().sp, 0);
+    let mut boot = power_on();
+    let mut to_main = 0;
+    while boot.core().registers().pc != addr("MainLoop") {
+        steps(&mut boot, 1);
+        to_main += 1;
+    }
+    let passes = 3;
+    let profile = m
+        .profile(Budget::instructions(to_main + 18 * passes))
+        .unwrap();
+    assert_eq!(profile.shadow.ret_jumps, passes, "one per Trampoline");
+    assert_eq!(profile.shadow.unwound, passes, "one per Discard");
+    let roots: Vec<_> = profile.routines.iter().filter(|r| r.calls == 0).collect();
+    assert_eq!(
+        roots.len(),
+        1,
+        "the power-on root never returned: {roots:#?}"
+    );
+}
+
+#[test]
 fn a_profile_cut_short_counts_the_open_calls_so_far() {
     // Stops inside Outer's call to Leaf, before Leaf's `ret`.
     let mut m = at_main_loop();
@@ -302,6 +338,7 @@ fn measure_ends_at_a_stop_nothing_can_wake() {
         to: place(0x015D),
         iterations: 1,
         budget: Budget::frames(30),
+        interrupt: None,
     };
     let err = m.measure(&spec).unwrap_err();
     assert_eq!(
@@ -310,6 +347,64 @@ fn measure_ends_at_a_stop_nothing_can_wake() {
             completed: 0,
             leg: Leg::ToEnd,
             reason: StopReason::Stopped
+        }
+    );
+}
+
+/// Halted at HaltLoop.wait's `nop` (PC is past the HALT), mid-wait.
+fn halted_before_the_nop() -> Machine {
+    let mut m = halting();
+    while !m.core().registers().halted {
+        steps(&mut m, 1);
+    }
+    common::run(m.core_mut(), Budget::ticks(40_000));
+    let regs = m.core().registers();
+    assert!(regs.halted);
+    assert_eq!(regs.pc, addr("HaltLoop.wait") + 1);
+    m
+}
+
+#[test]
+fn a_halted_cpu_has_not_arrived_so_every_iteration_times_the_same_span() {
+    // Design §11 ruling (leaf dg4BWI): an arrival is the CPU about to execute
+    // --from. Halted with PC there, it isn't; iteration 1 starts at the wake.
+    let nop = addr("HaltLoop.wait") + 1;
+    let place = |addr| Location {
+        addr,
+        bank: None,
+        symbol: None,
+    };
+    let spec = MeasureSpec {
+        from: place(nop),
+        to: place(nop + 1),
+        iterations: 3,
+        budget: Budget::frames(10),
+        interrupt: None,
+    };
+    let result = halted_before_the_nop().measure(&spec).unwrap();
+    let t: Vec<u64> = result.samples.iter().map(|s| s.t(result.speed)).collect();
+    assert_eq!(t, vec![table_t(nop); 3]);
+}
+
+#[test]
+fn measure_polls_the_interrupt_flag() {
+    // Design §5: everything that emulates polls the flag. Without it, this
+    // measurement would spend 3000 frames looking for an arrival never made.
+    let flag = std::sync::atomic::AtomicBool::new(true);
+    let mut never = spec("MainLoop", "MainLoop", 1);
+    never.to = Location {
+        addr: 0x3000,
+        bank: None,
+        symbol: None,
+    };
+    never.budget = Budget::frames(3000);
+    never.interrupt = Some(&flag);
+    let err = at_main_loop().measure(&never).unwrap_err();
+    assert_eq!(
+        err,
+        MeasureError::Interrupted {
+            completed: 0,
+            leg: Leg::ToEnd
         }
     );
 }

@@ -21,7 +21,7 @@ use crate::mem;
 /// Instructions per core call between the engine's own checks (HALT with
 /// interrupts off, user break). Small enough to notice either promptly,
 /// large enough that the checks cost nothing measurable.
-const CHUNK: u64 = 4096;
+pub(crate) const CHUNK: u64 = 4096;
 
 /// The register that unmaps the boot ROM: its first write is the handoff.
 pub(super) const BOOT_OFF: u16 = 0xFF50;

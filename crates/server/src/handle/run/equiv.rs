@@ -18,6 +18,7 @@ use gbcli_protocol::{
 use super::super::history::checkpoint_frame;
 use super::super::writes::apply_writes;
 use super::super::{Failure, Handler};
+use super::budget::wall_guard_ended;
 use crate::convert;
 
 /// Where a divergence leaves each side, overwritten by the next one.
@@ -64,12 +65,9 @@ impl Handler {
             interrupt: Some(&interrupt),
         };
         let verdict = equiv::compare(&mut a, &mut b, &spec).map_err(|e| match e {
-            EquivError::Interrupted { frames } => Failure::new(ErrorBody::new(
-                ErrorCode::BudgetExhausted,
-                format!(
-                    "the {:?} wall guard ended the check after {frames} equivalent frames",
-                    self.wall_guard
-                ),
+            EquivError::Interrupted { frames } => Failure::new(wall_guard_ended(
+                self.wall_guard,
+                &format!("after {frames} equivalent frames"),
                 "compare fewer --frames per call",
             )),
             other => equiv_failure(&other),
@@ -83,7 +81,7 @@ impl Handler {
                 }),
                 ..ResultBody::default()
             }),
-            Verdict::Diverged(d) => Err(diverged(store, meta, *d)),
+            Verdict::Diverged(d) => Err(diverged(store, meta, *d, args.b.rom.as_deref())),
         }
     }
 
@@ -157,7 +155,12 @@ pub(in crate::handle) fn equiv_failure(e: &EquivError) -> Failure {
 
 /// A divergence: both sides saved as named checkpoints, and `predicate_false`
 /// carrying the verdict.
-fn diverged(store: &SessionStore, meta: &SessionFile, d: Divergence) -> Failure {
+fn diverged(
+    store: &SessionStore,
+    meta: &SessionFile,
+    d: Divergence,
+    b_rom: Option<&str>,
+) -> Failure {
     let save = |name: &str, side: SideState| -> Result<SideMade, Failure> {
         Ok(SideMade {
             checkpoint: save_side(store, meta, name, &side.checkpoint)?,
@@ -165,6 +168,7 @@ fn diverged(store: &SessionStore, meta: &SessionFile, d: Divergence) -> Failure 
         })
     };
     let [a_name, b_name] = SIDE_CHECKPOINTS;
+    let remedy = next_step(&d, b_rom);
     let sides = save(a_name, d.a).and_then(|a| Ok((a, save(b_name, d.b)?)));
     let (a, b) = match sides {
         Ok(sides) => sides,
@@ -192,13 +196,29 @@ fn diverged(store: &SessionStore, meta: &SessionFile, d: Divergence) -> Failure 
             "the sides diverge at frame {}: {summary}; saved as {a_name} and {b_name}",
             d.frame
         ),
-        format!("`gbcli restore {b_name}` to see side B where it went wrong"),
+        remedy,
     );
     body.result = Some(Box::new(ResultBody {
         equiv: Some(made),
         ..ResultBody::default()
     }));
     Failure::new(body)
+}
+
+/// Where to look next. A restore rebuilds the core from the session's ROM
+/// (plus the checkpoint's patches), so side B restores only when it ran the
+/// session's ROM; a side B built from another ROM would run on A's code, or
+/// be refused as `rom_changed`.
+fn next_step(d: &Divergence, b_rom: Option<&str>) -> String {
+    let [a_name, b_name] = SIDE_CHECKPOINTS;
+    if d.a.checkpoint.header.rom_sha256 == d.b.checkpoint.header.rom_sha256 {
+        return format!("`gbcli restore {b_name}` to see side B where it went wrong");
+    }
+    let rom = b_rom.unwrap_or("another ROM");
+    format!(
+        "side B ran {rom}, which this session can't restore, so its stop is in the \
+         result; `gbcli restore {a_name}` shows side A where it went wrong"
+    )
 }
 
 fn save_side(

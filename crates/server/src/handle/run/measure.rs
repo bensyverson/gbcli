@@ -2,10 +2,12 @@
 //! another, on a copy of `--at` or the head (design §11). The head never
 //! moves, so nothing is saved and the revision stays.
 
+use std::time::Duration;
+
 use gbcli_bundle::{SessionStore, Start};
 use gbcli_core::Budget;
 use gbcli_engine::Machine;
-use gbcli_engine::profile::{CpuSpeed, MeasureError, MeasureSpec, Measurement};
+use gbcli_engine::profile::{CpuSpeed, Leg, MeasureError, MeasureSpec, Measurement};
 use gbcli_protocol::{
     CpuSpeedName, CycleStats, ErrorBody, ErrorCode, Location, MeasureArgs, MeasureMade,
     PercentStats, Real, ResultBody, SessionFile,
@@ -13,7 +15,7 @@ use gbcli_protocol::{
 
 use super::super::writes::parse_location;
 use super::super::{Failure, Handler, Need};
-use super::budget::budget_from;
+use super::budget::{WALL_GUARD_REMEDY, budget_from, wall_guard_ended};
 
 impl Handler {
     pub(in crate::handle) fn measure(
@@ -25,17 +27,21 @@ impl Handler {
     ) -> Result<ResultBody, Failure> {
         let iterations = args.iterations.unwrap_or(1);
         if iterations == 0 {
-            return Err(failure(&MeasureError::NoIterations));
+            return Err(failure(&MeasureError::NoIterations, self.wall_guard));
         }
         let (mut machine, loaded) =
             self.machine_for(store, meta, Need::Start(Start::Boot), args.at.as_deref())?;
         warnings.extend(loaded);
         let (budget, _, _) = budget_from(args.frames, args.instructions, args.ticks);
+        let interrupt = self.interrupt.clone();
+        let guard = self.wall_guard;
         let measured = parse_location(&machine, &args.from)
             .and_then(|from| Ok((from, parse_location(&machine, &args.to)?)))
             .and_then(|(from, to)| {
-                let spec = spec(from, to, iterations, budget);
-                measure_on(&mut machine, &spec, &args.from, &args.to, args.max_t)
+                let mut spec = spec(from, to, iterations, budget);
+                spec.interrupt = Some(&interrupt);
+                let names = (args.from.as_str(), args.to.as_str());
+                measure_on(&mut machine, &spec, names, args.max_t, guard)
             });
         // Only the head's machine may stay warm: `--at` loaded another state.
         if args.at.is_none() {
@@ -48,25 +54,34 @@ impl Handler {
     }
 }
 
-pub(super) fn spec(from: Location, to: Location, iterations: u32, budget: Budget) -> MeasureSpec {
+/// A spec without an interrupt flag: the caller sets the request's.
+pub(super) fn spec(
+    from: Location,
+    to: Location,
+    iterations: u32,
+    budget: Budget,
+) -> MeasureSpec<'static> {
     MeasureSpec {
         from,
         to,
         iterations,
         budget,
+        interrupt: None,
     }
 }
 
-/// Measures `spec` on a copy of `machine`; with `max_t`, a slowest iteration
-/// over it is `predicate_false` carrying the measurement.
+/// Measures `spec` on a copy of `machine`, `(from, to)` as the request named
+/// them; with `max_t`, a slowest iteration over it is `predicate_false`
+/// carrying the measurement. `guard` is the wall guard that sets the spec's
+/// interrupt flag.
 pub(super) fn measure_on(
     machine: &mut Machine,
     spec: &MeasureSpec,
-    from: &str,
-    to: &str,
+    (from, to): (&str, &str),
     max_t: Option<u64>,
+    guard: Duration,
 ) -> Result<MeasureMade, Failure> {
-    let m = machine.measure(spec).map_err(|e| failure(&e))?;
+    let m = machine.measure(spec).map_err(|e| failure(&e, guard))?;
     let made = made(&m, from, to, max_t);
     match max_t {
         Some(max) if m.exceeds(max) => {
@@ -114,8 +129,17 @@ fn made(m: &Measurement, from: &str, to: &str, max_t: Option<u64>) -> MeasureMad
     }
 }
 
-fn failure(e: &MeasureError) -> Failure {
+fn failure(e: &MeasureError, guard: Duration) -> Failure {
     let (code, remedy) = match e {
+        // The wall guard is the only thing that sets a request's flag.
+        MeasureError::Interrupted { completed, leg } => {
+            let leg = match leg {
+                Leg::ToStart => "before reaching --from",
+                Leg::ToEnd => "before reaching --to",
+            };
+            let reached = format!("{leg} after {completed} iterations");
+            return Failure::new(wall_guard_ended(guard, &reached, WALL_GUARD_REMEDY));
+        }
         MeasureError::NoIterations => (ErrorCode::BadRequest, "pass --iterations 1 or more"),
         // Exit 1: the measurement ran, and its answer is that T-cycles mean
         // two things across the span.

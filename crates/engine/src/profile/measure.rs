@@ -2,6 +2,7 @@
 //! arrival at another, over several iterations (design §11).
 
 use std::fmt;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use gbcli_core::{
     AddrFilter, BankSel, Budget, Core, CoreError, FirstStep, InStop, RunRequest, StopReason, Ticks,
@@ -10,6 +11,7 @@ use gbcli_core::{
 use gbcli_protocol::Location;
 
 use super::{CpuSpeed, Span};
+use crate::debug::CHUNK;
 use crate::machine::Machine;
 use crate::mem;
 
@@ -18,8 +20,9 @@ const KEY1: u16 = 0xFF4D;
 
 /// What to measure.
 #[derive(Clone, Debug)]
-pub struct MeasureSpec {
-    /// Each iteration starts at the first arrival here (the current PC counts).
+pub struct MeasureSpec<'a> {
+    /// Each iteration starts at the first arrival here. The current PC counts,
+    /// unless the CPU is halted there: then the arrival comes at the wake.
     pub from: Location,
     /// And ends at the next arrival here, after at least one instruction.
     pub to: Location,
@@ -27,6 +30,8 @@ pub struct MeasureSpec {
     pub iterations: u32,
     /// For the whole measurement, all iterations together.
     pub budget: Budget,
+    /// Set from elsewhere to stop the measurement: a user break or wall guard.
+    pub interrupt: Option<&'a AtomicBool>,
 }
 
 /// The cycles of each iteration, in order.
@@ -111,6 +116,11 @@ pub enum MeasureError {
         completed: u32,
         leg: Leg,
     },
+    /// The interrupt flag was set after `completed` iterations.
+    Interrupted {
+        completed: u32,
+        leg: Leg,
+    },
     /// The CPU locked up on an illegal opcode, or entered STOP with nothing
     /// to wake it, so the next arrival can never come.
     Halted {
@@ -135,6 +145,9 @@ impl fmt::Display for MeasureError {
             ),
             MeasureError::Budget { completed, leg: l } => {
                 write!(f, "budget ran out {} after {completed} iterations", leg(l))
+            }
+            MeasureError::Interrupted { completed, leg: l } => {
+                write!(f, "interrupted {} after {completed} iterations", leg(l))
             }
             MeasureError::Halted {
                 completed, leg: l, ..
@@ -180,6 +193,7 @@ fn measure_on(core: &mut dyn Core, spec: &MeasureSpec) -> Result<Measurement, Me
         budget: spec.budget,
         used: Usage::default(),
         speed,
+        interrupt: spec.interrupt,
     };
     let mut samples = Vec::new();
     for iteration in 0..spec.iterations {
@@ -212,20 +226,23 @@ struct Runner<'a> {
     budget: Budget,
     used: Usage,
     speed: CpuSpeed,
+    interrupt: Option<&'a AtomicBool>,
 }
 
 impl Runner<'_> {
-    /// Whether PC is at `filter` now.
+    /// Whether the CPU has arrived at `filter`: it is about to execute the
+    /// instruction there. Halted, PC already points past the HALT but the
+    /// next step is a wait or a wake, so it hasn't (design §11 ruling).
     fn at(&self, filter: &AddrFilter) -> bool {
-        let pc = self.core.registers().pc;
-        filter.matches(pc, mem::bank_at(self.core, pc))
+        let regs = self.core.registers();
+        !regs.halted && filter.matches(regs.pc, mem::bank_at(self.core, regs.pc))
     }
 
     /// Runs until PC arrives at `filter`, after at least one instruction: the
     /// leg's first run leaves its first step unchecked, so this always moves.
     /// A run resumed after a KEY1 write checks its first step, since the
-    /// instruction after the write may be the arrival. Every KEY1 write stops the core and the speed is checked at every
-    /// stop: a switch clears KEY1's arm bit, so switching back needs another
+    /// instruction after the write may be the arrival. Every KEY1 write
+    /// stops the core and the speed is checked at every stop: a switch clears KEY1's arm bit, so switching back needs another
     /// KEY1 write, where the first switch shows. A switch and back can't
     /// hide between two checks.
     fn until(
@@ -236,7 +253,16 @@ impl Runner<'_> {
         let completed = iteration;
         let mut first_step = FirstStep::Run;
         loop {
-            let mut req = RunRequest::new(self.budget.remaining_after(&self.used));
+            if self.interrupt.is_some_and(|f| f.load(Ordering::Relaxed)) {
+                return Err(MeasureError::Interrupted { completed, leg });
+            }
+            // In chunks, so the flag is polled promptly; a chunk's end is no
+            // arrival, so the next one checks its first step.
+            let mut req = RunRequest::new(
+                self.budget
+                    .remaining_after(&self.used)
+                    .capped_instructions(CHUNK),
+            );
             req.first_step = first_step;
             first_step = FirstStep::Check;
             // No key comes during a measurement, so a STOP nothing can wake
@@ -259,7 +285,10 @@ impl Runner<'_> {
                 }
                 // A KEY1 write: the speed check above is all it was for.
                 StopReason::Candidate(_) => {}
-                StopReason::Budget(_) => return Err(MeasureError::Budget { completed, leg }),
+                StopReason::Budget(_) if self.budget.exhausted(&self.used).is_some() => {
+                    return Err(MeasureError::Budget { completed, leg });
+                }
+                StopReason::Budget(_) => {}
                 reason @ (StopReason::Locked { .. } | StopReason::Stopped) => {
                     return Err(MeasureError::Halted {
                         completed,

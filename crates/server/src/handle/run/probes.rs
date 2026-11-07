@@ -3,6 +3,8 @@
 //! run's own execution events so its breakpoints, budget and keys still apply.
 
 use std::cell::RefCell;
+use std::sync::atomic::AtomicBool;
+use std::time::Duration;
 
 use gbcli_core::{Event, EventKinds, EventSink};
 use gbcli_engine::Machine;
@@ -54,7 +56,7 @@ impl Sinks {
 
 /// The probes a run asked for, checked and resolved before it moves.
 pub(super) struct Probes {
-    measure: Option<(String, String, MeasureSpec)>,
+    measure: Option<(String, String, MeasureSpec<'static>)>,
     top: Option<u32>,
     pub(super) sinks: Option<RefCell<Sinks>>,
 }
@@ -98,10 +100,18 @@ impl Probes {
             .is_some_and(|s| s.borrow().split.is_some())
     }
 
-    /// One measurement on a copy of the stop, if asked for.
-    pub(super) fn measure(&self, machine: &mut Machine) -> Option<Result<MeasureMade, Failure>> {
+    /// One measurement on a copy of the stop, if asked for; `interrupt` is
+    /// the request's flag, which `guard` sets.
+    pub(super) fn measure(
+        &self,
+        machine: &mut Machine,
+        interrupt: &AtomicBool,
+        guard: Duration,
+    ) -> Option<Result<MeasureMade, Failure>> {
         let (from, to, spec) = self.measure.as_ref()?;
-        Some(measure_on(machine, spec, from, to, None))
+        let mut spec = spec.clone();
+        spec.interrupt = Some(interrupt);
+        Some(measure_on(machine, &spec, (from, to), None, guard))
     }
 
     /// The profile and the frame budget the run collected.

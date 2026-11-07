@@ -137,8 +137,9 @@ pub const EQUIV_VERB: VerbSpec = VerbSpec {
             checkpoint) under one key timeline, and compares the screen, the --ram bytes \
             and the sound writes at the end of every frame. Exit 0 when every frame \
             matches; exit 1 (predicate_false) at the first frame that differs, with every \
-            difference, and both sides saved as checkpoints equiv-a and equiv-b to restore \
-            or run from. The head never moves.",
+            difference, and both sides saved as checkpoints equiv-a and equiv-b (equiv-b \
+            restores only when side B ran the session's ROM, as with --patch). The head \
+            never moves.",
     example: (
         "gbcli equiv fast.gb --session dx --frames 600 --keys 'RIGHT@10' --ram wX",
         "checks 600 frames of fast.gb against the session's ROM with RIGHT held from frame \

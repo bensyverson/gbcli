@@ -38,14 +38,34 @@ pub(super) fn budget_from(
     (budget, limits, false)
 }
 
-/// The wall guard's answer: `budget_exhausted`, and not reproducible.
+/// What every wall-guard error tells the caller to do.
+pub(in crate::handle) const WALL_GUARD_REMEDY: &str =
+    "narrow the experiment, or give it a structure that ends";
+
+/// The wall guard's answer to a run or step: `budget_exhausted`, and not
+/// reproducible.
 pub(super) fn wall_guard_error(guard: Duration, stop: StopRecord) -> ErrorBody {
     ErrorBody::new(
         ErrorCode::BudgetExhausted,
         format!("the {guard:?} wall guard ended the request; this stop isn't reproducible"),
-        "narrow the experiment, or give it a structure that ends",
+        WALL_GUARD_REMEDY,
     )
     .with_stop(stop)
+}
+
+/// The wall guard's answer to work with no stop of its own (a measurement,
+/// an equivalence check); `reached` says how far it got, and `remedy` is
+/// the work's own way to fit under the guard.
+pub(in crate::handle) fn wall_guard_ended(
+    guard: Duration,
+    reached: &str,
+    remedy: &str,
+) -> ErrorBody {
+    ErrorBody::new(
+        ErrorCode::BudgetExhausted,
+        format!("the {guard:?} wall guard ended the request {reached}"),
+        remedy,
+    )
 }
 
 /// The error a run's stop is, if it didn't answer the question. A run with a

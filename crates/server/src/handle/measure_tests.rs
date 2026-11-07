@@ -4,12 +4,15 @@
 //! `ld hl,d16` 12, `inc [hl]` 12, `jr nz` taken 12, `ret` 16) + `jr` 12 =
 //! 112 T while wFrame's low byte doesn't wrap.
 
+use std::time::Duration;
+
 use gbcli_protocol::{
     CheckpointArgs, CpuSpeedName, ErrorCode, MeasureArgs, MeasureMade, Op, Response, RunArgs,
-    RunMeasure,
+    RunMeasure, StopReason,
 };
 
 use super::Handler;
+use super::run::WALL_GUARD_REMEDY;
 use super::test_support::{handler, request, run_frames};
 use crate::fixture::Fixture;
 
@@ -179,4 +182,51 @@ fn run_measure_measures_one_pass_on_a_copy_of_the_stop() {
     let m = result.measure.expect("a measurement");
     assert_eq!((m.n, m.t.max), (1, PASS_T));
     assert_eq!(result.stop, plain_stop, "the head is the run's stop");
+}
+
+#[test]
+fn the_wall_guard_ends_a_measurement() {
+    // 3000 frames looking for an arrival that never comes: seconds of work
+    // the guard must end at once.
+    let f = Fixture::with_sym("measure-guard");
+    let mut h = handler(&f);
+    assert!(run_frames(&mut h, 1).is_ok(), "past the boot run");
+    h.set_wall_guard(Duration::ZERO);
+    let mut args = main_loop(1);
+    args.to = "$0000".into();
+    args.frames = Some(3000);
+    let error = measure(&mut h, args).outcome.expect_err("the guard fired");
+    assert_eq!(error.code, ErrorCode::BudgetExhausted);
+    assert!(error.message.contains("wall guard"), "{}", error.message);
+    assert_eq!(error.remedy, WALL_GUARD_REMEDY);
+}
+
+#[test]
+fn the_wall_guard_ends_a_runs_measurement() {
+    // The guard falls after the one-frame run and during its measurement,
+    // which looks 600 frames (about half a second) for an arrival never made.
+    let f = Fixture::with_sym("run-measure-guard");
+    let mut h = handler(&f);
+    assert!(run_frames(&mut h, 1).is_ok(), "past the boot run");
+    h.set_wall_guard(Duration::from_millis(150));
+    let error = h
+        .handle(&request(Op::Run(RunArgs {
+            frames: Some(1),
+            measure: Some(Box::new(RunMeasure {
+                from: "Main.loop".into(),
+                to: "$0000".into(),
+            })),
+            ..RunArgs::default()
+        })))
+        .outcome
+        .expect_err("the guard fired");
+    let stop = error.stop.as_ref().expect("the run's stop rides along");
+    assert_ne!(
+        stop.reason,
+        StopReason::WallGuard,
+        "the run itself finished"
+    );
+    assert_eq!(error.code, ErrorCode::BudgetExhausted);
+    assert!(error.message.contains("wall guard"), "{}", error.message);
+    assert_eq!(error.remedy, WALL_GUARD_REMEDY);
 }

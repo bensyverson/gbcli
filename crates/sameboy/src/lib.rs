@@ -4,6 +4,7 @@
 //! RTC, the illegal-opcode lock, and side effects of SameBoy's own reads.
 
 mod blob;
+mod display;
 mod hooks;
 mod memory;
 mod run;
@@ -14,10 +15,10 @@ use std::ptr::NonNull;
 use std::sync::Mutex;
 
 use gbcli_core::{
-    ApuState, BootRom, Budget, BudgetKind, Core, CoreConfig, CoreError, CoreInfo, Feature,
-    FrameRef, IoReg, JoypadBounce, Keys, LayerMap, Model, PpuMode, PpuStatus, Region, RegionView,
-    Registers, Rendering, RtcMode, RunRequest, StepUnit, Stop, StopReason, Support, Ticks,
-    WriteTracking, WrittenView,
+    ApuState, BootRom, Budget, BudgetKind, ColorMode, Core, CoreConfig, CoreError, CoreInfo,
+    Feature, FrameRef, IoReg, JoypadBounce, Keys, LayerMap, LiveFrame, Model, PpuMode, PpuStatus,
+    Region, RegionView, Registers, Rendering, RtcMode, RunRequest, StepUnit, Stop, StopReason,
+    Support, Ticks, WriteTracking, WrittenView,
 };
 use sameboy_sys as sb;
 
@@ -301,6 +302,18 @@ impl Core for SameBoy {
             height: frame.height,
             pixels: frame.pixels(),
         })
+    }
+
+    fn live_frame(&self) -> Result<LiveFrame, CoreError> {
+        Ok(display::live_frame(self))
+    }
+
+    fn color_mode(&self) -> Result<ColorMode, CoreError> {
+        Ok(display::color_mode(self))
+    }
+
+    fn rgb555_color(&self, color: u16) -> Result<u32, CoreError> {
+        display::rgb555_color(self, color)
     }
 
     fn pixel_layers(&self) -> Result<LayerMap<'_>, CoreError> {

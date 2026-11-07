@@ -1,0 +1,16 @@
+[package]
+name = "gbcli-view"
+description = "gbcli's image views: frames, filmstrips, frame diffs, tileset, tilemap and OAM, as deterministic PNG"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gbcli-core.workspace = true
+gbcli-engine.workspace = true
+png.workspace = true
+
+[dev-dependencies]
+gbcli-sameboy.workspace = true
+sameboy-sys.workspace = true

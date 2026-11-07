@@ -32,6 +32,11 @@ pub enum Feature {
     Mmm01RomPatch,
     /// Event sinks (taps and the profiler) on a run.
     EventSinks,
+    /// The live, partly drawn framebuffer (`Core::live_frame`).
+    LiveFrame,
+    /// The core's color mode and its RGB output for a CGB color
+    /// (`Core::color_mode`, `Core::rgb555_color`).
+    DisplayColors,
 }
 
 impl Feature {
@@ -51,6 +56,8 @@ impl Feature {
             Feature::ExecHookCoversInterrupts => "exec_hook_covers_interrupts",
             Feature::Mmm01RomPatch => "mmm01_rom_patch",
             Feature::EventSinks => "event_sinks",
+            Feature::LiveFrame => "live_frame",
+            Feature::DisplayColors => "display_colors",
         }
     }
 }

@@ -39,6 +39,9 @@ pub(crate) fn support(feature: Feature) -> Support {
         Feature::ApuChannels => return Support::Yes,
         Feature::PixelLayers => return Support::Yes,
         Feature::CartRamWrites => return Support::Yes,
+        Feature::LiveFrame => return Support::Yes,
+        // The color mode always; CGB colors only where frames are RGB.
+        Feature::DisplayColors => return Support::Yes,
         Feature::DotStep => "SameBoy's finest public step is one CPU step (GB_run)",
         Feature::MCycleStep => "SameBoy's finest public step is one CPU step (GB_run)",
         Feature::PpuDot => {

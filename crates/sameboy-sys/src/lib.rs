@@ -157,6 +157,12 @@ unsafe extern "C" {
     pub fn GB_random_seed(seed: u64);
     pub fn GB_get_model(gb: *mut GB_gameboy_t) -> GB_model_t;
     pub fn GB_is_cgb(gb: *const GB_gameboy_t) -> bool;
+    /// False on a CGB running a DMG cartridge (and on every non-CGB model).
+    pub fn GB_is_cgb_in_cgb_mode(gb: *mut GB_gameboy_t) -> bool;
+    pub fn GB_is_sgb(gb: *mut GB_gameboy_t) -> bool;
+    /// An RGB555 color as the renderer outputs it, through the color
+    /// correction mode and the RGB encode callback. Only reads the instance.
+    pub fn GB_convert_rgb15(gb: *mut GB_gameboy_t, color: u16, for_border: bool) -> u32;
     pub fn GB_set_user_data(gb: *mut GB_gameboy_t, data: *mut c_void);
     pub fn GB_get_user_data(gb: *mut GB_gameboy_t) -> *mut c_void;
     /// A no-op when the debugger is compiled out, as it is here.

@@ -4,6 +4,7 @@
 //! approximations.
 
 mod apu;
+mod display;
 mod error;
 mod filter;
 mod region;
@@ -13,6 +14,7 @@ mod stop;
 mod time;
 
 pub use apu::{ApuChannel, ApuChannelState, ApuState, ApuSync};
+pub use display::{ColorMode, LiveFrame, PixelBuf};
 pub use error::{CoreError, Feature, Support};
 pub use filter::{AddrFilter, BankSel, StoreFilter, canonical_addr};
 pub use region::{
@@ -56,6 +58,32 @@ pub trait Core {
     fn io_register(&self, reg: IoReg) -> Result<u8, CoreError>;
     fn ppu(&self) -> PpuStatus;
     fn last_complete_frame(&self) -> Option<FrameRef<'_>>;
+    /// The framebuffer as it is now, partly drawn ([`Feature::LiveFrame`]).
+    /// The default is for a core without it, so adding this method broke no
+    /// backend.
+    fn live_frame(&self) -> Result<LiveFrame, CoreError> {
+        Err(CoreError::Unsupported {
+            feature: Feature::LiveFrame,
+            reason: "this core doesn't expose its live framebuffer",
+        })
+    }
+    /// How the PPU colors pixels now ([`Feature::DisplayColors`]).
+    fn color_mode(&self) -> Result<ColorMode, CoreError> {
+        Err(CoreError::Unsupported {
+            feature: Feature::DisplayColors,
+            reason: "this core doesn't report its color mode",
+        })
+    }
+    /// The 0x00RRGGBB a frame of this core holds for a CGB RGB555 color, as
+    /// its renderer converts it (color correction included)
+    /// ([`Feature::DisplayColors`]). `Unsupported` on a core whose frames are
+    /// shades.
+    fn rgb555_color(&self, _color: u16) -> Result<u32, CoreError> {
+        Err(CoreError::Unsupported {
+            feature: Feature::DisplayColors,
+            reason: "this core doesn't convert CGB colors",
+        })
+    }
     /// Which layer drew each pixel of the last complete frame
     /// ([`Feature::PixelLayers`]). Capture is off until
     /// [`set_pixel_layers`](Core::set_pixel_layers) turns it on. Only a frame

@@ -37,3 +37,11 @@ SameBoy randomizes RAM at power-on (seeded, so it is the same every run), and `q
 ## 2026-11-06 — in an isolated worktree, a path containing `git` reads as a git command
 
 The worktree guard refused plain commands that only *mentioned* a path under `/Users/ben/git/...` inside a pipe, redirect or heredoc ("names git in a form too complex to verify"), including the session scratchpad (`/private/tmp/claude-501/-Users-ben-git-gbcli/...`), and `/usr/bin/time -p cargo test` ("cannot be shown not to be git"). Keep scratch files under the worktree's `target/` (gitignored), run scripts as `python3 -I <file>` rather than heredocs, and keep each call to one plain command (leaf 5ewkYZ).
+
+## 2026-11-06 — poking CGB palette RAM doesn't change what SameBoy draws
+
+SameBoy renders from a converted-color cache (`background_palettes_rgb`, `object_palettes_rgb`) that only BCPD/OCPD writes refresh (`GB_palette_changed`, internal). `poke(Region::BgPalette, …)` changes the bytes `region()` returns, so inspection and the tilemap view see the new color, but frames keep the old one until the game writes that palette entry. In tests, set palettes with bus writes to BCPS/BCPD (OCPS/OCPD); see `write_palette` in `crates/view/tests/common/mod.rs`. Making a poke refresh the cache needs a shim accessor (leaf qliE6W).
+
+## 2026-11-06 — the fast CGB boot ROM hands over with the LCD on, so a test ROM's VRAM and OAM writes can drop
+
+`layers_cgb.gb` writes OAM and the map attributes without turning the LCD off. After `cgb_boot_fast` (`sameboy_sys::boot_roms::CGB_FAST`), the LCD is on at handover, so writes that land in mode 2 or 3 are dropped: objects 1 and 4 were missing from the frame. The view tests poke the ROM's tables back after its setup (`cgb_scene`). A new test ROM should turn the LCD off (in vblank) before writing VRAM and OAM (leaf qliE6W).

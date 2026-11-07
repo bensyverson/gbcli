@@ -233,7 +233,7 @@ pub(crate) fn vblank_kind(kind: sb::GB_vblank_type_t) -> Option<VblankKind> {
 
 /// A sentinel-palette pixel back to its DMG shade; the LCD-off color reads as
 /// shade 0 (the frame's tag says the LCD was off).
-fn shade(pixel: u32) -> u8 {
+pub(crate) fn shade(pixel: u32) -> u8 {
     match pixel & 0xFF {
         index @ 0..=3 => 3 - index as u8,
         _ => 0,

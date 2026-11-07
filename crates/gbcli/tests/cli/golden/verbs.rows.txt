@@ -432,7 +432,7 @@ $ gbcli read [$FEA0] --session demo
 exit 5
 --- stderr
 gbcli: unsupported: unsupported (ExtraOam): FEA0-FEFF has no backing store to read without a bus read
-remedy: the core can't extra_oam: FEA0-FEFF has no backing store to read without a bus read — see `gbcli doctor --core`
+remedy: the core can't extra_oam: FEA0-FEFF has no backing store to read without a bus read; `gbcli gaps` lists every such gap this project hit
 $ gbcli gaps
 exit 0
 gap feature=extra_oam count=1

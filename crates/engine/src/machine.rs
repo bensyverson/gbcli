@@ -236,6 +236,7 @@ impl Machine {
             debugger: self.debugger.clone(),
             created_by: meta.created_by,
             parent: meta.parent,
+            rev: meta.rev,
         };
         Checkpoint {
             header,

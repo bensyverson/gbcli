@@ -44,8 +44,8 @@ fn a_thousand_steps_leave_no_threads_behind() {
         .create(&RomSource {
             rom: dir.join("demo.gb"),
             sym: None,
-            model: Model::DmgB,
-            seed: 0,
+            model: Some(Model::DmgB),
+            seed: Some(0),
         })
         .unwrap();
     let mut handler = Handler::new(bundle, Some("demo".into()), None);

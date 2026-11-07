@@ -41,19 +41,21 @@ pub struct Target {
     pub rev: Option<Rev>,
     pub allow_rom_change: bool,
     pub json: bool,
-    /// Where to look for `.gbcli/`; `GBCLI_DIR` overrides it.
+    /// Where to look for `.gbcli/`; it beats `GBCLI_DIR`.
     pub dir: Option<PathBuf>,
     /// Create the session from this when it doesn't exist.
     pub create: Option<Create>,
 }
 
 /// A new session's ROM and settings (`--rom`, `--sym`, `--model`, `--seed`).
+/// A setting not given takes the default for a new session and is not
+/// checked against an existing one.
 #[derive(Debug)]
 pub struct Create {
     pub rom: PathBuf,
     pub sym: Option<PathBuf>,
-    pub model: Model,
-    pub seed: u64,
+    pub model: Option<Model>,
+    pub seed: Option<u64>,
 }
 
 impl Target {
@@ -262,20 +264,21 @@ fn target(inv: &Invocation, env: &Env, rom: Option<String>) -> Result<Target, Us
         Some(rom) => Some(Create {
             rom: env.cwd.join(rom),
             sym: inv.one("sym").map(|p| env.cwd.join(p)),
-            model: match inv.one("model") {
-                Some(name) => model_from_name(name).ok_or_else(|| {
-                    Usage::new(
-                        format!("unknown model `{name}`"),
-                        "dmg-b, mgb, sgb, sgb2, cgb0, cgb-a … cgb-e or agb",
-                    )
-                })?,
-                None => Model::DmgB,
-            },
+            model: inv
+                .one("model")
+                .map(|name| {
+                    model_from_name(name).ok_or_else(|| {
+                        Usage::new(
+                            format!("unknown model `{name}`"),
+                            "dmg-b, mgb, sgb, sgb2, cgb0, cgb-a … cgb-e or agb",
+                        )
+                    })
+                })
+                .transpose()?,
             seed: inv
                 .one("seed")
                 .map(|n| values::count("seed", n))
-                .transpose()?
-                .unwrap_or(0),
+                .transpose()?,
         }),
         None => {
             if let Some(flag) = ["sym", "model", "seed"].into_iter().find(|f| inv.has(f)) {

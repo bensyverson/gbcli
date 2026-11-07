@@ -252,8 +252,8 @@ fn a_bank_qualified_poke_writes_that_bank() {
         .create(&RomSource {
             rom: f.dir.join("demo.gb"),
             sym: None,
-            model: Model::CgbE,
-            seed: 0,
+            model: Some(Model::CgbE),
+            seed: Some(0),
         })
         .unwrap();
     let mut h = Handler::new(f.bundle.clone(), Some("cgb".into()), None);

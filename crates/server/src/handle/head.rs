@@ -28,6 +28,7 @@ pub(super) fn save_head(
     let cp = machine.capture(SaveMeta {
         created_by: change.actor,
         parent: change.parent,
+        rev: None,
     });
     let rev = next(meta.rev);
     store

@@ -26,6 +26,12 @@ pub enum StoreError {
         name: String,
         known: Vec<String>,
     },
+    /// No `.gbcli/` where the search looked, for a caller that may not
+    /// create one: `start` and the directories above it, or `GBCLI_DIR`.
+    NoBundle {
+        start: PathBuf,
+        gbcli_dir: Option<PathBuf>,
+    },
     BadSessionName {
         name: String,
     },
@@ -72,6 +78,14 @@ pub enum StoreError {
         stored: String,
         given: PathBuf,
     },
+    /// A model, seed or `.sym` given for an existing session that has another.
+    SettingDiffers {
+        name: String,
+        setting: Setting,
+        /// The session's value, as its flag spells it.
+        session: String,
+        given: String,
+    },
     /// The session's `session.json` exists but doesn't parse.
     SessionUnreadable {
         name: String,
@@ -107,11 +121,30 @@ pub enum StoreError {
     Setup(SetupError),
 }
 
+/// A session setting a caller can give when opening one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Setting {
+    Model,
+    Seed,
+    Sym,
+}
+
+impl Setting {
+    /// The flag that gives it.
+    pub fn flag(self) -> &'static str {
+        match self {
+            Setting::Model => "--model",
+            Setting::Seed => "--seed",
+            Setting::Sym => "--sym",
+        }
+    }
+}
+
 impl StoreError {
     pub fn code(&self) -> ErrorCode {
         match self {
             StoreError::Io { .. } | StoreError::NoRoot { .. } => ErrorCode::IoFailed,
-            StoreError::NoSession { .. } => ErrorCode::NoSession,
+            StoreError::NoSession { .. } | StoreError::NoBundle { .. } => ErrorCode::NoSession,
             StoreError::BadSessionName { .. } => ErrorCode::BadRequest,
             StoreError::Busy { .. } => ErrorCode::SessionBusy,
             StoreError::HeadMissing { .. } => ErrorCode::CheckpointUnreadable,
@@ -122,6 +155,7 @@ impl StoreError {
             StoreError::SymbolsUnreadable { .. } => ErrorCode::SymbolsUnreadable,
             StoreError::SessionExists { .. }
             | StoreError::RomMismatch { .. }
+            | StoreError::SettingDiffers { .. }
             | StoreError::UndoPastOldest { .. }
             | StoreError::BadHistoryRef { .. }
             | StoreError::BadCheckpointName { .. }
@@ -151,6 +185,18 @@ impl StoreError {
             StoreError::NoSession { known, .. } => {
                 format!("known sessions: {}", known.join(", "))
             }
+            StoreError::NoBundle { .. } => {
+                "create a session, which makes .gbcli/ in the working directory: \
+                 `gbcli run game.gb --session NAME` (or pass --dir to a project that has one)"
+                    .into()
+            }
+            StoreError::SettingDiffers {
+                setting, session, ..
+            } => format!(
+                "drop {flag} (the session keeps {session}), or name a new session with \
+                 --session NAME",
+                flag = setting.flag()
+            ),
             StoreError::BadSessionName { .. } => {
                 "names are [a-z0-9-], 1 to 40 characters, not starting with -".into()
             }
@@ -276,7 +322,10 @@ fn setup_code(e: &SetupError) -> ErrorCode {
 fn setup_remedy(e: &SetupError) -> String {
     match e {
         SetupError::Core(CoreError::Unsupported { reason, .. }) => {
-            format!("the core can't run this ROM ({reason}); see `gbcli doctor --core`")
+            format!(
+                "the core can't run this ROM ({reason}); `gbcli gaps` lists what it can't do \
+                 that this project has hit"
+            )
         }
         SetupError::Core(_) => {
             "the core refused this ROM; check that the file is a Game Boy ROM with a full header"
@@ -294,6 +343,29 @@ impl fmt::Display for StoreError {
                 write!(f, "no .gbcli/ from {}: {source}", start.display())
             }
             StoreError::NoSession { name, .. } => write!(f, "no session {name:?}"),
+            StoreError::NoBundle {
+                gbcli_dir: Some(dir),
+                ..
+            } => write!(
+                f,
+                "GBCLI_DIR names {}, which is not a directory",
+                dir.display()
+            ),
+            StoreError::NoBundle { start, .. } => write!(
+                f,
+                "no .gbcli/ in {} or any directory above it",
+                start.display()
+            ),
+            StoreError::SettingDiffers {
+                name,
+                setting,
+                session,
+                given,
+            } => write!(
+                f,
+                "session {name:?} has {flag} {session}, not {given}",
+                flag = setting.flag()
+            ),
             StoreError::BadSessionName { name } => write!(f, "bad session name {name:?}"),
             StoreError::Busy { name, waited } => {
                 write!(f, "session {name:?} stayed locked for {waited:?}")

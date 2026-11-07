@@ -20,35 +20,43 @@ pub fn request(target: &Target, op: Op, env: &Env, io: Io) -> u8 {
 
 /// The project's bundle and a handler over it, with the target's session
 /// opened first, and created when a ROM names a new one, as `gbcli serve`
-/// does. The handler's defaults are the target's session and actor, for the
-/// request lines of `serve` and `batch`.
+/// does. Only an invocation that can create a session (a ROM and a session
+/// name) creates `.gbcli/`; any other finds one or fails naming where it
+/// looked. `--dir` beats `GBCLI_DIR`: the flag is the more explicit. The
+/// handler's defaults are the target's session and actor, for the request
+/// lines of `serve` and `batch`.
 pub fn handler(target: &Target, env: &Env) -> Result<Handler, Box<ErrorBody>> {
-    let start = target.dir.clone().unwrap_or_else(|| env.cwd.clone());
-    let bundle = Bundle::open_or_create_in(&start, env.gbcli_dir.as_deref())
-        .map_err(|e| Box::new(store(e)))?;
     let source = target.create.as_ref().map(|create| RomSource {
         rom: create.rom.clone(),
         sym: create.sym.clone(),
         model: create.model,
         seed: create.seed,
     });
-    match (&target.session, &source) {
-        (Some(name), source) => {
-            bundle
-                .open_session(name, source.as_ref())
-                .map_err(|e| Box::new(store(e)))?;
-        }
-        (None, Some(source)) => {
-            return Err(Box::new(ErrorBody::new(
-                ErrorCode::NoSession,
-                format!(
-                    "{} names a ROM but no session; ephemeral runs without a session aren't built yet",
-                    source.rom.display()
-                ),
-                "add --session NAME (or set GBCLI_SESSION) to create a session from it",
-            )));
-        }
-        (None, None) => {}
+    if let (None, Some(source)) = (&target.session, &source) {
+        return Err(Box::new(ErrorBody::new(
+            ErrorCode::NoSession,
+            format!(
+                "{} names a ROM but no session; ephemeral runs without a session aren't built yet",
+                source.rom.display()
+            ),
+            "add --session NAME (or set GBCLI_SESSION) to create a session from it",
+        )));
+    }
+    let (start, gbcli_dir) = match &target.dir {
+        Some(dir) => (dir.clone(), None),
+        None => (env.cwd.clone(), env.gbcli_dir.as_deref()),
+    };
+    let creates = target.session.is_some() && target.create.is_some();
+    let bundle = if creates {
+        Bundle::open_or_create_in(&start, gbcli_dir)
+    } else {
+        Bundle::open_in(&start, gbcli_dir)
+    }
+    .map_err(|e| Box::new(store(e)))?;
+    if let Some(name) = &target.session {
+        bundle
+            .open_session(name, source.as_ref())
+            .map_err(|e| Box::new(store(e)))?;
     }
     Ok(Handler::new(
         bundle,

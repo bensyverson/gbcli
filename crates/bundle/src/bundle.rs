@@ -32,20 +32,22 @@ impl Bundle {
     }
 
     /// [`Bundle::open`] with `GBCLI_DIR`'s value passed in, so tests don't
-    /// depend on the environment.
+    /// depend on the environment. Never creates anything; no bundle is
+    /// `NoBundle`, naming where it looked.
+    pub fn open_in(start: &Path, gbcli_dir: Option<&Path>) -> Result<Bundle, StoreError> {
+        Bundle::locate(start, gbcli_dir)
+    }
+
     pub(crate) fn locate(start: &Path, gbcli_dir: Option<&Path>) -> Result<Bundle, StoreError> {
         if let Some(dir) = gbcli_dir {
             let root = absolute(dir);
             if root.is_dir() {
                 return Ok(Bundle { root });
             }
-            return Err(no_root(
-                start,
-                format!(
-                    "GBCLI_DIR names {} which is not a directory",
-                    root.display()
-                ),
-            ));
+            return Err(StoreError::NoBundle {
+                start: absolute(start),
+                gbcli_dir: Some(root),
+            });
         }
         let start = absolute(start);
         let mut dir = start.as_path();
@@ -59,10 +61,10 @@ impl Bundle {
             };
             dir = parent;
         }
-        Err(no_root(
-            &start,
-            "no .gbcli/ in this directory or above".to_string(),
-        ))
+        Err(StoreError::NoBundle {
+            start,
+            gbcli_dir: None,
+        })
     }
 
     /// [`Bundle::open_or_create`] with `GBCLI_DIR`'s value passed in, for callers
@@ -78,7 +80,7 @@ impl Bundle {
         }
         match Bundle::locate(start, None) {
             Ok(bundle) => Ok(bundle),
-            Err(StoreError::NoRoot { .. }) => {
+            Err(StoreError::NoBundle { .. }) => {
                 let root = absolute(start).join(".gbcli");
                 fs::create_dir_all(&root).map_err(|source| StoreError::NoRoot {
                     start: root.clone(),
@@ -219,13 +221,6 @@ fn normalize(path: &Path) -> PathBuf {
     out
 }
 
-fn no_root(start: &Path, reason: String) -> StoreError {
-    StoreError::NoRoot {
-        start: start.to_path_buf(),
-        source: std::io::Error::new(std::io::ErrorKind::NotFound, reason),
-    }
-}
-
 /// Host time in Unix seconds. Only logs, listing and pruning read it; emulation
 /// never does (design §10).
 pub fn now_secs() -> u64 {
@@ -314,7 +309,7 @@ mod tests {
         let state = tmp.join("state");
         assert!(matches!(
             Bundle::locate(&tmp, Some(&state)),
-            Err(StoreError::NoRoot { .. })
+            Err(StoreError::NoBundle { .. })
         ));
         let made = Bundle::open_or_create_in(&tmp, Some(&state)).unwrap();
         assert_eq!(made.root(), state.as_path());

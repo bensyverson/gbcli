@@ -65,8 +65,8 @@ impl Fixture {
             .create(&RomSource {
                 rom: self.dir.join("demo.gb"),
                 sym: sym.then(|| self.dir.join("demo.sym")),
-                model: Model::DmgB,
-                seed: 0,
+                model: Some(Model::DmgB),
+                seed: Some(0),
             })
             .expect("session");
     }

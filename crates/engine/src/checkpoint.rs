@@ -73,6 +73,8 @@ impl Checkpoint {
 pub struct SaveMeta {
     pub created_by: Option<String>,
     pub parent: Option<String>,
+    /// The head's revision a named checkpoint was saved at.
+    pub rev: Option<gbcli_protocol::Rev>,
 }
 
 /// What a restore may use or override.

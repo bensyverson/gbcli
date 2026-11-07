@@ -6,7 +6,7 @@ use std::ffi::OsString;
 use lexopt::prelude::*;
 
 use crate::usage::{Usage, did_you_mean, near};
-use crate::verbs::{FlagSpec, VERBS, VerbSpec, by_name};
+use crate::verbs::{Class, FlagSpec, VERBS, VerbSpec, by_name};
 
 /// What the command line asks for, before its flags are interpreted.
 #[derive(Debug)]
@@ -172,6 +172,16 @@ fn flags(spec: &'static VerbSpec, rest: &[String]) -> Result<Invocation, Usage> 
 }
 
 fn unknown_flag(spec: &VerbSpec, typed: &str, name: &str) -> Usage {
+    if name == "rev" && spec.class == Class::Read {
+        return Usage::new(
+            format!(
+                "`gbcli {}` changes nothing, so --rev has nothing to guard",
+                spec.name
+            ),
+            "drop --rev; it guards the verbs that change a session (run, step, write, \
+             checkpoint, break, watch, delete, …)",
+        );
+    }
     let names = spec.all_flags().map(|f| f.long);
     let near = near(name, names);
     Usage::new(

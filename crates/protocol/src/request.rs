@@ -96,6 +96,16 @@ impl Op {
             Op::Run(_) | Op::Step(_) | Op::Restore(_) | Op::Undo | Op::Write(_)
         )
     }
+
+    /// Whether applying it changes the session: its head, or its named
+    /// checkpoints, breakpoints or watches. A request's `rev` guards these.
+    pub fn changes_session(&self) -> bool {
+        self.mutates_head()
+            || matches!(
+                self,
+                Op::Checkpoint(_) | Op::Break(_) | Op::Watch(_) | Op::Delete(_)
+            )
+    }
 }
 
 /// The names a request uses: everything after `--`.

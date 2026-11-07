@@ -37,7 +37,7 @@ pub const JSON: FlagSpec = switch("json", "print the protocol's result object in
 pub const DIR: FlagSpec = value(
     "dir",
     "PATH",
-    "find .gbcli/ from PATH instead of the working directory (GBCLI_DIR overrides both)",
+    "find .gbcli/ from PATH instead of the working directory (beats GBCLI_DIR)",
 );
 pub const AS: FlagSpec = value(
     "as",
@@ -64,14 +64,20 @@ pub const ROM: FlagSpec = value(
 pub const SYM: FlagSpec = value(
     "sym",
     "FILE",
-    "the .sym for a new session (default: the ROM's name with .sym, if it exists)",
+    "the .sym for a new session (default: the ROM's name with .sym, if it exists); an \
+     existing session refuses another",
 );
 pub const MODEL: FlagSpec = value(
     "model",
     "MODEL",
-    "the model for a new session: dmg-b (default), cgb-e, …",
+    "the model for a new session: dmg-b (default), cgb-e, …; an existing session refuses \
+     another",
 );
-pub const SEED: FlagSpec = value("seed", "N", "the RAM seed for a new session (default 0)");
+pub const SEED: FlagSpec = value(
+    "seed",
+    "N",
+    "the RAM seed for a new session (default 0); an existing session refuses another",
+);
 
 /// Taken by every verb that works on one session.
 pub const SESSION: &[FlagSpec] = &[
@@ -80,16 +86,19 @@ pub const SESSION: &[FlagSpec] = &[
     SYM,
     MODEL,
     SEED,
-    value(
-        "rev",
-        "sN",
-        "refuse a change if the session is no longer at this revision",
-    ),
     switch(
         "allow-rom-change",
         "load a stored state even though the ROM was rebuilt and the check refuses it",
     ),
 ];
+
+/// Taken by every verb that changes the session: its head, checkpoints,
+/// breakpoints or watches. A verb that changes nothing has no `--rev`.
+pub const CHANGE: &[FlagSpec] = &[value(
+    "rev",
+    "sN",
+    "refuse the change if the session is no longer at this revision",
+)];
 
 /// `batch`: a default session, created from a ROM if new.
 pub const CREATE: &[FlagSpec] = &[SESSION_FLAG, ROM, SYM, MODEL, SEED];
@@ -141,7 +150,8 @@ pub const RUN: &[FlagSpec] = &[
     value(
         "from",
         "boot|power-on",
-        "with no head, start at the boot handoff (default) or at power-on",
+        "start at the boot handoff when there is no head (default), or at power-on, which \
+         also skips the head; not with --at",
     ),
     SINCE,
     value("until", "EXPR", "stop when this condition holds"),
@@ -153,7 +163,8 @@ pub const RUN: &[FlagSpec] = &[
     value(
         "frames",
         "N",
-        "frame budget (default 600 with --until or --to)",
+        "frame budget; any run without a budget gets 600 frames, and using them all up \
+         without another stop is budget_exhausted",
     ),
     value("instructions", "N", "instruction budget"),
     value("ticks", "N", "tick budget"),

@@ -81,7 +81,8 @@ fn checkpoints_lists_named_ones_then_history_with_rev_frame_and_rom_match() {
         at: at.into(),
         rev: Some(Rev(rev)),
         frame: Some(frame),
-        rom_matches: true,
+        rom_matches: Some(true),
+        error: None,
     };
     assert_eq!(
         rows,
@@ -98,5 +99,79 @@ fn checkpoints_lists_named_ones_then_history_with_rev_frame_and_rom_match() {
     // After a rebuild, none of them was saved from the ROM on disk.
     f.rebuild(V2, V2_SYM);
     let rows = checkpoints(&mut handler(&f));
-    assert!(rows.iter().all(|r| !r.rom_matches), "{rows:?}");
+    assert!(
+        rows.iter().all(|r| r.rom_matches == Some(false)),
+        "{rows:?}"
+    );
+}
+
+#[test]
+fn a_named_checkpoints_rev_is_the_one_it_was_saved_at_not_a_failed_runs() {
+    let f = Fixture::new("listing-failed-run");
+    let mut h = handler(&f);
+    assert!(run_frames(&mut h, 1).is_ok());
+    let saved = h.handle(&request(Op::Checkpoint(CheckpointArgs {
+        name: "foo".into(),
+    })));
+    assert!(saved.is_ok());
+    let failed = h.handle(&request(Op::Run(RunArgs {
+        frames: Some(1),
+        read: vec!["[$C003]".into()],
+        checkpoint: Some("foo".into()),
+        ..RunArgs::default()
+    })));
+    assert!(!failed.is_ok(), "the read fails");
+    let rows = checkpoints(&mut h);
+    assert_eq!(rows[0].at, "foo");
+    assert_eq!(rows[0].rev, Some(Rev(1)), "{rows:?}");
+}
+
+#[test]
+fn a_checkpoint_from_before_files_recorded_their_rev_lists_it_as_unknown() {
+    let f = Fixture::new("listing-old-file");
+    let mut h = handler(&f);
+    assert!(run_frames(&mut h, 1).is_ok());
+    let saved = h.handle(&request(Op::Checkpoint(CheckpointArgs {
+        name: "old".into(),
+    })));
+    assert!(saved.is_ok());
+    let store = f.bundle.session("demo").unwrap();
+    let mut cp = store.checkpoint("old").unwrap();
+    cp.header.rev = None;
+    store.write_checkpoint("old", &cp).unwrap();
+    let rows = checkpoints(&mut h);
+    assert_eq!(rows[0].at, "old");
+    assert_eq!(rows[0].rev, None, "guessed from the log: {rows:?}");
+}
+
+#[test]
+fn one_unreadable_entry_is_a_row_with_its_error_not_a_failed_listing() {
+    let f = Fixture::new("listing-bad-entry");
+    let mut h = handler(&f);
+    assert!(run_frames(&mut h, 1).is_ok());
+    assert!(run_frames(&mut h, 1).is_ok());
+    let saved = h.handle(&request(Op::Checkpoint(CheckpointArgs {
+        name: "good".into(),
+    })));
+    assert!(saved.is_ok());
+    let store = f.bundle.session("demo").unwrap();
+    let dir = store.dir();
+    std::fs::write(
+        dir.join("checkpoints").join("bad.gbck"),
+        b"not a checkpoint",
+    )
+    .unwrap();
+    // The head is rev 2, so `~1` is rev 1's entry.
+    std::fs::write(dir.join("history").join("s1.gbck"), b"junk").unwrap();
+
+    let rows = checkpoints(&mut h);
+    let bad = rows.iter().find(|r| r.at == "bad").expect("a row for bad");
+    assert!(bad.error.is_some() && bad.rom_matches.is_none(), "{bad:?}");
+    let good = rows
+        .iter()
+        .find(|r| r.at == "good")
+        .expect("a row for good");
+    assert_eq!(good.error, None);
+    let entry = rows.iter().find(|r| r.at == "~1").expect("a row for ~1");
+    assert!(entry.error.is_some(), "{entry:?}");
 }

@@ -16,9 +16,7 @@ pub fn rows(r: &ResultBody) -> String {
             .field("frame", shot.frame_label())
             .line();
     }
-    for key in r.keys_unapplied.iter().flatten() {
-        out += &Row::new("key_unapplied").field("event", key).line();
-    }
+    out += &unapplied(r.keys_unapplied.as_deref());
     if let Some(view) = &r.view {
         out += &data(&view.data);
         if let Some(png) = &view.png {
@@ -46,11 +44,15 @@ pub fn rows(r: &ResultBody) -> String {
     }
     if let Some(saved) = &r.checkpoints {
         for c in saved {
+            let rev = c
+                .rev
+                .map_or_else(|| "unknown".to_string(), |r| r.to_string());
             out += &Row::new("saved")
                 .field("at", &c.at)
-                .opt("rev", c.rev)
+                .field("rev", rev)
                 .opt("frame", c.frame)
-                .flag("rom_matches", c.rom_matches)
+                .opt("rom_matches", c.rom_matches.map(u8::from))
+                .opt("error", c.error.as_deref())
                 .line();
         }
         if saved.is_empty() {
@@ -118,4 +120,13 @@ fn data(data: &VideoData) -> String {
 
 fn indented(lines: &[String]) -> String {
     lines.iter().map(|l| format!("  {l}\n")).collect()
+}
+
+/// The key events a run stopped before, whether it succeeded or failed.
+pub fn unapplied(keys: Option<&[gbcli_protocol::KeyEvent]>) -> String {
+    let mut out = String::new();
+    for key in keys.into_iter().flatten() {
+        out += &Row::new("key_unapplied").field("event", key).line();
+    }
+    out
 }

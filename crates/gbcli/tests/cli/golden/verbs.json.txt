@@ -78,10 +78,10 @@ exit 0
 {"id":"cli","ok":true,"rev":"s12","result":{"events":[{"at":*,"op":"sym","args":{"pattern":"Work*"},"ok":true,"rev_before":"s12","rev_after":"s12"},{"at":*,"op":"checkpoints","ok":true,"rev_before":"s12","rev_after":"s12"}]},"warnings":[]}
 $ gbcli read [$FEA0] --session demo --json
 exit 5
-{"id":"cli","ok":false,"rev":"s12","error":{"code":"unsupported","exit":5,"message":"unsupported (ExtraOam): FEA0-FEFF has no backing store to read without a bus read","remedy":"the core can't extra_oam: FEA0-FEFF has no backing store to read without a bus read — see `gbcli doctor --core`"},"warnings":[]}
+{"id":"cli","ok":false,"rev":"s12","error":{"code":"unsupported","exit":5,"message":"unsupported (ExtraOam): FEA0-FEFF has no backing store to read without a bus read","remedy":"the core can't extra_oam: FEA0-FEFF has no backing store to read without a bus read; `gbcli gaps` lists every such gap this project hit"},"warnings":[]}
 --- stderr
 gbcli: unsupported: unsupported (ExtraOam): FEA0-FEFF has no backing store to read without a bus read
-remedy: the core can't extra_oam: FEA0-FEFF has no backing store to read without a bus read — see `gbcli doctor --core`
+remedy: the core can't extra_oam: FEA0-FEFF has no backing store to read without a bus read; `gbcli gaps` lists every such gap this project hit
 $ gbcli gaps --json
 exit 0
 {"id":"cli","ok":true,"result":{"gaps":[{"feature":"extra_oam","count":1}]},"warnings":[]}

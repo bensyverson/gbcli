@@ -139,7 +139,10 @@ impl CheckpointError {
                 model_name(*saved)
             ),
             CheckpointError::BootRomMissing { sha256 } => {
-                format!("pass --boot-rom <file> with the boot ROM whose SHA-256 is {sha256}")
+                format!(
+                    "the state was saved with a boot ROM this gbcli doesn't have (SHA-256 \
+                     {sha256}); load it with the gbcli that saved it, or re-create it from the ROM"
+                )
             }
             CheckpointError::SymbolsMissing { .. } => {
                 "the ROM changed and can't be checked without symbols: rebuild with \

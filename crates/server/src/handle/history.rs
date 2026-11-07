@@ -118,6 +118,7 @@ pub(super) fn write_checkpoint(
     let cp = machine.capture(SaveMeta {
         created_by: actor.clone(),
         parent: None,
+        rev: Some(rev),
     });
     let frame = checkpoint_frame(&cp);
     store

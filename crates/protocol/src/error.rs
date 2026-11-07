@@ -5,6 +5,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+use crate::keys::KeyEvent;
 use crate::stop::StopRecord;
 
 /// Every way a request can fail. The wire spelling is snake_case.
@@ -99,7 +100,7 @@ impl ErrorCode {
                 "restore from a checkpoint of this build, or pass --allow-rom-change"
             }
             ErrorCode::UninitializedRead => {
-                "run from boot or later, or pass --allow-uninit to see the value anyway"
+                "read it after the program has written it (run further), or pass --allow-uninit to see the value anyway"
             }
             ErrorCode::RomUnreadable => "check the path and permissions",
             ErrorCode::CheckpointUnreadable => {
@@ -112,9 +113,13 @@ impl ErrorCode {
             ErrorCode::SessionUnreadable => {
                 "remove the session with `gbcli sessions rm <name>`, then create it again"
             }
-            ErrorCode::Unsupported => "the core can't do this; see `gbcli doctor --core`",
+            ErrorCode::Unsupported => {
+                "the core can't do this; `gbcli gaps` lists every such gap this project hit"
+            }
             ErrorCode::NoSession => "pass --session <name> and --rom <file> to create one",
-            ErrorCode::BootRomMissing => "pass --boot-rom <file> with the hash in the remedy",
+            ErrorCode::BootRomMissing => {
+                "this gbcli has no boot ROM with that hash; re-create the state with `gbcli run`"
+            }
             ErrorCode::ToolchainMissing => "install the pinned RGBDS, or put it on PATH",
             ErrorCode::IoFailed => "check the path's permissions and the free disk space",
             ErrorCode::Internal => {
@@ -168,6 +173,10 @@ pub struct ErrorBody {
     pub remedy: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stop: Option<StopRecord>,
+    /// A failed run's key events past its stop, as a successful run returns
+    /// them in `ResultBody::keys_unapplied`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keys_unapplied: Option<Vec<KeyEvent>>,
 }
 
 impl ErrorBody {
@@ -178,6 +187,7 @@ impl ErrorBody {
             message: message.into(),
             remedy: remedy.into(),
             stop: None,
+            keys_unapplied: None,
         }
     }
 

@@ -158,8 +158,8 @@ impl Handler {
         };
         let rev_before = meta.rev;
 
-        // A mutation may name the revision it read; a mismatch names the writer.
-        if request.op.mutates_head()
+        // A change may name the revision it read; a mismatch names the writer.
+        if request.op.changes_session()
             && let Some(asked) = request.rev
             && asked != meta.rev
         {

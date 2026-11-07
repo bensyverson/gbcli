@@ -154,8 +154,8 @@ mod tests {
             .create(&gbcli_bundle::RomSource {
                 rom: f.dir.join("demo.gb"),
                 sym: None,
-                model: gbcli_core::Model::DmgB,
-                seed: 0,
+                model: Some(gbcli_core::Model::DmgB),
+                seed: Some(0),
             })
             .unwrap();
         let read = || {

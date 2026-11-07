@@ -64,7 +64,7 @@ fn run_applies_writes_in_the_order_given_across_kinds() {
     assert_eq!(args.since, Some(TimeBase::Checkpoint("f30".into())));
     let create = target.create.expect("the ROM argument creates");
     assert_eq!(create.rom, PathBuf::from("/work/demo.gb"));
-    assert_eq!(create.model, Model::DmgB);
+    assert_eq!(create.model, None, "not given: the default, and unchecked");
 }
 
 #[test]
@@ -72,7 +72,7 @@ fn the_environment_supplies_session_and_actor_and_flags_win() {
     let (target, _) = request(&["show"]);
     assert_eq!(target.session.as_deref(), Some("envsession"));
     assert_eq!(target.actor.as_deref(), Some("envactor"));
-    let (target, _) = request(&["show", "--session", "dx", "--as", "me", "--rev", "s3"]);
+    let (target, _) = request(&["step", "--session", "dx", "--as", "me", "--rev", "s3"]);
     assert_eq!(target.session.as_deref(), Some("dx"));
     assert_eq!(target.actor.as_deref(), Some("me"));
     assert_eq!(target.rev, Some(Rev(3)));
@@ -159,7 +159,7 @@ fn bad_values_name_the_flag() {
         "`one` isn't a breakpoint or watch id"
     );
     assert_eq!(
-        command(&["show", "--rev", "6"]).unwrap_err().message,
+        command(&["step", "--rev", "6"]).unwrap_err().message,
         "--rev: a revision looks like s6, not \"6\""
     );
     assert!(

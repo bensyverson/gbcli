@@ -46,15 +46,20 @@ pub struct CheckpointRow {
     /// What `--at` takes: the name, or `~N` for a history entry.
     pub at: String,
     /// The head's revision when it was saved: a history entry's own, or for
-    /// a named checkpoint the one the event log recorded (absent when the
-    /// log has no record of it).
+    /// a named checkpoint the one its file records. Absent when unknown: a
+    /// checkpoint written before files recorded it, or one that didn't load.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rev: Option<Rev>,
     /// Frames since the boot handoff; absent before it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub frame: Option<i64>,
-    /// Whether it was saved from the ROM the session's file holds now.
-    pub rom_matches: bool,
+    /// Whether it was saved from the ROM the session's file holds now;
+    /// absent when the entry didn't load.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rom_matches: Option<bool>,
+    /// Why the entry didn't load. One bad entry is a row, not a failed listing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 #[cfg(test)]

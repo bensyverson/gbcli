@@ -5,4 +5,5 @@
 mod common;
 mod errors;
 mod help;
+mod honesty;
 mod verbs;

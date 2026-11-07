@@ -9,7 +9,7 @@ pub use recipes::RECIPES;
 pub use schema::SCHEMA;
 pub use topics::Topic;
 
-use crate::verbs::{Class, OUTPUT, SESSION, SHOT_OPTIONS, VERBS, VerbSpec};
+use crate::verbs::{CHANGE, Class, OUTPUT, SESSION, SHOT_OPTIONS, VERBS, VerbSpec};
 
 /// Bare `gbcli`: what it is, the verbs by class, the first command and
 /// where help lives. At most 40 lines (design §12).
@@ -81,6 +81,8 @@ pub fn verb(spec: &VerbSpec) -> String {
         // By content: a const slice has no stable address to compare.
         let heading = if *group == SESSION {
             "SESSION FLAGS (every session verb)"
+        } else if *group == CHANGE {
+            "CHANGE FLAGS (every verb that changes the session)"
         } else if *group == SHOT_OPTIONS {
             "SHOT FLAGS (how the PNG is taken)"
         } else if *group == OUTPUT {

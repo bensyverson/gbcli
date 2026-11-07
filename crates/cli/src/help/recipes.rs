@@ -24,7 +24,8 @@ Read variables, registers or IO
 Where is the machine, and why did it stop?
   gbcli show
 Find who writes a variable
-  gbcli watch write wSpeed, then gbcli run
+  gbcli watch write wSpeed, then gbcli run (stops at the first write, or fails
+  with budget_exhausted if none comes in 600 frames)
 Stop at a routine only in some cases
   gbcli break Main.loop --if 'a == 3', then gbcli run
 Try a value without rebuilding (what if wSpeed were 2?)

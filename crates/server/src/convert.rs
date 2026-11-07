@@ -37,7 +37,7 @@ pub fn core_error(e: &CoreError) -> ErrorBody {
     let code = core_code(e);
     let remedy = match e {
         CoreError::Unsupported { feature, reason } => format!(
-            "the core can't {}: {reason} — see `gbcli doctor --core`",
+            "the core can't {}: {reason}; `gbcli gaps` lists every such gap this project hit",
             feature.name()
         ),
         CoreError::OutOfRange { .. } => "check the address or offset".into(),

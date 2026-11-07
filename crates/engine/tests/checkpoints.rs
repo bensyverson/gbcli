@@ -15,6 +15,7 @@ fn meta() -> SaveMeta {
     SaveMeta {
         created_by: Some("test".into()),
         parent: None,
+        rev: None,
     }
 }
 

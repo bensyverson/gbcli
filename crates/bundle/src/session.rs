@@ -7,10 +7,10 @@ use std::path::{Path, PathBuf};
 
 use gbcli_core::{BootRom, CoreConfig, Model};
 use gbcli_engine::{Backend, Machine, SetupError};
-use gbcli_protocol::{RenderConfig, Rev, SessionFile};
+use gbcli_protocol::{RenderConfig, Rev, SessionFile, model_name};
 
 use crate::bundle::Bundle;
-use crate::error::StoreError;
+use crate::error::{Setting, StoreError};
 use crate::io::ensure_dir;
 use crate::lock::LOCK_WAIT;
 use crate::store::SessionStore;
@@ -22,9 +22,15 @@ pub struct RomSource {
     pub rom: PathBuf,
     /// The `.sym`; by default the ROM's basename with `.sym` beside it.
     pub sym: Option<PathBuf>,
-    pub model: Model,
-    pub seed: u64,
+    /// `None`: [`DEFAULT_MODEL`] for a new session, and whatever an existing
+    /// one has. A value an existing session doesn't have is refused.
+    pub model: Option<Model>,
+    /// `None`: 0 for a new session, and whatever an existing one has.
+    pub seed: Option<u64>,
 }
+
+/// The model a session is created with when none is given.
+pub const DEFAULT_MODEL: Model = Model::DmgB;
 
 impl Bundle {
     /// Opens a session by name, creating it from `rom` when it doesn't exist.
@@ -60,8 +66,50 @@ impl Bundle {
                 given,
             });
         }
+        check_settings(&store, &meta, source)?;
         Ok(store)
     }
+}
+
+/// Refuses a model, seed or `.sym` given for an existing session that has
+/// another: it would otherwise be silently ignored.
+fn check_settings(
+    store: &SessionStore,
+    meta: &SessionFile,
+    source: &RomSource,
+) -> Result<(), StoreError> {
+    let differs = |setting: Setting, session: String, given: String| StoreError::SettingDiffers {
+        name: store.name().to_string(),
+        setting,
+        session,
+        given,
+    };
+    if let Some(model) = source.model.filter(|m| *m != meta.model) {
+        return Err(differs(
+            Setting::Model,
+            model_name(meta.model).into(),
+            model_name(model).into(),
+        ));
+    }
+    if let Some(seed) = source.seed.filter(|s| *s != meta.seed) {
+        return Err(differs(
+            Setting::Seed,
+            meta.seed.to_string(),
+            seed.to_string(),
+        ));
+    }
+    if let Some(sym) = &source.sym {
+        let given = store.resolve(sym);
+        let same = meta
+            .sym
+            .as_ref()
+            .is_some_and(|s| same_file(&store.resolve(Path::new(s)), &given));
+        if !same {
+            let session = meta.sym.clone().unwrap_or_else(|| "no .sym".into());
+            return Err(differs(Setting::Sym, session, given.display().to_string()));
+        }
+    }
+    Ok(())
 }
 
 /// A value no earlier creation of a session by this name holds: host time in
@@ -98,8 +146,8 @@ impl SessionStore {
             name: self.name().to_string(),
             rom: self.stored(&rom_path),
             sym: sym_path.as_deref().map(|p| self.stored(p)),
-            model: source.model,
-            seed: source.seed,
+            model: source.model.unwrap_or(DEFAULT_MODEL),
+            seed: source.seed.unwrap_or(0),
             rev: Rev(0),
             config,
             debugger: Default::default(),
@@ -247,8 +295,8 @@ mod tests {
             .create(&RomSource {
                 rom: PathBuf::from("build/game.gb"),
                 sym: Some(PathBuf::from("build/labels.sym")),
-                model: Model::DmgB,
-                seed: 0,
+                model: Some(Model::DmgB),
+                seed: Some(0),
             })
             .unwrap();
         let meta = store.read_meta().unwrap();

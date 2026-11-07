@@ -36,7 +36,30 @@ struct Plan {
 }
 
 impl Handler {
+    /// A failed run names the checkpoint it didn't save and the key events
+    /// it didn't reach (design §11).
     pub(super) fn run(
+        &mut self,
+        store: &SessionStore,
+        meta: &mut SessionFile,
+        args: &RunArgs,
+        actor: &Option<String>,
+        warnings: &mut Vec<String>,
+    ) -> Result<ResultBody, Failure> {
+        let mut failure = match self.run_request(store, meta, args, actor, warnings) {
+            Ok(result) => return Ok(result),
+            Err(failure) => failure,
+        };
+        if let Some(name) = &args.checkpoint {
+            failure.body.message += &format!("; checkpoint `{name}` was not saved");
+        }
+        if let Some(stop) = &failure.body.stop {
+            failure.body.keys_unapplied = unapplied(&args.keys, stop, warnings);
+        }
+        Err(failure)
+    }
+
+    fn run_request(
         &mut self,
         store: &SessionStore,
         meta: &mut SessionFile,
@@ -50,6 +73,13 @@ impl Handler {
                 ErrorCode::BadRequest,
                 "a run stops at --until or --to, not both",
                 "drop one of them",
+            )));
+        }
+        if args.at.is_some() && args.from.is_some() {
+            return Err(Failure::new(ErrorBody::new(
+                ErrorCode::BadRequest,
+                "a run starts from --at or --from, not both",
+                "drop one of them: --at names the state to start from",
             )));
         }
         let from = args.from.unwrap_or(Start::Boot);
@@ -93,9 +123,6 @@ impl Handler {
         let mut outcome = match outcome {
             Ok(outcome) => outcome,
             Err(error) => {
-                if let Some(stop) = stop_of(&error) {
-                    unapplied(&args.keys, stop, warnings);
-                }
                 let parent = args.at.clone();
                 return Err(self.after_run_error(store, meta, machine, &error, actor, parent));
             }
@@ -106,7 +133,6 @@ impl Handler {
         warnings.extend(outcome.warnings.iter().map(warning_text));
 
         let stop = outcome.stop;
-        let keys_unapplied = unapplied(&args.keys, &stop, warnings);
         let change = HeadChange {
             actor: actor.clone(),
             parent: args.at.clone(),
@@ -114,28 +140,28 @@ impl Handler {
             ..HeadChange::default()
         };
         save_head(store, meta, &machine, change)?;
-        // After the save, so the checkpoint names the rev it is.
-        let checkpoint = match &args.checkpoint {
-            Some(name) => Some(write_checkpoint(store, &machine, name, actor, meta.rev)),
-            None => None,
-        }
-        .transpose();
         let reads = eval_reads(&machine, &plan.reads, &since, args.allow_uninit, warnings);
         // After the reads (design §11 step 6); capturing only reads the core.
         let shot = args.shot.as_ref().map(|s| shot::take(&machine, s, &since));
+        let answered = self.answered(args, defaulted, guarded, &stop);
+        // Last, and only when everything before it succeeded (step 7); after
+        // the head's save, so the checkpoint records the rev it is.
+        let checkpoint = match (&args.checkpoint, &reads, &shot, &answered) {
+            (Some(name), Ok(_), None | Some(Ok(_)), Ok(())) => {
+                Some(write_checkpoint(store, &machine, name, actor, meta.rev))
+            }
+            _ => None,
+        }
+        .transpose();
         self.keep_warm(store, meta, machine);
 
         // The run is saved; anything that failed after it rides with its stop.
         let with_stop = |f: Failure| f.with_stop(stop.clone());
-        let checkpoint = checkpoint.map_err(with_stop)?;
         let reads = reads.map_err(with_stop)?;
         let shot = shot.transpose().map_err(with_stop)?;
-        if guarded {
-            return Err(Failure::new(wall_guard_error(self.wall_guard, stop)));
-        }
-        if let Some(body) = unanswered(args, defaulted, &stop) {
-            return Err(Failure::new(body));
-        }
+        answered?;
+        let checkpoint = checkpoint.map_err(with_stop)?;
+        let keys_unapplied = unapplied(&args.keys, &stop, warnings);
         Ok(ResultBody {
             stop: Some(stop),
             reads: Some(reads),
@@ -145,6 +171,27 @@ impl Handler {
             writes: (!writes.is_empty()).then_some(writes),
             ..ResultBody::default()
         })
+    }
+
+    /// Whether the run reached what it was asked for: not stopped by the
+    /// wall guard, and not out of budget short of an explicit target.
+    fn answered(
+        &self,
+        args: &RunArgs,
+        defaulted: bool,
+        guarded: bool,
+        stop: &StopRecord,
+    ) -> Result<(), Failure> {
+        if guarded {
+            return Err(Failure::new(wall_guard_error(
+                self.wall_guard,
+                stop.clone(),
+            )));
+        }
+        match unanswered(args, defaulted, stop) {
+            Some(body) => Err(Failure::new(body)),
+            None => Ok(()),
+        }
     }
 
     /// Rewrites an interrupted stop as the wall guard's, which is the only
@@ -291,5 +338,7 @@ fn stop_of(error: &DebugError) -> Option<&StopRecord> {
     }
 }
 
+#[cfg(test)]
+mod checkpoint_tests;
 #[cfg(test)]
 mod tests;

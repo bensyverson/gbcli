@@ -41,6 +41,16 @@ impl Handler {
 /// crop, and a directory that isn't there.
 pub(super) fn check(args: &ShotArgs) -> Result<(), Failure> {
     check_image(&args.path, args.scale)?;
+    if args.live && args.any_frame {
+        // A live shot is the frame being drawn, never a stored one, so
+        // any_frame would be ignored.
+        return Err(bad(
+            "a shot is the live frame or the last complete one, not both".into(),
+            "drop one of them: live for the pixels drawn so far, any-frame for an LCD-off or \
+             blank last frame"
+                .into(),
+        ));
+    }
     if args.crop.is_some_and(|c| c.width == 0 || c.height == 0) {
         return Err(bad(
             "a crop needs a width and a height".into(),

@@ -6,7 +6,7 @@ mod flags;
 mod table;
 mod table_read;
 
-pub use flags::{OUTPUT, SESSION, SHOT_OPTIONS};
+pub use flags::{CHANGE, OUTPUT, SESSION, SHOT_OPTIONS};
 pub use table::VERBS;
 
 /// What a verb does, and so what it needs before it can run (design §12).
@@ -150,6 +150,9 @@ impl VerbSpec {
 pub fn by_name(name: &str) -> Option<&'static VerbSpec> {
     VERBS.iter().find(|s| s.name == name)
 }
+
+#[cfg(test)]
+mod remedy_tests;
 
 #[cfg(test)]
 mod tests {

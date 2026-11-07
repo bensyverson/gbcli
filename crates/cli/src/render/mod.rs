@@ -41,6 +41,7 @@ pub fn response(response: &Response, json: bool, out: &mut dyn Write, err: &mut 
             if let Some(stop) = &body.stop {
                 // The state the failure left is still the answer's data.
                 emit(out, &stop::rows(stop));
+                emit(out, &video::unapplied(body.keys_unapplied.as_deref()));
                 emit(out, &rev());
             }
             error(err, body)

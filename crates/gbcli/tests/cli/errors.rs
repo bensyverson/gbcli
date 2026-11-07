@@ -238,8 +238,11 @@ fn boot_rom_missing_names_the_hash() {
     let hash = &text[at..at + 64];
     let other: String = std::iter::repeat_n('0', 64).collect();
     edit_header(&path, hash, &other);
-    p.gbcli(&["restore", "one", "--session", "demo"])
-        .fails(5, "boot_rom_missing", "--boot-rom");
+    p.gbcli(&["restore", "one", "--session", "demo"]).fails(
+        5,
+        "boot_rom_missing",
+        "re-create it from the ROM",
+    );
 }
 
 #[test]
@@ -279,12 +282,15 @@ fn unsupported_is_counted_in_the_gap_ledger() {
 
 #[test]
 fn no_session_says_how_to_make_one() {
-    let p = Project::new("no-session");
+    let p = Project::with_session("no-session");
     p.gbcli(&["show", "--session", "nosuch"])
-        .fails(5, "no_session", "--rom");
+        .fails(5, "no_session", "known sessions: demo");
     p.gbcli(&["show"]).fails(5, "no_session", "--session");
-    p.gbcli(&["run", "demo.gb", "--frames", "1"])
+    let fresh = Project::new("no-session-fresh");
+    fresh
+        .gbcli(&["run", "demo.gb", "--frames", "1"])
         .fails(5, "no_session", "add --session NAME");
+    assert!(!fresh.path(".gbcli").exists());
 }
 
 #[test]

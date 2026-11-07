@@ -108,8 +108,8 @@ impl UninitRead {
 /// The §8 remedy for a never-written byte.
 fn uninit_remedy(read: &UninitRead) -> String {
     format!(
-        "{read} has never been written at this point; run from boot (--from boot) or later, \
-         or pass --allow-uninit"
+        "{read} has never been written at this point; read it after the program writes it \
+         (run further), or pass --allow-uninit"
     )
 }
 

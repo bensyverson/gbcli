@@ -1,7 +1,8 @@
 //! The entries. Order within a class is the order the primer lists them.
 
 use super::flags::{
-    BATCH, BREAK, CREATE, EVENTS, OUTPUT, PRUNE, READ, RM, RUN, SERVE, SESSION, SHOT_OPTIONS, WATCH,
+    BATCH, BREAK, CHANGE, CREATE, EVENTS, OUTPUT, PRUNE, READ, RM, RUN, SERVE, SESSION,
+    SHOT_OPTIONS, WATCH,
 };
 use super::table_read::{CHECKPOINTS_VERB, SHOT_VERB, SYM_VERB, VIEW_VERB};
 use super::{Arity, Class, Verb, VerbSpec};
@@ -28,7 +29,10 @@ const fn many(name: &'static str) -> Arity {
     }
 }
 
-const SESSION_VERB: &[&[super::FlagSpec]] = &[SESSION, OUTPUT];
+/// A verb that reads the session and changes nothing.
+const READ_VERB: &[&[super::FlagSpec]] = &[SESSION, OUTPUT];
+/// A verb that changes the session, so `--rev` can guard it.
+const CHANGE_VERB: &[&[super::FlagSpec]] = &[SESSION, CHANGE, OUTPUT];
 
 pub const VERBS: &[VerbSpec] = &[
     VerbSpec {
@@ -44,7 +48,7 @@ pub const VERBS: &[VerbSpec] = &[
             name: "ROM",
         },
         flags: RUN,
-        groups: &[SHOT_OPTIONS, SESSION, OUTPUT],
+        groups: &[SHOT_OPTIONS, SESSION, CHANGE, OUTPUT],
         about: "The experiment verb. In this order, whatever the order of the flags: start \
                 from --at, the head, or the boot handoff; apply --patch, --poke and --write \
                 in the order given; schedule --keys; run until --until holds, --to is reached, a breakpoint or \
@@ -68,7 +72,7 @@ pub const VERBS: &[VerbSpec] = &[
             name: "UNIT",
         },
         flags: &[],
-        groups: SESSION_VERB,
+        groups: CHANGE_VERB,
         about: "Advance the head by one unit: an instruction (the default), over a call, out \
                 of the current routine, to the next frame, or to the next scanline. To run to \
                 an address, use `gbcli run --to ADDR`.",
@@ -85,7 +89,7 @@ pub const VERBS: &[VerbSpec] = &[
         usage: "NAME [flags]",
         arity: one("NAME"),
         flags: &[],
-        groups: SESSION_VERB,
+        groups: CHANGE_VERB,
         about: "Save the session's head as a named checkpoint, which `restore` and `run --at` \
                 read and which `sessions prune` never removes. The head does not change.",
         example: (
@@ -101,7 +105,7 @@ pub const VERBS: &[VerbSpec] = &[
         usage: "NAME|~N [flags]",
         arity: one("NAME"),
         flags: &[],
-        groups: SESSION_VERB,
+        groups: CHANGE_VERB,
         about: "Replace the head with a named checkpoint, or with ~N, the head N changes back. \
                 Breakpoints and watches belong to the session and are kept.",
         example: (
@@ -117,7 +121,7 @@ pub const VERBS: &[VerbSpec] = &[
         usage: "[flags]",
         arity: NONE,
         flags: &[],
-        groups: SESSION_VERB,
+        groups: CHANGE_VERB,
         about: "Restore the state before the last head change. Repeat to walk further back, \
                 up to eight changes.",
         example: (
@@ -133,7 +137,7 @@ pub const VERBS: &[VerbSpec] = &[
         usage: "TARGET=BYTES… [flags]",
         arity: many("TARGET=BYTES"),
         flags: &[],
-        groups: SESSION_VERB,
+        groups: CHANGE_VERB,
         about: "A bus write: DIV resets, DMA starts, banks switch, the LCD turns on or off. \
                 BYTES are one or more comma-separated bytes: $91, 0x91, 145 or %10010001. \
                 See `gbcli help writes` for the three kinds of write.",
@@ -150,7 +154,7 @@ pub const VERBS: &[VerbSpec] = &[
         usage: "TARGET=BYTES… [flags]",
         arity: many("TARGET=BYTES"),
         flags: &[],
-        groups: SESSION_VERB,
+        groups: CHANGE_VERB,
         about: "Write RAM, VRAM, OAM or any region's backing bytes directly; nothing else \
                 happens. ROM is refused: use `gbcli patch`. Poked bytes count as written.",
         example: (
@@ -166,7 +170,7 @@ pub const VERBS: &[VerbSpec] = &[
         usage: "TARGET=BYTES… [flags]",
         arity: many("TARGET=BYTES"),
         flags: &[],
-        groups: SESSION_VERB,
+        groups: CHANGE_VERB,
         about: "Change the ROM's backing store at a bank-qualified address or rom:OFFSET. \
                 Patches are recorded in checkpoints, so a restore brings back exactly its \
                 patches. The header ($0100-$014F) is refused: rebuild instead.",
@@ -183,7 +187,7 @@ pub const VERBS: &[VerbSpec] = &[
         usage: "[flags]",
         arity: NONE,
         flags: &[],
-        groups: SESSION_VERB,
+        groups: READ_VERB,
         about: "Print the head's CPU registers and flags, the PPU's line and mode, and the \
                 stop record of the last run.",
         example: ("gbcli show --session dx", "prints where the machine is"),
@@ -196,7 +200,7 @@ pub const VERBS: &[VerbSpec] = &[
         usage: "EXPR… [--since BASE] [--allow-uninit] [flags]",
         arity: many("EXPR"),
         flags: READ,
-        groups: SESSION_VERB,
+        groups: READ_VERB,
         about: "Each argument is an expression (`gbcli help expressions`): [wFrame], \
                 u16[$C000], rLY, frame, pc. A byte the program never wrote is an error \
                 unless --allow-uninit.",
@@ -217,7 +221,7 @@ pub const VERBS: &[VerbSpec] = &[
         usage: "[--limit N] [flags]",
         arity: NONE,
         flags: EVENTS,
-        groups: SESSION_VERB,
+        groups: READ_VERB,
         about: "One row per request the session answered: when, who (--as), the op and its \
                 arguments, the outcome and the revisions before and after.",
         example: (
@@ -289,7 +293,7 @@ pub const VERBS: &[VerbSpec] = &[
         usage: "ADDR [--if EXPR] [flags]",
         arity: one("ADDR"),
         flags: BREAK,
-        groups: SESSION_VERB,
+        groups: CHANGE_VERB,
         about: "Stop every later run before the instruction at ADDR executes (when --if \
                 holds). Prints the breakpoint's id, which `delete` takes.",
         example: (
@@ -309,7 +313,7 @@ pub const VERBS: &[VerbSpec] = &[
             name: "read|write|access ADDR",
         },
         flags: WATCH,
-        groups: SESSION_VERB,
+        groups: CHANGE_VERB,
         about: "Stop every later run at an access to ADDR. In --if, `old` and `new` are the \
                 byte before and after a write. --once deletes it after it fires.",
         example: (
@@ -325,7 +329,7 @@ pub const VERBS: &[VerbSpec] = &[
         usage: "ID [flags]",
         arity: one("ID"),
         flags: &[],
-        groups: SESSION_VERB,
+        groups: CHANGE_VERB,
         about: "Remove the breakpoint or watchpoint with this id, as `break` or `watch` \
                 printed it.",
         example: ("gbcli delete 1 --session dx", "removes breakpoint 1"),

@@ -44,11 +44,11 @@ CLASS
 
 FLAGS
   --at NAME|~N            start from a named checkpoint or the head N changes back
-  --from boot|power-on    with no head, start at the boot handoff (default) or at power-on
+  --from boot|power-on    start at the boot handoff when there is no head (default), or at power-on, which also skips the head; not with --at
   --since BASE            what frame and t count from: boot (default), power-on or a checkpoint name
   --until EXPR            stop when this condition holds
   --to ADDR               stop before the instruction at this address executes
-  --frames N              frame budget (default 600 with --until or --to)
+  --frames N              frame budget; any run without a budget gets 600 frames, and using them all up without another stop is budget_exhausted
   --instructions N        instruction budget
   --ticks N               tick budget
   --write TARGET=BYTES…   bus write before the run, as the CPU would
@@ -70,15 +70,17 @@ SHOT FLAGS (how the PNG is taken)
 SESSION FLAGS (every session verb)
   -s, --session NAME      the session to use (default: GBCLI_SESSION); naming a new one with a ROM creates it
   --rom FILE              the ROM a new session is created from; an existing session refuses another ROM
-  --sym FILE              the .sym for a new session (default: the ROM's name with .sym, if it exists)
-  --model MODEL           the model for a new session: dmg-b (default), cgb-e, …
-  --seed N                the RAM seed for a new session (default 0)
-  --rev sN                refuse a change if the session is no longer at this revision
+  --sym FILE              the .sym for a new session (default: the ROM's name with .sym, if it exists); an existing session refuses another
+  --model MODEL           the model for a new session: dmg-b (default), cgb-e, …; an existing session refuses another
+  --seed N                the RAM seed for a new session (default 0); an existing session refuses another
   --allow-rom-change      load a stored state even though the ROM was rebuilt and the check refuses it
+
+CHANGE FLAGS (every verb that changes the session)
+  --rev sN                refuse the change if the session is no longer at this revision
 
 OUTPUT FLAGS (every verb that sends a request)
   --json                  print the protocol's result object instead of rows
-  --dir PATH              find .gbcli/ from PATH instead of the working directory (GBCLI_DIR overrides both)
+  --dir PATH              find .gbcli/ from PATH instead of the working directory (beats GBCLI_DIR)
   --as NAME               who is asking, for the event log (default: GBCLI_AS)
 
 EXAMPLE
@@ -103,7 +105,7 @@ FLAGS
 
 OUTPUT FLAGS (every verb that sends a request)
   --json                  print the protocol's result object instead of rows
-  --dir PATH              find .gbcli/ from PATH instead of the working directory (GBCLI_DIR overrides both)
+  --dir PATH              find .gbcli/ from PATH instead of the working directory (beats GBCLI_DIR)
   --as NAME               who is asking, for the event log (default: GBCLI_AS)
 
 EXAMPLE
@@ -129,15 +131,17 @@ FLAGS
 SESSION FLAGS (every session verb)
   -s, --session NAME      the session to use (default: GBCLI_SESSION); naming a new one with a ROM creates it
   --rom FILE              the ROM a new session is created from; an existing session refuses another ROM
-  --sym FILE              the .sym for a new session (default: the ROM's name with .sym, if it exists)
-  --model MODEL           the model for a new session: dmg-b (default), cgb-e, …
-  --seed N                the RAM seed for a new session (default 0)
-  --rev sN                refuse a change if the session is no longer at this revision
+  --sym FILE              the .sym for a new session (default: the ROM's name with .sym, if it exists); an existing session refuses another
+  --model MODEL           the model for a new session: dmg-b (default), cgb-e, …; an existing session refuses another
+  --seed N                the RAM seed for a new session (default 0); an existing session refuses another
   --allow-rom-change      load a stored state even though the ROM was rebuilt and the check refuses it
+
+CHANGE FLAGS (every verb that changes the session)
+  --rev sN                refuse the change if the session is no longer at this revision
 
 OUTPUT FLAGS (every verb that sends a request)
   --json                  print the protocol's result object instead of rows
-  --dir PATH              find .gbcli/ from PATH instead of the working directory (GBCLI_DIR overrides both)
+  --dir PATH              find .gbcli/ from PATH instead of the working directory (beats GBCLI_DIR)
   --as NAME               who is asking, for the event log (default: GBCLI_AS)
 
 EXAMPLE

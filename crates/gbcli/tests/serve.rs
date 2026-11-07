@@ -29,8 +29,8 @@ fn create_session(dir: &Path) {
         .create(&RomSource {
             rom: dir.join("demo.gb"),
             sym: None,
-            model: Model::DmgB,
-            seed: 0,
+            model: Some(Model::DmgB),
+            seed: Some(0),
         })
         .unwrap();
 }

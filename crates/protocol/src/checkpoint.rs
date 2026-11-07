@@ -8,6 +8,8 @@ use std::str::FromStr;
 use gbcli_core::{JoypadBounce, Model, Rendering, RtcMode, WriteTracking};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+use crate::rev::Rev;
+
 /// The header of a `.gbck` envelope. Hashes are of the unpatched ROM file.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CheckpointHeader {
@@ -37,6 +39,11 @@ pub struct CheckpointHeader {
     pub created_by: Option<String>,
     /// The checkpoint or head this state ran from.
     pub parent: Option<String>,
+    /// For a named checkpoint, the head's revision when it was saved. Absent
+    /// from files written before it was recorded, and from history entries,
+    /// whose file name is their revision.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rev: Option<Rev>,
 }
 
 /// Which backend, at which commit, wrote a blob.
@@ -304,6 +311,7 @@ mod tests {
             debugger: DebuggerConfig::default(),
             created_by: Some("claude".into()),
             parent: None,
+            rev: Some(Rev(4)),
         }
     }
 
@@ -312,6 +320,14 @@ mod tests {
         let json = serde_json::to_string(&header()).unwrap();
         let back: CheckpointHeader = serde_json::from_str(&json).unwrap();
         assert_eq!(back, header());
+    }
+
+    #[test]
+    fn a_header_written_before_it_recorded_its_rev_still_parses() {
+        let mut json = serde_json::to_value(header()).unwrap();
+        json.as_object_mut().unwrap().remove("rev");
+        let back: CheckpointHeader = serde_json::from_value(json).unwrap();
+        assert_eq!(back.rev, None);
     }
 
     #[test]

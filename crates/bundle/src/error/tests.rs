@@ -293,7 +293,8 @@ fn a_rom_the_core_cant_run_is_unsupported() {
         &e,
         ErrorCode::Unsupported,
         5,
-        "the core can't run this ROM (no mapper); see `gbcli doctor --core`",
+        "the core can't run this ROM (no mapper); `gbcli gaps` lists what it can't do that this \
+         project has hit",
     );
 }
 

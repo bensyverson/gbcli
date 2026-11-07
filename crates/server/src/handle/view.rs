@@ -29,6 +29,13 @@ impl Handler {
         args: &ViewArgs,
         warnings: &mut Vec<String>,
     ) -> Result<ResultBody, Failure> {
+        if args.map.is_some() && args.what != ViewKind::Map {
+            return Err(Failure::new(gbcli_protocol::ErrorBody::new(
+                gbcli_protocol::ErrorCode::BadRequest,
+                "only the map view takes a map choice",
+                "drop --map, or view map",
+            )));
+        }
         if let Some(png) = &args.png {
             check_image(&png.path, png.scale)?;
         }

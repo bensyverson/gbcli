@@ -35,8 +35,8 @@ impl Fixture {
         RomSource {
             rom: self.root.join("demo.gb"),
             sym: None,
-            model: Model::DmgB,
-            seed: 0,
+            model: Some(Model::DmgB),
+            seed: Some(0),
         }
     }
 

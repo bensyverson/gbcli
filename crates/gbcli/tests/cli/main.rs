@@ -5,6 +5,7 @@
 mod audio;
 mod common;
 mod errors;
+mod filmstrip;
 mod help;
 mod honesty;
 mod verbs;

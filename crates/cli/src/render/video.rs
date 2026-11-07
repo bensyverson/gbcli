@@ -16,6 +16,25 @@ pub fn rows(r: &ResultBody) -> String {
             .field("frame", shot.frame_label())
             .line();
     }
+    if let Some(strip) = &r.filmstrip {
+        out += &Row::new("filmstrip")
+            .field("path", &strip.path)
+            .field("width", strip.width)
+            .field("height", strip.height)
+            .field("scale", strip.scale)
+            .field("frames", strip.frames.len())
+            .opt(
+                "beyond_cap",
+                (strip.beyond_cap > 0).then_some(strip.beyond_cap),
+            )
+            .line();
+        for (i, frame) in strip.frames.iter().enumerate() {
+            out += &Row::new("frame")
+                .field("index", i)
+                .field("label", frame.label(&strip.since))
+                .line();
+        }
+    }
     out += &unapplied(r.keys_unapplied.as_deref());
     if let Some(view) = &r.view {
         out += &data(&view.data);

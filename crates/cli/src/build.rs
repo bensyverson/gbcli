@@ -241,6 +241,7 @@ fn run(inv: &Invocation, env: &Env) -> Result<RunArgs, Usage> {
         allow_uninit: inv.has("allow-uninit"),
         shot: video::run_shot(inv)?.map(Box::new),
         audio: audio::run_audio(inv)?.map(Box::new),
+        filmstrip: video::run_filmstrip(inv)?.map(Box::new),
         keys: video::keys(inv, env)?,
     })
 }

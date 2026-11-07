@@ -329,6 +329,9 @@ mod shot_tests;
 mod audio_tests;
 
 #[cfg(test)]
+mod filmstrip_tests;
+
+#[cfg(test)]
 mod keys_tests;
 
 #[cfg(test)]

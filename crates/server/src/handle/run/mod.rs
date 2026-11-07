@@ -4,10 +4,11 @@
 
 mod audio;
 mod budget;
+mod filmstrip;
 
 use gbcli_bundle::{SessionStore, Start, validate_checkpoint_name};
 use gbcli_core::Budget;
-use gbcli_engine::{DebugError, Machine, Outcome, RunOptions, unapplied_keys};
+use gbcli_engine::{DebugError, FrameSink, Machine, Outcome, RunOptions, unapplied_keys};
 use gbcli_protocol::{
     ErrorBody, ErrorCode, KeyEvent, Location, ResultBody, RunArgs, SessionFile, StepArgs, StepKind,
     StopReason, StopRecord, WavChannels,
@@ -92,6 +93,9 @@ impl Handler {
         if let Some(shot) = &args.shot {
             shot::check(shot)?;
         }
+        if let Some(strip) = &args.filmstrip {
+            filmstrip::check(strip)?;
+        }
         if let Some(sound) = &args.audio {
             audio::check(sound)?;
         }
@@ -127,11 +131,22 @@ impl Handler {
         };
         let (budget, limits, defaulted) = budget_of(args);
         let interrupt = self.interrupt.clone();
+        let collector = args.filmstrip.as_deref().map(filmstrip::Collector::new);
+        let sink = |m: &Machine, done: u64| {
+            if let Some(c) = &collector {
+                c.on_frame(m, done);
+            }
+        };
         let mut opts = RunOptions::new(budget);
         opts.since = since.clone();
         opts.allow_uninit = args.allow_uninit;
         opts.interrupt = Some(&interrupt);
         opts.keys = &args.keys;
+        // The audio replays run the same request without collecting frames.
+        let replay_opts = opts.clone();
+        if collector.is_some() {
+            opts.on_frame = Some(FrameSink(&sink));
+        }
         let outcome = run_target(&mut machine, &plan.target, &opts);
         // Whatever the outcome, so the machine kept warm stops collecting.
         let collected = match (sound, collecting) {
@@ -164,29 +179,33 @@ impl Handler {
         // After the reads (design §11 step 6); capturing only reads the core.
         let shot = args.shot.as_ref().map(|s| shot::take(&machine, s, &since));
         let answered = self.answered(args, defaulted, guarded, &stop);
-        // After the shot, and only when everything before succeeded: the
-        // replays for per-channel WAVs run the request four more times.
-        let sound = match (sound, collected, &reads, &shot, &answered) {
-            (Some(a), Some(collected), Ok(_), None | Some(Ok(_)), Ok(())) => {
-                Some(collected.and_then(|c| {
-                    let drive = |m: &mut Machine| {
-                        run_target(m, &plan.target, &opts)
-                            .map(|_| ())
-                            .map_err(|e| Failure::from_debug(&e))
-                    };
-                    audio::deliver(a, c, &machine, &since, || {
-                        audio::takes(replay_from.as_ref(), drive)
-                    })
-                }))
-            }
+        // The files after the shot are written only when everything before
+        // them succeeded: the filmstrip, then the audio, whose per-channel
+        // replays run the request four more times.
+        let so_far = reads.is_ok() && shot.as_ref().is_none_or(Result::is_ok) && answered.is_ok();
+        let strip = match &collector {
+            Some(c) if so_far => Some(c.write(&machine, &since, warnings)),
+            _ => None,
+        };
+        let so_far = so_far && strip.as_ref().is_none_or(Result::is_ok);
+        let sound = match (sound, collected) {
+            (Some(a), Some(collected)) if so_far => Some(collected.and_then(|c| {
+                let drive = |m: &mut Machine| {
+                    run_target(m, &plan.target, &replay_opts)
+                        .map(|_| ())
+                        .map_err(|e| Failure::from_debug(&e))
+                };
+                audio::deliver(a, c, &machine, &since, || {
+                    audio::takes(replay_from.as_ref(), drive)
+                })
+            })),
             _ => None,
         };
         // Last, and only when everything before it succeeded (step 7); after
         // the head's save, so the checkpoint records the rev it is.
-        let checkpoint = match (&args.checkpoint, &reads, &shot, &answered, &sound) {
-            (Some(name), Ok(_), None | Some(Ok(_)), Ok(()), None | Some(Ok(_))) => {
-                Some(write_checkpoint(store, &machine, name, actor, meta.rev))
-            }
+        let so_far = so_far && sound.as_ref().is_none_or(Result::is_ok);
+        let checkpoint = match &args.checkpoint {
+            Some(name) if so_far => Some(write_checkpoint(store, &machine, name, actor, meta.rev)),
             _ => None,
         }
         .transpose();
@@ -197,6 +216,7 @@ impl Handler {
         let reads = reads.map_err(with_stop)?;
         let shot = shot.transpose().map_err(with_stop)?;
         answered?;
+        let strip = strip.transpose().map_err(with_stop)?;
         let sound = sound.transpose().map_err(with_stop)?;
         let checkpoint = checkpoint.map_err(with_stop)?;
         let keys_unapplied = unapplied(&args.keys, &stop, warnings);
@@ -204,6 +224,7 @@ impl Handler {
             stop: Some(stop),
             reads: Some(reads),
             shot,
+            filmstrip: strip,
             audio: sound,
             keys_unapplied,
             checkpoint,

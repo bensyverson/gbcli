@@ -9,7 +9,7 @@ use crate::keys::KeyEvent;
 use crate::listing::SymArgs;
 use crate::parse::WireRequest;
 use crate::rev::Rev;
-use crate::shot::{ShotArgs, ShotReadArgs};
+use crate::shot::{FilmstripArgs, ShotArgs, ShotReadArgs};
 use crate::stop::{StepKind, TimeBase};
 use crate::video::ViewArgs;
 
@@ -152,6 +152,9 @@ pub struct RunArgs {
     /// run and written after the shot (design §9). Boxed to keep `Op` small.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audio: Option<Box<AudioArgs>>,
+    /// Frames collected during the run, written after the shot (design §9).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filmstrip: Option<Box<FilmstripArgs>>,
     /// Save the stop state under this name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checkpoint: Option<String>,

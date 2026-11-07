@@ -191,6 +191,17 @@ pub const RUN: &[FlagSpec] = &[
         "PATH",
         "save a PNG of the screen at the stop (see the shot flags)",
     ),
+    value(
+        "filmstrip",
+        "PATH",
+        "save a PNG of the frames the run passed, in a row, each labeled (LCD-off frames \
+         kept); at most 16, more are counted and warned about",
+    ),
+    value(
+        "every",
+        "N",
+        "with --filmstrip: keep a frame every N frames of the run (default 1)",
+    ),
     switch(
         "audio-log",
         "print every write the run made to the sound registers, decoded into notes and \

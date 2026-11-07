@@ -41,7 +41,7 @@ pub use rev::Rev;
 pub use session::{
     EventLogLine, GapCount, GapLine, SessionFile, SessionRow, StopSummary, UndoWalk,
 };
-pub use shot::{Crop, ShotArgs, ShotFrame, ShotMade, ShotReadArgs};
+pub use shot::{Crop, FilmstripArgs, FilmstripMade, ShotArgs, ShotFrame, ShotMade, ShotReadArgs};
 pub use stop::{
     BudgetLimits, BudgetUse, Cadence, FrameShown, StepKind, StopReason, StopRecord, StopTime,
     TimeBase, vblank_name,

@@ -339,3 +339,16 @@ fn run_wav_takes_its_channels_and_refuses_them_alone() {
     let bad = command(&["run", "--wav", "m.wav", "--channels", "all"]).unwrap_err();
     assert!(bad.remedy.contains("each"), "{bad:?}");
 }
+
+#[test]
+fn run_filmstrip_takes_every_and_refuses_it_alone() {
+    let strip = |line: &[&str]| match request(line).1 {
+        Op::Run(args) => args.filmstrip,
+        other => panic!("{other:?}"),
+    };
+    let made = strip(&["run", "--filmstrip", "f.png", "--every", "5"]).unwrap();
+    assert_eq!((made.path.as_str(), made.every), ("f.png", 5));
+    assert_eq!(strip(&["run", "--filmstrip", "f.png"]).unwrap().every, 1);
+    let alone = command(&["run", "--every", "5"]).unwrap_err();
+    assert!(alone.message.contains("--filmstrip"), "{alone:?}");
+}

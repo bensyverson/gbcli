@@ -208,10 +208,16 @@ fn run(
         req.stores = stores;
         req.stop_at_frame = goal == Goal::Frame
             || until.as_ref().is_some_and(|u| u.triggers.vblank)
-            || keys.pending();
+            || keys.pending()
+            || opts.on_frame.is_some();
         let stop = m.core_mut().run(&mut req)?;
         used += stop.used;
         keys.apply_due(m, used.frames);
+        if let Some(sink) = opts.on_frame
+            && stop.used.frames > 0
+        {
+            (sink.0)(m, used.frames);
+        }
         let fired = until
             .as_ref()
             .is_some_and(|u| u.fired(&stop, ly_before, m.core()));

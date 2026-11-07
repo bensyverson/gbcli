@@ -59,6 +59,8 @@ FLAGS
   --checkpoint NAME       save the stop state under this name
   --allow-uninit          read never-written bytes as their power-on values, with a warning
   --shot PATH             save a PNG of the screen at the stop (see the shot flags)
+  --filmstrip PATH        save a PNG of the frames the run passed, in a row, each labeled (LCD-off frames kept); at most 16, more are counted and warned about
+  --every N               with --filmstrip: keep a frame every N frames of the run (default 1)
   --audio-log             print every write the run made to the sound registers, decoded into notes and settings, at elapsed 2^23 Hz ticks since --since: the cheap sibling of --wav
   --wav PATH              save what the run played as a WAV (16-bit stereo, 32,768 Hz)
   --channels mixed|each   with --wav: each also saves every channel alone beside it (PATH's stem with -square1, -square2, -wave, -noise) by replaying the run muted

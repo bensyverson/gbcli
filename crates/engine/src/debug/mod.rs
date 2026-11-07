@@ -54,6 +54,19 @@ pub struct RunOptions<'a> {
     pub interrupt: Option<&'a AtomicBool>,
     /// Key presses and releases at frame offsets from the run's start.
     pub keys: &'a [KeyEvent],
+    /// Called at every vblank the run passes, after the key events due there.
+    pub on_frame: Option<FrameSink<'a>>,
+}
+
+/// What a run calls at each vblank, with the frames it has completed: how a
+/// caller collects frames during a run (filmstrips). It only observes.
+#[derive(Clone, Copy)]
+pub struct FrameSink<'a>(pub &'a dyn Fn(&Machine, u64));
+
+impl std::fmt::Debug for FrameSink<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("FrameSink")
+    }
 }
 
 impl RunOptions<'_> {
@@ -64,6 +77,7 @@ impl RunOptions<'_> {
             allow_uninit: false,
             interrupt: None,
             keys: &[],
+            on_frame: None,
         }
     }
 }

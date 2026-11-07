@@ -11,7 +11,7 @@ use crate::listing::{CheckpointRow, SymbolRow};
 use crate::request::WriteKind;
 use crate::rev::Rev;
 use crate::session::{EventLogLine, GapCount, SessionRow};
-use crate::shot::ShotMade;
+use crate::shot::{FilmstripMade, ShotMade};
 use crate::stop::StopRecord;
 use crate::video::ViewMade;
 use crate::views::{PpuView, RegistersView};
@@ -142,6 +142,8 @@ pub struct ResultBody {
     pub reads: Option<Vec<ReadValue>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shot: Option<ShotMade>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filmstrip: Option<FilmstripMade>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audio: Option<AudioMade>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

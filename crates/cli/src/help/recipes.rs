@@ -11,6 +11,8 @@ Run to a routine
   gbcli run --to Main.loop
 See the screen
   gbcli shot now.png (the head), or gbcli run --frames 60 --shot after.png
+Watch the screen change over a run
+  gbcli run --frames 60 --filmstrip strip.png --every 4 (16 labeled frames in a row)
 Why is the screen blank?
   gbcli shot blank.png --any-frame, then gbcli read '[rLCDC]' (bit 7: LCD on)
 Press buttons during a run

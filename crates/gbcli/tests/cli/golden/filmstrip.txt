@@ -1,0 +1,17 @@
+$ gbcli run demo.gb --frames 6 --filmstrip f.png --every 2 --session demo
+exit 0
+stop budget_exhausted kind=frames pc=$016C bank=0 symbol=Work+$9 frame=6 t=421168 since=boot ticks=12604552 ly=144 shown=6 vblank=normal
+budget frames=6/6 instructions=33855 ticks=842336
+filmstrip path=f.png width=482 height=144 scale=1 frames=3
+frame index=0 label="complete frame 2 since boot (vblank normal)"
+frame index=1 label="complete frame 4 since boot (vblank normal)"
+frame index=2 label="complete frame 6 since boot (vblank normal)"
+rev s1
+$ gbcli run --frames 18 --filmstrip g.png --json --session demo
+exit 0
+{"id":"cli","ok":true,"rev":"s2","result":{"stop":{"reason":"budget_exhausted","kind":"frames","pc":358,"bank":0,"symbol":"Work+$3","time":{"ticks":15132616,"t":1685200,"since":{"kind":"boot"},"frame":24,"ly":144,"dot":null},"frame_shown":{"n":24,"vblank":"normal"},"budget":{"ticks":2528064,"instructions":101604,"frames":18,"limits":{"frames":18},"defaulted":false}},"reads":[],"filmstrip":{"path":"g.png","width":2575,"height":144,"scale":1,"since":{"kind":"boot"},"frames":[{"kind":"complete","n":7,"vblank":"normal"},{"kind":"complete","n":8,"vblank":"normal"},{"kind":"complete","n":9,"vblank":"normal"},{"kind":"complete","n":10,"vblank":"normal"},{"kind":"complete","n":11,"vblank":"normal"},{"kind":"complete","n":12,"vblank":"normal"},{"kind":"complete","n":13,"vblank":"normal"},{"kind":"complete","n":14,"vblank":"normal"},{"kind":"complete","n":15,"vblank":"normal"},{"kind":"complete","n":16,"vblank":"normal"},{"kind":"complete","n":17,"vblank":"normal"},{"kind":"complete","n":18,"vblank":"normal"},{"kind":"complete","n":19,"vblank":"normal"},{"kind":"complete","n":20,"vblank":"normal"},{"kind":"complete","n":21,"vblank":"normal"},{"kind":"complete","n":22,"vblank":"normal"}],"beyond_cap":2}},"warnings":["the filmstrip holds 16 frames; 2 more were due and not kept: raise --every to cover the run"]}
+$ gbcli run --every 2 --session demo
+exit 2
+--- stderr
+gbcli: bad_request: --every only applies with --filmstrip
+remedy: add --filmstrip PATH, or drop it

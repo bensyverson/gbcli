@@ -120,6 +120,45 @@ impl ShotFrame {
     }
 }
 
+/// A filmstrip to write after the run: the last complete frame at every
+/// `every`th vblank the run passes, in one row.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FilmstripArgs {
+    /// Where to write the PNG, relative to the server's working directory.
+    pub path: String,
+    /// Keep a frame every this many frames of the run (at least 1).
+    pub every: u64,
+    /// The integer scale; 1 when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scale: Option<u32>,
+}
+
+impl FilmstripArgs {
+    /// The most frames a filmstrip holds; later ones are counted, not kept.
+    pub const MAX_FRAMES: usize = 16;
+}
+
+/// A filmstrip that was written.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FilmstripMade {
+    pub path: String,
+    pub width: u32,
+    pub height: u32,
+    pub scale: u32,
+    /// What each frame's number counts from.
+    pub since: TimeBase,
+    /// Left to right. Frames that aren't normal (LCD off) are kept, and say so.
+    pub frames: Vec<ShotFrame>,
+    /// Frames due past [`FilmstripArgs::MAX_FRAMES`], not kept.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub beyond_cap: u64,
+}
+
+fn is_zero(n: &u64) -> bool {
+    *n == 0
+}
+
 #[cfg(test)]
 mod tests {
     use gbcli_core::VblankKind;
@@ -148,6 +187,27 @@ mod tests {
         let typo = r#"{"id":"1","op":"run","args":{"shot":{"path":"a.png","scael":2}}}"#;
         let err = parse_request(typo).unwrap_err();
         assert!(err.remedy.contains("`scale`"), "{}", err.remedy);
+    }
+
+    #[test]
+    fn a_run_carries_a_filmstrip_and_refuses_strangers_inside_it() {
+        let line =
+            r#"{"id":"1","op":"run","args":{"frames":6,"filmstrip":{"path":"f.png","every":2}}}"#;
+        let request = parse_request(line).expect("parses");
+        let Op::Run(RunArgs {
+            filmstrip: Some(strip),
+            ..
+        }) = &request.op
+        else {
+            panic!("{request:?}")
+        };
+        assert_eq!(
+            (strip.path.as_str(), strip.every, strip.scale),
+            ("f.png", 2, None)
+        );
+        assert_eq!(serde_json::to_string(&request).unwrap(), line);
+        let typo = r#"{"id":"1","op":"run","args":{"filmstrip":{"path":"f.png","evry":2}}}"#;
+        assert!(parse_request(typo).unwrap_err().remedy.contains("`every`"));
     }
 
     #[test]

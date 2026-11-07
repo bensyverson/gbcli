@@ -163,6 +163,7 @@ dependencies = [
  "gbcli-engine",
  "gbcli-protocol",
  "gbcli-view",
+ "png",
  "serde",
  "serde_json",
 ]

@@ -1,6 +1,8 @@
 //! The flags of screenshots, views and key timelines → their protocol args.
 
-use gbcli_protocol::{Crop, ImageOut, KeyEvent, MapSel, ShotArgs, ViewArgs, ViewKind, parse_keys};
+use gbcli_protocol::{
+    Crop, FilmstripArgs, ImageOut, KeyEvent, MapSel, ShotArgs, ViewArgs, ViewKind, parse_keys,
+};
 
 use crate::Env;
 use crate::argv::Invocation;
@@ -23,6 +25,27 @@ pub fn run_shot(inv: &Invocation) -> Result<Option<ShotArgs>, Usage> {
             }
             Ok(None)
         }
+    }
+}
+
+/// `run --filmstrip PATH [--every N]` (a frame every N frames, default 1),
+/// or `None` when there is no `--filmstrip`.
+pub fn run_filmstrip(inv: &Invocation) -> Result<Option<FilmstripArgs>, Usage> {
+    let every = inv
+        .one("every")
+        .map(|n| values::count("every", n))
+        .transpose()?;
+    match (inv.one("filmstrip"), every) {
+        (Some(path), every) => Ok(Some(FilmstripArgs {
+            path: path.to_string(),
+            every: every.unwrap_or(1),
+            scale: None,
+        })),
+        (None, Some(_)) => Err(Usage::new(
+            "--every only applies with --filmstrip",
+            "add --filmstrip PATH, or drop it",
+        )),
+        (None, None) => Ok(None),
     }
 }
 

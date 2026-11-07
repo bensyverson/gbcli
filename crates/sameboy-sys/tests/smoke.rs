@@ -65,6 +65,7 @@ fn capture_stdout(body: impl FnOnce()) -> Vec<u8> {
         saved
     };
     body();
+    // SAFETY: restores the stdout descriptor saved above, which is still open.
     unsafe {
         fflush(std::ptr::null_mut());
         dup2(saved, STDOUT_FD);
@@ -83,6 +84,7 @@ fn capture_stdout(body: impl FnOnce()) -> Vec<u8> {
 #[test]
 fn boots_a_rom_headless_for_60_frames_without_writing_to_stdout() {
     let mut cartridge_ticks: u64 = 0;
+    // SAFETY: one instance, created, used and freed on this thread inside the body.
     let stdout = capture_stdout(|| unsafe {
         let gb = sb::GB_init(sb::GB_alloc(), sb::GB_MODEL_DMG_B);
         sb::GB_set_log_callback(gb, Some(route_log));

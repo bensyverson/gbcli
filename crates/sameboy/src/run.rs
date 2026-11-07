@@ -111,6 +111,7 @@ pub(crate) fn run(core: &mut SameBoy, req: &mut RunRequest<'_>) -> Result<Stop, 
             // SAFETY: side-effect-free accessors.
             let bank = unsafe { sb::gbcli_bank_for(gb, pc) };
             if req.exec.matches(pc, bank) {
+                // SAFETY: a side-effect-free read of the live instance.
                 let opcode = u8::try_from(unsafe { sb::gbcli_peek(gb, pc) }).ok();
                 let hit = Hit {
                     access: Access::Exec,

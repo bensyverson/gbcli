@@ -153,6 +153,7 @@ pub(crate) fn guard<T>(
     if hooks.is_null() {
         return fallback;
     }
+    // SAFETY: non-null, and the only live reference to the hooks (see above).
     let hooks = unsafe { &mut *hooks };
     match catch_unwind(AssertUnwindSafe(|| body(hooks))) {
         Ok(value) => value,

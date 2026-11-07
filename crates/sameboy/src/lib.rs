@@ -483,8 +483,10 @@ impl Core for SameBoy {
             sb::GB_save_state_to_buffer(gb, state.as_mut_ptr());
             state
         };
+        // SAFETY: a plain getter on the live instance.
+        let model = unsafe { sb::GB_get_model(gb) };
         blob::encode(&blob::Blob {
-            model: unsafe { sb::GB_get_model(gb) },
+            model,
             ticks: self.ticks,
             vblanks: self.vblanks,
             written: self

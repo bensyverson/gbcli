@@ -37,6 +37,7 @@ fn capture_stdout(body: impl FnOnce()) -> Vec<u8> {
         saved
     };
     body();
+    // SAFETY: restores the stdout descriptor saved above, which is still open.
     unsafe {
         fflush(std::ptr::null_mut());
         dup2(saved, STDOUT_FD);

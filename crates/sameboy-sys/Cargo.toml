@@ -9,3 +9,7 @@ links = "sameboy"
 
 [build-dependencies]
 cc.workspace = true
+
+# Every unsafe block states why it is sound (user discussion, 2026-11-06).
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"

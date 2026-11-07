@@ -82,7 +82,11 @@ impl Condition {
 
     /// Everything that can make this condition change on `core`.
     pub(crate) fn triggers(&self, core: &dyn Core) -> cadence::Triggers {
-        cadence::analyze(&self.expr, core.supports(Feature::CartRamWrites))
+        cadence::analyze(
+            &self.expr,
+            core.supports(Feature::CartRamWrites),
+            crate::mem::CartSizes::of(core),
+        )
     }
 }
 

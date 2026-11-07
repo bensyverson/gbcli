@@ -214,3 +214,28 @@ fn ie_reads_from_its_own_region() {
     let ie = read_register(&core, find("rIE").unwrap());
     assert_eq!((ie.raw, ie.value), (Some(0x1D), Ok(0x1D)));
 }
+
+#[test]
+fn every_register_name_and_alias_parses_in_a_condition() {
+    // Conditions read names from this table (design §8), so every name and
+    // alias evaluates to its address; `_AUD3WAVERAM+N` folds as a sum.
+    use gbcli_engine::cond::{Condition, EvalCtx};
+    let core = quick_dmg(BUSY);
+    let ctx = EvalCtx {
+        core: &core,
+        symbols: None,
+        access: None,
+        base: gbcli_protocol::TimeMark { ticks: 0, frame: 0 },
+        allow_uninit: false,
+    };
+    for reg in HW_REGISTERS {
+        for name in std::iter::once(&reg.name).chain(reg.aliases) {
+            let cond = Condition::compile(name, None).unwrap_or_else(|e| panic!("{name}: {e:?}"));
+            let value = cond.eval(&ctx, &mut Vec::new()).unwrap();
+            assert_eq!(value, i64::from(reg.addr), "{name}");
+        }
+    }
+    // Pan Docs' names, which conditions accepted before the tables merged.
+    assert_eq!(find("rJOYP").map(|r| r.addr), Some(0xFF00));
+    assert_eq!(find("rWBK").map(|r| r.addr), Some(0xFF70));
+}

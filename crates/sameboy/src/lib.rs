@@ -265,6 +265,10 @@ impl Core for SameBoy {
         memory::region(self, region)
     }
 
+    fn rom0_bank(&self) -> u16 {
+        memory::rom0_bank(self)
+    }
+
     fn io_register(&self, reg: IoReg) -> Result<u8, CoreError> {
         memory::io_register(self, reg)
     }
@@ -365,6 +369,14 @@ impl Core for SameBoy {
             })?;
         match region {
             Region::Vram | Region::Oam => Err(unsupported_err(Feature::WriteHookCoversDma)),
+            // The hook can't place this mapper's cart RAM writes, so it can't
+            // tell an unwritten byte from a written one: untracked, not unwritten.
+            Region::Sram if self.supports(Feature::CartRamWrites) != Support::Yes => {
+                Err(CoreError::Unsupported {
+                    feature: Feature::CartRamWrites,
+                    reason: support::CART_RAM_REASON,
+                })
+            }
             _ => tracking.view(region).ok_or(CoreError::InvalidState {
                 reason: format!("{region:?} isn't tracked: only WRAM, HRAM and cart RAM are"),
             }),

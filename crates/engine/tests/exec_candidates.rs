@@ -56,6 +56,9 @@ impl Core for Counting {
     fn region(&self, region: Region) -> Result<RegionView<'_>, CoreError> {
         self.0.region(region)
     }
+    fn rom0_bank(&self) -> u16 {
+        self.0.rom0_bank()
+    }
     fn io_register(&self, reg: IoReg) -> Result<u8, CoreError> {
         if reg == IoReg::SCY {
             SCY_READS.with(|n| n.set(n.get() + 1));

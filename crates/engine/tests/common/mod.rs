@@ -114,3 +114,45 @@ pub fn step_to(m: &mut Machine, pc: u16) {
     }
     panic!("PC never reached {pc:#06x}");
 }
+
+/// busy.gb with `code` at $0150, where its entry point jumps.
+pub fn program(code: &[u8]) -> Vec<u8> {
+    let mut rom = BUSY.to_vec();
+    rom[0x150..0x150 + code.len()].copy_from_slice(code);
+    rom
+}
+
+/// `rom` with a cartridge type and RAM size code in its header.
+pub fn with_cart(mut rom: Vec<u8>, kind: u8, ram_size: u8) -> Vec<u8> {
+    rom[0x147] = kind;
+    rom[0x149] = ram_size;
+    fix_header_checksum(&mut rom);
+    rom
+}
+
+/// Recomputes the header checksum at $14D.
+pub fn fix_header_checksum(rom: &mut [u8]) {
+    rom[0x14D] = rom[0x134..0x14D]
+        .iter()
+        .fold(0u8, |x, b| x.wrapping_sub(*b).wrapping_sub(1));
+}
+
+/// Enables cart RAM, selects RAM bank `bank`, clears `addr` and counts up
+/// there forever.
+pub fn count_in_cart_ram(bank: u8, addr: u16) -> Vec<u8> {
+    let [lo, hi] = addr.to_le_bytes();
+    #[rustfmt::skip]
+    let code = [
+        0x3E, 0x0A, 0xEA, 0x00, 0x00, // ld a, $0A; ld [$0000], a
+        0x3E, bank, 0xEA, 0x00, 0x40, // ld a, bank; ld [$4000], a
+        0x21, lo, hi,                 // ld hl, addr
+        0x36, 0x00,                   // ld [hl], 0
+        0x34,                         // $015F .loop: inc [hl]
+        0x18, 0xFD,                   // jr .loop
+    ];
+    code.to_vec()
+}
+
+pub const MBC5_RAM: u8 = 0x1A;
+pub const RAM_2K: u8 = 0x01;
+pub const RAM_8K: u8 = 0x02;

@@ -1,6 +1,7 @@
 //! Parser tests; evaluation is tested against a real core in tests/conditions.rs.
 
 use super::*;
+use crate::mem::CartSizes;
 use gbcli_core::Support;
 use gbcli_protocol::Cadence;
 
@@ -251,7 +252,8 @@ fn unknown_and_ambiguous_symbols_list_candidates() {
 
 #[test]
 fn the_cadence_names_the_costliest_trigger_the_reads_need() {
-    let cadence = |text: &str| cadence::analyze(&parse(text), Support::Yes).cadence();
+    let cadence =
+        |text: &str| cadence::analyze(&parse(text), Support::Yes, CartSizes::default()).cadence();
 
     // The write hook covers these, so only a write can change them.
     assert_eq!(cadence("u16[wFrame] >= 60"), Cadence::Writes);
@@ -265,9 +267,11 @@ fn the_cadence_names_the_costliest_trigger_the_reads_need() {
     assert_eq!(cadence("[sSave] == 1"), Cadence::Writes);
     // Nothing a run does changes ROM: no trigger at all.
     assert_eq!(cadence("[rom:0x4000] == 1"), Cadence::Writes);
-    assert_eq!(cadence("[$0100] == 1"), Cadence::Writes);
-    // A CPU address in the switchable ROM window changes on a bank switch.
+    assert_eq!(cadence("[$00:$0100] == 1"), Cadence::Writes);
+    // A CPU address in ROM changes on a bank switch: ROMX on any mapper,
+    // ROM0 on MBC1 (mode 1) and MMM01.
     assert_eq!(cadence("[$4123] == 1"), Cadence::EveryInstruction);
+    assert_eq!(cadence("[$0100] == 1"), Cadence::EveryInstruction);
     // VRAM and OAM writes can come from DMA, which the write hook misses.
     assert_eq!(cadence("[$8000] == 1"), Cadence::EveryInstruction);
     assert_eq!(cadence("[$FE00] == 1"), Cadence::EveryInstruction);
@@ -291,11 +295,11 @@ fn the_cadence_names_the_costliest_trigger_the_reads_need() {
     // Cart RAM on a mapper whose RAM path the hook doesn't mirror.
     let no = Support::No { reason: "test" };
     assert_eq!(
-        cadence::analyze(&parse("[sSave] == 1"), no).cadence(),
+        cadence::analyze(&parse("[sSave] == 1"), no, CartSizes::default()).cadence(),
         Cadence::EveryInstruction
     );
     assert_eq!(
-        cadence::analyze(&parse("[wFrame] == 1"), no).cadence(),
+        cadence::analyze(&parse("[wFrame] == 1"), no, CartSizes::default()).cadence(),
         Cadence::Writes
     );
     assert_eq!(
@@ -345,7 +349,7 @@ fn malformed_conditions_point_at_the_problem() {
 
 #[test]
 fn the_triggers_are_a_set_and_reads_arm_the_bytes_the_evaluator_reads() {
-    let triggers = |text: &str| cadence::analyze(&parse(text), Support::Yes);
+    let triggers = |text: &str| cadence::analyze(&parse(text), Support::Yes, CartSizes::default());
 
     // `frame` needs the vblank even beside `ly`: with the LCD off LY never
     // changes while frames still end.
@@ -356,7 +360,7 @@ fn the_triggers_are_a_set_and_reads_arm_the_bytes_the_evaluator_reads() {
     // CPU sees it with bank 0 selected.
     let syms = Symbols::parse("00:d000 wHigh\n").unwrap();
     let high = Condition::compile("u16[wHigh] == 1", Some(&syms)).unwrap();
-    let armed = cadence::analyze(&high.expr, Support::Yes).stores;
+    let armed = cadence::analyze(&high.expr, Support::Yes, CartSizes::default()).stores;
     assert_eq!(
         armed.entries(),
         [(Region::Wram, 0x1000), (Region::Wram, 0x1001)]

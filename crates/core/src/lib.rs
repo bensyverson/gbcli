@@ -44,8 +44,13 @@ pub trait Core {
     // Side-effect-free inspection: never advances, syncs or perturbs anything.
 
     fn registers(&self) -> Registers;
-    /// A region's raw backing bytes and its current bank.
+    /// A region's raw backing bytes and its current bank. For ROM, the bank
+    /// is the one mapped at 4000-7FFF; see [`rom0_bank`](Core::rom0_bank).
     fn region(&self, region: Region) -> Result<RegionView<'_>, CoreError>;
+    /// The ROM bank mapped at 0000-3FFF once the boot ROM is unmapped: 0,
+    /// except on mappers that switch it (MBC1 in mode 1 on a large cart,
+    /// MMM01).
+    fn rom0_bank(&self) -> u16;
     /// A hardware register decoded as the CPU would read it, without a bus read;
     /// `Unsupported` where decoding would need one.
     fn io_register(&self, reg: IoReg) -> Result<u8, CoreError>;

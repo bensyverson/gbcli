@@ -64,7 +64,8 @@ const fn wave(name: &'static str, n: u16) -> HwReg {
 
 #[rustfmt::skip]
 pub(super) const HW_REGISTERS: &[HwReg] = &[
-    reg("rP1", 0xFF00, Derived, &[f("select_buttons", 5, 1), f("select_dpad", 4, 1), f("inputs", 0, 4)]),
+    // rJOYP and rWBK (below) are Pan Docs' names, not hardware.inc 4.6's.
+    reg("rP1", 0xFF00, Derived, &[f("select_buttons", 5, 1), f("select_dpad", 4, 1), f("inputs", 0, 4)]).aka(&["rJOYP"]),
     reg("rSB", 0xFF01, Stored, &[]),
     reg("rSC", 0xFF02, Stored, &[f("transfer", 7, 1), f("speed", 1, 1), f("clock", 0, 1)]),
     reg("rDIV", 0xFF04, Derived, &[]),
@@ -145,7 +146,7 @@ pub(super) const HW_REGISTERS: &[HwReg] = &[
     reg("rOCPS", 0xFF6A, Stored, PALETTE_SPEC).aka(&["rOBPI"]).cgb(),
     reg("rOCPD", 0xFF6B, Derived, &[]).aka(&["rOBPD"]).cgb(),
     reg("rOPRI", 0xFF6C, Stored, &[f("by_coordinate", 0, 1)]).cgb(),
-    reg("rSVBK", 0xFF70, Stored, &[f("bank", 0, 3)]).aka(&["rSMBK"]).cgb(),
+    reg("rSVBK", 0xFF70, Stored, &[f("bank", 0, 3)]).aka(&["rSMBK", "rWBK"]).cgb(),
     reg("rPCM12", 0xFF76, Derived, &[f("ch2", 4, 4), f("ch1", 0, 4)]).cgb(),
     reg("rPCM34", 0xFF77, Derived, &[f("ch4", 4, 4), f("ch3", 0, 4)]).cgb(),
     reg("rIE", 0xFFFF, Stored, INTERRUPTS),

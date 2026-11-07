@@ -14,11 +14,11 @@ pub enum Target {
     Io(IoReg),
 }
 
-/// The region whose bank is switched at `addr`: ROMX, VRAM, cart RAM and
-/// WRAMX. Everywhere else the mapping is fixed.
+/// The region whose bank is switched at `addr`: ROM0 (on mappers that switch
+/// it), ROMX, VRAM, cart RAM and WRAMX. Everywhere else the mapping is fixed.
 fn switchable(addr: u16) -> Option<Region> {
     match Area::of(canonical_addr(addr)) {
-        Area::RomX => Some(Region::Rom),
+        Area::Rom0 | Area::RomX => Some(Region::Rom),
         Area::Vram => Some(Region::Vram),
         Area::Sram => Some(Region::Sram),
         Area::WramX => Some(Region::Wram),
@@ -26,18 +26,82 @@ fn switchable(addr: u16) -> Option<Region> {
     }
 }
 
-/// The bank mapped at `addr`: the ROM, VRAM, cart RAM or WRAM bank for the
-/// switchable areas, 0 elsewhere.
+/// The bank mapped at `addr`: the ROM0, ROMX, VRAM, cart RAM or WRAM bank for
+/// the switchable areas, 0 elsewhere.
 pub fn bank_at(core: &dyn Core, addr: u16) -> u16 {
+    if Area::of(canonical_addr(addr)) == Area::Rom0 {
+        return core.rom0_bank();
+    }
     switchable(addr).map_or(0, |region| core.region(region).map_or(0, |v| v.bank))
+}
+
+/// The sizes cart memory aliases through: a mapper drives only as many
+/// address lines as the memory has, so a bank or address past the end
+/// reaches the byte its low bits name. Zero means no aliasing.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CartSizes {
+    pub rom: usize,
+    pub sram: usize,
+}
+
+impl CartSizes {
+    /// The sizes of `core`'s ROM and cart RAM.
+    pub fn of(core: &dyn Core) -> Self {
+        let len = |region| core.region(region).map_or(0, |v| v.bytes.len());
+        CartSizes {
+            rom: len(Region::Rom),
+            sram: len(Region::Sram),
+        }
+    }
+
+    /// `target` with a ROM or cart RAM offset aliased through the size.
+    /// Other targets, and sizes that aren't a power of two, are unchanged.
+    pub fn alias(self, target: Target) -> Target {
+        let Target::Backing { region, offset } = target else {
+            return target;
+        };
+        let size = match region {
+            Region::Rom => self.rom,
+            Region::Sram => self.sram,
+            _ => return target,
+        };
+        if !size.is_power_of_two() {
+            return target;
+        }
+        Target::Backing {
+            region,
+            offset: offset & (size - 1),
+        }
+    }
+}
+
+/// The bank a location names, as `core`'s hardware reaches it: a ROM or cart
+/// RAM bank past the memory's size is the bank it aliases to (the bank of
+/// [`target_in_bank`]'s byte). Other areas are unchanged.
+pub fn effective_bank(core: &dyn Core, bank: u16, addr: u16) -> u16 {
+    let size = match Area::of(canonical_addr(addr)) {
+        Area::Rom0 | Area::RomX => 0x4000,
+        Area::Sram => 0x2000,
+        _ => return bank,
+    };
+    match target_in_bank(core, bank, addr) {
+        Ok(Target::Backing { offset, .. }) => (offset / size) as u16,
+        _ => bank,
+    }
 }
 
 /// Resolves a CPU address to its backing byte or register.
 pub fn target(core: &dyn Core, addr: u16) -> Result<Target, CoreError> {
     match fixed_target(addr) {
         Some(target) => target,
-        None => banked_target(bank_at(core, addr), addr),
+        None => target_in_bank(core, bank_at(core, addr), addr),
     }
+}
+
+/// Resolves an address in a given bank as `core`'s hardware would with that
+/// bank selected: [`banked_target`], aliased through the cart's sizes.
+pub fn target_in_bank(core: &dyn Core, bank: u16, addr: u16) -> Result<Target, CoreError> {
+    Ok(CartSizes::of(core).alias(banked_target(bank, addr)?))
 }
 
 /// What a CPU address resolves to whatever is mapped, or `None` in a
@@ -51,7 +115,8 @@ pub fn fixed_target(addr: u16) -> Option<Result<Target, CoreError>> {
 }
 
 /// Resolves an address in a given bank, whatever is mapped now. The bank
-/// matters only in the switchable areas (ROMX, VRAM, cart RAM, WRAMX).
+/// matters only in the switchable areas (ROM0, ROMX, VRAM, cart RAM, WRAMX).
+/// Offsets are not aliased: see [`target_in_bank`].
 pub fn banked_target(bank: u16, addr: u16) -> Result<Target, CoreError> {
     let addr = canonical_addr(addr);
     let a = usize::from(addr);
@@ -64,7 +129,7 @@ pub fn banked_target(bank: u16, addr: u16) -> Result<Target, CoreError> {
         offset: a - base,
     };
     Ok(match Area::of(addr) {
-        Area::Rom0 => flat(Region::Rom, 0),
+        Area::Rom0 => banked(Region::Rom, 0, 0x4000),
         Area::RomX => banked(Region::Rom, 0x4000, 0x4000),
         Area::Vram => banked(Region::Vram, 0x8000, 0x2000),
         Area::Sram => banked(Region::Sram, 0xA000, 0x2000),

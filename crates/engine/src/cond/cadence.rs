@@ -4,7 +4,7 @@
 //! The triggers are a set, not a ladder: `frame` changes at a vblank, which
 //! with the LCD off is not a scanline change, so a predicate reading `frame`
 //! and `ly` needs both. Memory reads arm the backing bytes the evaluator
-//! reads ([`mem::fixed_target`], [`mem::banked_target`] or the region form):
+//! reads ([`mem::fixed_target`], [`mem::target_in_bank`] or the region form):
 //! the write hook matches a write by the byte it lands in, so the two sides
 //! share one identity and a bank number or mirror cannot make them disagree.
 //! Anything that can change without a CPU write to its byte needs the
@@ -14,7 +14,7 @@ use gbcli_core::{Region, StoreFilter, Support};
 use gbcli_protocol::Cadence;
 
 use super::{BinOp, Expr, Place, UnOp, Width};
-use crate::mem::{self, Target};
+use crate::mem::{self, CartSizes, Target};
 
 /// Everything that can make a predicate change.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -52,14 +52,26 @@ impl Triggers {
 
 /// The triggers of `expr`. `cart_ram` is whether the core places every cart
 /// RAM change at its byte (`Feature::CartRamWrites`); without it a cart RAM
-/// read falls back to every instruction.
-pub(crate) fn analyze(expr: &Expr, cart_ram: Support) -> Triggers {
+/// read falls back to every instruction. `sizes` alias a banked read as the
+/// evaluator aliases it (`mem::target_in_bank`).
+pub(crate) fn analyze(expr: &Expr, cart_ram: Support, sizes: CartSizes) -> Triggers {
     let mut triggers = Triggers::default();
-    walk(expr, cart_ram, &mut triggers);
+    let cart = Cart {
+        ram: cart_ram,
+        sizes,
+    };
+    walk(expr, cart, &mut triggers);
     triggers
 }
 
-fn walk(e: &Expr, cart_ram: Support, out: &mut Triggers) {
+/// What the analysis needs to know about the cartridge.
+#[derive(Clone, Copy)]
+struct Cart {
+    ram: Support,
+    sizes: CartSizes,
+}
+
+fn walk(e: &Expr, cart: Cart, out: &mut Triggers) {
     match e {
         Expr::Num(_) | Expr::Sym { .. } => {}
         Expr::Frame => out.vblank = true,
@@ -67,23 +79,23 @@ fn walk(e: &Expr, cart_ram: Support, out: &mut Triggers) {
         Expr::Reg(_) | Expr::Flag(_) | Expr::Ime | Expr::Bank | Expr::T | Expr::Old | Expr::New => {
             out.every_instruction = true
         }
-        Expr::Unary(_, inner) => walk(inner, cart_ram, out),
+        Expr::Unary(_, inner) => walk(inner, cart, out),
         Expr::Binary(_, l, r) => {
-            walk(l, cart_ram, out);
-            walk(r, cart_ram, out);
+            walk(l, cart, out);
+            walk(r, cart, out);
         }
-        Expr::Read { width, place } => read(*width, place, cart_ram, out),
+        Expr::Read { width, place } => read(*width, place, cart, out),
     }
 }
 
-fn read(width: Width, place: &Place, cart_ram: Support, out: &mut Triggers) {
+fn read(width: Width, place: &Place, cart: Cart, out: &mut Triggers) {
     let len = match width {
         Width::U8 | Width::S8 => 1,
         Width::U16 | Width::S16 => 2,
     };
     for i in 0..len {
-        match target(place, i) {
-            Some(Ok(target)) => arm(target, cart_ram, out),
+        match target(place, i, cart.sizes) {
+            Some(Ok(target)) => arm(target, cart.ram, out),
             // A read the evaluator can't resolve fails whenever it runs; the
             // baseline at least evaluates it at the first instruction.
             Some(Err(())) | None => out.every_instruction = true,
@@ -94,15 +106,17 @@ fn read(width: Width, place: &Place, cart_ram: Support, out: &mut Triggers) {
 /// Byte `i` of a read, resolved as the evaluator resolves it (`eval::read`);
 /// `None` when that depends on the machine (a dynamic address, or a CPU
 /// address in a switchable area, which a bank switch remaps).
-fn target(place: &Place, i: usize) -> Option<Result<Target, ()>> {
+fn target(place: &Place, i: usize, sizes: CartSizes) -> Option<Result<Target, ()>> {
     match place {
         Place::Cpu(e) => {
             let base = u16::try_from(const_value(e)?).ok()?;
             Some(mem::fixed_target(base.wrapping_add(i as u16))?.map_err(drop))
         }
-        Place::Banked { bank, addr } => {
-            Some(mem::banked_target(*bank, addr.wrapping_add(i as u16)).map_err(drop))
-        }
+        Place::Banked { bank, addr } => Some(
+            mem::banked_target(*bank, addr.wrapping_add(i as u16))
+                .map(|t| sizes.alias(t))
+                .map_err(drop),
+        ),
         Place::Region { region, offset } => {
             let offset = usize::try_from(const_value(offset)?).ok()?;
             Some(Ok(Target::Backing {

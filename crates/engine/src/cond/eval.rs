@@ -300,7 +300,7 @@ fn read(
             }
             Place::Banked { bank, addr } => {
                 let addr = addr.wrapping_add(i as u16);
-                (mem::banked_target(*bank, addr)?, Some(addr))
+                (mem::target_in_bank(ctx.core, *bank, addr)?, Some(addr))
             }
             Place::Region { region, offset } => {
                 let value = eval(offset, ctx, warnings)?;

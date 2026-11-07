@@ -110,26 +110,6 @@ fn banked_cart_ram_and_rom_stop_on_the_write_in_their_bank() {
     );
 }
 
-/// Enables cart RAM, selects RAM bank `bank`, clears `addr` and counts up
-/// there forever.
-fn count_in_cart_ram(bank: u8, addr: u16) -> Vec<u8> {
-    let [lo, hi] = addr.to_le_bytes();
-    #[rustfmt::skip]
-    let code = [
-        0x3E, 0x0A, 0xEA, 0x00, 0x00, // ld a, $0A; ld [$0000], a
-        0x3E, bank, 0xEA, 0x00, 0x40, // ld a, bank; ld [$4000], a
-        0x21, lo, hi,                 // ld hl, addr
-        0x36, 0x00,                   // ld [hl], 0
-        0x34,                         // $015F .loop: inc [hl]
-        0x18, 0xFD,                   // jr .loop
-    ];
-    code.to_vec()
-}
-
-const MBC5_RAM: u8 = 0x1A;
-const RAM_2K: u8 = 0x01;
-const RAM_8K: u8 = 0x02;
-
 #[test]
 fn a_write_through_an_aliased_ram_bank_reaches_bank_0() {
     // 8 KiB of cart RAM is one bank: RAM bank 1 is bank 0 again.

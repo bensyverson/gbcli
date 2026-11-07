@@ -9,7 +9,7 @@ use gbcli_core::{
 };
 use gbcli_protocol::{Location, StepKind, StopReason, WatchAccess};
 
-use super::decide::{Notes, compile, decide, exec_breakpoint, exec_hit, remove_once};
+use super::decide::{Notes, compile, decide, exec_breakpoint, exec_hit, reached, remove_once};
 use super::record::record;
 use super::until::Until;
 use super::{DebugError, Outcome, RunOptions};
@@ -111,6 +111,10 @@ fn run(
     condition: Option<&Condition>,
 ) -> Result<Outcome, DebugError> {
     let compiled = compile(m)?;
+    let goal = match goal {
+        Goal::To(at) => Goal::To(reached(m, &at)),
+        other => other,
+    };
     let (mut exec, mut read, mut write) = (AddrFilter::new(), AddrFilter::new(), AddrFilter::new());
     for (_, at, _) in &compiled.breakpoints {
         exec.insert(at.addr, bank_sel(at));

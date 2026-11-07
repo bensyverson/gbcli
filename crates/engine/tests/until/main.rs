@@ -36,23 +36,6 @@ fn lenient() -> RunOptions<'static> {
     opts
 }
 
-/// busy.gb with `code` at $0150, where its entry point jumps.
-fn program(code: &[u8]) -> Vec<u8> {
-    let mut rom = BUSY.to_vec();
-    rom[0x150..0x150 + code.len()].copy_from_slice(code);
-    rom
-}
-
-/// `rom` with a cartridge type and RAM size code in its header.
-fn with_cart(mut rom: Vec<u8>, kind: u8, ram_size: u8) -> Vec<u8> {
-    rom[0x147] = kind;
-    rom[0x149] = ram_size;
-    rom[0x14D] = rom[0x134..0x14D]
-        .iter()
-        .fold(0u8, |x, b| x.wrapping_sub(*b).wrapping_sub(1));
-    rom
-}
-
 fn at(addr: u16) -> Location {
     Location {
         addr,

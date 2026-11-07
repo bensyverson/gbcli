@@ -40,11 +40,16 @@ static uint16_t rom_bank(GB_gameboy_t *gb, uint16_t bank)
     return ((uint32_t)bank * 0x4000 & (gb->rom_size - 1)) / 0x4000;
 }
 
-static uint8_t cart_ram_bank(GB_gameboy_t *gb)
+// The cart RAM bank a write at A000-BFFF lands in: the selected bank masked
+// as write_mbc_ram masks it, then by the RAM size, as rom_bank masks by the
+// ROM size. So a hit's bank is the bank of the byte it reached, the bank the
+// engine aliases an explicit bank to (mem::effective_bank).
+static uint16_t cart_ram_bank(GB_gameboy_t *gb)
 {
-    uint8_t bank = gb->mbc_ram_bank;
+    uint32_t bank = gb->mbc_ram_bank;
     if (gb->cartridge_type->mbc_type == GB_MBC3 && !gb->is_mbc30) bank &= 3;
-    return bank;
+    if (!gb->mbc_ram_size) return bank;
+    return (bank * 0x2000 & (gb->mbc_ram_size - 1)) / 0x2000;
 }
 
 // The bank mapped at a canonical address (echo already folded to WRAM).

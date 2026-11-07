@@ -67,6 +67,8 @@ pub const GB_DIRECT_ACCESS_OAM: GB_direct_access_t = 7;
 pub const GB_DIRECT_ACCESS_BGP: GB_direct_access_t = 8;
 pub const GB_DIRECT_ACCESS_OBP: GB_direct_access_t = 9;
 pub const GB_DIRECT_ACCESS_IE: GB_direct_access_t = 10;
+/// The ROM, with the bank mapped at 0000-3FFF in the bank output.
+pub const GB_DIRECT_ACCESS_ROM0: GB_direct_access_t = 11;
 
 /// `GB_vblank_type_t` (display.h), a C enum.
 pub type GB_vblank_type_t = c_uint;

@@ -24,6 +24,16 @@ pub(super) struct Compiled {
     pub watches: Vec<(u32, WatchAccess, Location, Option<Condition>, bool)>,
 }
 
+/// `at` with its bank as the hardware reaches it ([`mem::effective_bank`]):
+/// the core reports a hit in the bank of the byte it reached, so a location
+/// named through an aliased bank must be armed and matched in that bank.
+pub(super) fn reached(m: &Machine, at: &Location) -> Location {
+    Location {
+        bank: at.bank.map(|b| mem::effective_bank(m.core(), b, at.addr)),
+        ..at.clone()
+    }
+}
+
 pub(super) fn compile(m: &Machine) -> Result<Compiled, DebugError> {
     let config = m.debugger_config();
     let cond = |id: u32, text: &Option<String>| {
@@ -36,7 +46,7 @@ pub(super) fn compile(m: &Machine) -> Result<Compiled, DebugError> {
         breakpoints: config
             .breakpoints
             .iter()
-            .map(|b| Ok((b.id, b.at.clone(), cond(b.id, &b.condition)?)))
+            .map(|b| Ok((b.id, reached(m, &b.at), cond(b.id, &b.condition)?)))
             .collect::<Result<_, DebugError>>()?,
         watches: config
             .watches
@@ -45,7 +55,7 @@ pub(super) fn compile(m: &Machine) -> Result<Compiled, DebugError> {
                 Ok((
                     w.id,
                     w.access,
-                    w.at.clone(),
+                    reached(m, &w.at),
                     cond(w.id, &w.condition)?,
                     w.once,
                 ))

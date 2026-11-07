@@ -56,6 +56,20 @@ pub(crate) fn region(core: &SameBoy, region: Region) -> Result<RegionView<'_>, C
     Ok(RegionView { bytes, bank })
 }
 
+pub(crate) fn rom0_bank(core: &SameBoy) -> u16 {
+    let mut bank = 0u16;
+    // SAFETY: GB_get_direct_access only reads the instance and fills the outputs.
+    unsafe {
+        sb::GB_get_direct_access(
+            core.raw(),
+            sb::GB_DIRECT_ACCESS_ROM0,
+            std::ptr::null_mut(),
+            &mut bank,
+        )
+    };
+    bank
+}
+
 pub(crate) fn io_register(core: &SameBoy, reg: IoReg) -> Result<u8, CoreError> {
     if reg.0 >= 0x80 {
         return Err(CoreError::OutOfRange {

@@ -262,3 +262,44 @@ fn cart_ram_writes_are_supported_only_on_mappers_the_hook_mirrors() {
         Support::No { reason } if !reason.is_empty()
     ));
 }
+
+#[test]
+fn cart_ram_the_hook_does_not_mirror_is_untracked() {
+    let mut mbc2 = BANKED.to_vec();
+    mbc2[0x147] = 0x06; // MBC2+battery
+    mbc2[0x148] = 0x00;
+    mbc2[0x149] = 0x00;
+    let core = quick_dmg(&mbc2);
+    let err = core.written(Region::Sram).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            CoreError::Unsupported {
+                feature: Feature::CartRamWrites,
+                ..
+            }
+        ),
+        "{err:?}"
+    );
+}
+
+#[test]
+fn a_cart_ram_hit_reports_the_bank_the_ram_size_leaves() {
+    // Writes $A000 with RAM bank 1 selected on an 8 KiB cart, which has one
+    // bank: the write lands in bank 0, and the hit says so.
+    #[rustfmt::skip]
+    let code = [
+        0x3E, 0x0A, 0xEA, 0x00, 0x00, // ld a, $0A; ld [$0000], a
+        0x3E, 0x01, 0xEA, 0x00, 0x40, // ld a, 1; ld [$4000], a
+        0x3E, 0x42, 0xEA, 0x00, 0xA0, // ld a, $42; ld [$A000], a
+        0x18, 0xFE,                   // jr @
+    ];
+    let mut rom = BUSY.to_vec();
+    rom[0x150..0x150 + code.len()].copy_from_slice(&code);
+    rom[0x147] = 0x1A; // MBC5+RAM
+    rom[0x149] = 0x02; // 8 KiB
+    let mut core = quick_dmg(&rom);
+    let write = filter(&[(0xA000, BankSel::Bank(0))]);
+    let h = hit(&run_with(&mut core, |r| r.write = &write));
+    assert_eq!((h.addr, h.bank, h.new), (0xA000, 0, 0x42));
+}

@@ -15,6 +15,10 @@ Why is the screen blank?
   gbcli shot blank.png --any-frame, then gbcli read '[rLCDC]' (bit 7: LCD on)
 Press buttons during a run
   gbcli run --frames 30 --keys 'START@5 -START@7' (or --keys-file keys.txt)
+What does my music do?
+  gbcli run --frames 120 --audio-log (every sound write, decoded into notes), then
+  --wav music.wav to hear it, --channels each for one file per channel, --piano
+  roll.png or --spectrogram spec.png to see it
 Look at tiles, the background map or sprites
   gbcli view tiles, gbcli view map --map window, gbcli view oam
 Find a symbol's address

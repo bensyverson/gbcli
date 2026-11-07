@@ -30,14 +30,15 @@ exit 0
 gbcli run — advance the machine to a stop, then read and save
 
 USAGE
-  gbcli run [ROM] [--frames N | --until EXPR | --to ADDR] [--keys TOKENS] [--read EXPR]… [--shot PATH] [flags]
+  gbcli run [ROM] [--frames N | --until EXPR | --to ADDR] [--keys TOKENS] [--read EXPR]… [--shot PATH] [--audio-log] [--wav PATH] [flags]
 
 The experiment verb. In this order, whatever the order of the flags: start
 from --at, the head, or the boot handoff; apply --patch, --poke and --write in
 the order given; schedule --keys; run until --until holds, --to is reached, a
 breakpoint or watch fires, or the budget ends; evaluate --read; save --shot;
-save --checkpoint. The stop becomes the session's new head. A ROM argument is
-the same as --rom.
+save the audio (--audio-log, --wav, --piano, --spectrogram); save
+--checkpoint. The stop becomes the session's new head. A ROM argument is the
+same as --rom.
 
 CLASS
   act: advances or changes the machine and saves the new head; needs a session (name one with a ROM to create it).
@@ -58,6 +59,11 @@ FLAGS
   --checkpoint NAME       save the stop state under this name
   --allow-uninit          read never-written bytes as their power-on values, with a warning
   --shot PATH             save a PNG of the screen at the stop (see the shot flags)
+  --audio-log             print every write the run made to the sound registers, decoded into notes and settings, at elapsed 2^23 Hz ticks since --since: the cheap sibling of --wav
+  --wav PATH              save what the run played as a WAV (16-bit stereo, 32,768 Hz)
+  --channels mixed|each   with --wav: each also saves every channel alone beside it (PATH's stem with -square1, -square2, -wave, -noise) by replaying the run muted
+  --piano PATH            save a piano roll PNG of the notes the run's sound writes played
+  --spectrogram PATH      save a spectrogram PNG of what the run played
   --keys TOKENS           press and release buttons: 'A@0 -A@2 START@10' (frame offsets)
   --keys-file FILE        key tokens from a file, after --keys; # starts a comment
 

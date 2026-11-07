@@ -51,20 +51,37 @@ pub fn record_takes<C: Core>(
     mut make: impl FnMut() -> Result<C, CoreError>,
     mut drive: impl FnMut(&mut C) -> Result<(), CoreError>,
 ) -> Result<Takes, AudioError> {
-    let mut take =
-        |capture: AudioCapture| -> Result<(AudioSamples, (Ticks, Registers)), AudioError> {
-            let mut core = make()?;
-            core.set_audio_capture(Some(capture))?;
-            drive(&mut core)?;
-            let audio = core.take_audio()?;
-            Ok((audio, (core.now(), core.registers())))
-        };
+    record_takes_with(
+        || make().map_err(AudioError::from),
+        |core: &mut C| drive(core).map_err(AudioError::from),
+        |core: &mut C| core as &mut dyn Core,
+    )
+}
+
+/// [`record_takes`] over anything that holds a core, such as a debugger
+/// session whose runs stop at breakpoints and press keys: `core` reaches the
+/// core inside, and `make` and `drive` fail with the caller's own error.
+pub fn record_takes_with<T, E: From<AudioError>>(
+    mut make: impl FnMut() -> Result<T, E>,
+    mut drive: impl FnMut(&mut T) -> Result<(), E>,
+    core: impl Fn(&mut T) -> &mut dyn Core,
+) -> Result<Takes, E> {
+    let mut take = |capture: AudioCapture| -> Result<(AudioSamples, (Ticks, Registers)), E> {
+        let mut made = make()?;
+        core(&mut made)
+            .set_audio_capture(Some(capture))
+            .map_err(AudioError::from)?;
+        drive(&mut made)?;
+        let c = core(&mut made);
+        let audio = c.take_audio().map_err(AudioError::from)?;
+        Ok((audio, (c.now(), c.registers())))
+    };
     let (mixed, end) = take(AudioCapture::MIXED)?;
     let mut channels: [AudioSamples; 4] = Default::default();
     for channel in ApuChannel::ALL {
         let (audio, solo_end) = take(AudioCapture::solo(channel))?;
         if solo_end != end || audio.samples.len() != mixed.samples.len() {
-            return Err(AudioError::ReplayDiverged { channel });
+            return Err(AudioError::ReplayDiverged { channel }.into());
         }
         channels[channel as usize] = audio;
     }

@@ -477,6 +477,13 @@ impl Core for SameBoy {
 
     fn save(&self) -> Vec<u8> {
         let gb = self.raw();
+        // The batched APU cycle count is saved, and capture changes how often
+        // it is caught up, so catch it up first: observing must not change the
+        // head's bytes. This changes no behavior (any APU access does it).
+        // SAFETY: outside GB_run, so no callback holds a reference into the
+        // hooks; the sample callback this may fire reaches them through user
+        // data, and no reference from here is alive while it runs.
+        unsafe { sb::gbcli_sync_apu(gb) };
         // SAFETY: SameBoy fills exactly GB_get_save_state_size bytes; saving reads only.
         let sameboy = unsafe {
             let mut state = vec![0u8; sb::GB_get_save_state_size(gb)];

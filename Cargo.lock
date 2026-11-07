@@ -157,6 +157,7 @@ dependencies = [
 name = "gbcli-server"
 version = "0.1.0"
 dependencies = [
+ "gbcli-audio",
  "gbcli-bundle",
  "gbcli-core",
  "gbcli-engine",

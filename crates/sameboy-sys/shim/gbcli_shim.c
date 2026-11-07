@@ -152,6 +152,13 @@ int32_t gbcli_write_target(GB_gameboy_t *gb, uint16_t addr)
 // cycles (apu.apu_cycles) and catches up on any APU register access.
 bool gbcli_apu_synced(GB_gameboy_t *gb) { return gb->apu.apu_cycles == 0; }
 
+// Runs the APU's batched cycles now, as any APU register access does. How
+// many are batched depends on how often the renderer made it catch up, which
+// capture changes, so a save made after this is the same bytes either way.
+// With capture on, it renders the samples those cycles complete, which the
+// next catch-up would have rendered identically.
+void gbcli_sync_apu(GB_gameboy_t *gb) { GB_apu_run(gb, true); }
+
 // Mirrors GB_apu_read (apu.c) minus its GB_apu_run: -1 where that run could
 // change the result (NR52's channel bits, wave RAM while channel 3 plays).
 static int apu_peek(GB_gameboy_t *gb, uint8_t reg)

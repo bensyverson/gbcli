@@ -12,6 +12,7 @@ gbcli-core.workspace = true
 gbcli-engine.workspace = true
 gbcli-protocol.workspace = true
 gbcli-view.workspace = true
+gbcli-audio.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 

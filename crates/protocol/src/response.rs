@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::audio::AudioMade;
 use crate::checkpoint::{Location, WatchAccess};
 use crate::error::ErrorBody;
 use crate::keys::KeyEvent;
@@ -141,6 +142,8 @@ pub struct ResultBody {
     pub reads: Option<Vec<ReadValue>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shot: Option<ShotMade>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio: Option<AudioMade>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub view: Option<ViewMade>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

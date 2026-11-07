@@ -10,7 +10,9 @@ use std::path::{Path, PathBuf};
 use super::{VERBS, by_name};
 
 /// The crates whose strings reach a user: errors, remedies, help.
-const CRATES: &[&str] = &["protocol", "bundle", "engine", "server", "cli", "view"];
+const CRATES: &[&str] = &[
+    "protocol", "bundle", "engine", "server", "cli", "view", "audio",
+];
 
 /// Flags every verb takes, or that come before a verb.
 const ALWAYS: &[&str] = &["help", "version"];

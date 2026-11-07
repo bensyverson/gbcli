@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::audio::AudioArgs;
 use crate::checkpoint::WatchAccess;
 use crate::keys::KeyEvent;
 use crate::listing::SymArgs;
@@ -147,6 +148,10 @@ pub struct RunArgs {
     /// to keep `Op` small.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shot: Option<Box<ShotArgs>>,
+    /// What the run told the APU and what it played, collected during the
+    /// run and written after the shot (design §9). Boxed to keep `Op` small.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio: Option<Box<AudioArgs>>,
     /// Save the stop state under this name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checkpoint: Option<String>,

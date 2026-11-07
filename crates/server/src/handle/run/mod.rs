@@ -2,6 +2,7 @@
 //! checked before the machine moves; once it has moved, the state it reached
 //! is saved whatever fails after, and the failure carries its stop record.
 
+mod audio;
 mod budget;
 
 use gbcli_bundle::{SessionStore, Start, validate_checkpoint_name};
@@ -9,7 +10,7 @@ use gbcli_core::Budget;
 use gbcli_engine::{DebugError, Machine, Outcome, RunOptions, unapplied_keys};
 use gbcli_protocol::{
     ErrorBody, ErrorCode, KeyEvent, Location, ResultBody, RunArgs, SessionFile, StepArgs, StepKind,
-    StopReason, StopRecord,
+    StopReason, StopRecord, WavChannels,
 };
 
 use super::history::write_checkpoint;
@@ -23,6 +24,7 @@ use budget::{DEFAULT_FRAMES, budget_of, unanswered, wall_guard_error};
 const SCANLINE_STEP_INSTRUCTIONS: u64 = 100_000;
 
 /// What a run stops at besides its budget, resolved before it starts.
+#[derive(Clone)]
 enum Target {
     Budget,
     Until(String),
@@ -90,6 +92,9 @@ impl Handler {
         if let Some(shot) = &args.shot {
             shot::check(shot)?;
         }
+        if let Some(sound) = &args.audio {
+            audio::check(sound)?;
+        }
 
         // What needs the machine's symbols and sizes. A refusal here hands
         // the machine back untouched.
@@ -108,6 +113,18 @@ impl Handler {
 
         // The machine moves from here on.
         let writes = apply_writes(&mut machine, &args.writes)?;
+        let sound = args.audio.as_deref();
+        // The per-channel replays start where the run starts: after the writes.
+        let replay_from = match sound.and_then(|a| a.wav.as_ref()) {
+            Some(w) if w.channels == WavChannels::Each => {
+                Some(machine.try_clone().map_err(|e| Failure::from_core(&e))?)
+            }
+            _ => None,
+        };
+        let collecting = match sound {
+            Some(a) => Some((audio::start(&mut machine, a)?, machine.core().now())),
+            None => None,
+        };
         let (budget, limits, defaulted) = budget_of(args);
         let interrupt = self.interrupt.clone();
         let mut opts = RunOptions::new(budget);
@@ -115,10 +132,13 @@ impl Handler {
         opts.allow_uninit = args.allow_uninit;
         opts.interrupt = Some(&interrupt);
         opts.keys = &args.keys;
-        let outcome = match plan.target {
-            Target::Until(text) => machine.run_until(&text, &opts),
-            Target::To(at) => machine.run_to(at, &opts),
-            Target::Budget => machine.run(&opts),
+        let outcome = run_target(&mut machine, &plan.target, &opts);
+        // Whatever the outcome, so the machine kept warm stops collecting.
+        let collected = match (sound, collecting) {
+            (Some(a), Some((snapshot, from))) => {
+                Some(audio::finish(&mut machine, a, snapshot, from))
+            }
+            _ => None,
         };
         let mut outcome = match outcome {
             Ok(outcome) => outcome,
@@ -144,10 +164,27 @@ impl Handler {
         // After the reads (design §11 step 6); capturing only reads the core.
         let shot = args.shot.as_ref().map(|s| shot::take(&machine, s, &since));
         let answered = self.answered(args, defaulted, guarded, &stop);
+        // After the shot, and only when everything before succeeded: the
+        // replays for per-channel WAVs run the request four more times.
+        let sound = match (sound, collected, &reads, &shot, &answered) {
+            (Some(a), Some(collected), Ok(_), None | Some(Ok(_)), Ok(())) => {
+                Some(collected.and_then(|c| {
+                    let drive = |m: &mut Machine| {
+                        run_target(m, &plan.target, &opts)
+                            .map(|_| ())
+                            .map_err(|e| Failure::from_debug(&e))
+                    };
+                    audio::deliver(a, c, &machine, &since, || {
+                        audio::takes(replay_from.as_ref(), drive)
+                    })
+                }))
+            }
+            _ => None,
+        };
         // Last, and only when everything before it succeeded (step 7); after
         // the head's save, so the checkpoint records the rev it is.
-        let checkpoint = match (&args.checkpoint, &reads, &shot, &answered) {
-            (Some(name), Ok(_), None | Some(Ok(_)), Ok(())) => {
+        let checkpoint = match (&args.checkpoint, &reads, &shot, &answered, &sound) {
+            (Some(name), Ok(_), None | Some(Ok(_)), Ok(()), None | Some(Ok(_))) => {
                 Some(write_checkpoint(store, &machine, name, actor, meta.rev))
             }
             _ => None,
@@ -160,12 +197,14 @@ impl Handler {
         let reads = reads.map_err(with_stop)?;
         let shot = shot.transpose().map_err(with_stop)?;
         answered?;
+        let sound = sound.transpose().map_err(with_stop)?;
         let checkpoint = checkpoint.map_err(with_stop)?;
         let keys_unapplied = unapplied(&args.keys, &stop, warnings);
         Ok(ResultBody {
             stop: Some(stop),
             reads: Some(reads),
             shot,
+            audio: sound,
             keys_unapplied,
             checkpoint,
             writes: (!writes.is_empty()).then_some(writes),
@@ -289,8 +328,24 @@ impl Handler {
     }
 }
 
+/// Runs `machine` to `target`.
+fn run_target(
+    machine: &mut Machine,
+    target: &Target,
+    opts: &RunOptions<'_>,
+) -> Result<Outcome, DebugError> {
+    match target {
+        Target::Until(text) => machine.run_until(text, opts),
+        Target::To(at) => machine.run_to(at.clone(), opts),
+        Target::Budget => machine.run(opts),
+    }
+}
+
 /// Compiles the reads and resolves the target on `machine`, before it moves.
 fn plan_of(machine: &Machine, args: &RunArgs) -> Result<Plan, Failure> {
+    if let Some(sound) = &args.audio {
+        audio::check_machine(machine, sound)?;
+    }
     let reads = compile_reads(machine, &args.read)?;
     let target = match (&args.until, &args.to) {
         (Some(text), _) => {

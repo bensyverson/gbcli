@@ -24,6 +24,6 @@ pub use notes::{NoteSpan, note_spans};
 pub use piano::{MAX_WIDTH, PianoRoll, piano_roll};
 pub use pitch::{Note, NoteName, Pitch, midi_of, nearest_note, noise_hz};
 pub use reg::{Direction, Duty, Envelope, LfsrWidth, SoundReg, Sweep, WaveLevel, channel_name};
-pub use replay::{Takes, record_takes};
+pub use replay::{Takes, record_takes, record_takes_with};
 pub use spectrogram::{FLOOR_DB, HOP, HZ_PER_ROW, LEVELS, ROWS, Spectrum, spectrogram, spectrum};
 pub use wav::wav;

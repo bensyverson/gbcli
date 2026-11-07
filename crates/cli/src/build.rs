@@ -240,6 +240,7 @@ fn run(inv: &Invocation, env: &Env) -> Result<RunArgs, Usage> {
         checkpoint: inv.one("checkpoint").map(str::to_string),
         allow_uninit: inv.has("allow-uninit"),
         shot: video::run_shot(inv)?.map(Box::new),
+        audio: audio::run_audio(inv)?.map(Box::new),
         keys: video::keys(inv, env)?,
     })
 }
@@ -315,6 +316,7 @@ fn target(inv: &Invocation, env: &Env, rom: Option<String>) -> Result<Target, Us
     })
 }
 
+mod audio;
 mod video;
 
 #[cfg(test)]

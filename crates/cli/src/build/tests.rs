@@ -311,3 +311,31 @@ fn the_read_verbs_for_shots_views_symbols_and_checkpoints_build_their_ops() {
     assert_eq!(args.pattern, "Main*");
     assert!(matches!(request(&["checkpoints"]).1, Op::Checkpoints));
 }
+
+fn run_audio(line: &[&str]) -> Option<Box<gbcli_protocol::AudioArgs>> {
+    match request(line).1 {
+        Op::Run(args) => args.audio,
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn run_collects_audio_only_when_asked() {
+    assert_eq!(run_audio(&["run", "--frames", "2"]), None);
+    let audio = run_audio(&["run", "--audio-log", "--piano", "p.png"]).unwrap();
+    assert!(audio.log && audio.wav.is_none());
+    assert_eq!(audio.piano.unwrap().path, "p.png");
+}
+
+#[test]
+fn run_wav_takes_its_channels_and_refuses_them_alone() {
+    use gbcli_protocol::WavChannels;
+    let audio = run_audio(&["run", "--wav", "m.wav"]).unwrap();
+    assert_eq!(audio.wav.unwrap().channels, WavChannels::Mixed);
+    let audio = run_audio(&["run", "--wav", "m.wav", "--channels", "each"]).unwrap();
+    assert_eq!(audio.wav.unwrap().channels, WavChannels::Each);
+    let alone = command(&["run", "--channels", "each"]).unwrap_err();
+    assert!(alone.message.contains("--wav"), "{alone:?}");
+    let bad = command(&["run", "--wav", "m.wav", "--channels", "all"]).unwrap_err();
+    assert!(bad.remedy.contains("each"), "{bad:?}");
+}

@@ -41,7 +41,7 @@ pub const VERBS: &[VerbSpec] = &[
         class: Class::Act,
         summary: "advance the machine to a stop, then read and save",
         usage: "[ROM] [--frames N | --until EXPR | --to ADDR] [--keys TOKENS] [--read EXPR]… \
-                [--shot PATH] [flags]",
+                [--shot PATH] [--audio-log] [--wav PATH] [flags]",
         arity: Arity {
             min: 0,
             max: Some(1),
@@ -52,7 +52,8 @@ pub const VERBS: &[VerbSpec] = &[
         about: "The experiment verb. In this order, whatever the order of the flags: start \
                 from --at, the head, or the boot handoff; apply --patch, --poke and --write \
                 in the order given; schedule --keys; run until --until holds, --to is reached, a breakpoint or \
-                watch fires, or the budget ends; evaluate --read; save --shot; save --checkpoint. The stop \
+                watch fires, or the budget ends; evaluate --read; save --shot; save the audio \
+                (--audio-log, --wav, --piano, --spectrogram); save --checkpoint. The stop \
                 becomes the session's new head. A ROM argument is the same as --rom.",
         example: (
             "gbcli run game.gb --session dx --until 'u16[wFrame] >= 60' --read wSpriteX",

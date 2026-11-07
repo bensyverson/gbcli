@@ -191,6 +191,32 @@ pub const RUN: &[FlagSpec] = &[
         "PATH",
         "save a PNG of the screen at the stop (see the shot flags)",
     ),
+    switch(
+        "audio-log",
+        "print every write the run made to the sound registers, decoded into notes and \
+         settings, at elapsed 2^23 Hz ticks since --since: the cheap sibling of --wav",
+    ),
+    value(
+        "wav",
+        "PATH",
+        "save what the run played as a WAV (16-bit stereo, 32,768 Hz)",
+    ),
+    value(
+        "channels",
+        "mixed|each",
+        "with --wav: each also saves every channel alone beside it (PATH's stem with \
+         -square1, -square2, -wave, -noise) by replaying the run muted",
+    ),
+    value(
+        "piano",
+        "PATH",
+        "save a piano roll PNG of the notes the run's sound writes played",
+    ),
+    value(
+        "spectrogram",
+        "PATH",
+        "save a spectrogram PNG of what the run played",
+    ),
     value(
         "keys",
         "TOKENS",

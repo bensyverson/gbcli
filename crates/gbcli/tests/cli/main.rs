@@ -2,6 +2,7 @@
 //! transcripts, every error code's remedy, and help with no preconditions.
 //! Each test drives the built binary in its own temporary project.
 
+mod audio;
 mod common;
 mod errors;
 mod help;

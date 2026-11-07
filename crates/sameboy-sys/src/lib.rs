@@ -264,6 +264,8 @@ unsafe extern "C" {
     /// write reaches no memory but OAM.
     pub fn gbcli_write_target(gb: *mut GB_gameboy_t, addr: u16) -> i32;
     pub fn gbcli_apu_synced(gb: *mut GB_gameboy_t) -> bool;
+    /// Runs the APU's batched cycles now (sets state: see the shim).
+    pub fn gbcli_sync_apu(gb: *mut GB_gameboy_t);
     /// Ticks since the current `GB_run` began, read from inside a callback.
     pub fn gbcli_cycles_since_run(gb: *mut GB_gameboy_t) -> c_uint;
     /// One of the `GBCLI_APU_WRITE_*` codes: what the APU will do with a

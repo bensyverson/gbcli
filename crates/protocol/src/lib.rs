@@ -2,6 +2,7 @@
 //! server and the CLI client. The shapes are in
 //! `project/2026-11-06-design.md` §5, §6 and §10.
 
+mod audio;
 mod checkpoint;
 mod error;
 mod hex;
@@ -18,6 +19,7 @@ mod strict;
 mod video;
 mod views;
 
+pub use audio::{ApuWriteLine, AudioArgs, AudioMade, WavArgs, WavChannels, WavMade, WavTake};
 pub use checkpoint::{
     BreakpointSpec, CheckpointHeader, CoreId, DebuggerConfig, LiveSymbol, Location, Patch,
     RenderConfig, Sha256, SymbolRole, TimeMark, WatchAccess, WatchSpec, model_from_name,

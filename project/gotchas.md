@@ -41,3 +41,7 @@ The worktree guard refused plain commands that only *mentioned* a path under `/U
 ## 2026-11-06 — a `--frames` run stops at the vblank, before the ROM has seen it
 
 `run --frames N` ends on the core's vblank stop, which comes before the game's own vblank code runs. So anything a ROM does "at vblank" (sampling JOYP, logging a frame counter) for the stop's vblank happens at the start of the *next* run, as that run's frame 0. A test that assumed the next run's first sample was its first full frame was off by one (leaf bHJhLp, `crates/server/src/handle/keys_tests.rs`).
+
+## 2026-11-06 — the CLI goldens mask every ` at=` and `"at":` as wall-clock time
+
+`crates/gbcli/tests/cli/common.rs` (`mask`) replaces the value after ` at=` and `"at":` in every transcript, because event rows carry host time there. A new field named `at` holding emulated time is silently masked, so its golden pins nothing. Name emulated times something else (the audio log's `elapsed`, leaf vd3ulF), or narrow the mask.

@@ -123,6 +123,11 @@ impl SameBoy {
                 Some(_) => {
                     sb::GB_set_sample_rate(gb, AudioCapture::SAMPLE_RATE);
                     sb::GB_apu_set_sample_callback(gb, Some(on_sample));
+                    // Cycles still batched would be rendered after the
+                    // restart, a few ticks late; run them first, so capture
+                    // starts at this moment whatever the APU had batched.
+                    // What they render is dropped with the samples below.
+                    sb::gbcli_sync_apu(gb);
                     sb::gbcli_audio_restart(gb);
                 }
                 None => {
@@ -142,10 +147,18 @@ impl SameBoy {
         if let Some(log) = &mut hooks.apu_log {
             log.clear();
         }
-        if let Some(audio) = &mut hooks.audio {
-            *audio = AudioSamples::default();
-            // SAFETY: outside GB_run.
-            unsafe { sb::gbcli_audio_restart(gb) };
+        if hooks.audio.is_some() {
+            // As in `set_capture`: a state saved by another build may hold
+            // batched cycles. The sync may render into the hooks, so it runs
+            // before the samples are cleared, through no live reference.
+            // SAFETY: outside GB_run; no reference into the hooks is alive.
+            unsafe {
+                sb::gbcli_sync_apu(gb);
+                sb::gbcli_audio_restart(gb);
+            }
+            if let Some(audio) = &mut self.hooks_mut().audio {
+                *audio = AudioSamples::default();
+            }
         }
     }
 }

@@ -1,0 +1,65 @@
+$ gbcli checkpoint start --rom tune.gb --session tune
+exit 0
+checkpoint name=start path=.gbcli/sessions/tune/checkpoints/start.gbck frame=0 rev=s0
+rev s0
+$ gbcli run --at start --frames 40 --audio-log --session tune
+exit 0
+stop budget_exhausted kind=frames pc=$0040 bank=0 frame=40 t=2808804 since=boot ticks=17379824 ly=144 shown=40 vblank=normal
+budget frames=40/40 instructions=701614 ticks=5617608
+audio since=boot writes=43
+apu elapsed=224 pc=$0162 text="NR52 $80: APU on"
+apu elapsed=264 pc=$0166 text="NR50 $77: volume left 7, right 7"
+apu elapsed=304 pc=$016A text="NR51 $FF: panning left 1234, right 1234"
+apu elapsed=400 pc=$0175 text="WAVE0 $01: wave RAM samples 0, 1"
+apu elapsed=480 pc=$0175 text="WAVE1 $23: wave RAM samples 2, 3"
+apu elapsed=560 pc=$0175 text="WAVE2 $45: wave RAM samples 4, 5"
+apu elapsed=640 pc=$0175 text="WAVE3 $67: wave RAM samples 6, 7"
+apu elapsed=720 pc=$0175 text="WAVE4 $89: wave RAM samples 8, 9"
+apu elapsed=800 pc=$0175 text="WAVE5 $AB: wave RAM samples 10, 11"
+apu elapsed=880 pc=$0175 text="WAVE6 $CD: wave RAM samples 12, 13"
+apu elapsed=960 pc=$0175 text="WAVE7 $EF: wave RAM samples 14, 15"
+apu elapsed=1040 pc=$0175 text="WAVE8 $FE: wave RAM samples 15, 14"
+apu elapsed=1120 pc=$0175 text="WAVE9 $DC: wave RAM samples 13, 12"
+apu elapsed=1200 pc=$0175 text="WAVEA $BA: wave RAM samples 11, 10"
+apu elapsed=1280 pc=$0175 text="WAVEB $98: wave RAM samples 9, 8"
+apu elapsed=1360 pc=$0175 text="WAVEC $76: wave RAM samples 7, 6"
+apu elapsed=1440 pc=$0175 text="WAVED $54: wave RAM samples 5, 4"
+apu elapsed=1520 pc=$0175 text="WAVEE $32: wave RAM samples 3, 2"
+apu elapsed=1600 pc=$0175 text="WAVEF $10: wave RAM samples 1, 0"
+apu elapsed=1680 pc=$017C text="NR10 $00: sweep off"
+apu elapsed=1720 pc=$0180 text="NR11 $80: square 1 duty 50%, length 64"
+apu elapsed=1760 pc=$0184 text="NR12 $F3: square 1 envelope 15 down, pace 3"
+apu elapsed=1800 pc=$0188 text="NR13 $D6: square 1 period 2006 = G7 -8.4c (3120.76 Hz)"
+apu elapsed=1840 pc=$018C text="NR14 $86: square 1 trigger, length off, period 1750 = A4 -0.6c (439.84 Hz)"
+apu elapsed=1880 pc=$0190 text="NR21 $60: square 2 duty 25%, length 32"
+apu elapsed=1920 pc=$0194 text="NR22 $A0: square 2 envelope 10 steady"
+apu elapsed=1960 pc=$0198 text="NR23 $72: square 2 period 114 = C#2 -38.5c (67.77 Hz)"
+apu elapsed=2000 pc=$019C text="NR24 $C6: square 2 trigger, length on, period 1650 = E4 -1.6c (329.33 Hz)"
+apu elapsed=2040 pc=$01A0 text="NR30 $80: wave DAC on"
+apu elapsed=2080 pc=$01A4 text="NR31 $00: wave length 256"
+apu elapsed=2120 pc=$01A8 text="NR32 $20: wave level 100%"
+apu elapsed=2160 pc=$01AC text="NR33 $B2: wave period 178 = C#1 +19.8c (35.05 Hz)"
+apu elapsed=2200 pc=$01B0 text="NR34 $86: wave trigger, length off, period 1714 = G3 +1.9c (196.22 Hz)"
+apu elapsed=2106528 pc=$01B9 text="NR10 $17: sweep up, pace 1, shift 7"
+apu elapsed=2106568 pc=$01BD text="NR13 $06: square 1 period 1542 = C4 -17.2c (259.04 Hz)"
+apu elapsed=2106608 pc=$01C1 text="NR14 $87: square 1 trigger, length off, period 1798 = C5 +3.4c (524.29 Hz)"
+apu elapsed=2106648 pc=$01C5 text="NR42 $A1: noise envelope 10 down, pace 1"
+apu elapsed=2106688 pc=$01C9 text="NR43 $52: noise shift 5, 15-bit, divisor 2 = 4096 Hz"
+apu elapsed=2106728 pc=$01CD text="NR44 $80: noise trigger, length off"
+apu elapsed=4213240 pc=$01D5 text="NR30 $00: wave DAC off"
+apu elapsed=4213264 pc=$01D7 text="NR52 $00: APU off"
+apu elapsed=4213304 pc=$01DB text="NR12 $F0: square 1 envelope 15 steady (ignored: the APU is off)"
+apu elapsed=4213344 pc=$01DF text="NR11 $BF: square 1 length 1 (the APU is off: a DMG takes only the length)"
+rev s1
+$ gbcli run --at start --frames 40 --wav tune.wav --channels each --piano piano.png --spectrogram spectrogram.png --session tune
+exit 0
+stop budget_exhausted kind=frames pc=$0040 bank=0 frame=40 t=2808804 since=boot ticks=17379824 ly=144 shown=40 vblank=normal
+budget frames=40/40 instructions=701614 ticks=5617608
+wav take=mixed path=tune.wav samples=21943 rate=32768
+wav take=square1 path=tune-square1.wav samples=21943 rate=32768
+wav take=square2 path=tune-square2.wav samples=21943 rate=32768
+wav take=wave path=tune-wave.wav samples=21943 rate=32768
+wav take=noise path=tune-noise.wav samples=21943 rate=32768
+piano path=piano.png width=160 height=291 scale=1
+spectrogram path=spectrogram.png width=43 height=256 scale=1
+rev s2

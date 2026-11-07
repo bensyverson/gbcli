@@ -53,7 +53,8 @@ pub enum AddressingView {
 #[serde(deny_unknown_fields)]
 pub struct ImageOut {
     pub path: String,
-    /// The integer scale; the view's default (4) when absent.
+    /// The integer scale when present; otherwise the view's default: 4 for the
+    /// VRAM views, 1 for a run's audio images.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scale: Option<u32>,
 }

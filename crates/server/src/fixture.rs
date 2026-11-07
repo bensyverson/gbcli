@@ -22,6 +22,9 @@ pub const V3: &[u8] = include_bytes!("../../engine/tests/roms/rebuild_v3.gb");
 pub const V3_SYM: &[u8] = include_bytes!("../../engine/tests/roms/rebuild_v3.sym");
 /// Logs the held buttons at every vblank (`joypad.asm`).
 pub const JOYPAD: &[u8] = include_bytes!("../../engine/tests/roms/joypad.gb");
+/// Plays notes on all four channels for about 32 frames, then turns the APU
+/// off and writes a register while it is off (`tune.asm`).
+pub const TUNE: &[u8] = include_bytes!("../../audio/tests/roms/tune.gb");
 
 impl Fixture {
     /// A project directory with `demo.gb` and a `demo` session created.
@@ -36,14 +39,19 @@ impl Fixture {
 
     /// As [`Fixture::new`], over `rom` instead of V1.
     pub fn with_rom(name: &str, rom: &[u8]) -> Fixture {
-        Fixture::build(name, rom, false)
+        Fixture::build(name, rom, false, Model::DmgB)
+    }
+
+    /// As [`Fixture::with_rom`], on another model.
+    pub fn with_model(name: &str, rom: &[u8], model: Model) -> Fixture {
+        Fixture::build(name, rom, false, model)
     }
 
     fn make(name: &str, sym: bool) -> Fixture {
-        Fixture::build(name, V1, sym)
+        Fixture::build(name, V1, sym, Model::DmgB)
     }
 
-    fn build(name: &str, rom: &[u8], sym: bool) -> Fixture {
+    fn build(name: &str, rom: &[u8], sym: bool, model: Model) -> Fixture {
         let dir = std::env::temp_dir().join(format!("gbcli-server-{}-{name}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).expect("temp project");
@@ -54,18 +62,22 @@ impl Fixture {
         // Explicit: a GBCLI_DIR in the environment must not move the bundle.
         let bundle = Bundle::open_or_create_in(&dir, None).expect("bundle");
         let fixture = Fixture { dir, bundle };
-        fixture.create_session(sym);
+        fixture.create_session_on(sym, model);
         fixture
     }
 
     /// Creates the `demo` session over whatever `demo.gb` now holds.
     pub fn create_session(&self, sym: bool) {
+        self.create_session_on(sym, Model::DmgB);
+    }
+
+    fn create_session_on(&self, sym: bool, model: Model) {
         let session = self.bundle.session("demo").expect("name");
         session
             .create(&RomSource {
                 rom: self.dir.join("demo.gb"),
                 sym: sym.then(|| self.dir.join("demo.sym")),
-                model: Some(Model::DmgB),
+                model: Some(model),
                 seed: Some(0),
             })
             .expect("session");

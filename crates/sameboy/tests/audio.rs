@@ -152,12 +152,8 @@ fn capture_does_not_change_what_the_machine_does() {
         plain.apu().unwrap().channels,
         captured.apu().unwrap().channels
     );
-    // Rendering changes when SameBoy catches the APU up (its batching), so the
-    // state blobs can differ by the batched cycle count; once a real NR52 read
-    // catches both up, they are identical.
-    plain.bus_read(0xFF26).unwrap();
-    captured.bus_read(0xFF26).unwrap();
-    assert!(plain.save() == captured.save(), "synced states differ");
+    // A save catches the batched APU cycles up, so the bytes agree too.
+    assert!(plain.save() == captured.save(), "states differ");
 }
 
 #[test]
@@ -253,4 +249,58 @@ fn capture_is_refused_on_the_sgb() {
         Support::No { .. }
     ));
     assert!(core.set_audio_capture(Some(AudioCapture::MIXED)).is_err());
+}
+
+#[test]
+fn a_save_is_the_same_bytes_with_or_without_capture() {
+    // Observation must not change the head: SameBoy batches APU cycles, and
+    // rendering makes it catch up more often, so a save must not depend on it.
+    for frames in [1, 7, 35] {
+        let mut plain = quick_dmg(TUNE);
+        let mut captured = quick_dmg(TUNE);
+        captured
+            .set_audio_capture(Some(AudioCapture::MIXED))
+            .unwrap();
+        run(&mut plain, Budget::frames(frames));
+        run(&mut captured, Budget::frames(frames));
+        assert!(
+            plain.save() == captured.save(),
+            "saves differ after {frames} frames"
+        );
+    }
+}
+
+#[test]
+fn saving_during_a_capture_does_not_change_what_it_renders() {
+    let mut straight = quick_dmg(TUNE);
+    let mut saved = quick_dmg(TUNE);
+    straight
+        .set_audio_capture(Some(AudioCapture::MIXED))
+        .unwrap();
+    saved.set_audio_capture(Some(AudioCapture::MIXED)).unwrap();
+    run(&mut straight, Budget::frames(20));
+    for _ in 0..20 {
+        run(&mut saved, Budget::frames(1));
+        saved.save();
+    }
+    assert_eq!(straight.now(), saved.now());
+    assert_eq!(straight.take_audio().unwrap(), saved.take_audio().unwrap());
+    assert!(straight.save() == saved.save());
+}
+
+#[test]
+fn capture_renders_the_same_whatever_the_apu_had_batched() {
+    // Two cores at the same moment, one with its batched APU cycles caught up
+    // (a save does that) and one not: capture must start from the moment,
+    // not from wherever the APU last caught up.
+    let mut batched = quick_dmg(TUNE);
+    let mut synced = quick_dmg(TUNE);
+    assert_eq!(batched.apu().unwrap().sync, gbcli_core::ApuSync::Lagging);
+    synced.save();
+    assert_eq!(synced.apu().unwrap().sync, gbcli_core::ApuSync::Current);
+    for core in [&mut batched, &mut synced] {
+        core.set_audio_capture(Some(AudioCapture::MIXED)).unwrap();
+        run(core, Budget::frames(20));
+    }
+    assert_eq!(batched.take_audio().unwrap(), synced.take_audio().unwrap());
 }

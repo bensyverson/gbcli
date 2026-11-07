@@ -61,3 +61,7 @@ A `git merge --squash` that conflicted in two files was resolved in one (crates/
 ## 2026-11-07 — a worktree has no corpus, and `GBCLI_TEST_ROMS` doesn't reach every test
 
 `tests/corpus/fetched/` is gitignored, so a fresh worktree's `cargo test --workspace` fails on missing corpus files. `GBCLI_TEST_ROMS=/Users/ben/git/gbcli/tests/corpus/fetched` fixes the CLI's song tests, but `crates/corpus/tests/docboy_boot.rs` reads `<repo>/tests/corpus/fetched` directly and ignores the variable. A symlink from the worktree's `tests/corpus/fetched` to the main checkout's (remove it afterwards) makes the whole suite run (leaf 3KQ8fO).
+
+## 2026-11-07 — the permission check refuses to run uge2source until Ben approves it
+
+`scripts/music/export-reference.sh` builds hUGETracker's `uge2source` from its source. Claude Code's auto-mode check refused the first run of that binary as "code from external" until Ben approved it in the session; a later agent ran the script without a prompt. If it is refused, ask Ben, and don't work around it. Two more traps on the same path. The sandbox refuses to extract a tarball's `.gitmodules` ("Operation not permitted"), so the script extracts only `src/`. And parallel agents share `$TMPDIR`: a reviewer's scratch folder replaced the hand-built binary, so build through the script, which keeps its build under `target/uge2source`.

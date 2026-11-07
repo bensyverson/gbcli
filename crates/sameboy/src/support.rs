@@ -37,6 +37,8 @@ pub fn builtin_boot_rom(model: Model) -> &'static [u8] {
 pub(crate) fn support(feature: Feature) -> Support {
     let reason = match feature {
         Feature::ApuChannels => return Support::Yes,
+        Feature::ApuWriteLog => return Support::Yes,
+        Feature::AudioSamples => return Support::Yes,
         Feature::PixelLayers => return Support::Yes,
         Feature::CartRamWrites => return Support::Yes,
         Feature::LiveFrame => return Support::Yes,

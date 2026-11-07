@@ -246,6 +246,7 @@ pub(crate) unsafe extern "C" fn on_write(gb: *mut sb::GB_gameboy_t, addr: u16, d
                 }
             }
         }
+        crate::audio::log_write(gb, hooks, addr, data);
         if let Some(tracking) = &mut hooks.tracking
             && let Some(store) = store.or_else(|| store_of(gb, addr))
         {

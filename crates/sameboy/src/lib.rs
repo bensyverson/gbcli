@@ -3,6 +3,7 @@
 //! logging, stdin input, real-time pacing, the global RNG, host time in the
 //! RTC, the illegal-opcode lock, and side effects of SameBoy's own reads.
 
+mod audio;
 mod blob;
 mod display;
 mod hooks;
@@ -15,10 +16,10 @@ use std::ptr::NonNull;
 use std::sync::Mutex;
 
 use gbcli_core::{
-    ApuState, BootRom, Budget, BudgetKind, ColorMode, Core, CoreConfig, CoreError, CoreInfo,
-    Feature, FrameRef, IoReg, JoypadBounce, Keys, LayerMap, LiveFrame, Model, PpuMode, PpuStatus,
-    Region, RegionView, Registers, Rendering, RtcMode, RunRequest, StepUnit, Stop, StopReason,
-    Support, Ticks, WriteTracking, WrittenView,
+    ApuState, ApuWrite, AudioCapture, AudioSamples, BootRom, Budget, BudgetKind, ColorMode, Core,
+    CoreConfig, CoreError, CoreInfo, Feature, FrameRef, IoReg, JoypadBounce, Keys, LayerMap,
+    LiveFrame, Model, PpuMode, PpuStatus, Region, RegionView, Registers, Rendering, RtcMode,
+    RunRequest, StepUnit, Stop, StopReason, Support, Ticks, WriteTracking, WrittenView,
 };
 use sameboy_sys as sb;
 
@@ -200,6 +201,10 @@ impl Core for SameBoy {
 
     fn supports(&self, feature: Feature) -> Support {
         match feature {
+            Feature::AudioSamples => match self.audio_refusal() {
+                Some(reason) => Support::No { reason },
+                None => Support::Yes,
+            },
             Feature::PixelLayers => match self.layers_refusal() {
                 Some(reason) => Support::No { reason },
                 None => Support::Yes,
@@ -372,6 +377,33 @@ impl Core for SameBoy {
         Ok(memory::apu(self))
     }
 
+    fn set_apu_write_log(&mut self, on: bool) -> Result<(), CoreError> {
+        self.set_apu_log(on);
+        Ok(())
+    }
+
+    fn take_apu_writes(&mut self) -> Result<Vec<ApuWrite>, CoreError> {
+        Ok(self
+            .hooks_mut()
+            .apu_log
+            .as_mut()
+            .map(std::mem::take)
+            .unwrap_or_default())
+    }
+
+    fn set_audio_capture(&mut self, capture: Option<AudioCapture>) -> Result<(), CoreError> {
+        self.set_capture(capture)
+    }
+
+    fn take_audio(&mut self) -> Result<AudioSamples, CoreError> {
+        Ok(self
+            .hooks_mut()
+            .audio
+            .as_mut()
+            .map(std::mem::take)
+            .unwrap_or_default())
+    }
+
     fn written(&self, region: Region) -> Result<WrittenView<'_>, CoreError> {
         let tracking = self
             .hooks()
@@ -397,6 +429,10 @@ impl Core for SameBoy {
     }
 
     fn bus_write(&mut self, addr: u16, value: u8) -> Result<(), CoreError> {
+        let (ticks, pc) = (self.ticks, self.registers().pc);
+        let hooks = self.hooks_mut();
+        hooks.step_ticks = ticks;
+        hooks.step_pc = pc;
         // SAFETY: a bus write on a live instance outside GB_run.
         unsafe { sb::GB_write_memory(self.raw(), addr, value) };
         Ok(())
@@ -514,6 +550,7 @@ impl Core for SameBoy {
         if let Some(tracking) = &mut hooks.tracking {
             tracking.restore(&blob.written);
         }
+        self.audio_after_load();
         Ok(())
     }
 }

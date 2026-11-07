@@ -1,0 +1,17 @@
+[package]
+name = "gbcli-audio"
+description = "gbcli's audio views: the decoded sound-register log, WAV export, piano roll and spectrogram"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gbcli-core.workspace = true
+gbcli-view.workspace = true
+
+[dev-dependencies]
+gbcli-sameboy.workspace = true
+
+[lints]
+workspace = true

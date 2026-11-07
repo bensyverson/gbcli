@@ -77,6 +77,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "gbcli-audio"
+version = "0.1.0"
+dependencies = [
+ "gbcli-core",
+ "gbcli-sameboy",
+ "gbcli-view",
+]
+
+[[package]]
 name = "gbcli-bundle"
 version = "0.1.0"
 dependencies = [

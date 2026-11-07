@@ -12,13 +12,16 @@
 //! - `plain`: write tracking off, no filters;
 //! - `tracking`: never-written tracking on (keeps the write hook armed);
 //! - `filters`: tracking off, 1,000 armed filters that never match (see `filters`);
-//! - `layers`: tracking off, per-pixel layer capture on (see `Feature::PixelLayers`).
+//! - `layers`: tracking off, per-pixel layer capture on (see `Feature::PixelLayers`);
+//! - `apu-log`: tracking off, the sound-register write log on (keeps the write hook armed);
+//! - `audio`: tracking off, sample capture on (SameBoy renders at 32,768 Hz);
+//! - `apu-log+audio`: both.
 
 use std::time::Instant;
 
 use gbcli_core::{
-    AddrFilter, BankSel, Budget, Core, CoreConfig, Model, Rendering, RunRequest, Ticks,
-    WriteTracking,
+    AddrFilter, AudioCapture, BankSel, Budget, Core, CoreConfig, Model, Rendering, RunRequest,
+    Ticks, WriteTracking,
 };
 use gbcli_sameboy::SameBoy;
 
@@ -58,7 +61,9 @@ fn main() {
     };
     config.write_tracking = match mode.as_str() {
         "tracking" => WriteTracking::On,
-        "plain" | "filters" | "layers" => WriteTracking::Off,
+        "plain" | "filters" | "layers" | "apu-log" | "audio" | "apu-log+audio" => {
+            WriteTracking::Off
+        }
         other => panic!("unknown mode {other}"),
     };
     let (exec, read, write) = filters();
@@ -78,15 +83,27 @@ fn main() {
     if mode == "layers" {
         core.set_pixel_layers(true).expect("layer capture");
     }
+    if mode.starts_with("apu-log") {
+        core.set_apu_write_log(true).expect("write log");
+    }
+    if mode.ends_with("audio") {
+        core.set_audio_capture(Some(AudioCapture::MIXED))
+            .expect("audio capture");
+    }
 
     let ticks = frames * Ticks::PER_FRAME;
     let start = Instant::now();
     let stop = core.run(&mut request(Budget::ticks(ticks))).expect("run");
     let wall = start.elapsed().as_secs_f64();
+    let (writes, samples) = (
+        core.take_apu_writes().map_or(0, |w| w.len()),
+        core.take_audio().map_or(0, |a| a.samples.len()),
+    );
     let emulated = Ticks(stop.used.ticks).as_secs_f64();
     println!(
         "throughput: mode={mode} frames={frames} emulated={emulated:.2}s wall={wall:.3}s \
-         speed={:.1}x realtime ({:.0} fps) render={} stop={:?}",
+         speed={:.1}x realtime ({:.0} fps) render={} stop={:?} apu_writes={writes} \
+         samples={samples}",
         emulated / wall,
         frames as f64 / wall,
         u8::from(render),

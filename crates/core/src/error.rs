@@ -21,6 +21,12 @@ pub enum Feature {
     ApuInternals,
     /// Per-channel volume, amplitude and period, and the wave table (`Core::apu`).
     ApuChannels,
+    /// A log of CPU writes to the sound registers and wave RAM
+    /// (`Core::set_apu_write_log`).
+    ApuWriteLog,
+    /// The core's audio output as samples, with channels mutable
+    /// (`Core::set_audio_capture`).
+    AudioSamples,
     /// The write hook seeing OAM DMA and HDMA destination writes.
     WriteHookCoversDma,
     /// Store filters over cart RAM: every change to cart RAM is a CPU write
@@ -51,6 +57,8 @@ impl Feature {
             Feature::ExtraOam => "extra_oam",
             Feature::ApuInternals => "apu_internals",
             Feature::ApuChannels => "apu_channels",
+            Feature::ApuWriteLog => "apu_write_log",
+            Feature::AudioSamples => "audio_samples",
             Feature::WriteHookCoversDma => "write_hook_covers_dma",
             Feature::CartRamWrites => "cart_ram_writes",
             Feature::ExecHookCoversInterrupts => "exec_hook_covers_interrupts",

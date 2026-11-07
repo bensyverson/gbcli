@@ -4,6 +4,7 @@
 //! approximations.
 
 mod apu;
+mod audio;
 mod display;
 mod error;
 mod filter;
@@ -14,6 +15,10 @@ mod stop;
 mod time;
 
 pub use apu::{ApuChannel, ApuChannelState, ApuState, ApuSync};
+pub use audio::{
+    ApuWrite, ApuWriteEffect, AudioCapture, AudioSamples, SOUND_REGISTERS, StereoSample, WAVE_RAM,
+    is_sound_addr,
+};
 pub use display::{ColorMode, LiveFrame, PixelBuf};
 pub use error::{CoreError, Feature, Support};
 pub use filter::{AddrFilter, BankSel, StoreFilter, canonical_addr};
@@ -107,6 +112,44 @@ pub trait Core {
         Err(CoreError::Unsupported {
             feature: Feature::ApuChannels,
             reason: "this core doesn't report APU channel state",
+        })
+    }
+    /// Turns the sound-register write log on or off ([`Feature::ApuWriteLog`]).
+    /// While on, every CPU write to $FF10-$FF26 or wave RAM is recorded with
+    /// its time, the writing instruction and its [`ApuWriteEffect`]. Off by
+    /// default; turning it off drops what wasn't taken. The default is for a
+    /// core without it, so adding this method broke no backend.
+    fn set_apu_write_log(&mut self, _on: bool) -> Result<(), CoreError> {
+        Err(CoreError::Unsupported {
+            feature: Feature::ApuWriteLog,
+            reason: "this core doesn't log sound-register writes",
+        })
+    }
+    /// The writes logged since the log was turned on or last taken, oldest
+    /// first. A load drops them: they belong to the timeline it replaced.
+    fn take_apu_writes(&mut self) -> Result<Vec<ApuWrite>, CoreError> {
+        Err(CoreError::Unsupported {
+            feature: Feature::ApuWriteLog,
+            reason: "this core doesn't log sound-register writes",
+        })
+    }
+    /// Starts rendering audio samples, at [`AudioCapture::SAMPLE_RATE`] with
+    /// the given channels muted, or stops with `None` ([`Feature::AudioSamples`]).
+    /// Starting (or changing the mutes) restarts the renderer from silence, as
+    /// a fresh core has it, so the same state and the same run give the same
+    /// samples whatever came before. Rendering never changes what the APU does.
+    fn set_audio_capture(&mut self, _capture: Option<AudioCapture>) -> Result<(), CoreError> {
+        Err(CoreError::Unsupported {
+            feature: Feature::AudioSamples,
+            reason: "this core doesn't render audio samples",
+        })
+    }
+    /// The samples rendered since capture started or they were last taken. A
+    /// load drops them and restarts the renderer from silence.
+    fn take_audio(&mut self) -> Result<AudioSamples, CoreError> {
+        Err(CoreError::Unsupported {
+            feature: Feature::AudioSamples,
+            reason: "this core doesn't render audio samples",
         })
     }
     /// Never-written tracking for WRAM, HRAM or cart RAM (design §9).

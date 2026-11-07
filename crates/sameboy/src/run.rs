@@ -31,6 +31,7 @@ impl Arming {
         let read = !req.read.is_empty();
         let write = !(req.write.is_empty() && req.veto.is_empty() && req.stores.is_empty());
         let hooks = core.hooks_mut();
+        hooks.in_run = true;
         if read || write {
             hooks.armed = Some(Armed {
                 read: req.read,
@@ -68,10 +69,11 @@ impl Drop for Arming {
             let hooks = &mut *self.hooks;
             hooks.armed = None;
             hooks.hit = None;
+            hooks.in_run = false;
             if self.read {
                 sb::GB_set_read_memory_callback(self.gb, None);
             }
-            if self.write && hooks.tracking.is_none() {
+            if self.write && !hooks.write_hook_wanted() {
                 sb::GB_set_write_memory_callback(self.gb, None);
             }
         }
@@ -84,6 +86,7 @@ pub(crate) fn run(core: &mut SameBoy, req: &mut RunRequest<'_>) -> Result<Stop, 
     }
     let arming = Arming::new(core, req);
     let check_exec = !req.exec.is_empty();
+    let tapping = core.hooks().apu_log.is_some() || core.hooks().audio.is_some();
     let gb = core.raw();
     let regs = core.regs;
     let mut used = Usage::default();
@@ -121,8 +124,11 @@ pub(crate) fn run(core: &mut SameBoy, req: &mut RunRequest<'_>) -> Result<Stop, 
                 return Ok(stop(core, StopReason::Candidate(Hits::one(hit)), used));
             }
         }
-        if arming.armed() {
-            core.hooks_mut().step_pc = pc;
+        if arming.armed() || tapping {
+            let ticks = core.ticks;
+            let hooks = core.hooks_mut();
+            hooks.step_pc = pc;
+            hooks.step_ticks = ticks;
         }
 
         // SAFETY: no reference into the hooks is alive across this call.

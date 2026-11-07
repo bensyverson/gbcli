@@ -132,6 +132,15 @@ pub type GB_read_memory_callback_t =
 /// Returns false to prevent the write.
 pub type GB_write_memory_callback_t =
     Option<unsafe extern "C" fn(gb: *mut GB_gameboy_t, addr: u16, data: u8) -> bool>;
+/// `GB_sample_t` (apu.h): one stereo output sample.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct GB_sample_t {
+    pub left: i16,
+    pub right: i16,
+}
+pub type GB_sample_callback_t =
+    Option<unsafe extern "C" fn(gb: *mut GB_gameboy_t, sample: *mut GB_sample_t)>;
 pub type GB_execution_callback_t =
     Option<unsafe extern "C" fn(gb: *mut GB_gameboy_t, addr: u16, opcode: u8)>;
 
@@ -218,6 +227,12 @@ unsafe extern "C" {
     pub fn GB_get_channel_period(gb: *mut GB_gameboy_t, channel: GB_channel_t) -> u16;
     /// Fills 32 bytes: wave RAM as nibbles, high nibble first.
     pub fn GB_get_apu_wave_table(gb: *mut GB_gameboy_t, wave_table: *mut u8);
+
+    // Sample output (apu.h). The rate is samples per second; 0 stops rendering.
+    pub fn GB_set_sample_rate(gb: *mut GB_gameboy_t, sample_rate: c_uint);
+    pub fn GB_apu_set_sample_callback(gb: *mut GB_gameboy_t, callback: GB_sample_callback_t);
+    /// Silences a channel in the rendered output only; the APU runs as before.
+    pub fn GB_set_channel_muted(gb: *mut GB_gameboy_t, channel: GB_channel_t, muted: bool);
 }
 
 // gbcli's own accessors over SameBoy internals (`shim/gbcli_shim.c`). The
@@ -249,6 +264,13 @@ unsafe extern "C" {
     /// write reaches no memory but OAM.
     pub fn gbcli_write_target(gb: *mut GB_gameboy_t, addr: u16) -> i32;
     pub fn gbcli_apu_synced(gb: *mut GB_gameboy_t) -> bool;
+    /// Ticks since the current `GB_run` began, read from inside a callback.
+    pub fn gbcli_cycles_since_run(gb: *mut GB_gameboy_t) -> c_uint;
+    /// One of the `GBCLI_APU_WRITE_*` codes: what the APU will do with a
+    /// write to `addr`, read from inside the write callback.
+    pub fn gbcli_apu_write_effect(gb: *mut GB_gameboy_t, addr: u16) -> c_int;
+    /// Resets the output renderer (not the APU) to a fresh instance's state.
+    pub fn gbcli_audio_restart(gb: *mut GB_gameboy_t);
     pub fn gbcli_io_peek(gb: *mut GB_gameboy_t, reg: u8) -> c_int;
     pub fn gbcli_peek(gb: *mut GB_gameboy_t, addr: u16) -> c_int;
     pub fn gbcli_next_opcode(gb: *mut GB_gameboy_t) -> c_int;
@@ -268,6 +290,13 @@ unsafe extern "C" {
     /// (`shim/gbcli_layers.c`), so a test can check the constants above.
     pub static gbcli_layer_tags: [u8; 3];
 }
+
+/// `gbcli_apu_write_effect`: the APU takes the write.
+pub const GBCLI_APU_WRITE_APPLIED: c_int = 0;
+/// `gbcli_apu_write_effect`: the APU is off and ignores it.
+pub const GBCLI_APU_WRITE_IGNORED_OFF: c_int = 1;
+/// `gbcli_apu_write_effect`: wave RAM while channel 3 plays.
+pub const GBCLI_APU_WRITE_WAVE_PLAYING: c_int = 2;
 
 /// `gbcli_pre_run`: run the next step.
 pub const GBCLI_PRE_RUN: c_int = 0;

@@ -6,6 +6,8 @@
 // effect: no PPU sync, no open-bus update, no OAM bug, no callbacks. Where a
 // value can't be known without one, they return -1.
 
+#include <string.h>
+
 #include "Core/gb.h"
 
 bool gbcli_ime(GB_gameboy_t *gb) { return gb->ime; }
@@ -346,4 +348,54 @@ int gbcli_pre_run(GB_gameboy_t *gb, uint8_t *opcode)
     if (gbcli_next_opcode(gb) != byte) return GBCLI_PRE_RUN; // HALT, an interrupt, a DMA conflict
     *opcode = byte;
     return GBCLI_PRE_ILLEGAL;
+}
+
+// Emulated time since the current GB_run began, in 8 MHz units (gbcli's
+// ticks): from inside a callback, how far into the instruction it fired.
+unsigned gbcli_cycles_since_run(GB_gameboy_t *gb) { return gb->cycles_since_run; }
+
+// gbcli_apu_write_effect's answers.
+enum {
+    GBCLI_APU_WRITE_APPLIED = 0,
+    GBCLI_APU_WRITE_IGNORED_OFF = 1,   // the APU is off
+    GBCLI_APU_WRITE_WAVE_PLAYING = 2,  // wave RAM while channel 3 plays
+};
+
+// What GB_apu_write (apu.c) will do with a write to `addr`, from inside the
+// write callback, before it runs. Mirrors its two early returns. NR52's power
+// bit only changes on a write, so the first check is exact; whether channel 3
+// is playing can lag while APU cycles are batched (gbcli_apu_synced), since
+// GB_apu_write catches the APU up only after this callback returns.
+int gbcli_apu_write_effect(GB_gameboy_t *gb, uint16_t addr)
+{
+    uint8_t reg = addr & 0xFF;
+    if (!gb->apu.global_enable && reg != GB_IO_NR52 && reg < GB_IO_WAV_START &&
+        (GB_is_cgb(gb) ||
+         (reg != GB_IO_NR11 && reg != GB_IO_NR21 && reg != GB_IO_NR31 && reg != GB_IO_NR41))) {
+        return GBCLI_APU_WRITE_IGNORED_OFF;
+    }
+    if (reg >= GB_IO_WAV_START && reg <= GB_IO_WAV_END && gb->apu.is_active[GB_WAVE]) {
+        return GBCLI_APU_WRITE_WAVE_PLAYING;
+    }
+    return GBCLI_APU_WRITE_APPLIED;
+}
+
+// Puts SameBoy's output renderer (apu_output's band-limited buffers, DAC
+// charge and delay line, filters and sample clock) back to a fresh instance's
+// all-zero state. None of it is in the save state and none of it feeds the
+// emulation, so a capture started here renders the same samples from the same
+// state whatever the instance rendered before. Settings (rate, mutes,
+// callback, filter mode) are kept.
+void gbcli_audio_restart(GB_gameboy_t *gb)
+{
+    GB_apu_output_t *out = &gb->apu_output;
+    memset(out->band_limited, 0, sizeof(out->band_limited));
+    memset(out->dac_discharge, 0, sizeof(out->dac_discharge));
+    memset(out->dac_delay, 0, sizeof(out->dac_delay));
+    out->dac_delay_pos = 0;
+    out->highpass_diff = (GB_double_sample_t){0, 0};
+    out->interference_highpass = 0;
+    out->cycles_since_render = 0;
+    out->sample_fraction = 0;
+    out->sample_cycles = 0;
 }

@@ -8,7 +8,7 @@
 use std::ffi::{CStr, c_char};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
-use gbcli_core::{FrameTag, Hits, Layer, Pixels, VblankKind};
+use gbcli_core::{ApuWrite, AudioSamples, FrameTag, Hits, Layer, Pixels, VblankKind};
 use sameboy_sys as sb;
 
 use crate::watch::{Armed, Tracking};
@@ -83,11 +83,21 @@ pub(crate) struct Hooks {
     pub panicked: bool,
     /// The filters of the run in progress, if any.
     pub armed: Option<Armed>,
-    /// The PC of the instruction now executing (set while filters are armed).
+    /// The PC of the instruction now executing (set while filters are armed
+    /// or the write log is on).
     pub step_pc: u16,
     /// The filter hits of the current step, in access order.
     pub hit: Option<Hits>,
     pub tracking: Option<Tracking>,
+    /// The sound-register write log, while it is on.
+    pub apu_log: Option<Vec<ApuWrite>>,
+    /// The captured samples, while capture is on.
+    pub audio: Option<AudioSamples>,
+    /// `now` at the start of the current step, kept while the log or capture
+    /// is on (and set before a bus write), to stamp what the callbacks see.
+    pub step_ticks: u64,
+    /// Whether a run is in progress, so SameBoy's cycle count is this step's.
+    pub in_run: bool,
 }
 
 impl Hooks {
@@ -108,7 +118,16 @@ impl Hooks {
             step_pc: 0,
             hit: None,
             tracking: None,
+            apu_log: None,
+            audio: None,
+            step_ticks: 0,
+            in_run: false,
         }
+    }
+
+    /// Whether something outside a run needs SameBoy's write callback.
+    pub fn write_hook_wanted(&self) -> bool {
+        self.tracking.is_some() || self.apu_log.is_some()
     }
 
     /// Starts collecting tags from a clean buffer. Unless the frame in

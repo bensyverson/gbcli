@@ -1,10 +1,10 @@
 //! Why a checkpoint didn't load, what to do about it, and what loaded with a
-//! warning. Each refusal names its protocol error code (design §5) and a remedy.
+//! warning. Each refusal has one protocol error code (design §5) and a remedy.
 
 use std::fmt;
 
 use gbcli_core::Model;
-use gbcli_protocol::{CoreId, Sha256, model_name};
+use gbcli_protocol::{CoreId, ErrorCode, Sha256, model_name};
 
 /// A bank and address.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -69,37 +69,54 @@ pub enum SymbolSide {
 /// before the core is touched.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CheckpointError {
-    /// Step 1: not an envelope, or an unknown version. `checkpoint_unreadable`.
+    /// Step 1: not an envelope, or an unknown version.
     Unreadable { reason: String },
-    /// Step 2: written by another backend. `checkpoint_mismatch`.
+    /// Step 2: written by another backend.
     OtherBackend { saved: String, ours: String },
-    /// Step 2 or 7: the core refused the blob. `checkpoint_mismatch`.
+    /// Step 2 or 7: the core refused the blob.
     CoreRejected {
         saved: CoreId,
         ours: CoreId,
         reason: String,
     },
-    /// Step 3: the caller asked for another model. `bad_request`.
+    /// Step 3: the caller asked for another model.
     ModelConflict { saved: Model, requested: Model },
-    /// Step 4: no boot ROM we have matches. `boot_rom_missing`.
+    /// Step 4: no boot ROM we have matches.
     BootRomMissing { sha256: Sha256 },
-    /// Step 5: the ROM changed and there are no symbols to check it by. `rom_changed`.
+    /// Step 5: the ROM changed and there are no symbols to check it by.
     SymbolsMissing { side: SymbolSide },
-    /// Step 5: the ROM changed under something the state depends on. `rom_changed`.
+    /// Step 5: the ROM changed under something the state depends on.
     RomChanged { moved: Vec<Moved> },
-    /// Step 6: a patch's replaced bytes differ in the current ROM. `rom_changed`.
+    /// Step 6: a patch's replaced bytes differ in the current ROM.
     PatchConflict {
         offset: u32,
         expected: Vec<u8>,
         found: Vec<u8>,
     },
-    /// Step 6: the core refused a patch. `checkpoint_mismatch`.
+    /// Step 6: the core refused a patch.
     PatchRefused { offset: u32, reason: String },
-    /// No checkpoint by that name. `bad_request`.
+    /// No checkpoint by that name.
     Unknown { name: String, known: Vec<String> },
 }
 
 impl CheckpointError {
+    /// The protocol code. No wildcard: a new variant needs a code to compile.
+    pub fn code(&self) -> ErrorCode {
+        match self {
+            CheckpointError::Unreadable { .. } => ErrorCode::CheckpointUnreadable,
+            CheckpointError::OtherBackend { .. }
+            | CheckpointError::CoreRejected { .. }
+            | CheckpointError::PatchRefused { .. } => ErrorCode::CheckpointMismatch,
+            CheckpointError::ModelConflict { .. } | CheckpointError::Unknown { .. } => {
+                ErrorCode::BadRequest
+            }
+            CheckpointError::BootRomMissing { .. } => ErrorCode::BootRomMissing,
+            CheckpointError::SymbolsMissing { .. }
+            | CheckpointError::RomChanged { .. }
+            | CheckpointError::PatchConflict { .. } => ErrorCode::RomChanged,
+        }
+    }
+
     /// The next thing to do, with real values filled in.
     pub fn remedy(&self) -> String {
         match self {
@@ -228,4 +245,117 @@ pub enum LoadWarning {
     },
     /// A forced load applied a patch over bytes that differ from the ones it replaced.
     PatchOverChangedBytes { offset: u32 },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn core_id(commit: &str) -> CoreId {
+        CoreId {
+            backend: "sameboy".into(),
+            commit: commit.into(),
+        }
+    }
+
+    fn assert_code(e: CheckpointError, code: ErrorCode, exit: u8) {
+        assert_eq!(e.code(), code, "{e:?}");
+        assert_eq!(e.code().exit_code(), exit, "{e:?}");
+    }
+
+    #[test]
+    fn an_unreadable_envelope_is_checkpoint_unreadable() {
+        let e = CheckpointError::Unreadable {
+            reason: "bad magic".into(),
+        };
+        assert_code(e, ErrorCode::CheckpointUnreadable, 4);
+    }
+
+    #[test]
+    fn another_backend_is_a_checkpoint_mismatch() {
+        let e = CheckpointError::OtherBackend {
+            saved: "mgba".into(),
+            ours: "sameboy".into(),
+        };
+        assert_code(e, ErrorCode::CheckpointMismatch, 4);
+    }
+
+    #[test]
+    fn a_blob_the_core_rejects_is_a_checkpoint_mismatch() {
+        let e = CheckpointError::CoreRejected {
+            saved: core_id("1234+layer"),
+            ours: core_id("1234+other"),
+            reason: "another patch set".into(),
+        };
+        assert_code(e, ErrorCode::CheckpointMismatch, 4);
+    }
+
+    #[test]
+    fn a_conflicting_model_is_a_bad_request() {
+        let e = CheckpointError::ModelConflict {
+            saved: Model::DmgB,
+            requested: Model::Mgb,
+        };
+        assert_code(e, ErrorCode::BadRequest, 2);
+    }
+
+    #[test]
+    fn a_missing_boot_rom_is_boot_rom_missing() {
+        let e = CheckpointError::BootRomMissing {
+            sha256: Sha256([0xab; 32]),
+        };
+        assert_code(e, ErrorCode::BootRomMissing, 5);
+    }
+
+    #[test]
+    fn a_changed_rom_without_symbols_is_rom_changed() {
+        let e = CheckpointError::SymbolsMissing {
+            side: SymbolSide::Both,
+        };
+        assert_code(e, ErrorCode::RomChanged, 3);
+    }
+
+    #[test]
+    fn a_rom_that_moved_live_symbols_is_rom_changed() {
+        let e = CheckpointError::RomChanged {
+            moved: vec![Moved {
+                name: "wSpeed".into(),
+                role: MovedRole::Ram,
+                old: SymbolAt {
+                    bank: 0,
+                    addr: 0xc000,
+                },
+                new: None,
+            }],
+        };
+        assert_code(e, ErrorCode::RomChanged, 3);
+    }
+
+    #[test]
+    fn a_patch_over_changed_bytes_is_rom_changed() {
+        let e = CheckpointError::PatchConflict {
+            offset: 0x150,
+            expected: vec![0x00],
+            found: vec![0x76],
+        };
+        assert_code(e, ErrorCode::RomChanged, 3);
+    }
+
+    #[test]
+    fn a_patch_the_core_refuses_is_a_checkpoint_mismatch() {
+        let e = CheckpointError::PatchRefused {
+            offset: 0x150,
+            reason: "out of range".into(),
+        };
+        assert_code(e, ErrorCode::CheckpointMismatch, 4);
+    }
+
+    #[test]
+    fn an_unknown_name_is_a_bad_request() {
+        let e = CheckpointError::Unknown {
+            name: "f30".into(),
+            known: vec!["f10".into()],
+        };
+        assert_code(e, ErrorCode::BadRequest, 2);
+    }
 }

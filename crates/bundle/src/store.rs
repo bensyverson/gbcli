@@ -124,8 +124,8 @@ impl SessionStore {
     /// Creates the session from a ROM. Refuses an existing name.
     pub fn create(&self, source: &RomSource) -> Result<Machine, StoreError> {
         if self.exists() {
-            return Err(StoreError::Configuration {
-                what: format!("session {:?} already exists", self.name),
+            return Err(StoreError::SessionExists {
+                name: self.name.clone(),
             });
         }
         let rom_path = self.resolve(&source.rom);
@@ -266,9 +266,7 @@ impl SessionStore {
                 },
                 &run,
             )
-            .map_err(|e| StoreError::Configuration {
-                what: format!("the boot ROM didn't reach the handoff: {e}"),
-            })?;
+            .map_err(StoreError::BootFailed)?;
         if machine.boot().is_none() {
             return Err(StoreError::NoHandoff);
         }
@@ -315,8 +313,10 @@ impl SessionStore {
             }
             Err(source) => return Err(StoreError::Io { path, source }),
         };
-        serde_json::from_slice(&text).map_err(|e| StoreError::Configuration {
-            what: format!("{} doesn't parse: {e}", path.display()),
+        serde_json::from_slice(&text).map_err(|e| StoreError::SessionUnreadable {
+            name: self.name.clone(),
+            path,
+            reason: e.to_string(),
         })
     }
 
@@ -361,8 +361,8 @@ impl SessionStore {
     /// A checkpoint by name, or `~N` for N heads back.
     pub fn checkpoint_or_history(&self, head_rev: Rev, at: &str) -> Result<Checkpoint, StoreError> {
         if let Some(back) = at.strip_prefix('~') {
-            let back: u64 = back.parse().map_err(|_| StoreError::Configuration {
-                what: format!("{at:?} is not a history reference; try ~1"),
+            let back: u64 = back.parse().map_err(|_| StoreError::BadHistoryRef {
+                text: at.to_string(),
             })?;
             if back == 0 {
                 return self
@@ -620,10 +620,8 @@ pub fn validate_checkpoint_name(name: &str) -> Result<(), StoreError> {
     if ok {
         Ok(())
     } else {
-        Err(StoreError::Configuration {
-            what: format!(
-                "{name:?} is not a checkpoint name; use letters, digits, -, _ and . (1 to 64)"
-            ),
+        Err(StoreError::BadCheckpointName {
+            name: name.to_string(),
         })
     }
 }

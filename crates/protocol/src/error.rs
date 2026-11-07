@@ -29,10 +29,14 @@ pub enum ErrorCode {
     CheckpointUnreadable,
     CheckpointMismatch,
     SymbolsUnreadable,
+    /// The session's own files (`session.json`) don't parse.
+    SessionUnreadable,
     Unsupported,
     NoSession,
     BootRomMissing,
     ToolchainMissing,
+    /// The filesystem refused a read or write: permissions, a full disk.
+    IoFailed,
 }
 
 impl ErrorCode {
@@ -54,11 +58,13 @@ impl ErrorCode {
             ErrorCode::RomUnreadable
             | ErrorCode::CheckpointUnreadable
             | ErrorCode::CheckpointMismatch
-            | ErrorCode::SymbolsUnreadable => 4,
+            | ErrorCode::SymbolsUnreadable
+            | ErrorCode::SessionUnreadable => 4,
             ErrorCode::Unsupported
             | ErrorCode::NoSession
             | ErrorCode::BootRomMissing
-            | ErrorCode::ToolchainMissing => 5,
+            | ErrorCode::ToolchainMissing
+            | ErrorCode::IoFailed => 5,
         }
     }
 
@@ -86,19 +92,26 @@ impl ErrorCode {
                 "run from boot or later, or pass --allow-uninit to see the value anyway"
             }
             ErrorCode::RomUnreadable => "check the path and permissions",
-            ErrorCode::CheckpointUnreadable => "check the checkpoint name with `gbcli checkpoints`",
+            ErrorCode::CheckpointUnreadable => {
+                "this gbcli can't read the file; save a new one with `gbcli checkpoint <name>`"
+            }
             ErrorCode::CheckpointMismatch => {
                 "this checkpoint needs another core or model; rebuild it"
             }
             ErrorCode::SymbolsUnreadable => "rebuild with `-n game.sym`, or pass --sym <file>",
+            ErrorCode::SessionUnreadable => {
+                "remove the session with `gbcli sessions rm <name>`, then create it again"
+            }
             ErrorCode::Unsupported => "the core can't do this; see `gbcli doctor --core`",
             ErrorCode::NoSession => "pass --session <name> and --rom <file> to create one",
             ErrorCode::BootRomMissing => "pass --boot-rom <file> with the hash in the remedy",
             ErrorCode::ToolchainMissing => "install the pinned RGBDS, or put it on PATH",
+            ErrorCode::IoFailed => "check the path's permissions and the free disk space",
         }
     }
 }
 
+/// The wire spelling. A test holds it to serde's over every code.
 impl fmt::Display for ErrorCode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match self {
@@ -118,10 +131,12 @@ impl fmt::Display for ErrorCode {
             ErrorCode::CheckpointUnreadable => "checkpoint_unreadable",
             ErrorCode::CheckpointMismatch => "checkpoint_mismatch",
             ErrorCode::SymbolsUnreadable => "symbols_unreadable",
+            ErrorCode::SessionUnreadable => "session_unreadable",
             ErrorCode::Unsupported => "unsupported",
             ErrorCode::NoSession => "no_session",
             ErrorCode::BootRomMissing => "boot_rom_missing",
             ErrorCode::ToolchainMissing => "toolchain_missing",
+            ErrorCode::IoFailed => "io_failed",
         };
         f.write_str(name)
     }
@@ -188,7 +203,53 @@ mod tests {
         ErrorCode::NoSession,
         ErrorCode::BootRomMissing,
         ErrorCode::ToolchainMissing,
+        ErrorCode::SessionUnreadable,
+        ErrorCode::IoFailed,
     ];
+
+    /// Fails to compile when a code is added, as a reminder to add it to `EVERY`.
+    fn listed(code: ErrorCode) -> bool {
+        match code {
+            ErrorCode::PredicateFalse
+            | ErrorCode::BadRequest
+            | ErrorCode::BadAddress
+            | ErrorCode::BadExpression
+            | ErrorCode::AmbiguousSymbol
+            | ErrorCode::UnknownSymbol
+            | ErrorCode::Refused
+            | ErrorCode::BudgetExhausted
+            | ErrorCode::RevMismatch
+            | ErrorCode::SessionBusy
+            | ErrorCode::RomChanged
+            | ErrorCode::UninitializedRead
+            | ErrorCode::RomUnreadable
+            | ErrorCode::CheckpointUnreadable
+            | ErrorCode::CheckpointMismatch
+            | ErrorCode::SymbolsUnreadable
+            | ErrorCode::SessionUnreadable
+            | ErrorCode::Unsupported
+            | ErrorCode::NoSession
+            | ErrorCode::BootRomMissing
+            | ErrorCode::ToolchainMissing
+            | ErrorCode::IoFailed => EVERY.contains(&code),
+        }
+    }
+
+    #[test]
+    fn display_and_the_wire_spell_every_code_the_same_way() {
+        for &code in EVERY {
+            assert!(listed(code), "{code:?}");
+            let wire = serde_json::to_value(code).unwrap();
+            assert_eq!(
+                wire,
+                serde_json::Value::String(code.to_string()),
+                "{code:?}"
+            );
+            let back: ErrorCode =
+                serde_json::from_value(serde_json::Value::String(code.to_string())).unwrap();
+            assert_eq!(back, code);
+        }
+    }
 
     #[test]
     fn every_error_code_has_a_non_empty_remedy_and_the_designed_exit_code() {
@@ -216,10 +277,12 @@ mod tests {
             (ErrorCode::CheckpointUnreadable, 4),
             (ErrorCode::CheckpointMismatch, 4),
             (ErrorCode::SymbolsUnreadable, 4),
+            (ErrorCode::SessionUnreadable, 4),
             (ErrorCode::Unsupported, 5),
             (ErrorCode::NoSession, 5),
             (ErrorCode::BootRomMissing, 5),
             (ErrorCode::ToolchainMissing, 5),
+            (ErrorCode::IoFailed, 5),
         ];
         for (code, exit) in exits {
             assert_eq!(code.exit_code(), exit, "{code:?}");

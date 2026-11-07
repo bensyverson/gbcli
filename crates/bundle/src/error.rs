@@ -7,7 +7,8 @@ use std::time::Duration;
 
 use gbcli_protocol::ErrorCode;
 
-use gbcli_engine::{CheckpointError, LoadWarning, SetupError};
+use gbcli_core::CoreError;
+use gbcli_engine::{CheckpointError, DebugError, LoadWarning, SetupError};
 
 #[derive(Debug)]
 pub enum StoreError {
@@ -60,10 +61,29 @@ pub enum StoreError {
         path: PathBuf,
         reason: String,
     },
-    /// A session's recorded settings don't build a machine (bad model, bad seed).
-    Configuration {
-        what: String,
+    /// `create` on a name that already has a session.
+    SessionExists {
+        name: String,
     },
+    /// The session's `session.json` exists but doesn't parse.
+    SessionUnreadable {
+        name: String,
+        path: PathBuf,
+        reason: String,
+    },
+    /// An `--at ~N` that isn't `~` and a number.
+    BadHistoryRef {
+        text: String,
+    },
+    BadCheckpointName {
+        name: String,
+    },
+    /// A pruning duration that isn't a number and a unit.
+    BadDuration {
+        text: String,
+    },
+    /// The run to the boot handoff failed.
+    BootFailed(DebugError),
     /// The boot ROM never reached the handoff, so there is no boot start state.
     NoHandoff,
     Checkpoint(CheckpointError),
@@ -73,26 +93,34 @@ pub enum StoreError {
 impl StoreError {
     pub fn code(&self) -> ErrorCode {
         match self {
-            StoreError::Io { .. } | StoreError::NoRoot { .. } => ErrorCode::Refused,
+            StoreError::Io { .. } | StoreError::NoRoot { .. } => ErrorCode::IoFailed,
             StoreError::NoSession { .. } => ErrorCode::NoSession,
             StoreError::BadSessionName { .. } => ErrorCode::BadRequest,
             StoreError::Busy { .. } => ErrorCode::SessionBusy,
             StoreError::HeadMissing { .. } => ErrorCode::CheckpointUnreadable,
             StoreError::RevMismatch { .. } => ErrorCode::RevMismatch,
-            StoreError::CheckpointMissing { .. } => ErrorCode::CheckpointUnreadable,
+            StoreError::CheckpointMissing { .. } => ErrorCode::BadRequest,
             StoreError::CheckpointsPresent { .. } => ErrorCode::Refused,
             StoreError::RomUnreadable { .. } => ErrorCode::RomUnreadable,
             StoreError::SymbolsUnreadable { .. } => ErrorCode::SymbolsUnreadable,
-            StoreError::Configuration { .. } => ErrorCode::BadRequest,
+            StoreError::SessionExists { .. }
+            | StoreError::BadHistoryRef { .. }
+            | StoreError::BadCheckpointName { .. }
+            | StoreError::BadDuration { .. } => ErrorCode::BadRequest,
+            StoreError::SessionUnreadable { .. } => ErrorCode::SessionUnreadable,
+            StoreError::BootFailed(e) => boot_code(e),
             StoreError::NoHandoff => ErrorCode::Refused,
-            StoreError::Checkpoint(e) => checkpoint_code(e),
+            StoreError::Checkpoint(e) => e.code(),
             StoreError::Setup(e) => setup_code(e),
         }
     }
 
     pub fn remedy(&self) -> String {
         match self {
-            StoreError::Io { path, .. } => format!("check permissions on {}", path.display()),
+            StoreError::Io { path, .. } => format!(
+                "check permissions on {} and the free disk space",
+                path.display()
+            ),
             StoreError::NoRoot { start, .. } => format!(
                 "create a writable project directory, or set GBCLI_DIR (tried {})",
                 start.display()
@@ -130,11 +158,30 @@ impl StoreError {
             StoreError::SymbolsUnreadable { path, .. } => {
                 format!("rebuild with `-n {}`, or pass --sym <file>", path.display())
             }
-            StoreError::Configuration { .. } => "check the session's model and seed".into(),
+            StoreError::SessionExists { name } => format!(
+                "use another --session name, or remove this one with `gbcli sessions rm {name}`"
+            ),
+            StoreError::SessionUnreadable { name, path, .. } => format!(
+                "fix {} by hand, or remove the session with `gbcli sessions rm {name}` and \
+                 create it again",
+                path.display()
+            ),
+            StoreError::BadHistoryRef { .. } => {
+                "use ~N for the head N requests back, e.g. ~1".into()
+            }
+            StoreError::BadCheckpointName { .. } => {
+                "use letters, digits, -, _ and . (1 to 64 characters)".into()
+            }
+            StoreError::BadDuration { .. } => {
+                "use a number and a unit (s, m, h or d): 30m, 12h or 7d".into()
+            }
+            StoreError::BootFailed(_) => "pass --from power-on to run the boot ROM inside the \
+                 request and see where it stops"
+                .into(),
             StoreError::NoHandoff => {
                 "pass --from power-on, which runs without the boot cache".into()
             }
-            StoreError::Checkpoint(e) => checkpoint_remedy(e),
+            StoreError::Checkpoint(e) => e.remedy(),
             StoreError::Setup(e) => setup_remedy(e),
         }
     }
@@ -163,55 +210,47 @@ impl StoreError {
     }
 }
 
-fn checkpoint_code(e: &CheckpointError) -> ErrorCode {
+/// A fresh machine runs to the handoff with no breakpoints or predicate, so
+/// in practice only the core fails. A feature the core lacks keeps its code;
+/// anything else is refused, and `--from power-on` reruns the boot inside the
+/// request, where the run reports its own code and stop.
+fn boot_code(e: &DebugError) -> ErrorCode {
     match e {
-        CheckpointError::OtherBackend { .. }
-        | CheckpointError::ModelConflict { .. }
-        | CheckpointError::CoreRejected { .. } => ErrorCode::CheckpointMismatch,
-        CheckpointError::RomChanged { .. } => ErrorCode::RomChanged,
-        CheckpointError::BootRomMissing { .. } => ErrorCode::BootRomMissing,
-        _ => ErrorCode::CheckpointUnreadable,
-    }
-}
-
-fn checkpoint_remedy(e: &CheckpointError) -> String {
-    match e {
-        CheckpointError::Unknown { known, .. } if known.is_empty() => {
-            "this session has no named checkpoints".into()
-        }
-        CheckpointError::Unknown { known, .. } => {
-            format!("known checkpoints: {}", known.join(", "))
-        }
-        CheckpointError::RomChanged { moved } => {
-            let names: Vec<&str> = moved.iter().map(|m| m.name.as_str()).collect();
-            format!(
-                "this checkpoint's state depends on symbols that moved ({}); restore a checkpoint of this build, or pass --allow-rom-change",
-                names.join(", ")
-            )
-        }
-        CheckpointError::BootRomMissing { sha256 } => {
-            format!("pass --boot-rom <file> whose SHA-256 is {sha256}")
-        }
-        CheckpointError::OtherBackend { ours, .. } => {
-            format!("this build is {ours}; rebuild the checkpoint with it")
-        }
-        CheckpointError::ModelConflict { requested, .. } => {
-            format!("drop --model {requested:?}, or restore without it")
-        }
-        other => format!("{other}; delete and recreate the checkpoint"),
+        DebugError::Core(CoreError::Unsupported { .. }) => ErrorCode::Unsupported,
+        DebugError::Core(
+            CoreError::OutOfRange { .. }
+            | CoreError::InvalidState { .. }
+            | CoreError::Backend { .. },
+        )
+        | DebugError::Condition { .. }
+        | DebugError::Eval { .. }
+        | DebugError::UntilSyntax { .. }
+        | DebugError::Until { .. }
+        | DebugError::NeedsAddress => ErrorCode::Refused,
     }
 }
 
 fn setup_code(e: &SetupError) -> ErrorCode {
     match e {
-        SetupError::Core(_) => ErrorCode::CheckpointMismatch,
+        SetupError::Core(CoreError::Unsupported { .. }) => ErrorCode::Unsupported,
+        SetupError::Core(
+            CoreError::OutOfRange { .. }
+            | CoreError::InvalidState { .. }
+            | CoreError::Backend { .. },
+        ) => ErrorCode::RomUnreadable,
         SetupError::Symbols(_) => ErrorCode::SymbolsUnreadable,
     }
 }
 
 fn setup_remedy(e: &SetupError) -> String {
     match e {
-        SetupError::Core(_) => "the core refused to build this ROM; check its header".into(),
+        SetupError::Core(CoreError::Unsupported { reason, .. }) => {
+            format!("the core can't run this ROM ({reason}); see `gbcli doctor --core`")
+        }
+        SetupError::Core(_) => {
+            "the core refused this ROM; check that the file is a Game Boy ROM with a full header"
+                .into()
+        }
         SetupError::Symbols(_) => "fix or drop the .sym file".into(),
     }
 }
@@ -252,7 +291,18 @@ impl fmt::Display for StoreError {
             StoreError::SymbolsUnreadable { path, reason } => {
                 write!(f, "can't read symbols {}: {reason}", path.display())
             }
-            StoreError::Configuration { what } => write!(f, "{what}"),
+            StoreError::SessionExists { name } => write!(f, "session {name:?} already exists"),
+            StoreError::SessionUnreadable { path, reason, .. } => {
+                write!(f, "{} doesn't parse: {reason}", path.display())
+            }
+            StoreError::BadHistoryRef { text } => {
+                write!(f, "{text:?} is not a history reference")
+            }
+            StoreError::BadCheckpointName { name } => {
+                write!(f, "{name:?} is not a checkpoint name")
+            }
+            StoreError::BadDuration { text } => write!(f, "{text:?} is not a duration"),
+            StoreError::BootFailed(e) => write!(f, "the boot ROM didn't reach the handoff: {e}"),
             StoreError::NoHandoff => write!(f, "the boot ROM never wrote FF50 (no handoff)"),
             StoreError::Checkpoint(e) => write!(f, "{e}"),
             StoreError::Setup(e) => write!(f, "{e}"),
@@ -273,3 +323,6 @@ impl From<SetupError> for StoreError {
         StoreError::Setup(e)
     }
 }
+
+#[cfg(test)]
+mod tests;

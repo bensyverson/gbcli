@@ -200,8 +200,8 @@ pub fn now_secs() -> u64 {
 pub fn parse_duration(text: &str) -> Result<Duration, StoreError> {
     let text = text.trim();
     let (digits, unit) = text.split_at(text.len().saturating_sub(1));
-    let n: u64 = digits.parse().map_err(|_| StoreError::Configuration {
-        what: format!("{text:?} is not a duration; try 30m, 12h or 7d"),
+    let n: u64 = digits.parse().map_err(|_| StoreError::BadDuration {
+        text: text.to_string(),
     })?;
     let unit = match unit {
         "s" => Duration::from_secs(n),
@@ -209,8 +209,8 @@ pub fn parse_duration(text: &str) -> Result<Duration, StoreError> {
         "h" => Duration::from_secs(n * 60 * 60),
         "d" => Duration::from_secs(n * 60 * 60 * 24),
         _ => {
-            return Err(StoreError::Configuration {
-                what: format!("{text:?} needs a unit: s, m, h or d"),
+            return Err(StoreError::BadDuration {
+                text: text.to_string(),
             });
         }
     };

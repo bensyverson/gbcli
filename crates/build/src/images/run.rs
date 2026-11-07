@@ -1,9 +1,12 @@
 //! rgbgfx, run on an image that passed its checks, and the data it wrote.
 //! A background is converted with `-u -t` (unique tiles and a tilemap); a
 //! sprite sheet with `-Z` and no `-u`, so each 8x16 unit's two tiles stay
-//! adjacent, and gbcli keeps the units its dedup chose. Every run passes
-//! `-N`, so a count past the limit is fatal rather than a warning, and `-c`
-//! with the image's own colors at the indices of their shades.
+//! adjacent, and gbcli keeps the units its dedup chose. A background run
+//! passes `-N`, so a count past the map's limit is fatal rather than a
+//! warning; a sheet run doesn't, because without `-u` rgbgfx counts the
+//! sheet's raw tiles, blanks and repeats included, while the limit applies
+//! to the units gbcli keeps (`sheet::check`). Every run passes `-c` with the
+//! image's own colors at the indices of their shades.
 
 use std::fs;
 use std::path::Path;
@@ -96,7 +99,7 @@ impl Rgbgfx<'_> {
             return Ok(Some(Vec::new()));
         }
         let all = format!("{out}.sheet.2bpp");
-        let args = ["-Z", "-N", "256,256", "-c", &plan.spec, "-o", &all];
+        let args = ["-Z", "-c", &plan.spec, "-o", &all];
         if !self.run(image, &args, source)? {
             return Ok(None);
         }

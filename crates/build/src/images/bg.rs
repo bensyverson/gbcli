@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use gbcli_protocol::{ImageLimit, ImageProblem, TileAt};
 
-use super::census::{self, error};
+use super::census::{self, Key, error, key};
 use super::pixels::{Pixels, Rgba, hex};
 use super::shades::shades;
 
@@ -48,15 +48,16 @@ pub(crate) fn check(image: &str, pixels: &Pixels) -> Result<BgPlan, Vec<ImagePro
         )]);
     }
     let list: Vec<Rgba> = colors.iter().map(|(c, _)| *c).collect();
-    let shade: HashMap<Rgba, u8> = list.iter().copied().zip(shades(&list)).collect();
     let mut slots = [
         "#none".to_string(),
         "#none".into(),
         "#none".into(),
         "#none".into(),
     ];
-    for (c, s) in &shade {
-        slots[usize::from(*s)] = hex(*c);
+    let mut shade: HashMap<Key, u8> = HashMap::new();
+    for (c, s) in list.iter().zip(shades(&list)) {
+        slots[usize::from(s)] = hex(*c);
+        shade.insert(key(*c), s);
     }
     let (width, height) = (pixels.width / 8, pixels.height / 8);
     // Each unique tile's first place and how often it is used.
@@ -65,7 +66,7 @@ pub(crate) fn check(image: &str, pixels: &Pixels) -> Result<BgPlan, Vec<ImagePro
     for ty in 0..height {
         for tx in 0..width {
             let tile: Vec<u8> = (0..64)
-                .map(|i| shade[&pixels.at(tx * 8 + i % 8, ty * 8 + i / 8)])
+                .map(|i| shade[&key(pixels.at(tx * 8 + i % 8, ty * 8 + i / 8))])
                 .collect();
             let entry = seen.entry(tile.clone()).or_insert_with(|| {
                 order.push(tile);
@@ -96,6 +97,19 @@ pub(crate) fn check(image: &str, pixels: &Pixels) -> Result<BgPlan, Vec<ImagePro
              into two backgrounds",
         );
         return Err(vec![ImageProblem { tiles: once, ..p }]);
+    }
+    let map = (width * height) as usize;
+    if let Some(p) = census::bank(
+        image,
+        unique * 16 + map,
+        &format!("{unique} tiles of 16 bytes and a map of {map}, one byte a tile"),
+        &format!(
+            "split it into backgrounds of at most {} tiles each (a 32x32 screen map is 1024) \
+             and load them as they scroll into view",
+            census::BANK_BYTES - unique * 16
+        ),
+    ) {
+        return Err(vec![p]);
     }
     Ok(BgPlan {
         spec: slots.join(","),

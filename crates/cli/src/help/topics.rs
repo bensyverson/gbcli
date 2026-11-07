@@ -291,9 +291,17 @@ mod tests {
             ObjNoTransparency,
             ObjPerLine,
             ObjTotal,
+            FrameGrid,
+            FrameSpan,
+            RomxBank,
             Alpha,
         ] {
             assert!(text.contains(limit.name()), "{} missing", limit.name());
+        }
+        // The shade rule as shades.rs applies it: nearest lightness, unless
+        // two colors would share a shade, and colors one in RGB555 are one.
+        for needle in ["nearest its lightness", "spread", "RGB555"] {
+            assert!(text.contains(needle), "{needle} missing");
         }
         for needle in [
             "assets/bg/",

@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use gbcli_protocol::{ImageLimit, ImageProblem, Severity, TileAt};
 
-use super::census::{self, error};
+use super::census::{self, Key, error, key};
 use super::pixels::{Pixels, Rgba, hex};
 use super::shades::shades;
 
@@ -72,25 +72,7 @@ pub(crate) fn check(
         return Err(vec![p]);
     }
     let (fw, fh) = frame.unwrap_or((pixels.width, pixels.height));
-    if fw == 0
-        || fh == 0
-        || fw % 8 != 0
-        || fh % 16 != 0
-        || !pixels.width.is_multiple_of(fw)
-        || !pixels.height.is_multiple_of(fh)
-    {
-        let p = error(
-            image,
-            ImageLimit::ObjPair8x16,
-            fh as usize,
-            16,
-            format!(
-                "{image}'s frames are {fw}x{fh}; a frame is whole 8x16 objects (width a multiple \
-                 of 8, height of 16) and the {}x{} sheet a grid of them",
-                pixels.width, pixels.height
-            ),
-            &format!("rename it with a frame size that tiles the sheet, e.g. {stem}.16x16.png"),
-        );
+    if let Some(p) = frame_shape(image, stem, pixels, frame) {
         return Err(vec![p]);
     }
     if let Some(p) = census::alpha(image, pixels, true) {
@@ -130,12 +112,12 @@ pub(crate) fn check(
     let shade = shades(&list);
     let mut by_shade: Vec<(u8, Rgba)> = shade.iter().copied().zip(list.drain(..)).collect();
     by_shade.sort();
-    let mut index: HashMap<Rgba, u8> = HashMap::new();
+    let mut index: HashMap<Key, u8> = HashMap::new();
     let mut slots = vec!["#none".to_string()];
     let mut obp = 0u8;
     for (i, (s, c)) in by_shade.iter().enumerate() {
         let i = i as u8 + 1;
-        index.insert(*c, i);
+        index.insert(key(*c), i);
         slots.push(hex(*c));
         obp |= s << (2 * i);
     }
@@ -146,7 +128,7 @@ pub(crate) fn check(
         (0..128)
             .map(|i| {
                 let p = pixels.at(ux + i % 8, uy + i / 8);
-                if p[3] == 0 { 0 } else { index[&p] }
+                if p[3] == 0 { 0 } else { index[&key(p)] }
             })
             .collect()
     };
@@ -253,6 +235,19 @@ pub(crate) fn check(
             "reuse units across frames (flipped copies are free), or split the sheet",
         ));
     }
+    // images.asm: the units, a pointer per frame, then each frame's count
+    // and four bytes an object.
+    let lists: usize = frames.iter().map(|f| 1 + 4 * f.len()).sum();
+    problems.extend(census::bank(
+        image,
+        kept.len() * 32 + frames.len() * 2 + lists,
+        &format!(
+            "{} units of 32 bytes, and {} frames' pointers and object lists",
+            kept.len(),
+            frames.len()
+        ),
+        "split it into sheets of fewer frames; each sheet is its own section",
+    ));
     if !problems.is_empty() {
         problems.extend(warnings);
         return Err(problems);
@@ -268,6 +263,104 @@ pub(crate) fn check(
         frames,
         warnings,
     })
+}
+
+/// Pixels a frame spans at most each way: OAM positions are bytes, and so
+/// are the offsets in a frame's object list.
+const FRAME_SPAN: u32 = 256;
+
+/// The problem with the sheet's frames, if any: whole 8x16 objects, a grid
+/// that tiles the sheet, and a span OAM can place. `named` is the frame
+/// size its file name gives; the whole sheet is one frame without one.
+fn frame_shape(
+    image: &str,
+    stem: &str,
+    pixels: &Pixels,
+    named: Option<(u32, u32)>,
+) -> Option<ImageProblem> {
+    let (w, h) = (pixels.width, pixels.height);
+    let (fw, fh) = named.unwrap_or((w, h));
+    let named = named.is_some();
+    // The frame size nearest (at most) the one named that is whole objects,
+    // tiles the sheet and fits the span: 8x16 always does, since the sheet
+    // is whole objects (census::size).
+    let tiling = |want: u32, unit: u32, sheet: u32| {
+        (1..=want.clamp(unit, FRAME_SPAN) / unit)
+            .rev()
+            .map(|n| n * unit)
+            .find(|&f| sheet.is_multiple_of(f))
+            .unwrap_or(unit)
+    };
+    let offer = format!("{stem}.{}x{}.png", tiling(fw, 8, w), tiling(fh, 16, h));
+    let whole = |n: u32, unit: u32| (n / unit).max(1) * unit;
+    let frames = format!("{image}'s frames are {fw}x{fh}");
+    let (limit, count, max, message, remedy) = if fw == 0 || !fw.is_multiple_of(8) {
+        (
+            ImageLimit::SizeMultiple8,
+            fw,
+            whole(fw, 8),
+            format!("{frames}; a frame is whole 8x16 objects, so its width is a multiple of 8"),
+            format!("rename it {offer}"),
+        )
+    } else if fh == 0 || !fh.is_multiple_of(16) {
+        (
+            ImageLimit::ObjPair8x16,
+            fh,
+            whole(fh, 16),
+            format!(
+                "{frames}; 8x16 objects pair two tiles top over bottom, so a frame's height is \
+                 a multiple of 16"
+            ),
+            format!("rename it {offer}"),
+        )
+    } else if !w.is_multiple_of(fw) || !h.is_multiple_of(fh) {
+        let (count, frame) = if w.is_multiple_of(fw) {
+            (h, fh)
+        } else {
+            (w, fw)
+        };
+        let pad = (w.div_ceil(fw) * fw, h.div_ceil(fh) * fh);
+        (
+            ImageLimit::FrameGrid,
+            count,
+            count / frame * frame,
+            format!(
+                "{frames}, which don't tile the {w}x{h} sheet; frames run left to right, then \
+                 down, so its width and height are whole frames"
+            ),
+            format!(
+                "rename it {offer}, whose frames tile it, or pad the sheet to {}x{} to keep \
+                 {fw}x{fh} frames",
+                pad.0, pad.1
+            ),
+        )
+    } else if fw > FRAME_SPAN || fh > FRAME_SPAN {
+        let named = if named {
+            "name a smaller frame size"
+        } else {
+            "if the sheet holds several frames, name their size"
+        };
+        (
+            ImageLimit::FrameSpan,
+            fw.max(fh),
+            FRAME_SPAN,
+            format!(
+                "{frames}; OAM positions are bytes, so one frame's objects span at most \
+                 {FRAME_SPAN} pixels each way"
+            ),
+            format!("{named}, e.g. {offer}, or split the image into frames that move together"),
+        )
+    } else {
+        return None;
+    };
+    Some(error(
+        image,
+        limit,
+        count as usize,
+        max as usize,
+        message,
+        &remedy,
+    ))
 }
 
 /// A unit's flipped variants, as the hardware flips a whole 8x16 object.

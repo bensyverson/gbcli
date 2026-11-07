@@ -7,13 +7,33 @@ use gbcli_protocol::{ImageLimit, ImageProblem, Severity, TileAt};
 
 use super::pixels::{Pixels, Rgba, hex};
 
-/// An image's colors (fully transparent pixels excluded), most used first.
+/// A color as rgbgfx reads it: RGB555, each channel's top 5 bits. Colors
+/// with one key are one color to rgbgfx (it merges them with a warning), so
+/// every check counts and shades them as one.
+pub(crate) type Key = [u8; 3];
+
+pub(crate) fn key(c: Rgba) -> Key {
+    [c[0] >> 3, c[1] >> 3, c[2] >> 3]
+}
+
+/// An image's colors (fully transparent pixels excluded) as rgbgfx counts
+/// them, most used first. Each is its key's most used RGB value, which
+/// stands for the rest in messages, in rgbgfx's spec and for its shade.
 pub(crate) fn colors(pixels: &Pixels) -> Vec<(Rgba, u32)> {
     let mut count: BTreeMap<Rgba, u32> = BTreeMap::new();
     for &p in pixels.rgba.iter().filter(|p| p[3] != 0) {
         *count.entry(p).or_default() += 1;
     }
-    let mut colors: Vec<(Rgba, u32)> = count.into_iter().collect();
+    let mut by_key: BTreeMap<Key, (Rgba, u32, u32)> = BTreeMap::new();
+    for (c, n) in count {
+        let (best, most, total) = by_key.entry(key(c)).or_insert((c, 0, 0));
+        // The BTreeMap's order breaks ties by the smaller color.
+        if n > *most {
+            (*best, *most) = (c, n);
+        }
+        *total += n;
+    }
+    let mut colors: Vec<(Rgba, u32)> = by_key.into_values().map(|(c, _, n)| (c, n)).collect();
     colors.sort_by_key(|&(c, n)| (std::cmp::Reverse(n), c));
     colors
 }
@@ -45,7 +65,9 @@ pub(crate) fn too_many_colors(
     remedy: &str,
 ) -> ImageProblem {
     let extra = &colors[max..];
-    let tiles = tiles_where(pixels, |p| p[3] != 0 && extra.iter().any(|(c, _)| *c == p));
+    let tiles = tiles_where(pixels, |p| {
+        p[3] != 0 && extra.iter().any(|(c, _)| key(*c) == key(p))
+    });
     let named: Vec<String> = extra
         .iter()
         .map(|(c, n)| format!("{} ({n} px)", hex(*c)))
@@ -65,6 +87,28 @@ pub(crate) fn too_many_colors(
         remedy,
     );
     ImageProblem { tiles, ..problem }
+}
+
+/// One ROMX bank: each image is one section in images.asm, and a section
+/// lives in one bank (Pan Docs, Memory Map; `man 5 rgbasm`, SECTION).
+pub(crate) const BANK_BYTES: usize = 0x4000;
+
+/// The problem when an image's section, `bytes` itemized by `what`, won't
+/// fit one bank.
+pub(crate) fn bank(image: &str, bytes: usize, what: &str, remedy: &str) -> Option<ImageProblem> {
+    (bytes > BANK_BYTES).then(|| {
+        error(
+            image,
+            ImageLimit::RomxBank,
+            bytes,
+            BANK_BYTES,
+            format!(
+                "{image} becomes {bytes} bytes ({what}); its section in images.asm is one ROMX \
+                 bank of {BANK_BYTES}"
+            ),
+            remedy,
+        )
+    })
 }
 
 /// An error-severity problem with `image`, with no tiles named yet.

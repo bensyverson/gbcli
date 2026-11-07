@@ -8,7 +8,11 @@ Images — PNGs under assets/, converted by `gbcli build` with rgbgfx (RGBDS).
   assets/sprites/hero.png      8x16 objects; the whole sheet is one frame
   assets/sprites/hero.16x16.png  frames of 16x16, left to right, then down
 Draw in up to 4 colors (any 4: grays or greens); each takes the DMG shade
-nearest its lightness. Sprites: 3 colors + transparent (alpha 0).
+nearest its lightness, unless two would share one: then all are spread
+apart, lightest to darkest (2 colors: white, black; 3: white, light or dark
+gray by the middle one's lightness, black; 4: all four shades). Colors equal
+in RGB555 (5 bits a channel, as rgbgfx reads them) are one color.
+Sprites: 3 colors + transparent (alpha 0).
 
 Every hardware limit is a `problem` row: limit, count, max, tiles=x,y (in
 the image's 8x8 grid; --json lists them all), message and remedy.
@@ -20,6 +24,9 @@ the image's 8x8 grid; --json lists them all), message and remedy.
   obj_pair_8x16       sheet and frame heights a multiple of 16
   obj_per_line        10 objects side by side in a frame
   obj_total           40 objects in a frame
+  frame_grid          a sheet's width and height whole frames
+  frame_span          a frame at most 256 pixels each way (OAM's bytes)
+  romx_bank           one image's data and frame lists in a 16 KiB bank
   obj_no_transparency a warning: no transparent pixel, every object a block
   alpha               a pixel half transparent, or any in a background
 

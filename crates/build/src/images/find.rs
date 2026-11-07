@@ -1,7 +1,8 @@
 //! The images a project has, by convention: `assets/bg/*.png` and
-//! `assets/sprites/*.png`, each named after its file so the program can
-//! address it (`town.png` is `TownTiles`, `TOWN_WIDTH`). A sprite sheet's
-//! name may carry its frame size: `hero.16x24.png`.
+//! `assets/sprites/*.png` (`.PNG` too, in any case), each named after its
+//! file so the program can address it (`town.png` is `TownTiles`,
+//! `TOWN_WIDTH`). A sprite sheet's name may carry its frame size:
+//! `hero.16x24.png`.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -9,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 use gbcli_protocol::ImageKind;
 
+use super::emit;
 use crate::paths::quote;
 use crate::project::BuildError;
 
@@ -48,7 +50,10 @@ pub(crate) fn sources(
                     error,
                 })?
                 .path();
-            if path.is_file() && path.extension().is_some_and(|e| e == "png") {
+            let png = path
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("png"));
+            if path.is_file() && png {
                 paths.push(path);
             }
         }
@@ -69,6 +74,26 @@ pub(crate) fn sources(
                 ),
                 remedy: "rename one of them; an image's labels come from its file name".into(),
             });
+        }
+    }
+    // Labels can differ while constants don't: `hero-frame.png` and a
+    // sheet `hero.png` both define HERO_FRAME_WIDTH, `hero.png` and
+    // `HERO.png` both HERO_TILES.
+    let mut by_symbol: BTreeMap<String, &Source> = BTreeMap::new();
+    for s in &found {
+        for symbol in emit::symbols(s.kind, &s.label, &s.constant) {
+            if let Some(other) = by_symbol.insert(symbol.clone(), s) {
+                return Err(BuildError::Layout {
+                    message: format!(
+                        "{} and {} would both define `{symbol}` in the program",
+                        shown(&other.path),
+                        shown(&s.path),
+                    ),
+                    remedy: "rename one of them; an image's labels and constants come from its \
+                             file name (`hero-frame.png` is HeroFrame and HERO_FRAME)"
+                        .into(),
+                });
+            }
         }
     }
     Ok(found)

@@ -28,8 +28,9 @@ impl ImageKind {
     }
 }
 
-/// A hardware limit an image can break (Pan Docs), or `alpha`, the one
-/// check that isn't a limit but would make the conversion guess.
+/// A hardware limit an image can break (Pan Docs); or `alpha`, which would
+/// make the conversion guess, or `frame_grid`, a sheet its frames don't
+/// tile: the two checks that aren't limits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ImageLimit {
@@ -56,6 +57,14 @@ pub enum ImageLimit {
     ObjPerLine,
     /// 40 objects in OAM.
     ObjTotal,
+    /// A sheet's frames tile it: its width and height are whole frames.
+    FrameGrid,
+    /// OAM positions are bytes, so a frame spans at most 256 pixels each
+    /// way (and its objects' offsets are bytes in the frame lists).
+    FrameSpan,
+    /// One image's section (its data, and a sheet's frame lists) fits one
+    /// 16 KiB ROMX bank.
+    RomxBank,
     /// A pixel neither opaque nor fully transparent, or a transparent pixel
     /// in a background, which has none.
     Alpha,
@@ -74,6 +83,9 @@ impl ImageLimit {
             ImageLimit::ObjNoTransparency => "obj_no_transparency",
             ImageLimit::ObjPerLine => "obj_per_line",
             ImageLimit::ObjTotal => "obj_total",
+            ImageLimit::FrameGrid => "frame_grid",
+            ImageLimit::FrameSpan => "frame_span",
+            ImageLimit::RomxBank => "romx_bank",
             ImageLimit::Alpha => "alpha",
         }
     }
@@ -184,6 +196,9 @@ mod tests {
             ObjNoTransparency,
             ObjPerLine,
             ObjTotal,
+            FrameGrid,
+            FrameSpan,
+            RomxBank,
             Alpha,
         ] {
             assert_eq!(serde_json::to_value(limit).unwrap(), limit.name());

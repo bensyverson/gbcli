@@ -37,7 +37,8 @@ fn main() {
         .run(&RunOptions::new(Budget::frames(10)))
         .expect("run");
     let cp = machine.capture(SaveMeta::default());
-    store.write_head(&cp, Rev(0)).unwrap();
+    store.write_head(&cp, Rev(1)).unwrap();
+    let mut head_rev = Rev(1);
 
     let (mut meta_read, mut head_read, mut head_write, mut meta_write) =
         (0u128, 0u128, 0u128, 0u128);
@@ -49,12 +50,13 @@ fn main() {
         meta_read += start.elapsed().as_nanos();
 
         let start = Instant::now();
-        let head = store.read_head().unwrap().expect("a head");
+        let head = store.read_head(head_rev).unwrap().expect("a head");
         head_read += start.elapsed().as_nanos();
         assert_eq!(head.header.rom_sha256, cp.header.rom_sha256);
 
         let start = Instant::now();
-        store.write_head(&cp, Rev(cycle)).unwrap();
+        head_rev = Rev(cycle + 1);
+        store.write_head(&cp, head_rev).unwrap();
         head_write += start.elapsed().as_nanos();
 
         let start = Instant::now();

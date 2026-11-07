@@ -5,7 +5,7 @@
 use std::env;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use gbcli_protocol::{Rev, SessionRow};
 
@@ -19,10 +19,23 @@ pub struct Bundle {
 }
 
 impl Bundle {
-    /// Opens an existing bundle, searching upwards from `start`.
+    /// Opens an existing bundle: `GBCLI_DIR` when it is set, else the first
+    /// `.gbcli/` found searching upwards from `start`.
     pub fn open(start: &Path) -> Result<Bundle, StoreError> {
-        if let Some(dir) = env::var_os("GBCLI_DIR") {
-            let root = PathBuf::from(dir);
+        Bundle::locate(start, gbcli_dir().as_deref())
+    }
+
+    /// Opens a bundle, creating it if there is none: `GBCLI_DIR` when it is
+    /// set, else an existing `.gbcli/` above `start`, else `start/.gbcli/`.
+    pub fn open_or_create(start: &Path) -> Result<Bundle, StoreError> {
+        Bundle::open_or_create_in(start, gbcli_dir().as_deref())
+    }
+
+    /// [`Bundle::open`] with `GBCLI_DIR`'s value passed in, so tests don't
+    /// depend on the environment.
+    pub(crate) fn locate(start: &Path, gbcli_dir: Option<&Path>) -> Result<Bundle, StoreError> {
+        if let Some(dir) = gbcli_dir {
+            let root = absolute(dir);
             if root.is_dir() {
                 return Ok(Bundle { root });
             }
@@ -52,17 +65,19 @@ impl Bundle {
         ))
     }
 
-    /// Opens a bundle, creating `.gbcli/` under `start` if there is none.
-    pub fn open_or_create(start: &Path) -> Result<Bundle, StoreError> {
-        if let Some(dir) = env::var_os("GBCLI_DIR") {
-            let root = PathBuf::from(dir);
+    pub(crate) fn open_or_create_in(
+        start: &Path,
+        gbcli_dir: Option<&Path>,
+    ) -> Result<Bundle, StoreError> {
+        if let Some(dir) = gbcli_dir {
+            let root = absolute(dir);
             fs::create_dir_all(&root).map_err(|source| StoreError::NoRoot {
                 start: root.clone(),
                 source,
             })?;
             return Ok(Bundle { root });
         }
-        match Bundle::open(start) {
+        match Bundle::locate(start, None) {
             Ok(bundle) => Ok(bundle),
             Err(StoreError::NoRoot { .. }) => {
                 let root = absolute(start).join(".gbcli");
@@ -81,13 +96,23 @@ impl Bundle {
         &self.root
     }
 
-    /// The project directory: `.gbcli/`'s parent. Stored paths are relative to it.
+    /// The project directory: the bundle directory's parent, whatever the
+    /// bundle directory is called. Under `GBCLI_DIR=/work/state` the project
+    /// is `/work`. Stored ROM and `.sym` paths are relative to it, and so are
+    /// relative paths in a [`crate::RomSource`].
     pub fn project(&self) -> &Path {
         self.root.parent().unwrap_or(&self.root)
     }
 
     pub fn sessions_dir(&self) -> PathBuf {
         self.root.join("sessions")
+    }
+
+    /// Session lock files live here, outside the session directories, so
+    /// removing a session never unlinks a lock another process holds or
+    /// waits on. They are never deleted.
+    pub(crate) fn locks_dir(&self) -> PathBuf {
+        self.root.join("locks")
     }
 
     /// A session store by name; the session need not exist yet.
@@ -134,20 +159,6 @@ impl Bundle {
         Ok(rows)
     }
 
-    /// Removes sessions unused for longer than `unused_for`; returns their names.
-    pub fn prune(&self, unused_for: Duration) -> Result<Vec<String>, StoreError> {
-        let cutoff = now_secs().saturating_sub(unused_for.as_secs());
-        let mut removed = Vec::new();
-        for name in self.session_names()? {
-            let store = self.session(&name)?;
-            if store.last_used()? < cutoff {
-                store.remove(true)?;
-                removed.push(name);
-            }
-        }
-        Ok(removed)
-    }
-
     pub fn gaps_path(&self) -> PathBuf {
         self.root.join("gaps.jsonl")
     }
@@ -155,6 +166,10 @@ impl Bundle {
     pub fn cache_dir(&self) -> PathBuf {
         self.root.join("cache")
     }
+}
+
+fn gbcli_dir() -> Option<PathBuf> {
+    env::var_os("GBCLI_DIR").map(PathBuf::from)
 }
 
 /// Absolute without requiring the path to exist.
@@ -196,30 +211,10 @@ pub fn now_secs() -> u64 {
         .map_or(0, |d| d.as_secs())
 }
 
-/// Parses a pruning duration: `30m`, `12h`, `7d`, `45s`.
-pub fn parse_duration(text: &str) -> Result<Duration, StoreError> {
-    let text = text.trim();
-    let (digits, unit) = text.split_at(text.len().saturating_sub(1));
-    let n: u64 = digits.parse().map_err(|_| StoreError::BadDuration {
-        text: text.to_string(),
-    })?;
-    let unit = match unit {
-        "s" => Duration::from_secs(n),
-        "m" => Duration::from_secs(n * 60),
-        "h" => Duration::from_secs(n * 60 * 60),
-        "d" => Duration::from_secs(n * 60 * 60 * 24),
-        _ => {
-            return Err(StoreError::BadDuration {
-                text: text.to_string(),
-            });
-        }
-    };
-    Ok(unit)
-}
-
-/// A session name: `[a-z0-9-]{1,40}`.
+/// A session name: `[a-z0-9-]{1,40}`, not starting with `-`, which a CLI would read as a flag.
 pub fn validate_name(name: &str) -> Result<(), StoreError> {
     let ok = (1..=40).contains(&name.len())
+        && !name.starts_with('-')
         && name
             .chars()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
@@ -241,9 +236,16 @@ pub fn next(rev: Rev) -> Rev {
 mod tests {
     use super::*;
 
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("gbcli-bundle-{}-{name}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
     #[test]
     fn names_are_lowercase_digits_and_dashes() {
-        for name in ["dx", "demo-1", "a", &"x".repeat(40)] {
+        for name in ["dx", "demo-1", "a", "a-", &"x".repeat(40)] {
             assert!(validate_name(name).is_ok(), "{name}");
         }
         for name in ["", "DX", "demo_1", "a b", &"x".repeat(41)] {
@@ -252,23 +254,55 @@ mod tests {
     }
 
     #[test]
-    fn durations_need_a_unit() {
-        assert_eq!(parse_duration("30m").unwrap(), Duration::from_secs(1800));
-        assert_eq!(parse_duration("7d").unwrap(), Duration::from_secs(604_800));
-        assert!(parse_duration("7").is_err());
-        assert!(parse_duration("d").is_err());
-        assert!(parse_duration("1w").is_err());
+    fn a_name_cannot_start_with_a_dash_a_cli_would_read_as_a_flag() {
+        for name in ["-", "-x", "--rom"] {
+            assert!(validate_name(name).is_err(), "{name}");
+        }
     }
 
     #[test]
     fn finding_a_bundle_walks_up_from_a_nested_directory() {
-        let tmp = std::env::temp_dir().join(format!("gbcli-bundle-test-{}", std::process::id()));
+        let tmp = scratch("walk-up");
         let nested = tmp.join("a").join("b");
         fs::create_dir_all(&nested).unwrap();
         let root = tmp.join(".gbcli");
         fs::create_dir_all(&root).unwrap();
-        assert_eq!(Bundle::open(&nested).unwrap().root(), root.as_path());
-        assert_eq!(Bundle::open(&nested).unwrap().project(), tmp.as_path());
+        let found = Bundle::locate(&nested, None).unwrap();
+        assert_eq!(found.root(), root.as_path());
+        assert_eq!(found.project(), tmp.as_path());
         fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    #[test]
+    fn gbcli_dir_wins_over_the_walk_up_and_its_parent_is_the_project() {
+        let tmp = scratch("gbcli-dir");
+        fs::create_dir_all(tmp.join(".gbcli")).unwrap();
+        let state = tmp.join("elsewhere").join("state");
+        fs::create_dir_all(&state).unwrap();
+        let found = Bundle::locate(&tmp, Some(&state)).unwrap();
+        assert_eq!(found.root(), state.as_path());
+        assert_eq!(found.project(), tmp.join("elsewhere").as_path());
+        fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    #[test]
+    fn a_gbcli_dir_that_does_not_exist_is_refused_by_open_and_made_by_open_or_create() {
+        let tmp = scratch("gbcli-dir-missing");
+        let state = tmp.join("state");
+        assert!(matches!(
+            Bundle::locate(&tmp, Some(&state)),
+            Err(StoreError::NoRoot { .. })
+        ));
+        let made = Bundle::open_or_create_in(&tmp, Some(&state)).unwrap();
+        assert_eq!(made.root(), state.as_path());
+        assert!(state.is_dir());
+        fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    #[test]
+    fn a_relative_gbcli_dir_is_made_absolute_so_the_project_is_a_real_directory() {
+        let found = Bundle::locate(Path::new("/"), Some(Path::new("."))).unwrap();
+        assert!(found.root().is_absolute(), "{:?}", found.root());
+        assert!(found.project().is_absolute(), "{:?}", found.project());
     }
 }

@@ -1,3 +1,4 @@
+use gbcli_bundle::LOCK_WAIT;
 use gbcli_protocol::{PruneArgs, Response, ResultBody, RmArgs};
 
 use super::Handler;
@@ -36,12 +37,12 @@ impl Handler {
             Ok(d) => d,
             Err(e) => return Response::failed(id, None, convert::store(&e)),
         };
-        match self.bundle.prune(unused_for) {
-            Ok(pruned) => Response::ok(
+        match self.bundle.prune(unused_for, LOCK_WAIT) {
+            Ok(report) => Response::ok(
                 id,
                 None,
                 ResultBody {
-                    pruned: Some(pruned),
+                    pruned: Some(report.removed),
                     ..ResultBody::default()
                 },
             ),
@@ -54,7 +55,7 @@ impl Handler {
             Ok(store) => store,
             Err(e) => return Response::failed(id, None, convert::store(&e)),
         };
-        match store.remove(args.with_checkpoints) {
+        match store.remove(args.with_checkpoints, LOCK_WAIT) {
             Ok(()) => Response::ok(
                 id,
                 None,

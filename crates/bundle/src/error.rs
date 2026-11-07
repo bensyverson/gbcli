@@ -65,6 +65,13 @@ pub enum StoreError {
     SessionExists {
         name: String,
     },
+    /// `--rom` names another file than the existing session was made from.
+    RomMismatch {
+        name: String,
+        /// The ROM path in `session.json`.
+        stored: String,
+        given: PathBuf,
+    },
     /// The session's `session.json` exists but doesn't parse.
     SessionUnreadable {
         name: String,
@@ -104,6 +111,7 @@ impl StoreError {
             StoreError::RomUnreadable { .. } => ErrorCode::RomUnreadable,
             StoreError::SymbolsUnreadable { .. } => ErrorCode::SymbolsUnreadable,
             StoreError::SessionExists { .. }
+            | StoreError::RomMismatch { .. }
             | StoreError::BadHistoryRef { .. }
             | StoreError::BadCheckpointName { .. }
             | StoreError::BadDuration { .. } => ErrorCode::BadRequest,
@@ -131,7 +139,9 @@ impl StoreError {
             StoreError::NoSession { known, .. } => {
                 format!("known sessions: {}", known.join(", "))
             }
-            StoreError::BadSessionName { .. } => "names are [a-z0-9-], 1 to 40 characters".into(),
+            StoreError::BadSessionName { .. } => {
+                "names are [a-z0-9-], 1 to 40 characters, not starting with -".into()
+            }
             StoreError::Busy { .. } => {
                 "wait for the other writer to finish, or use a different --session".into()
             }
@@ -160,6 +170,10 @@ impl StoreError {
             }
             StoreError::SessionExists { name } => format!(
                 "use another --session name, or remove this one with `gbcli sessions rm {name}`"
+            ),
+            StoreError::RomMismatch { name, stored, .. } => format!(
+                "omit --rom to open {name} over {stored}, use another --session name, or remove \
+                 it with `gbcli sessions rm {name}` and create it again"
             ),
             StoreError::SessionUnreadable { name, path, .. } => format!(
                 "fix {} by hand, or remove the session with `gbcli sessions rm {name}` and \
@@ -292,6 +306,11 @@ impl fmt::Display for StoreError {
                 write!(f, "can't read symbols {}: {reason}", path.display())
             }
             StoreError::SessionExists { name } => write!(f, "session {name:?} already exists"),
+            StoreError::RomMismatch {
+                name,
+                stored,
+                given,
+            } => write!(f, "session {name:?} runs {stored}, not {}", given.display()),
             StoreError::SessionUnreadable { path, reason, .. } => {
                 write!(f, "{} doesn't parse: {reason}", path.display())
             }

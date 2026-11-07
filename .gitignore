@@ -11,5 +11,5 @@ scripts/bench/rust-build/target/
 # Cargo build output
 /target/
 # Test-ROM corpus (fetched by scripts/corpus/fetch.py)
-/tests/corpus/fetched/
+/tests/corpus/fetched
 /tests/corpus/.downloads/

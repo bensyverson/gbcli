@@ -210,6 +210,37 @@ fn creating_an_existing_session_is_a_bad_request_naming_another_way() {
 }
 
 #[test]
+fn a_rom_other_than_the_sessions_is_a_bad_request_naming_three_ways_out() {
+    let e = StoreError::RomMismatch {
+        name: "demo".into(),
+        stored: "build/demo.gb".into(),
+        given: PathBuf::from("/work/other.gb"),
+    };
+    assert_maps(
+        &e,
+        ErrorCode::BadRequest,
+        2,
+        "omit --rom to open demo over build/demo.gb, use another --session name, or remove \
+         it with `gbcli sessions rm demo` and create it again",
+    );
+    assert_eq!(
+        e.to_string(),
+        "session \"demo\" runs build/demo.gb, not /work/other.gb"
+    );
+}
+
+#[test]
+fn a_bad_session_name_says_a_name_cant_start_with_a_dash() {
+    let e = StoreError::BadSessionName { name: "-x".into() };
+    assert_maps(
+        &e,
+        ErrorCode::BadRequest,
+        2,
+        "names are [a-z0-9-], 1 to 40 characters, not starting with -",
+    );
+}
+
+#[test]
 fn a_boot_run_the_core_cant_do_keeps_the_unsupported_code() {
     let e = StoreError::BootFailed(DebugError::Core(CoreError::Unsupported {
         feature: Feature::DotStep,

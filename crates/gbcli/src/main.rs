@@ -71,11 +71,16 @@ fn serve_command(args: Vec<String>) -> ExitCode {
         Err(e) => return store_failure(&e),
     };
 
-    // A named session that doesn't exist yet is created from --rom.
-    if let Some(name) = &parsed.session
-        && let Err(e) = open_or_create_session(&bundle, name, &parsed)
-    {
-        return store_failure(&e);
+    if let Some(name) = &parsed.session {
+        let source = parsed.rom.as_ref().map(|rom| RomSource {
+            rom: absolute(rom),
+            sym: parsed.sym.as_deref().map(absolute),
+            model: parsed.model,
+            seed: parsed.seed,
+        });
+        if let Err(e) = bundle.open_session(name, source.as_ref()) {
+            return store_failure(&e);
+        }
     }
 
     let mut handler = Handler::new(bundle, parsed.session, parsed.actor);
@@ -91,28 +96,9 @@ fn serve_command(args: Vec<String>) -> ExitCode {
     }
 }
 
-fn open_or_create_session(
-    bundle: &Bundle,
-    name: &str,
-    args: &ServeArgs,
-) -> Result<(), gbcli_bundle::StoreError> {
-    let store = bundle.session(name)?;
-    if store.exists() {
-        return Ok(());
-    }
-    let Some(rom) = &args.rom else {
-        return Err(gbcli_bundle::StoreError::NoSession {
-            name: name.to_string(),
-            known: bundle.session_names()?,
-        });
-    };
-    store.create(&RomSource {
-        rom: rom.clone(),
-        sym: args.sym.clone(),
-        model: args.model,
-        seed: args.seed,
-    })?;
-    Ok(())
+/// Paths on the command line are relative to the working directory.
+fn absolute(path: &std::path::Path) -> PathBuf {
+    std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 fn parse_serve(args: Vec<String>) -> Result<ServeArgs, String> {
@@ -166,8 +152,9 @@ fn print_serve_help() {
          \n\
          One request per line, one final response per request. stdout carries protocol\n\
          only; diagnostics go to stderr. A named session that doesn't exist is created\n\
-         from --rom; naming an existing one opens it. The machine stays warm between\n\
-         requests and reloads if another process moved the head.\n"
+         from --rom; naming an existing one opens it, and refuses a --rom other than\n\
+         the session's. The machine stays warm between requests and reloads if another\n\
+         process moved the head.\n"
     );
 }
 

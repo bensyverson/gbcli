@@ -15,7 +15,7 @@ use gbcli_core::{Core, CoreError, Feature, Region};
 use crate::sym::{Symbol, Symbols};
 
 pub(crate) use cadence::Triggers;
-pub use eval::{AccessValues, EvalCtx, EvalError, EvalWarning};
+pub use eval::{AccessValues, EvalCtx, EvalError, EvalWarning, StopTrigger, UninitRead, Verdict};
 
 /// A compiled condition: its source and its tree, symbols already resolved.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -54,6 +54,24 @@ impl Condition {
         warnings: &mut Vec<EvalWarning>,
     ) -> Result<bool, EvalError> {
         Ok(self.eval(ctx, warnings)? != 0)
+    }
+
+    /// Whether this condition, as a stop trigger, holds now (design §8). A
+    /// read of a never-written byte makes the whole condition "not yet",
+    /// never a value: a trigger asks whether something has happened, and an
+    /// unwritten variable hasn't. Value reads use [`eval`](Self::eval), which
+    /// fails instead.
+    pub fn verdict(
+        &self,
+        ctx: &EvalCtx<'_>,
+        warnings: &mut Vec<EvalWarning>,
+    ) -> Result<Verdict, EvalError> {
+        match self.holds(ctx, warnings) {
+            Ok(true) => Ok(Verdict::Holds),
+            Ok(false) => Ok(Verdict::DoesNotHold),
+            Err(EvalError::UninitializedRead(read)) => Ok(Verdict::NotYet(read)),
+            Err(e) => Err(e),
+        }
     }
 
     /// The cadence a run evaluates this condition on, and thus what it costs

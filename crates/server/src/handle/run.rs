@@ -340,18 +340,40 @@ mod tests {
     }
 
     #[test]
-    fn a_predicate_reading_never_written_memory_points_at_allow_uninit() {
+    fn a_predicate_reading_never_written_memory_waits_and_points_at_allow_uninit() {
+        // Design §8 ruling: a stop trigger reads an unwritten byte as "not yet".
         let f = Fixture::new("until-uninit");
         let mut h = handler(&f);
         let response = h.handle(&request(Op::Run(RunArgs {
             until: Some("[$C003] == 0".into()),
-            frames: Some(600),
+            frames: Some(2),
             ..RunArgs::default()
         })));
-        let error = response.error.expect("an uninitialized read fails the run");
+        assert!(response.ok, "{:?}", response.error);
+        let stop = response.result.unwrap().stop.unwrap();
+        assert!(matches!(stop.reason, StopReason::BudgetExhausted { .. }));
+        assert!(
+            response
+                .warnings
+                .iter()
+                .any(|w| w.contains("$C003") && w.contains("--allow-uninit")),
+            "{:?}",
+            response.warnings
+        );
+    }
+
+    #[test]
+    fn a_read_of_never_written_memory_still_fails() {
+        let f = Fixture::new("read-uninit");
+        let mut h = handler(&f);
+        let response = h.handle(&request(Op::Run(RunArgs {
+            read: vec!["[$C003]".into()],
+            frames: Some(1),
+            ..RunArgs::default()
+        })));
+        let error = response.error.expect("an uninitialized read fails");
         assert_eq!(error.code, ErrorCode::UninitializedRead);
         assert!(error.remedy.contains("--allow-uninit"), "{}", error.remedy);
-        assert!(error.stop.is_some(), "the stop record rides on the error");
     }
 
     #[test]

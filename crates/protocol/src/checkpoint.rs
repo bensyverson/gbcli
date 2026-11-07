@@ -110,7 +110,7 @@ pub struct Location {
     pub addr: u16,
     /// `None` matches every bank.
     pub bank: Option<u16>,
-    /// The symbol it was set by, if any (`Name` or `Name+3`).
+    /// The symbol it was set by, if any (`Name` or `Name+$3`).
     pub symbol: Option<String>,
 }
 

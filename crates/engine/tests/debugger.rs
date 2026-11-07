@@ -7,7 +7,8 @@ use std::sync::atomic::AtomicBool;
 
 use common::*;
 use gbcli_core::{Access, Budget, BudgetKind, CoreConfig, Model};
-use gbcli_engine::{Backend, DebugError, Machine, Outcome, RunOptions, Since};
+use gbcli_engine::cond::{EvalWarning, StopTrigger};
+use gbcli_engine::{Backend, Machine, Outcome, RunOptions, Since};
 use gbcli_protocol::{Location, StepKind, StopReason, StopRecord, TimeBase, WatchAccess};
 
 #[test]
@@ -137,22 +138,67 @@ fn a_once_watch_is_deleted_after_its_stop() {
 }
 
 #[test]
-fn a_condition_reading_never_written_memory_fails_the_run_with_its_stop() {
+fn a_condition_reading_never_written_memory_waits_and_warns_at_the_end() {
+    // Design §8 ruling: a stop trigger reads an unwritten byte as "not yet".
     let mut m = machine(V1, Some(V1_SYM));
-    m.add_breakpoint(at(0x0163), Some("[wNever] == [wNever]"))
+    let bp = m
+        .add_breakpoint(at(0x0163), Some("[wNever] == [wNever]"))
         .unwrap();
-    let err = m.run(&opts()).unwrap_err();
-    let DebugError::Eval { stop, error, .. } = &err else {
-        panic!("{err:?}")
-    };
-    assert!(error.remedy().contains("--allow-uninit"));
-    check_place(&m, stop, 0x0163);
+    let watch = m
+        .add_watch(WatchAccess::Write, at(0xC000), Some("[wNever] == 0"), false)
+        .unwrap();
+    let budget = RunOptions::new(Budget::instructions(500));
+    let Outcome { stop, warnings } = m.run(&budget).expect("no error");
+    assert!(
+        matches!(stop.reason, StopReason::BudgetExhausted { .. }),
+        "{stop:?}"
+    );
+    let waited: Vec<_> = warnings
+        .iter()
+        .map(|w| match w {
+            EvalWarning::NotYet { trigger, read } => (trigger.clone(), read.addr),
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    assert_eq!(
+        waited,
+        [
+            (StopTrigger::Condition { id: bp }, Some(0xC003)),
+            (StopTrigger::Condition { id: watch }, Some(0xC003)),
+        ]
+    );
+    let text = warnings[0].to_string();
+    assert!(
+        text.contains("wNever") && text.contains("#1") && text.contains("--allow-uninit"),
+        "{text}"
+    );
 
     let mut allowed = opts();
     allowed.allow_uninit = true;
     let Outcome { stop, warnings } = m.run(&allowed).unwrap();
     assert!(matches!(stop.reason, StopReason::Breakpoint { .. }));
-    assert!(!warnings.is_empty());
+    assert!(matches!(&warnings[..], [EvalWarning::UninitializedRead(_)]));
+}
+
+#[test]
+fn a_waiting_condition_does_not_warn_once_its_byte_is_written() {
+    let mut m = machine(V1, Some(V1_SYM));
+    // wFrame is unwritten when Main starts and written a few instructions
+    // later: the breakpoint waited, but the run ends with the byte written.
+    m.add_breakpoint(at(0x0150), Some("[wFrame] == $FF"))
+        .unwrap();
+    let Outcome { stop, warnings } = m.run(&RunOptions::new(Budget::instructions(100))).unwrap();
+    assert!(matches!(stop.reason, StopReason::BudgetExhausted { .. }));
+    assert!(warnings.is_empty(), "{warnings:?}");
+}
+
+#[test]
+fn a_stop_names_a_symbol_offset_in_hex() {
+    let mut m = machine(V1, Some(V1_SYM));
+    // `inc hl`, reached when wFrame's low byte wraps.
+    let stop = m.run_to(at(0x016E), &opts()).unwrap().stop;
+    assert_eq!(stop.pc, 0x016E);
+    assert_eq!(stop.symbol.as_deref(), Some("Work+$B"));
 }
 
 #[test]
@@ -238,8 +284,7 @@ fn running_to_the_handoff_stops_right_after_the_boot_rom() {
     // The FF50 write is a passed-over candidate, and the boot ROM falls
     // through to $0100: the exec filter must be checked at that PC even
     // though it begins the next core call.
-    let mut config = CoreConfig::new(Model::DmgB, V1.to_vec());
-    let _ = &mut config;
+    let config = CoreConfig::new(Model::DmgB, V1.to_vec());
     let mut m = Machine::new(Backend::sameboy(), config, Some(V1_SYM)).unwrap();
     let stop = m
         .run_to(at(0x0100), &RunOptions::new(Budget::frames(600)))
@@ -372,5 +417,5 @@ fn a_backtrace_lists_return_addresses_on_the_stack() {
     let frames = m.backtrace();
     assert_eq!(frames.len(), 1, "{frames:?}");
     assert_eq!(frames[0].return_addr, 0x0161);
-    assert_eq!(frames[0].symbol.as_deref(), Some("Main.loop+3"));
+    assert_eq!(frames[0].symbol.as_deref(), Some("Main.loop+$3"));
 }

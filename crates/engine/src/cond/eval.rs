@@ -6,6 +6,7 @@ use gbcli_core::{Core, CoreError, Region};
 use gbcli_protocol::TimeMark;
 
 use super::{BinOp, Expr, Flag, Place, Reg, UnOp, Width};
+use crate::addr::label;
 use crate::mem::{self, Target};
 use crate::sym::Symbols;
 
@@ -52,7 +53,64 @@ impl fmt::Display for UninitRead {
 /// Something an evaluation let through but wants reported.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EvalWarning {
+    /// `allow_uninit` read a never-written byte's power-on value.
     UninitializedRead(UninitRead),
+    /// A run ended while a stop trigger's condition was waiting on a byte
+    /// that is still unwritten, so it could not hold (design §8).
+    NotYet {
+        trigger: StopTrigger,
+        read: UninitRead,
+    },
+}
+
+/// A condition that triggers a stop.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum StopTrigger {
+    /// The `--until` predicate.
+    Until,
+    /// A breakpoint's or watch's condition.
+    Condition { id: u32 },
+}
+
+impl fmt::Display for EvalWarning {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            EvalWarning::UninitializedRead(read) => write!(f, "uninitialized read of {read}"),
+            EvalWarning::NotYet { trigger, read } => {
+                let what = match trigger {
+                    StopTrigger::Until => "the --until predicate".to_string(),
+                    StopTrigger::Condition { id } => format!("the condition of #{id}"),
+                };
+                write!(f, "{what} never held: {}", uninit_remedy(read))
+            }
+        }
+    }
+}
+
+/// What a stop trigger's condition says at one boundary (design §8).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Verdict {
+    Holds,
+    DoesNotHold,
+    /// It reads a byte the program has never written: not yet, whatever the
+    /// rest of the condition says.
+    NotYet(UninitRead),
+}
+
+impl UninitRead {
+    /// Whether the byte is still never-written on `core`.
+    pub fn still_unwritten(&self, core: &dyn Core) -> bool {
+        core.written(self.region)
+            .is_ok_and(|w| self.offset < w.len && w.never_written(self.offset))
+    }
+}
+
+/// The §8 remedy for a never-written byte.
+fn uninit_remedy(read: &UninitRead) -> String {
+    format!(
+        "{read} has never been written at this point; run from boot (--from boot) or later, \
+         or pass --allow-uninit"
+    )
 }
 
 /// Why an evaluation failed.
@@ -79,10 +137,7 @@ pub enum EvalError {
 impl EvalError {
     pub fn remedy(&self) -> String {
         match self {
-            EvalError::UninitializedRead(r) => format!(
-                "{r} has never been written at this point; run from boot (--from boot) or \
-                 later, or pass --allow-uninit"
-            ),
+            EvalError::UninitializedRead(r) => uninit_remedy(r),
             EvalError::Core(e) => format!("the core can't read this without side effects: {e}"),
             EvalError::DivideByZero => "guard the divisor, e.g. `d != 0 && x / d > 2`".into(),
             EvalError::NoAccess { which } => {
@@ -294,11 +349,7 @@ fn check_written(
     }
     let symbol = addr.and_then(|a| {
         let s = ctx.symbols?.containing(mem::bank_at(ctx.core, a), a)?;
-        Some(if s.addr == a {
-            s.name.clone()
-        } else {
-            format!("{}+{}", s.name, a - s.addr)
-        })
+        Some(label(&s.name, i64::from(a - s.addr)))
     });
     let read = UninitRead {
         addr,

@@ -6,6 +6,7 @@
 
 use gbcli_core::Core;
 
+use crate::addr::label;
 use crate::mem;
 use crate::sym::{Area, Symbols};
 
@@ -21,7 +22,7 @@ pub struct CallFrame {
     /// The bank mapped at `return_addr` now; a far call may have returned
     /// into another.
     pub bank: u16,
-    /// `Name` or `Name+3`.
+    /// `Name` or `Name+$3`.
     pub symbol: Option<String>,
 }
 
@@ -46,13 +47,9 @@ pub fn backtrace(core: &dyn Core, syms: Option<&Symbols>) -> Vec<CallFrame> {
         let word = u16::from_le_bytes([l, h]);
         if Area::of(word).is_rom() && after_call(core, word) {
             let bank = mem::bank_at(core, word);
-            let symbol = syms.and_then(|s| s.containing(bank, word)).map(|s| {
-                if s.addr == word {
-                    s.name.clone()
-                } else {
-                    format!("{}+{}", s.name, word - s.addr)
-                }
-            });
+            let symbol = syms
+                .and_then(|s| s.containing(bank, word))
+                .map(|s| label(&s.name, i64::from(word - s.addr)));
             frames.push(CallFrame {
                 sp: lo,
                 return_addr: word,

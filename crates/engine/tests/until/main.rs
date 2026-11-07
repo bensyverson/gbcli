@@ -2,17 +2,19 @@
 //! independent per-instruction oracle: the same predicate, evaluated after
 //! every instruction, must reach the same PC, ticks and instruction count as
 //! the cadence-derived stop. `banks` covers memory in switchable banks and
-//! aliased cart RAM; `triggers` covers mixed triggers and watch interplay.
+//! aliased cart RAM; `triggers` covers mixed triggers and watch interplay;
+//! `unwritten` covers never-written memory and predicate errors.
 
 #[path = "../common/mod.rs"]
 mod common;
 
 mod banks;
 mod triggers;
+mod unwritten;
 
 use common::*;
 use gbcli_core::{Budget, BudgetKind, Region, Registers, StepUnit};
-use gbcli_engine::cond::{Condition, EvalCtx};
+use gbcli_engine::cond::{Condition, EvalCtx, Verdict};
 use gbcli_engine::{DebugError, Machine, Outcome, RunOptions, Since};
 use gbcli_protocol::{Cadence, Location, StopReason, TimeMark, WatchAccess};
 
@@ -78,7 +80,8 @@ fn holds(m: &Machine, text: &str, allow_uninit: bool) -> bool {
 }
 
 /// An independent oracle: one instruction at a time, evaluating before each,
-/// until the predicate holds at an instruction boundary.
+/// until the predicate holds at an instruction boundary. A read of a
+/// never-written byte means "not yet", as for any stop trigger (design §8).
 struct Boundary {
     pc: u16,
     ticks: u64,
@@ -89,10 +92,10 @@ fn oracle(m: &mut Machine, text: &str, max: u64, allow_uninit: bool) -> Boundary
     let condition = Condition::compile(text, m.symbols()).expect("the predicate compiles");
     for instructions in 0..=max {
         let mut warnings = Vec::new();
-        if condition
-            .holds(&ctx(m, allow_uninit), &mut warnings)
-            .expect("the oracle evaluates")
-        {
+        let verdict = condition
+            .verdict(&ctx(m, allow_uninit), &mut warnings)
+            .expect("the oracle evaluates");
+        if verdict == Verdict::Holds {
             return Boundary {
                 pc: m.core().registers().pc,
                 ticks: m.core().now().0,
@@ -284,30 +287,6 @@ fn a_region_form_read_stops_on_its_write() {
     let outcome = check(&mut m, "[wram:0] == 60", &opts(), 5_000, Cadence::Writes);
     assert_eq!(outcome.stop.pc, 0x016C);
     assert_eq!(outcome.stop.budget.instructions, 537);
-}
-
-#[test]
-fn an_uninitialized_read_fails_with_a_remedy() {
-    let mut m = machine(V1, Some(V1_SYM));
-    let err = m.run_until("[wNever] == [wNever]", &opts()).unwrap_err();
-    let DebugError::Until { error, stop } = &err else {
-        panic!("{err:?}")
-    };
-    assert!(
-        error.remedy().contains("--allow-uninit"),
-        "{}",
-        error.remedy()
-    );
-    assert!(err.to_string().starts_with("until: "), "{err}");
-    assert_eq!(stop.budget.instructions, 0);
-    assert_eq!(stop.pc, 0x0100);
-
-    let mut allowed = opts();
-    allowed.allow_uninit = true;
-    let Outcome { stop, warnings } = m.run_until("[wNever] == [wNever]", &allowed).unwrap();
-    assert!(matches!(stop.reason, StopReason::Predicate { .. }));
-    assert_eq!(stop.budget.instructions, 0);
-    assert!(!warnings.is_empty());
 }
 
 #[test]

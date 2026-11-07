@@ -17,6 +17,7 @@ use crate::sym::{Area, Symbol, Symbols};
 mod offset;
 mod sizes;
 
+pub(crate) use offset::banked_area;
 pub use offset::{label, split_label};
 pub use sizes::{RegionSizes, SizeBasis};
 

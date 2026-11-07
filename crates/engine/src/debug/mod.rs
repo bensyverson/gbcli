@@ -3,6 +3,7 @@
 //! Breakpoints are PC checks in the run loop; nothing is patched into memory.
 
 mod backtrace;
+mod decide;
 mod drive;
 mod record;
 mod until;
@@ -62,7 +63,8 @@ impl RunOptions<'_> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Outcome {
     pub stop: StopRecord,
-    /// Never-written reads that `allow_uninit` let through.
+    /// Never-written reads that `allow_uninit` let through, then each stop
+    /// trigger left waiting on a byte still never written (design §8).
     pub warnings: Vec<EvalWarning>,
 }
 
@@ -84,8 +86,9 @@ pub enum DebugError {
     UntilSyntax {
         error: ExprError,
     },
-    /// An `--until` predicate failed while evaluated; `stop` is where the
-    /// machine is.
+    /// An `--until` predicate failed while evaluated (not a never-written
+    /// read, which means "not yet"); `stop` is where the machine is, with
+    /// reason `predicate_error`.
     Until {
         error: EvalError,
         stop: Box<StopRecord>,

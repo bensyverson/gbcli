@@ -3,7 +3,7 @@
 //! and stopping at the same instruction.
 //!
 //! ```sh
-//! cargo run --release -p gbcli-engine --example until_bench -- [iterations=2000]
+//! cargo run --release -p gbcli-engine --example until_bench -- [iterations=10000]
 //! ```
 //!
 //! Both predicates are the same proposition: `pc == pc` is always true, and
@@ -89,7 +89,7 @@ fn main() {
     let iterations: u32 = std::env::args()
         .nth(1)
         .and_then(|a| a.parse().ok())
-        .unwrap_or(2_000);
+        .unwrap_or(10_000);
     let mut m = machine();
     let blob = m.core().save();
     let opts = RunOptions::new(Budget::frames(60));

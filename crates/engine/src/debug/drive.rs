@@ -4,16 +4,16 @@
 use std::sync::atomic::Ordering;
 
 use gbcli_core::{
-    Access, AddrFilter, BankSel, Core, Hit, Region, RunRequest, StopReason as CoreReason,
-    StoreFilter, Usage,
+    Access, AddrFilter, BankSel, Core, Region, RunRequest, StopReason as CoreReason, StoreFilter,
+    Usage,
 };
-use gbcli_protocol::{Location, StepKind, StopReason, TimeMark, WatchAccess};
+use gbcli_protocol::{Location, StepKind, StopReason, WatchAccess};
 
+use super::decide::{Notes, compile, decide, exec_breakpoint, exec_hit, remove_once};
 use super::record::record;
-use super::until::{Until, evaluate};
+use super::until::Until;
 use super::{DebugError, Outcome, RunOptions};
-use crate::cond::eval::frame_number;
-use crate::cond::{AccessValues, Condition, EvalCtx, EvalWarning};
+use crate::cond::Condition;
 use crate::machine::Machine;
 use crate::mem;
 
@@ -23,7 +23,7 @@ use crate::mem;
 const CHUNK: u64 = 4096;
 
 /// The register that unmaps the boot ROM: its first write is the handoff.
-const BOOT_OFF: u16 = 0xFF50;
+pub(super) const BOOT_OFF: u16 = 0xFF50;
 
 /// What ends a run besides breakpoints, watches and the budget.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -83,51 +83,12 @@ fn bank_sel(at: &Location) -> BankSel {
     at.bank.map_or(BankSel::Any, BankSel::Bank)
 }
 
-fn matches(at: &Location, addr: u16, bank: u16) -> bool {
-    at.addr == addr && at.bank.is_none_or(|b| b == bank)
-}
-
 /// HALT that nothing can end: no interrupt enabled in IE.
 fn halted_forever(core: &dyn Core) -> bool {
     core.registers().halted
         && core
             .region(Region::Ie)
             .is_ok_and(|ie| ie.bytes.first().is_some_and(|&ie| ie & 0x1F == 0))
-}
-
-struct Compiled {
-    breakpoints: Vec<(u32, Location, Option<Condition>)>,
-    watches: Vec<(u32, WatchAccess, Location, Option<Condition>, bool)>,
-}
-
-fn compile(m: &Machine) -> Result<Compiled, DebugError> {
-    let config = m.debugger_config();
-    let cond = |id: u32, text: &Option<String>| {
-        text.as_deref()
-            .map(|t| Condition::compile(t, m.symbols()))
-            .transpose()
-            .map_err(|error| DebugError::Condition { id, error })
-    };
-    Ok(Compiled {
-        breakpoints: config
-            .breakpoints
-            .iter()
-            .map(|b| Ok((b.id, b.at.clone(), cond(b.id, &b.condition)?)))
-            .collect::<Result<_, DebugError>>()?,
-        watches: config
-            .watches
-            .iter()
-            .map(|w| {
-                Ok((
-                    w.id,
-                    w.access,
-                    w.at.clone(),
-                    cond(w.id, &w.condition)?,
-                    w.once,
-                ))
-            })
-            .collect::<Result<_, DebugError>>()?,
-    })
 }
 
 pub fn drive(m: &mut Machine, opts: &RunOptions<'_>, goal: Goal) -> Result<Outcome, DebugError> {
@@ -174,90 +135,63 @@ fn run(
     let until = condition.map(|c| Until::new(c, m.core()));
     let no_stores = StoreFilter::new();
     let stores = until.as_ref().map_or(&no_stores, |u| &u.triggers.stores);
+    let fine = goal.fine() || until.as_ref().is_some_and(Until::fine);
 
     let mut used = Usage::default();
-    let mut warnings: Vec<EvalWarning> = Vec::new();
-    let finish = |m: &Machine, reason, used: Usage, warnings: Vec<EvalWarning>| {
+    let mut notes = Notes::default();
+    let finish = |m: &Machine, reason, used: Usage, notes: Notes| {
+        let waiting = until.as_ref().and_then(|u| u.waiting(m, opts));
         Ok(Outcome {
             stop: record(m, reason, used, &opts.since),
-            warnings,
+            warnings: notes.finish(m, waiting),
         })
     };
 
     // Before the first instruction: a predicate that already holds must not
     // spend the budget. This also makes resuming idempotent.
-    if let Some(until) = &until {
-        match evaluate(m, opts, until.condition, &mut warnings) {
-            Ok(true) => return finish(m, until.reason(), used, warnings),
-            Ok(false) => {}
-            Err(error) => {
-                return Err(DebugError::Until {
-                    error,
-                    stop: Box::new(record(m, until.reason(), used, &opts.since)),
-                });
-            }
-        }
+    if let Some(until) = &until
+        && until.holds(m, opts, used, &mut notes.warnings)?
+    {
+        return finish(m, until.reason(), used, notes);
     }
 
+    // When the last core call ended on an exec candidate the engine passed
+    // over, the time of that boundary: its breakpoints have been decided.
+    let mut exec_decided: Option<u64> = None;
     loop {
         if let Some(kind) = opts.budget.exhausted(&used) {
-            return finish(m, StopReason::BudgetExhausted { kind }, used, warnings);
+            return finish(m, StopReason::BudgetExhausted { kind }, used, notes);
         }
         if opts
             .interrupt
             .is_some_and(|flag| flag.load(Ordering::Relaxed))
         {
-            return finish(m, StopReason::UserBreak, used, warnings);
+            return finish(m, StopReason::UserBreak, used, notes);
         }
         if halted_forever(m.core()) {
-            return finish(m, StopReason::HaltForever, used, warnings);
+            return finish(m, StopReason::HaltForever, used, notes);
         }
         // The core skips an execution filter at the first instruction of each
-        // call, so resuming from a breakpoint makes progress. After a
-        // passed-over candidate, that skipped PC may be the goal: the boot ROM
-        // falls through to $0100 right after the FF50 write the engine passed
-        // over, so checking it here is what makes the handoff stoppable.
-        if used.instructions > 0 {
-            let pc = m.core().registers().pc;
-            if exec.may_match(pc) {
-                let bank = mem::bank_at(m.core(), pc);
-                if exec.matches(pc, bank) {
-                    let old = mem::peek(m.core(), pc).ok();
-                    let hit = Hit {
-                        access: Access::Exec,
-                        addr: pc,
-                        bank,
-                        old,
-                        new: old.unwrap_or(0xFF),
-                        pc,
-                        vetoed: false,
-                    };
-                    match decide(m, &compiled, &goal, hit, opts, &mut warnings) {
-                        Err((id, reason, error)) => {
-                            return Err(DebugError::Eval {
-                                id,
-                                error,
-                                stop: Box::new(record(m, reason, used, &opts.since)),
-                            });
-                        }
-                        Ok(Some(reason)) => return finish(m, reason, used, warnings),
-                        Ok(None) => {}
-                    }
-                }
-            }
+        // call, so resuming from a breakpoint makes progress. So the engine
+        // checks that PC itself: after a chunk that ended there, or after a
+        // passed-over write (the boot ROM falls through to $0100 right after
+        // the FF50 write). After a passed-over exec candidate it has already
+        // decided, and evaluating its conditions again would repeat them.
+        let decided_here = exec_decided == Some(m.core().now().0);
+        if used.instructions > 0
+            && !decided_here
+            && let Some(hit) = exec_hit(m, &exec)
+            && let Some(reason) = decide(m, &compiled, &goal, hit, opts, used, &mut notes)?
+        {
+            return finish(m, reason, used, notes);
         }
-        let fine = goal.fine()
-            || until
-                .as_ref()
-                .is_some_and(|u| u.triggers.scanline || u.triggers.every_instruction);
-        let chunk = if fine { 1 } else { CHUNK };
         let before = m.core().registers();
         let ly_before = m.core().ppu().ly;
         let opcode = mem::peek(m.core(), before.pc).unwrap_or(0);
         let mut req = RunRequest::new(
             opts.budget
                 .remaining_after(&used)
-                .capped_instructions(chunk),
+                .capped_instructions(if fine { 1 } else { CHUNK }),
         );
         req.exec = &exec;
         req.read = &read;
@@ -267,231 +201,64 @@ fn run(
             goal == Goal::Frame || until.as_ref().is_some_and(|u| u.triggers.vblank);
         let stop = m.core_mut().run(&mut req)?;
         used += stop.used;
-        // Any trigger that fired: the set, not the costliest alone. A write
-        // to an armed byte, or any write hit at all (re-evaluating costs less
-        // than telling them apart).
-        let fired = until.as_ref().is_some_and(|u| {
-            let t = &u.triggers;
-            let wrote = matches!(stop.reason, CoreReason::Candidate(hits)
-                if hits.overflowed() || hits.iter().any(|h| h.access == Access::Write));
-            wrote
-                || (t.every_instruction && stop.used.instructions > 0)
-                || (t.vblank && stop.used.frames > 0)
-                || (t.scanline && m.core().ppu().ly != ly_before)
-        });
+        let fired = until
+            .as_ref()
+            .is_some_and(|u| u.fired(&stop, ly_before, m.core()));
+        exec_decided = None;
         let decided = match stop.reason {
             CoreReason::Locked { opcode } => Some(StopReason::IllegalOpcode { opcode }),
             CoreReason::Stopped => Some(StopReason::Stopped),
-            CoreReason::Frame => {
-                if goal == Goal::Frame {
-                    Some(StopReason::StepDone {
-                        unit: StepKind::Frame,
-                    })
-                } else {
-                    None
-                }
-            }
+            CoreReason::Frame if goal == Goal::Frame => Some(StopReason::StepDone {
+                unit: StepKind::Frame,
+            }),
             CoreReason::Candidate(hits) => {
-                // In access order: the first hit that is a real stop wins.
-                let stopped = hits.iter().try_fold(None, |found, hit| match found {
-                    Some(_) => Ok(found),
-                    None => decide(m, &compiled, &goal, *hit, opts, &mut warnings),
-                });
-                match stopped {
-                    // The stop is where the breakpoint or watch hit; the
-                    // error says why its condition couldn't be decided.
-                    Err((id, reason, error)) => {
-                        return Err(DebugError::Eval {
-                            id,
-                            error,
-                            stop: Box::new(record(m, reason, used, &opts.since)),
-                        });
-                    }
-                    Ok(Some(reason)) => Some(reason),
-                    Ok(None) => None,
+                if hits.iter().any(|h| h.access == Access::Exec) {
+                    exec_decided = Some(m.core().now().0);
                 }
+                // In access order: the first hit that is a real stop wins.
+                let mut found = None;
+                for hit in hits.iter() {
+                    found = decide(m, &compiled, &goal, *hit, opts, used, &mut notes)?;
+                    if found.is_some() {
+                        break;
+                    }
+                }
+                found
             }
-            CoreReason::Budget(_) | CoreReason::Step(_) => None,
+            CoreReason::Frame | CoreReason::Budget(_) | CoreReason::Step(_) => None,
         };
         if let Some(reason) = decided {
             if let StopReason::Watchpoint { id, .. } = reason {
                 remove_once(m, &compiled, id);
             }
-            return finish(m, reason, used, warnings);
+            return finish(m, reason, used, notes);
         }
-        if fired {
-            let Some(until) = &until else { continue };
-            match evaluate(m, opts, until.condition, &mut warnings) {
-                Ok(true) => {
-                    // A breakpoint at this boundary wins; a predicate that
-                    // lands on one reports the breakpoint instead.
-                    match exec_breakpoint(m, &compiled, opts, used, &mut warnings) {
-                        Ok(Some(reason)) => return finish(m, reason, used, warnings),
-                        Ok(None) => return finish(m, until.reason(), used, warnings),
-                        Err(error) => return Err(error),
-                    }
-                }
-                Ok(false) => {}
-                Err(error) => {
-                    return Err(DebugError::Until {
-                        error,
-                        stop: Box::new(record(m, until.reason(), used, &opts.since)),
-                    });
-                }
-            }
+        if let Some(until) = &until
+            && fired
+            && until.holds(m, opts, used, &mut notes.warnings)?
+        {
+            // A breakpoint at this boundary wins; a predicate that lands on
+            // one reports the breakpoint instead. One already decided here
+            // didn't hold.
+            let breakpoint = if exec_decided.is_some() {
+                None
+            } else {
+                exec_breakpoint(m, &compiled, opts, used, &mut notes)?
+            };
+            let reason = breakpoint.unwrap_or_else(|| until.reason());
+            return finish(m, reason, used, notes);
         }
         let after = m.core().registers();
-        let done = match goal {
-            Goal::Instruction => used.instructions >= 1,
-            Goal::Out { sp } => is_return(opcode) && after.sp > sp && after.pc != before.pc,
-            Goal::Scanline { ly } => m.core().ppu().ly != ly,
-            _ => false,
+        let unit = match goal {
+            Goal::Instruction if used.instructions >= 1 => Some(StepKind::Instruction),
+            Goal::Out { sp } if is_return(opcode) && after.sp > sp && after.pc != before.pc => {
+                Some(StepKind::Out)
+            }
+            Goal::Scanline { ly } if m.core().ppu().ly != ly => Some(StepKind::Scanline),
+            _ => None,
         };
-        if done {
-            let unit = match goal {
-                Goal::Instruction => StepKind::Instruction,
-                Goal::Out { .. } => StepKind::Out,
-                _ => StepKind::Scanline,
-            };
-            return finish(m, StopReason::StepDone { unit }, used, warnings);
+        if let Some(unit) = unit {
+            return finish(m, StopReason::StepDone { unit }, used, notes);
         }
     }
-}
-
-/// The breakpoint that would stop at the current boundary, if any. A
-/// predicate stop yields to one, since both describe the same instruction.
-fn exec_breakpoint(
-    m: &mut Machine,
-    compiled: &Compiled,
-    opts: &RunOptions<'_>,
-    used: Usage,
-    warnings: &mut Vec<EvalWarning>,
-) -> Result<Option<StopReason>, DebugError> {
-    if compiled.breakpoints.is_empty() {
-        return Ok(None);
-    }
-    let regs = m.core().registers();
-    let hit = Hit {
-        access: Access::Exec,
-        addr: regs.pc,
-        bank: mem::bank_at(m.core(), regs.pc),
-        old: mem::peek(m.core(), regs.pc).ok(),
-        new: 0,
-        pc: regs.pc,
-        vetoed: false,
-    };
-    match decide(m, compiled, &Goal::Run, hit, opts, warnings) {
-        Ok(stop) => Ok(stop),
-        Err((id, reason, error)) => Err(DebugError::Eval {
-            id,
-            error,
-            stop: Box::new(record(m, reason, used, &opts.since)),
-        }),
-    }
-}
-
-fn remove_once(m: &mut Machine, compiled: &Compiled, id: u32) {
-    if compiled.watches.iter().any(|w| w.0 == id && w.4) {
-        m.delete(id);
-    }
-}
-
-/// A stop or not; or the stop a condition couldn't decide, and why.
-type Decision = Result<Option<StopReason>, (u32, StopReason, crate::cond::EvalError)>;
-
-/// Whether a candidate is a real stop: a goal reached, or a breakpoint or
-/// watch whose condition holds.
-fn decide(
-    m: &mut Machine,
-    compiled: &Compiled,
-    goal: &Goal,
-    hit: Hit,
-    opts: &RunOptions<'_>,
-    warnings: &mut Vec<EvalWarning>,
-) -> Decision {
-    if hit.access == Access::Write && hit.addr == BOOT_OFF && m.boot.is_none() {
-        m.boot = Some(TimeMark {
-            ticks: m.core().now().0,
-            frame: frame_number(m.core()),
-        });
-    }
-    let base = super::record::base(m, &opts.since).1;
-    let ctx = |access| EvalCtx {
-        core: m.core(),
-        symbols: m.symbols(),
-        access,
-        base,
-        allow_uninit: opts.allow_uninit,
-    };
-    let holds =
-        |reason: &StopReason, cond: &Option<Condition>, access, warnings: &mut Vec<EvalWarning>| {
-            let id = match reason {
-                StopReason::Breakpoint { id } | StopReason::Watchpoint { id, .. } => *id,
-                _ => 0,
-            };
-            match cond {
-                None => Ok(true),
-                Some(c) => c
-                    .holds(&ctx(access), warnings)
-                    .map_err(|e| (id, reason.clone(), e)),
-            }
-        };
-    match hit.access {
-        Access::Exec => {
-            match goal {
-                Goal::To(at) if matches(at, hit.addr, hit.bank) => {
-                    return Ok(Some(StopReason::StepDone {
-                        unit: StepKind::ToAddress,
-                    }));
-                }
-                Goal::Over { ret, sp, .. }
-                    if hit.addr == *ret && m.core().registers().sp >= *sp =>
-                {
-                    return Ok(Some(StopReason::StepDone {
-                        unit: StepKind::Over,
-                    }));
-                }
-                Goal::Instruction => {
-                    return Ok(Some(StopReason::StepDone {
-                        unit: StepKind::Instruction,
-                    }));
-                }
-                _ => {}
-            }
-            for (id, at, cond) in &compiled.breakpoints {
-                let reason = StopReason::Breakpoint { id: *id };
-                if matches(at, hit.addr, hit.bank) && holds(&reason, cond, None, warnings)? {
-                    return Ok(Some(reason));
-                }
-            }
-        }
-        Access::Read | Access::Write => {
-            let wanted = |access: WatchAccess| match access {
-                WatchAccess::Read => hit.access == Access::Read,
-                WatchAccess::Write => hit.access == Access::Write,
-                WatchAccess::Access => true,
-            };
-            let values = Some(AccessValues {
-                old: hit.old,
-                new: hit.new,
-            });
-            for (id, access, at, cond, _) in &compiled.watches {
-                let reason = StopReason::Watchpoint {
-                    id: *id,
-                    access: hit.access,
-                    addr: hit.addr,
-                    old: hit.old,
-                    new: hit.new,
-                    writer_pc: hit.pc,
-                };
-                if wanted(*access)
-                    && matches(at, hit.addr, hit.bank)
-                    && holds(&reason, cond, values, warnings)?
-                {
-                    return Ok(Some(reason));
-                }
-            }
-        }
-    }
-    Ok(None)
 }

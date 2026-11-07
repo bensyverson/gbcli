@@ -4,7 +4,7 @@ mod common;
 
 use common::*;
 use gbcli_core::{Region, Registers};
-use gbcli_engine::cond::{AccessValues, Condition, EvalCtx, EvalError, EvalWarning};
+use gbcli_engine::cond::{AccessValues, Condition, EvalCtx, EvalError, EvalWarning, Verdict};
 use gbcli_engine::{Machine, sha256};
 use gbcli_protocol::TimeMark;
 
@@ -173,4 +173,57 @@ fn arithmetic_errors_are_reported_not_panicked() {
         eval(&m, "[$10000]"),
         Err(EvalError::AddressOutOfRange { .. })
     ));
+}
+
+#[test]
+fn a_stop_trigger_reads_a_never_written_byte_as_not_yet() {
+    let m = running();
+    let verdict = |text: &str, allow_uninit: bool, warnings: &mut Vec<EvalWarning>| {
+        let cond = Condition::compile(text, m.symbols()).expect("compiles");
+        let ctx = EvalCtx {
+            allow_uninit,
+            ..ctx(&m)
+        };
+        cond.verdict(&ctx, warnings).expect("no error")
+    };
+    let not_yet = |text: &str| match verdict(text, false, &mut Vec::new()) {
+        Verdict::NotYet(read) => read,
+        other => panic!("{text}: {other:?}"),
+    };
+    // Never as 0: a test for 0 and a test for nonzero both wait.
+    assert_eq!(not_yet("[wNever] == 0").symbol.as_deref(), Some("wNever"));
+    assert_eq!(not_yet("[wNever] != 0").addr, Some(0xC003));
+    // The whole condition waits, even when another part already holds.
+    assert_eq!(not_yet("[wFrame] == 0 && [wNever] == 0").addr, Some(0xC003));
+    assert_eq!(not_yet("[wNever] == 0 || 1").addr, Some(0xC003));
+    // A part never evaluated reads nothing.
+    let mut warnings = Vec::new();
+    assert_eq!(
+        verdict("[wFrame] == 1 && [wNever] == 0", false, &mut warnings),
+        Verdict::DoesNotHold
+    );
+    assert_eq!(
+        verdict("[wFrame] == 0", false, &mut warnings),
+        Verdict::Holds
+    );
+    assert!(warnings.is_empty());
+    // --allow-uninit reads the power-on value, and warns.
+    assert_eq!(verdict("[wNever] | 1", true, &mut warnings), Verdict::Holds);
+    assert!(matches!(&warnings[..], [EvalWarning::UninitializedRead(r)] if r.addr == Some(0xC003)));
+    // Other errors still fail.
+    let cond = Condition::compile("1 / (a - a)", None).unwrap();
+    assert_eq!(
+        cond.verdict(&ctx(&m), &mut Vec::new()),
+        Err(EvalError::DivideByZero)
+    );
+}
+
+#[test]
+fn a_never_written_read_names_its_symbol_offset_in_hex() {
+    let m = running();
+    let err = eval(&m, "[wStack + $10]").unwrap_err();
+    let EvalError::UninitializedRead(read) = &err else {
+        panic!("{err:?}")
+    };
+    assert_eq!(read.symbol.as_deref(), Some("wStack+$10"));
 }

@@ -75,9 +75,7 @@ impl Handler {
 }
 
 pub(super) fn warning_text(warning: &EvalWarning) -> String {
-    match warning {
-        EvalWarning::UninitializedRead(read) => format!("uninitialized read of {read}"),
-    }
+    warning.to_string()
 }
 
 pub(super) fn read_values(

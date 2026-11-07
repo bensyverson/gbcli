@@ -4,6 +4,7 @@ use gbcli_core::Usage;
 use gbcli_protocol::{FrameShown, StopReason, StopRecord, StopTime, TimeBase, TimeMark};
 
 use super::Since;
+use crate::addr::label;
 use crate::cond::eval::frame_number;
 use crate::machine::Machine;
 use crate::mem;
@@ -26,13 +27,7 @@ pub fn record(m: &Machine, reason: StopReason, used: Usage, since: &Since) -> St
     let symbol = m
         .symbols()
         .and_then(|s| s.containing(bank, regs.pc))
-        .map(|s| {
-            if s.addr == regs.pc {
-                s.name.clone()
-            } else {
-                format!("{}+{}", s.name, regs.pc - s.addr)
-            }
-        });
+        .map(|s| label(&s.name, i64::from(regs.pc - s.addr)));
     let (since, mark) = base(m, since);
     let ticks = core.now().0;
     let per_t = if regs.double_speed { 1 } else { 2 };

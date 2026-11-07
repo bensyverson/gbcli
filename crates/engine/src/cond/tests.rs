@@ -374,3 +374,37 @@ fn the_triggers_are_a_set_and_reads_arm_the_bytes_the_evaluator_reads() {
     );
     assert!(triggers("[Far] == 1").stores.is_empty(), "ROM is constant");
 }
+
+#[test]
+fn a_bank_qualified_address_may_start_with_a_hex_letter() {
+    // The address grammar reads `02:A000`; `A000` lexes as a name, which
+    // must still read as hex after a bank.
+    let banked = Expr::Read {
+        width: Width::U8,
+        place: Place::Banked {
+            bank: 2,
+            addr: 0xA000,
+        },
+    };
+    assert_eq!(parse("[$02:A000]"), banked);
+    assert_eq!(parse("[02:a000]"), banked);
+    assert_eq!(parse("[0x02:A000]"), banked);
+}
+
+#[test]
+fn region_names_match_the_address_grammar() {
+    let region = |text: &str| match parse(text) {
+        Expr::Read {
+            place: Place::Region { region, .. },
+            ..
+        } => region,
+        other => panic!("{text}: {other:?}"),
+    };
+    assert_eq!(region("[bootrom:0]"), Region::BootRom);
+    assert_eq!(region("[WRAM:0]"), Region::Wram);
+    assert_eq!(region("[BgPal:0]"), Region::BgPalette);
+    assert!(
+        Condition::compile("[boot:0]", None).is_err(),
+        "the region is `bootrom` everywhere"
+    );
+}

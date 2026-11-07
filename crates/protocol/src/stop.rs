@@ -46,6 +46,10 @@ pub enum StopReason {
         text: String,
         cadence: Cadence,
     },
+    /// An `--until` predicate couldn't be evaluated here (dividing by zero,
+    /// say); the error that comes with this record says why. The predicate
+    /// did not hold. `cadence` is as for `Predicate`.
+    PredicateError { text: String, cadence: Cadence },
 }
 
 /// The costliest trigger a predicate is evaluated on, from cheapest to
@@ -164,7 +168,7 @@ pub struct StopRecord {
     pub pc: u16,
     /// The bank mapped at `pc`.
     pub bank: u16,
-    /// The symbol containing `pc`, as `Name` or `Name+3`.
+    /// The symbol containing `pc`, as `Name` or `Name+$3` (hex, as the address grammar reads it).
     pub symbol: Option<String>,
     pub time: StopTime,
     pub frame_shown: Option<FrameShown>,
@@ -259,6 +263,19 @@ mod tests {
         assert_eq!(json["reason"], "predicate");
         assert_eq!(json["text"], "u16[wFrame] >= 60");
         assert_eq!(json["cadence"], "writes");
+        let back: StopReason = serde_json::from_value(json).unwrap();
+        assert_eq!(back, reason);
+    }
+
+    #[test]
+    fn a_predicate_error_reason_is_not_a_predicate_stop() {
+        let reason = StopReason::PredicateError {
+            text: "1 / [wD] == 0".into(),
+            cadence: Cadence::Writes,
+        };
+        let json = serde_json::to_value(&reason).unwrap();
+        assert_eq!(json["reason"], "predicate_error");
+        assert_eq!(json["text"], "1 / [wD] == 0");
         let back: StopReason = serde_json::from_value(json).unwrap();
         assert_eq!(back, reason);
     }

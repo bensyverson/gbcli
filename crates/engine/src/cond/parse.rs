@@ -1,10 +1,10 @@
 //! A precedence-climbing parser with C precedence.
 
-use gbcli_core::Region;
-
 use super::lex::{Tok, lex};
 use super::names;
 use super::{BinOp, Expr, ExprError, Place, UnOp, Width};
+use crate::addr::banked_area;
+use crate::inspect::regions::parse_region;
 use crate::sym::{Area, Symbols};
 
 pub fn parse(text: &str, syms: Option<&Symbols>) -> Result<Expr, ExprError> {
@@ -52,23 +52,6 @@ fn binop(op: &str) -> Option<(u8, BinOp)> {
         "*" => (10, BinOp::Mul),
         "/" => (10, BinOp::Div),
         "%" => (10, BinOp::Rem),
-        _ => return None,
-    })
-}
-
-fn region(name: &str) -> Option<Region> {
-    Some(match name {
-        "rom" => Region::Rom,
-        "wram" => Region::Wram,
-        "sram" => Region::Sram,
-        "vram" => Region::Vram,
-        "hram" => Region::Hram,
-        "oam" => Region::Oam,
-        "io" => Region::Io,
-        "ie" => Region::Ie,
-        "boot" => Region::BootRom,
-        "bgpal" => Region::BgPalette,
-        "objpal" => Region::ObjPalette,
         _ => return None,
     })
 }
@@ -196,7 +179,7 @@ impl Parser<'_> {
         let place = match (self.peek().cloned(), colon_next) {
             (Some(Tok::Ident(name)), true) => {
                 let at = self.at();
-                let region = region(&name).ok_or_else(|| {
+                let region = parse_region(&name).ok_or_else(|| {
                     ExprError::syntax(
                         at,
                         format!(
@@ -232,7 +215,8 @@ impl Parser<'_> {
     }
 }
 
-/// A bank-qualified part (`03`, `$4123`): hex, with or without a prefix.
+/// A bank-qualified part (`03`, `$4123`, `A000`): hex, with or without a
+/// prefix. Unprefixed hex that starts with a letter lexes as a name.
 fn hex(at: usize, tok: &Tok) -> Result<i64, ExprError> {
     let value = match tok {
         Tok::Num {
@@ -241,6 +225,9 @@ fn hex(at: usize, tok: &Tok) -> Result<i64, ExprError> {
             ..
         } => *value,
         Tok::Num { raw, .. } => i64::from_str_radix(raw, 16).ok(),
+        Tok::Ident(raw) if raw.bytes().all(|b| b.is_ascii_hexdigit()) => {
+            i64::from_str_radix(raw, 16).ok()
+        }
         _ => None,
     };
     value.filter(|v| (0..=0xFFFF).contains(v)).ok_or_else(|| {
@@ -266,11 +253,7 @@ fn banked_symbol(e: &Expr) -> Option<(u16, u16)> {
         _ => return None,
     };
     let addr = u16::try_from(addr).ok()?;
-    matches!(
-        Area::of(addr),
-        Area::RomX | Area::Sram | Area::WramX | Area::Vram
-    )
-    .then_some((bank, addr))
+    banked_area(Area::of(addr)).map(|_| (bank, addr))
 }
 
 /// `wFrame >= 60` compares an address: refuse it and suggest the reads.

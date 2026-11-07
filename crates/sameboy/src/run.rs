@@ -8,7 +8,7 @@
 //! after the instruction that made the access.
 
 use gbcli_core::{
-    Access, CoreError, Feature, FrameTag, Hit, RunRequest, Stop, StopReason, Ticks, Usage,
+    Access, CoreError, Feature, FrameTag, Hit, Hits, RunRequest, Stop, StopReason, Ticks, Usage,
 };
 use sameboy_sys as sb;
 
@@ -29,13 +29,14 @@ impl Arming {
     fn new(core: &mut SameBoy, req: &RunRequest<'_>) -> Arming {
         let gb = core.raw();
         let read = !req.read.is_empty();
-        let write = !(req.write.is_empty() && req.veto.is_empty());
+        let write = !(req.write.is_empty() && req.veto.is_empty() && req.stores.is_empty());
         let hooks = core.hooks_mut();
         if read || write {
             hooks.armed = Some(Armed {
                 read: req.read,
                 write: req.write,
                 veto: req.veto,
+                stores: req.stores,
             });
         }
         // SAFETY: installs our callbacks on the live instance outside GB_run.
@@ -117,7 +118,7 @@ pub(crate) fn run(core: &mut SameBoy, req: &mut RunRequest<'_>) -> Result<Stop, 
                     pc,
                     vetoed: false,
                 };
-                return Ok(stop(core, StopReason::Candidate(hit), used));
+                return Ok(stop(core, StopReason::Candidate(Hits::one(hit)), used));
             }
         }
         if arming.armed() {
@@ -151,8 +152,8 @@ pub(crate) fn run(core: &mut SameBoy, req: &mut RunRequest<'_>) -> Result<Stop, 
                 hooks.frame.tag = Some(FrameTag { number, kind, at });
             }
         }
-        if let Some(hit) = hit {
-            return Ok(stop(core, StopReason::Candidate(hit), used));
+        if let Some(hits) = hit {
+            return Ok(stop(core, StopReason::Candidate(hits), used));
         }
         if frame_ended && req.stop_at_frame {
             return Ok(stop(core, StopReason::Frame, used));

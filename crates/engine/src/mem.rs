@@ -14,22 +14,40 @@ pub enum Target {
     Io(IoReg),
 }
 
+/// The region whose bank is switched at `addr`: ROMX, VRAM, cart RAM and
+/// WRAMX. Everywhere else the mapping is fixed.
+fn switchable(addr: u16) -> Option<Region> {
+    match Area::of(canonical_addr(addr)) {
+        Area::RomX => Some(Region::Rom),
+        Area::Vram => Some(Region::Vram),
+        Area::Sram => Some(Region::Sram),
+        Area::WramX => Some(Region::Wram),
+        _ => None,
+    }
+}
+
 /// The bank mapped at `addr`: the ROM, VRAM, cart RAM or WRAM bank for the
 /// switchable areas, 0 elsewhere.
 pub fn bank_at(core: &dyn Core, addr: u16) -> u16 {
-    let bank = |region| core.region(region).map_or(0, |v| v.bank);
-    match Area::of(canonical_addr(addr)) {
-        Area::RomX => bank(Region::Rom),
-        Area::Vram => bank(Region::Vram),
-        Area::Sram => bank(Region::Sram),
-        Area::WramX => bank(Region::Wram),
-        _ => 0,
-    }
+    switchable(addr).map_or(0, |region| core.region(region).map_or(0, |v| v.bank))
 }
 
 /// Resolves a CPU address to its backing byte or register.
 pub fn target(core: &dyn Core, addr: u16) -> Result<Target, CoreError> {
-    banked_target(bank_at(core, addr), addr)
+    match fixed_target(addr) {
+        Some(target) => target,
+        None => banked_target(bank_at(core, addr), addr),
+    }
+}
+
+/// What a CPU address resolves to whatever is mapped, or `None` in a
+/// switchable area, where it depends on the bank. A predicate's cadence is
+/// derived from this, the evaluator's own mapping.
+pub fn fixed_target(addr: u16) -> Option<Result<Target, CoreError>> {
+    match switchable(addr) {
+        Some(_) => None,
+        None => Some(banked_target(0, addr)),
+    }
 }
 
 /// Resolves an address in a given bank, whatever is mapped now. The bank
@@ -101,4 +119,27 @@ pub fn never_written(core: &dyn Core, addr: u16) -> bool {
     }
     core.written(region)
         .is_ok_and(|w| offset < w.len && w.never_written(offset))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_fixed_target_is_the_same_in_every_bank_and_a_switchable_one_is_not() {
+        for addr in 0..=u16::MAX {
+            match fixed_target(addr) {
+                Some(fixed) => {
+                    for bank in [0, 1, 2, 7, 0x1FF] {
+                        assert_eq!(banked_target(bank, addr), fixed, "{addr:#06x}");
+                    }
+                }
+                None => assert_ne!(
+                    banked_target(2, addr),
+                    banked_target(3, addr),
+                    "{addr:#06x}"
+                ),
+            }
+        }
+    }
 }

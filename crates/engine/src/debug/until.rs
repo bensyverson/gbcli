@@ -1,36 +1,33 @@
-//! A `--until` predicate and the cadence derived from what it reads
+//! A `--until` predicate and the triggers derived from what it reads
 //! (design §8, §11).
 
-use gbcli_core::BankSel;
-use gbcli_protocol::{Cadence, StopReason};
+use gbcli_core::{Core, StoreFilter};
+use gbcli_protocol::StopReason;
 
 use super::RunOptions;
 use super::record;
-use crate::cond::{Condition, EvalCtx, EvalError, EvalWarning};
+use crate::cond::{Condition, EvalCtx, EvalError, EvalWarning, Triggers};
 use crate::machine::Machine;
 
 pub(crate) struct Until<'a> {
     pub condition: &'a Condition,
-    pub cadence: Cadence,
+    /// What can make it change. Every instruction already catches every
+    /// write, so that cadence arms no stores; the others keep theirs, so a
+    /// mid-line or mid-frame change is not missed.
+    pub triggers: Triggers,
     text: &'a str,
-    /// The static addresses to arm with the write hook. Every instruction
-    /// already catches every write, so a finer cadence leaves this empty; a
-    /// coarser one keeps it, so a mid-line or mid-frame change is not missed.
-    pub writes: Vec<(u16, BankSel)>,
 }
 
 impl<'a> Until<'a> {
-    pub fn new(condition: &'a Condition) -> Until<'a> {
-        let cadence = condition.cadence();
+    pub fn new(condition: &'a Condition, core: &dyn Core) -> Until<'a> {
+        let mut triggers = condition.triggers(core);
+        if triggers.every_instruction {
+            triggers.stores = StoreFilter::new();
+        }
         Until {
             condition,
-            cadence,
+            triggers,
             text: condition.source(),
-            writes: if cadence == Cadence::EveryInstruction {
-                Vec::new()
-            } else {
-                condition.write_candidates()
-            },
         }
     }
 
@@ -38,7 +35,7 @@ impl<'a> Until<'a> {
     pub fn reason(&self) -> StopReason {
         StopReason::Predicate {
             text: self.text.to_string(),
-            cadence: self.cadence,
+            cadence: self.triggers.cadence(),
         }
     }
 }

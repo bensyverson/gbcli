@@ -14,7 +14,7 @@
 //! so its banked SRAM/VRAM watchpoint bug (it treats 8000-CFFF as bank 0)
 //! doesn't apply.
 
-use gbcli_core::{Access, AddrFilter, Hit, Region, WrittenView, canonical_addr};
+use gbcli_core::{Access, AddrFilter, Hit, Hits, Region, StoreFilter, WrittenView, canonical_addr};
 use sameboy_sys as sb;
 
 use crate::hooks::{Hooks, guard};
@@ -26,6 +26,7 @@ pub(crate) struct Armed {
     pub read: *const AddrFilter,
     pub write: *const AddrFilter,
     pub veto: *const AddrFilter,
+    pub stores: *const StoreFilter,
 }
 
 /// One region's bits: set by the CPU, set by pokes.
@@ -88,29 +89,16 @@ impl Tracking {
         })
     }
 
-    /// Marks a CPU write at a canonical address.
+    /// Marks a CPU write that landed at `store`.
     #[inline(always)]
-    pub fn mark_cpu(&mut self, gb: *mut sb::GB_gameboy_t, addr: u16) {
-        match addr {
-            0xC000..=0xCFFF => set(&mut self.wram.cpu, usize::from(addr - 0xC000)),
-            0xD000..=0xDFFF => {
-                // SAFETY: a side-effect-free accessor on the live instance.
-                let bank = usize::from(unsafe { sb::gbcli_bank_for(gb, addr) });
-                set(
-                    &mut self.wram.cpu,
-                    bank * 0x1000 + usize::from(addr - 0xD000),
-                );
-            }
-            0xFF80..=0xFFFE => set(&mut self.hram.cpu, usize::from(addr - 0xFF80)),
-            0xA000..=0xBFFF => {
-                // SAFETY: as above.
-                let offset = unsafe { sb::gbcli_cart_ram_offset(gb, addr) };
-                if let Ok(offset) = usize::try_from(offset) {
-                    set(&mut self.sram.cpu, offset);
-                }
-            }
-            _ => {}
-        }
+    pub fn mark_cpu(&mut self, (region, offset): (Region, usize)) {
+        let bits = match region {
+            Region::Wram => &mut self.wram,
+            Region::Hram => &mut self.hram,
+            Region::Sram => &mut self.sram,
+            _ => return,
+        };
+        set(&mut bits.cpu, offset);
     }
 
     /// Marks poked bytes; regions that aren't tracked are ignored.
@@ -151,9 +139,35 @@ impl Tracking {
     }
 }
 
+/// The backing byte a CPU write at a canonical address lands in, as
+/// SameBoy's write path computes it: the identity store filters and
+/// never-written tracking share. `None` for memory without a store we track
+/// (ROM, VRAM, OAM, IO) and for a cart RAM write that reaches no RAM.
+#[inline(always)]
+pub(crate) fn store_of(gb: *mut sb::GB_gameboy_t, addr: u16) -> Option<(Region, usize)> {
+    match addr {
+        0xC000..=0xCFFF => Some((Region::Wram, usize::from(addr - 0xC000))),
+        0xD000..=0xDFFF => {
+            // SAFETY: a side-effect-free accessor on the live instance.
+            let bank = usize::from(unsafe { sb::gbcli_bank_for(gb, addr) });
+            Some((Region::Wram, bank * 0x1000 + usize::from(addr - 0xD000)))
+        }
+        0xFF80..=0xFFFE => Some((Region::Hram, usize::from(addr - 0xFF80))),
+        0xFFFF => Some((Region::Ie, 0)),
+        0xA000..=0xBFFF => {
+            // SAFETY: as above.
+            let offset = unsafe { sb::gbcli_cart_ram_offset(gb, addr) };
+            usize::try_from(offset).ok().map(|o| (Region::Sram, o))
+        }
+        _ => None,
+    }
+}
+
+/// Adds a hit to the instruction's hits.
 fn record(hooks: &mut Hooks, hit: Hit) {
-    if hooks.hit.is_none() {
-        hooks.hit = Some(hit);
+    match &mut hooks.hit {
+        Some(hits) => hits.push(hit),
+        None => hooks.hit = Some(Hits::one(hit)),
     }
 }
 
@@ -196,38 +210,61 @@ pub(crate) unsafe extern "C" fn on_read(gb: *mut sb::GB_gameboy_t, addr: u16, da
 pub(crate) unsafe extern "C" fn on_write(gb: *mut sb::GB_gameboy_t, addr: u16, data: u8) -> bool {
     guard(gb, true, |hooks| {
         let addr = canonical_addr(addr);
+        // Computed at most once per write, and only when something needs it.
+        let mut store = None;
         if let Some(armed) = hooks.armed {
             // SAFETY: armed filters outlive the run that armed them.
-            let (write, veto) = unsafe { (&*armed.write, &*armed.veto) };
+            let (write, veto, stores) = unsafe { (&*armed.write, &*armed.veto, &*armed.stores) };
+            let mut matched = false;
             if write.may_match(addr) || veto.may_match(addr) {
                 // SAFETY: a side-effect-free accessor.
                 let bank = unsafe { sb::gbcli_bank_for(gb, addr) };
                 let vetoed = veto.matches(addr, bank);
                 if vetoed || write.matches(addr, bank) {
+                    matched = true;
                     let pc = hooks.step_pc;
-                    record(
-                        hooks,
-                        Hit {
-                            access: Access::Write,
-                            addr,
-                            bank,
-                            old: peek(gb, addr),
-                            new: data,
-                            pc,
-                            vetoed,
-                        },
-                    );
+                    record(hooks, write_hit(gb, addr, bank, data, pc, vetoed));
                     if vetoed {
                         return false;
                     }
                 }
             }
+            if !stores.is_empty() {
+                store = store_of(gb, addr);
+                if !matched && store.is_some_and(|(r, o)| stores.contains(r, o)) {
+                    // SAFETY: a side-effect-free accessor.
+                    let bank = unsafe { sb::gbcli_bank_for(gb, addr) };
+                    let pc = hooks.step_pc;
+                    record(hooks, write_hit(gb, addr, bank, data, pc, false));
+                }
+            }
         }
-        if let Some(tracking) = &mut hooks.tracking {
-            tracking.mark_cpu(gb, addr);
+        if let Some(tracking) = &mut hooks.tracking
+            && let Some(store) = store.or_else(|| store_of(gb, addr))
+        {
+            tracking.mark_cpu(store);
         }
         true
     })
+}
+
+fn write_hit(
+    gb: *mut sb::GB_gameboy_t,
+    addr: u16,
+    bank: u16,
+    data: u8,
+    pc: u16,
+    vetoed: bool,
+) -> Hit {
+    Hit {
+        access: Access::Write,
+        addr,
+        bank,
+        old: peek(gb, addr),
+        new: data,
+        pc,
+        vetoed,
+    }
 }
 
 #[cfg(test)]

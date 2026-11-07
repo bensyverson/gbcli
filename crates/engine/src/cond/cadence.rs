@@ -1,148 +1,138 @@
-//! Deriving a predicate's evaluation cadence from what it reads (design §8,
-//! §11), and the addresses to arm with the write hook when only writes can
-//! change it.
+//! What can make a predicate change (design §8, §11): the triggers a run
+//! re-evaluates it on.
 //!
-//! The cadence is the finest trigger among everything the expression reads:
-//! `EveryInstruction` > `Scanline` > `Vblank` > `Writes`. A static read the
-//! write hook covers arms a candidate on each byte it takes; anything the
-//! hook misses (or a value that changes without a write at the address) needs
-//! the finer baseline.
+//! The triggers are a set, not a ladder: `frame` changes at a vblank, which
+//! with the LCD off is not a scanline change, so a predicate reading `frame`
+//! and `ly` needs both. Memory reads arm the backing bytes the evaluator
+//! reads ([`mem::fixed_target`], [`mem::banked_target`] or the region form):
+//! the write hook matches a write by the byte it lands in, so the two sides
+//! share one identity and a bank number or mirror cannot make them disagree.
+//! Anything that can change without a CPU write to its byte needs the
+//! per-instruction baseline.
 
-use gbcli_core::{BankSel, Region, canonical_addr};
+use gbcli_core::{Region, StoreFilter, Support};
 use gbcli_protocol::Cadence;
 
 use super::{BinOp, Expr, Place, UnOp, Width};
-use crate::sym::Area;
+use crate::mem::{self, Target};
 
-/// A predicate's cadence and, when it is `Writes`, the addresses to arm.
-pub(crate) struct Analysis {
-    pub cadence: Cadence,
-    pub writes: Vec<(u16, BankSel)>,
+/// Everything that can make a predicate change.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct Triggers {
+    /// A vblank (`frame`).
+    pub vblank: bool,
+    /// An LY change (`ly`).
+    pub scanline: bool,
+    /// Any instruction: registers, machine values, dynamic addresses, and
+    /// memory that changes without a CPU write to it.
+    pub every_instruction: bool,
+    /// The backing bytes read, which only a CPU write landing there changes.
+    /// Unused when every instruction triggers, since that sees every write.
+    pub stores: StoreFilter,
 }
 
-/// The cadence, and the addresses to arm for a `writes` cadence.
-pub(crate) fn analyze(expr: &Expr) -> Analysis {
-    let mut analysis = Analysis {
-        cadence: Cadence::Writes,
-        writes: Vec::new(),
-    };
-    walk(expr, &mut analysis);
-    analysis
-}
-
-impl Analysis {
-    fn join(&mut self, cadence: Cadence) {
-        self.cadence = self.cadence.max(cadence);
+impl Triggers {
+    /// The costliest trigger, which the stop record names: every instruction,
+    /// then scanlines (a run checks LY after each instruction), then vblanks,
+    /// then writes alone. Writes to [`stores`] always trigger too.
+    ///
+    /// [`stores`]: Triggers::stores
+    pub fn cadence(&self) -> Cadence {
+        if self.every_instruction {
+            Cadence::EveryInstruction
+        } else if self.scanline {
+            Cadence::Scanline
+        } else if self.vblank {
+            Cadence::Vblank
+        } else {
+            Cadence::Writes
+        }
     }
 }
 
-fn walk(e: &Expr, out: &mut Analysis) {
+/// The triggers of `expr`. `cart_ram` is whether the core places every cart
+/// RAM change at its byte (`Feature::CartRamWrites`); without it a cart RAM
+/// read falls back to every instruction.
+pub(crate) fn analyze(expr: &Expr, cart_ram: Support) -> Triggers {
+    let mut triggers = Triggers::default();
+    walk(expr, cart_ram, &mut triggers);
+    triggers
+}
+
+fn walk(e: &Expr, cart_ram: Support, out: &mut Triggers) {
     match e {
         Expr::Num(_) | Expr::Sym { .. } => {}
-        Expr::Frame => out.join(Cadence::Vblank),
-        Expr::Ly => out.join(Cadence::Scanline),
+        Expr::Frame => out.vblank = true,
+        Expr::Ly => out.scanline = true,
         Expr::Reg(_) | Expr::Flag(_) | Expr::Ime | Expr::Bank | Expr::T | Expr::Old | Expr::New => {
-            out.join(Cadence::EveryInstruction)
+            out.every_instruction = true
         }
-        Expr::Unary(_, inner) => walk(inner, out),
+        Expr::Unary(_, inner) => walk(inner, cart_ram, out),
         Expr::Binary(_, l, r) => {
-            walk(l, out);
-            walk(r, out);
+            walk(l, cart_ram, out);
+            walk(r, cart_ram, out);
         }
-        Expr::Read { width, place } => read(*width, place, out),
+        Expr::Read { width, place } => read(*width, place, cart_ram, out),
     }
 }
 
-fn read(width: Width, place: &Place, out: &mut Analysis) {
+fn read(width: Width, place: &Place, cart_ram: Support, out: &mut Triggers) {
     let len = match width {
         Width::U8 | Width::S8 => 1,
         Width::U16 | Width::S16 => 2,
     };
+    for i in 0..len {
+        match target(place, i) {
+            Some(Ok(target)) => arm(target, cart_ram, out),
+            // A read the evaluator can't resolve fails whenever it runs; the
+            // baseline at least evaluates it at the first instruction.
+            Some(Err(())) | None => out.every_instruction = true,
+        }
+    }
+}
+
+/// Byte `i` of a read, resolved as the evaluator resolves it (`eval::read`);
+/// `None` when that depends on the machine (a dynamic address, or a CPU
+/// address in a switchable area, which a bank switch remaps).
+fn target(place: &Place, i: usize) -> Option<Result<Target, ()>> {
     match place {
         Place::Cpu(e) => {
-            let Some(base) = const_value(e).and_then(|v| u16::try_from(v).ok()) else {
-                out.join(Cadence::EveryInstruction);
-                return;
-            };
-            for i in 0..len {
-                match cpu_candidate(base.wrapping_add(i as u16)) {
-                    Some(sel) => out
-                        .writes
-                        .push((canonical_addr(base.wrapping_add(i as u16)), sel)),
-                    None => out.join(Cadence::EveryInstruction),
-                }
-            }
+            let base = u16::try_from(const_value(e)?).ok()?;
+            Some(mem::fixed_target(base.wrapping_add(i as u16))?.map_err(drop))
         }
         Place::Banked { bank, addr } => {
-            for i in 0..len {
-                let addr = canonical_addr(addr.wrapping_add(i as u16));
-                match banked_candidate(addr, *bank) {
-                    Some(sel) => out.writes.push((addr, sel)),
-                    None => out.join(Cadence::EveryInstruction),
-                }
-            }
+            Some(mem::banked_target(*bank, addr.wrapping_add(i as u16)).map_err(drop))
         }
         Place::Region { region, offset } => {
-            let Some(base) = const_value(offset).and_then(|v| usize::try_from(v).ok()) else {
-                out.join(Cadence::EveryInstruction);
-                return;
-            };
-            for i in 0..len {
-                match region_candidate(*region, base + i) {
-                    Some((addr, sel)) => out.writes.push((addr, sel)),
-                    None => out.join(Cadence::EveryInstruction),
-                }
-            }
+            let offset = usize::try_from(const_value(offset)?).ok()?;
+            Some(Ok(Target::Backing {
+                region: *region,
+                offset: offset + i,
+            }))
         }
     }
 }
 
-/// A CPU address read in the mapping of the moment. `None` when the value can
-/// change without a write to the address: a bank switch changes a switchable
-/// area's byte, an internal write (serial, APU, PPU) is invisible to the write
-/// hook, and DMA can change VRAM or OAM.
-fn cpu_candidate(addr: u16) -> Option<BankSel> {
-    match Area::of(canonical_addr(addr)) {
-        Area::Rom0 | Area::Wram0 | Area::Hram | Area::Ie => Some(BankSel::Any),
-        _ => None,
-    }
-}
-
-/// A read of a named bank: a bank switch cannot change it, so only the write
-/// hook can. VRAM and OAM still fall back (DMA), and IO changes internally
-/// often enough that auditing every register is not worth the speed.
-fn banked_candidate(addr: u16, bank: u16) -> Option<BankSel> {
-    match Area::of(canonical_addr(addr)) {
-        Area::Rom0 | Area::Wram0 | Area::Hram | Area::Ie => Some(BankSel::Any),
-        Area::RomX | Area::Sram | Area::WramX => Some(BankSel::Bank(bank)),
-        _ => None,
-    }
-}
-
-/// A region offset, mapped to the CPU address(es) it is readable at.
-fn region_candidate(region: Region, offset: usize) -> Option<(u16, BankSel)> {
-    let any = |addr: u16| Some((addr, BankSel::Any));
-    match region {
-        Region::Wram if offset < 0x1000 => any(0xC000 + offset as u16),
-        Region::Wram if offset < 0x2000 => {
-            Some((0xD000 + (offset - 0x1000) as u16, BankSel::Bank(1)))
-        }
-        Region::Wram => Some((
-            0xD000 + (offset % 0x1000) as u16,
-            BankSel::Bank((offset / 0x1000) as u16),
-        )),
-        Region::Hram if offset < 0x7F => any(0xFF80 + offset as u16),
-        Region::Ie if offset == 0 => any(0xFFFF),
-        Region::Sram => Some((
-            0xA000 + (offset % 0x2000) as u16,
-            BankSel::Bank((offset / 0x2000) as u16),
-        )),
-        Region::Rom if offset < 0x4000 => any(offset as u16),
-        Region::Rom => Some((
-            0x4000 + (offset % 0x4000) as u16,
-            BankSel::Bank((offset / 0x4000) as u16),
-        )),
-        _ => None,
+/// The trigger for one byte the evaluator reads.
+fn arm(target: Target, cart_ram: Support, out: &mut Triggers) {
+    match target {
+        // Nothing a run does changes ROM, the boot ROM included.
+        Target::Backing {
+            region: Region::Rom | Region::BootRom,
+            ..
+        } => {}
+        Target::Backing {
+            region: region @ (Region::Wram | Region::Hram | Region::Ie),
+            offset,
+        } => out.stores.insert(region, offset),
+        Target::Backing {
+            region: Region::Sram,
+            offset,
+        } if cart_ram == Support::Yes => out.stores.insert(Region::Sram, offset),
+        // Cart RAM on a mapper the hook doesn't mirror; VRAM and OAM, which
+        // DMA writes without the hook; palette RAM and IO, which change
+        // through registers and internal writes.
+        _ => out.every_instruction = true,
     }
 }
 

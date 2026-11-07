@@ -1,4 +1,7 @@
-//! Bank-aware address filters: the candidate breakpoints and watches a run checks.
+//! Bank-aware address filters: the candidate breakpoints and watches a run
+//! checks; and store filters, which match writes by the byte they land in.
+
+use crate::Region;
 
 const WORDS: usize = 0x1_0000 / 64;
 
@@ -85,6 +88,48 @@ pub fn canonical_addr(addr: u16) -> u16 {
     }
 }
 
+/// Backing-store bytes whose CPU writes are candidates. A write is matched by
+/// the byte it lands in (the same `(region, offset)` direct access reads),
+/// whatever address, bank or mirror it was made through, so a reader of the
+/// backing store and the write hook share one identity.
+///
+/// Only bytes a CPU write can change are meaningful: WRAM, HRAM and IE, and
+/// cart RAM where the core has [`Feature::CartRamWrites`](crate::Feature).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct StoreFilter {
+    entries: Vec<(Region, usize)>,
+}
+
+impl StoreFilter {
+    pub const fn new() -> Self {
+        StoreFilter {
+            entries: Vec::new(),
+        }
+    }
+
+    pub fn insert(&mut self, region: Region, offset: usize) {
+        if !self.contains(region, offset) {
+            self.entries.push((region, offset));
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    /// Whether a write landing at `offset` in `region` is a candidate. A
+    /// predicate arms a handful of bytes, so a scan beats any index.
+    #[inline]
+    pub fn contains(&self, region: Region, offset: usize) -> bool {
+        self.entries.contains(&(region, offset))
+    }
+
+    /// The armed bytes, in insertion order.
+    pub fn entries(&self) -> &[(Region, usize)] {
+        &self.entries
+    }
+}
+
 #[inline(always)]
 fn set(bits: &mut [u64; WORDS], addr: u16) {
     bits[usize::from(addr) / 64] |= 1 << (addr % 64);
@@ -98,6 +143,20 @@ fn get(bits: &[u64; WORDS], addr: u16) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_store_filter_matches_its_bytes_by_region_and_offset() {
+        let mut stores = StoreFilter::new();
+        assert!(stores.is_empty());
+        stores.insert(Region::Wram, 0x1000);
+        stores.insert(Region::Wram, 0x1000);
+        stores.insert(Region::Sram, 0);
+        assert_eq!(stores.entries().len(), 2, "duplicates are kept once");
+        assert!(stores.contains(Region::Wram, 0x1000));
+        assert!(stores.contains(Region::Sram, 0));
+        assert!(!stores.contains(Region::Sram, 0x1000));
+        assert!(!stores.contains(Region::Hram, 0));
+    }
 
     #[test]
     fn an_empty_filter_matches_nothing() {

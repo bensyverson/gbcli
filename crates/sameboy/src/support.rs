@@ -38,6 +38,7 @@ pub(crate) fn support(feature: Feature) -> Support {
     let reason = match feature {
         Feature::ApuChannels => return Support::Yes,
         Feature::PixelLayers => return Support::Yes,
+        Feature::CartRamWrites => return Support::Yes,
         Feature::DotStep => "SameBoy's finest public step is one CPU step (GB_run)",
         Feature::MCycleStep => "SameBoy's finest public step is one CPU step (GB_run)",
         Feature::PpuDot => {
@@ -68,6 +69,10 @@ pub(crate) fn unsupported_err(feature: Feature) -> CoreError {
         Support::Yes => unreachable!("only unsupported features become errors"),
     }
 }
+
+/// Why store filters can't cover cart RAM on some mappers.
+pub(crate) const CART_RAM_REASON: &str = "this mapper's cart RAM path (MBC2, MBC7, HuC1/3, TPP1, \
+     camera) has modes and side channels the write hook doesn't mirror";
 
 /// Why layer capture is refused on SGB models: their frame is composited in
 /// `sgb.c` (border, mask modes, frozen masks) after the PPU's mixing point, so

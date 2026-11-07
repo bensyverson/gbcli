@@ -4,8 +4,8 @@ mod common;
 
 use common::*;
 use gbcli_core::{
-    Access, AddrFilter, BankSel, Budget, Core, CoreConfig, CoreError, Hit, Model, Region,
-    RunRequest, Stop, StopReason, WriteTracking,
+    Access, AddrFilter, BankSel, Budget, Core, CoreConfig, CoreError, Feature, Hit, Model, Region,
+    RunRequest, Stop, StopReason, StoreFilter, Support, WriteTracking,
 };
 use gbcli_sameboy::SameBoy;
 
@@ -21,7 +21,7 @@ fn filter(entries: &[(u16, BankSel)]) -> AddrFilter {
 
 fn hit(stop: &Stop) -> Hit {
     match stop.reason {
-        StopReason::Candidate(hit) => hit,
+        StopReason::Candidate(hits) => hits.first(),
         other => panic!("expected a filter hit, got {other:?}"),
     }
 }
@@ -180,4 +180,85 @@ fn tracking_off_refuses_written_queries() {
     let core = SameBoy::new(config).unwrap();
     let err = core.written(Region::Wram).unwrap_err();
     assert!(matches!(err, CoreError::InvalidState { .. }), "{err:?}");
+}
+
+fn stores(entries: &[(Region, usize)]) -> StoreFilter {
+    let mut stores = StoreFilter::new();
+    for &(region, offset) in entries {
+        stores.insert(region, offset);
+    }
+    stores
+}
+
+#[test]
+fn a_store_filter_matches_a_write_by_the_byte_it_lands_in() {
+    // Cart RAM bank 2's first byte, written at $A000 with RAM bank 2 mapped.
+    let mut core = quick_dmg(BANKED);
+    let sram = stores(&[(Region::Sram, 0x4000)]);
+    let stop = run_with(&mut core, |r| r.stores = &sram);
+    let h = hit(&stop);
+    assert_eq!(
+        (h.access, h.addr, h.bank, h.new),
+        (Access::Write, 0xA000, 2, 0x22)
+    );
+    assert_eq!(h.pc, 0x4007);
+
+    // WRAM $124, written through echo RAM at $E124.
+    let mut core = quick_dmg(BANKED);
+    let wram = stores(&[(Region::Wram, 0x124)]);
+    let h = hit(&run_with(&mut core, |r| r.stores = &wram));
+    assert_eq!((h.addr, h.pc), (0xC124, 0x400D));
+}
+
+#[test]
+fn a_store_filter_matches_wramx_through_whichever_bank_maps_it() {
+    // A DMG maps WRAM bank 1 at $D000: offset $1000.
+    // `ld hl, $D000; .loop: inc [hl]; jr .loop`
+    let mut rom = BUSY.to_vec();
+    rom[0x150..0x156].copy_from_slice(&[0x21, 0x00, 0xD0, 0x34, 0x18, 0xFD]);
+    let mut core = quick_dmg(&rom);
+    let wramx = stores(&[(Region::Wram, 0x1000)]);
+    let h = hit(&run_with(&mut core, |r| r.stores = &wramx));
+    assert_eq!(
+        (h.access, h.addr, h.bank, h.pc),
+        (Access::Write, 0xD000, 1, 0x0153)
+    );
+}
+
+#[test]
+fn every_hit_of_one_instruction_is_reported_in_access_order() {
+    // busy.gb's main loop increments $C000 with `inc [hl]`: a read, then a
+    // write, of the same byte.
+    let mut core = quick_dmg(BUSY);
+    let read = filter(&[(0xC000, BankSel::Any)]);
+    let wram = stores(&[(Region::Wram, 0)]);
+    let mut next = || {
+        run_with(&mut core, |r| {
+            r.read = &read;
+            r.stores = &wram;
+        })
+    };
+    assert_eq!(hit(&next()).pc, 0x0155, "Main's `ld [$C000], a`");
+    let stop = next();
+    let StopReason::Candidate(hits) = stop.reason else {
+        panic!("{stop:?}")
+    };
+    let seen: Vec<(Access, u16)> = hits.iter().map(|h| (h.access, h.addr)).collect();
+    assert_eq!(seen, [(Access::Read, 0xC000), (Access::Write, 0xC000)]);
+    assert!(!hits.overflowed());
+}
+
+#[test]
+fn cart_ram_writes_are_supported_only_on_mappers_the_hook_mirrors() {
+    let core = quick_dmg(BANKED); // MBC5
+    assert_eq!(core.supports(Feature::CartRamWrites), Support::Yes);
+    let mut mbc2 = BANKED.to_vec();
+    mbc2[0x147] = 0x06; // MBC2+battery
+    mbc2[0x148] = 0x00;
+    mbc2[0x149] = 0x00;
+    let core = quick_dmg(&mbc2);
+    assert!(matches!(
+        core.supports(Feature::CartRamWrites),
+        Support::No { reason } if !reason.is_empty()
+    ));
 }

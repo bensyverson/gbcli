@@ -1,9 +1,14 @@
 //! `--until` predicate stops (design §8, §11), each checked against an
 //! independent per-instruction oracle: the same predicate, evaluated after
 //! every instruction, must reach the same PC, ticks and instruction count as
-//! the cadence-derived stop.
+//! the cadence-derived stop. `banks` covers memory in switchable banks and
+//! aliased cart RAM; `triggers` covers mixed triggers and watch interplay.
 
+#[path = "../common/mod.rs"]
 mod common;
+
+mod banks;
+mod triggers;
 
 use common::*;
 use gbcli_core::{Budget, BudgetKind, Region, Registers, StepUnit};
@@ -19,6 +24,31 @@ fn opts() -> RunOptions<'static> {
     let mut opts = RunOptions::new(Budget::frames(60));
     opts.since = Since::PowerOn;
     opts
+}
+
+/// `opts`, reading RAM before the program first writes it: these programs
+/// start counters from whatever is there.
+fn lenient() -> RunOptions<'static> {
+    let mut opts = opts();
+    opts.allow_uninit = true;
+    opts
+}
+
+/// busy.gb with `code` at $0150, where its entry point jumps.
+fn program(code: &[u8]) -> Vec<u8> {
+    let mut rom = BUSY.to_vec();
+    rom[0x150..0x150 + code.len()].copy_from_slice(code);
+    rom
+}
+
+/// `rom` with a cartridge type and RAM size code in its header.
+fn with_cart(mut rom: Vec<u8>, kind: u8, ram_size: u8) -> Vec<u8> {
+    rom[0x147] = kind;
+    rom[0x149] = ram_size;
+    rom[0x14D] = rom[0x134..0x14D]
+        .iter()
+        .fold(0u8, |x, b| x.wrapping_sub(*b).wrapping_sub(1));
+    rom
 }
 
 fn at(addr: u16) -> Location {
@@ -55,12 +85,12 @@ struct Boundary {
     instructions: u64,
 }
 
-fn oracle(m: &mut Machine, text: &str, max: u64) -> Boundary {
+fn oracle(m: &mut Machine, text: &str, max: u64, allow_uninit: bool) -> Boundary {
     let condition = Condition::compile(text, m.symbols()).expect("the predicate compiles");
     for instructions in 0..=max {
         let mut warnings = Vec::new();
         if condition
-            .holds(&ctx(m, false), &mut warnings)
+            .holds(&ctx(m, allow_uninit), &mut warnings)
             .expect("the oracle evaluates")
         {
             return Boundary {
@@ -90,7 +120,7 @@ fn check(
     cadence: Cadence,
 ) -> Outcome {
     let mut truth = m.try_clone().expect("clone");
-    let truth = oracle(&mut truth, text, max);
+    let truth = oracle(&mut truth, text, max, opts.allow_uninit);
     let outcome = until(m, text, opts);
     assert_eq!(
         outcome.stop.reason,
@@ -107,7 +137,10 @@ fn check(
         outcome.stop.budget.instructions, truth.instructions,
         "{text:?}"
     );
-    assert!(holds(m, text, false), "the predicate holds at the stop");
+    assert!(
+        holds(m, text, opts.allow_uninit),
+        "the predicate holds at the stop"
+    );
     outcome
 }
 
@@ -233,7 +266,7 @@ fn a_dynamic_address_is_checked_every_instruction() {
 fn a_mixed_frame_and_memory_predicate_still_stops_on_the_write() {
     let mut m = initialized_v1();
     // The cadence is Vblank because `frame` is read, but the memory read can
-    // become true mid-frame, so the write candidates are still armed.
+    // become true mid-frame, so its stores are still armed.
     let outcome = check(
         &mut m,
         "frame >= 0 && u16[wFrame] >= 60",

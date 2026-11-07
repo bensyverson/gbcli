@@ -127,15 +127,19 @@ impl Driver {
                 StopReason::Budget(_) => {}
                 StopReason::Locked { opcode } => return Ok(Event::Locked(opcode)),
                 StopReason::Stopped => return Ok(Event::Stopped),
-                StopReason::Candidate(hit) => match hit.access {
-                    Access::Exec if hit.old == Some(LD_B_B) => return Ok(Event::LdBB),
-                    Access::Write if hit.addr == SB => self.sb = hit.new,
-                    Access::Write if hit.new & SC_START_INTERNAL == SC_START_INTERNAL => {
-                        self.serial.push(self.sb);
-                        return Ok(Event::Serial);
+                StopReason::Candidate(hits) => {
+                    for hit in hits.iter() {
+                        match hit.access {
+                            Access::Exec if hit.old == Some(LD_B_B) => return Ok(Event::LdBB),
+                            Access::Write if hit.addr == SB => self.sb = hit.new,
+                            Access::Write if hit.new & SC_START_INTERNAL == SC_START_INTERNAL => {
+                                self.serial.push(self.sb);
+                                return Ok(Event::Serial);
+                            }
+                            _ => {}
+                        }
                     }
-                    _ => {}
-                },
+                }
                 StopReason::Frame | StopReason::Step(_) => {}
             }
         }

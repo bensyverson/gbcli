@@ -1,6 +1,6 @@
 //! Run requests: what to run for, what to watch, and where events go.
 
-use crate::filter::AddrFilter;
+use crate::filter::{AddrFilter, StoreFilter};
 use crate::time::Ticks;
 
 /// Which limit of a [`Budget`] ended a run.
@@ -131,6 +131,9 @@ pub struct RunRequest<'a> {
     /// Addresses whose writes are vetoed: memory keeps its old value and the
     /// run stops with the attempted value. Implies a write candidate.
     pub veto: &'a AddrFilter,
+    /// Candidate writes by the backing byte they land in, checked as the
+    /// access happens.
+    pub stores: &'a StoreFilter,
     /// Stop after the next vblank.
     pub stop_at_frame: bool,
     /// Taps and the profiler; pure data push, no core access.
@@ -138,6 +141,7 @@ pub struct RunRequest<'a> {
 }
 
 static EMPTY: AddrFilter = AddrFilter::EMPTY;
+static NO_STORES: StoreFilter = StoreFilter::new();
 
 impl<'a> RunRequest<'a> {
     /// A request with no filters, no frame stop and no sink.
@@ -148,6 +152,7 @@ impl<'a> RunRequest<'a> {
             read: &EMPTY,
             write: &EMPTY,
             veto: &EMPTY,
+            stores: &NO_STORES,
             stop_at_frame: false,
             sink: None,
         }

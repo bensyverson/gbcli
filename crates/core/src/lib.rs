@@ -14,7 +14,7 @@ mod time;
 
 pub use apu::{ApuChannel, ApuChannelState, ApuState, ApuSync};
 pub use error::{CoreError, Feature, Support};
-pub use filter::{AddrFilter, BankSel, canonical_addr};
+pub use filter::{AddrFilter, BankSel, StoreFilter, canonical_addr};
 pub use region::{
     FrameRef, FrameTag, Layer, LayerMap, Pixels, Region, RegionView, VblankKind, WrittenView,
 };
@@ -23,7 +23,7 @@ pub use state::{
     BootRom, CoreConfig, CoreInfo, IoReg, JoypadBounce, Keys, Model, PpuStatus, Registers,
     Rendering, RtcMode, WriteTracking,
 };
-pub use stop::{Access, Hit, Stop, StopReason};
+pub use stop::{Access, Hit, Hits, Stop, StopReason};
 pub use time::Ticks;
 
 /// An emulator core. Construction is not on the trait: each backend has a

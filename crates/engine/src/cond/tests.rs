@@ -1,6 +1,7 @@
 //! Parser tests; evaluation is tested against a real core in tests/conditions.rs.
 
 use super::*;
+use gbcli_core::Support;
 use gbcli_protocol::Cadence;
 
 const SYM: &str = "00:0150 Main\n00:015e Main.loop\n03:4123 Far\n02:a000 sSave\n\
@@ -249,8 +250,8 @@ fn unknown_and_ambiguous_symbols_list_candidates() {
 }
 
 #[test]
-fn the_cadence_is_the_finest_trigger_the_reads_need() {
-    let cadence = |text: &str| Condition::compile(text, Some(&syms())).unwrap().cadence();
+fn the_cadence_names_the_costliest_trigger_the_reads_need() {
+    let cadence = |text: &str| cadence::analyze(&parse(text), Support::Yes).cadence();
 
     // The write hook covers these, so only a write can change them.
     assert_eq!(cadence("u16[wFrame] >= 60"), Cadence::Writes);
@@ -262,7 +263,9 @@ fn the_cadence_is_the_finest_trigger_the_reads_need() {
     // cannot change it: only a write can.
     assert_eq!(cadence("[Far+2] == 1"), Cadence::Writes);
     assert_eq!(cadence("[sSave] == 1"), Cadence::Writes);
+    // Nothing a run does changes ROM: no trigger at all.
     assert_eq!(cadence("[rom:0x4000] == 1"), Cadence::Writes);
+    assert_eq!(cadence("[$0100] == 1"), Cadence::Writes);
     // A CPU address in the switchable ROM window changes on a bank switch.
     assert_eq!(cadence("[$4123] == 1"), Cadence::EveryInstruction);
     // VRAM and OAM writes can come from DMA, which the write hook misses.
@@ -281,10 +284,20 @@ fn the_cadence_is_the_finest_trigger_the_reads_need() {
     // Vblank and scanline counters.
     assert_eq!(cadence("frame >= 3"), Cadence::Vblank);
     assert_eq!(cadence("ly == 100"), Cadence::Scanline);
-    // The finest trigger among everything read wins; a mixed predicate also
-    // keeps its write candidates, so a mid-frame change is not missed.
+    // The costliest trigger names the cadence; a mixed predicate also
+    // keeps its stores, so a mid-frame change is not missed.
     assert_eq!(cadence("frame >= 3 && [wFrame] == 2"), Cadence::Vblank);
     assert_eq!(cadence("ly == 100 && frame >= 3"), Cadence::Scanline);
+    // Cart RAM on a mapper whose RAM path the hook doesn't mirror.
+    let no = Support::No { reason: "test" };
+    assert_eq!(
+        cadence::analyze(&parse("[sSave] == 1"), no).cadence(),
+        Cadence::EveryInstruction
+    );
+    assert_eq!(
+        cadence::analyze(&parse("[wFrame] == 1"), no).cadence(),
+        Cadence::Writes
+    );
     assert_eq!(
         cadence("frame >= 3 && pc == Main"),
         Cadence::EveryInstruction
@@ -328,4 +341,36 @@ fn malformed_conditions_point_at_the_problem() {
         panic!()
     };
     assert_eq!(at, 4);
+}
+
+#[test]
+fn the_triggers_are_a_set_and_reads_arm_the_bytes_the_evaluator_reads() {
+    let triggers = |text: &str| cadence::analyze(&parse(text), Support::Yes);
+
+    // `frame` needs the vblank even beside `ly`: with the LCD off LY never
+    // changes while frames still end.
+    let both = triggers("frame >= 3 && ly == 0");
+    assert!(both.vblank && both.scanline && !both.every_instruction);
+
+    // A WRAMX symbol in bank 00 (`rgblink -w`) reads bank 1's byte, as the
+    // CPU sees it with bank 0 selected.
+    let syms = Symbols::parse("00:d000 wHigh\n").unwrap();
+    let high = Condition::compile("u16[wHigh] == 1", Some(&syms)).unwrap();
+    let armed = cadence::analyze(&high.expr, Support::Yes).stores;
+    assert_eq!(
+        armed.entries(),
+        [(Region::Wram, 0x1000), (Region::Wram, 0x1001)]
+    );
+
+    let armed = triggers("[sSave] == 1 && [$C010] == 2 && [hram:3] == 4 && [ie:0] == 5").stores;
+    assert_eq!(
+        armed.entries(),
+        [
+            (Region::Sram, 0x4000),
+            (Region::Wram, 0x10),
+            (Region::Hram, 3),
+            (Region::Ie, 0)
+        ]
+    );
+    assert!(triggers("[Far] == 1").stores.is_empty(), "ROM is constant");
 }

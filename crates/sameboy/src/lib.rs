@@ -178,12 +178,17 @@ impl Core for SameBoy {
     }
 
     fn supports(&self, feature: Feature) -> Support {
-        if feature == Feature::PixelLayers && self.model.is_sgb() {
-            Support::No {
+        match feature {
+            Feature::PixelLayers if self.model.is_sgb() => Support::No {
                 reason: support::SGB_LAYERS_REASON,
+            },
+            // SAFETY: a plain query on a live instance.
+            Feature::CartRamWrites if !unsafe { sb::gbcli_cart_ram_mirrored(self.raw()) } => {
+                Support::No {
+                    reason: support::CART_RAM_REASON,
+                }
             }
-        } else {
-            support(feature)
+            _ => support(feature),
         }
     }
 

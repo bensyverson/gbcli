@@ -8,7 +8,7 @@
 use std::ffi::{CStr, c_char};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
-use gbcli_core::{FrameTag, Hit, Layer, Pixels, VblankKind};
+use gbcli_core::{FrameTag, Hits, Layer, Pixels, VblankKind};
 use sameboy_sys as sb;
 
 use crate::watch::{Armed, Tracking};
@@ -75,8 +75,8 @@ pub(crate) struct Hooks {
     pub armed: Option<Armed>,
     /// The PC of the instruction now executing (set while filters are armed).
     pub step_pc: u16,
-    /// The first filter hit of the current step.
-    pub hit: Option<Hit>,
+    /// The filter hits of the current step, in access order.
+    pub hit: Option<Hits>,
     pub tracking: Option<Tracking>,
 }
 

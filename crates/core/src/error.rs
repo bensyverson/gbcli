@@ -23,6 +23,9 @@ pub enum Feature {
     ApuChannels,
     /// The write hook seeing OAM DMA and HDMA destination writes.
     WriteHookCoversDma,
+    /// Store filters over cart RAM: every change to cart RAM is a CPU write
+    /// the core places at its byte (no mapper-internal writes it can't see).
+    CartRamWrites,
     /// The execution hook seeing interrupt dispatch.
     ExecHookCoversInterrupts,
     /// ROM patches on MMM01 carts, which rotate their ROM in memory.
@@ -44,6 +47,7 @@ impl Feature {
             Feature::ApuInternals => "apu_internals",
             Feature::ApuChannels => "apu_channels",
             Feature::WriteHookCoversDma => "write_hook_covers_dma",
+            Feature::CartRamWrites => "cart_ram_writes",
             Feature::ExecHookCoversInterrupts => "exec_hook_covers_interrupts",
             Feature::Mmm01RomPatch => "mmm01_rom_patch",
             Feature::EventSinks => "event_sinks",

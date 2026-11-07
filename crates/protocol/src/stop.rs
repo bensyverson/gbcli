@@ -39,7 +39,7 @@ pub enum StopReason {
     /// The server's wall-clock guard ended the run (design §3). The result is
     /// not reproducible; host time is the only input.
     WallGuard,
-    /// An `--until` predicate became true. `cadence` is the finest trigger
+    /// An `--until` predicate became true. `cadence` is the costliest trigger
     /// that predicate needs, which is also what evaluating it costs.
     Predicate {
         /// The predicate as it was written.
@@ -48,18 +48,18 @@ pub enum StopReason {
     },
 }
 
-/// How often a predicate has to be evaluated, from cheapest to finest. A
-/// predicate needs the finest trigger among everything it reads; the stop
-/// record names it so the cost is visible.
+/// The costliest trigger a predicate is evaluated on, from cheapest to
+/// costliest, so the stop record shows the cost. A predicate is re-evaluated
+/// when any of its triggers fires (`frame` with `ly` needs both vblanks and
+/// LY changes), and writes to the bytes it reads always trigger.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Cadence {
-    /// Only when an address the predicate reads is written: memory the write
-    /// hook covers. The cheapest, and exact for a memory-only predicate.
+    /// Only when a CPU write lands in a byte the predicate reads.
     Writes,
-    /// At each vblank: `frame` alone.
+    /// Also at each vblank: `frame`.
     Vblank,
-    /// When LY changes: `ly` alone.
+    /// Also when LY changes: `ly`.
     Scanline,
     /// After every instruction: registers, flags, `pc`, `t`, dynamic
     /// addresses, and memory whose value changes without a write to it.

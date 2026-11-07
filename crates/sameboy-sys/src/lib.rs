@@ -231,6 +231,7 @@ unsafe extern "C" {
     /// blank LCD-off screen after the LCD was turned on.
     pub fn gbcli_frame_scrubbed(gb: *mut GB_gameboy_t) -> bool;
     pub fn gbcli_bank_for(gb: *mut GB_gameboy_t, addr: u16) -> u16;
+    pub fn gbcli_cart_ram_mirrored(gb: *mut GB_gameboy_t) -> bool;
     pub fn gbcli_cart_ram_offset(gb: *mut GB_gameboy_t, addr: u16) -> i32;
     pub fn gbcli_apu_synced(gb: *mut GB_gameboy_t) -> bool;
     pub fn gbcli_io_peek(gb: *mut GB_gameboy_t, reg: u8) -> c_int;

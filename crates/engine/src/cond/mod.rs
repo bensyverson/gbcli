@@ -10,10 +10,11 @@ mod parse;
 
 use std::fmt;
 
-use gbcli_core::{BankSel, CoreError, Region};
+use gbcli_core::{Core, CoreError, Feature, Region};
 
 use crate::sym::{Symbol, Symbols};
 
+pub(crate) use cadence::Triggers;
 pub use eval::{AccessValues, EvalCtx, EvalError, EvalWarning};
 
 /// A compiled condition: its source and its tree, symbols already resolved.
@@ -55,19 +56,15 @@ impl Condition {
         Ok(self.eval(ctx, warnings)? != 0)
     }
 
-    /// The finest trigger this condition needs (design §8, §11): the cadence
-    /// the run evaluates it on, and thus what it costs.
-    pub fn cadence(&self) -> gbcli_protocol::Cadence {
-        cadence::analyze(&self.expr).cadence
+    /// The cadence a run evaluates this condition on, and thus what it costs
+    /// (design §8, §11): the costliest of its triggers on `core`.
+    pub fn cadence(&self, core: &dyn Core) -> gbcli_protocol::Cadence {
+        self.triggers(core).cadence()
     }
 
-    /// The static addresses to arm with the write hook, one per byte of each
-    /// read. Used for every cadence but `EveryInstruction`, which already
-    /// sees every write.
-    ///
-    /// [`cadence`]: Condition::cadence
-    pub(crate) fn write_candidates(&self) -> Vec<(u16, BankSel)> {
-        cadence::analyze(&self.expr).writes
+    /// Everything that can make this condition change on `core`.
+    pub(crate) fn triggers(&self, core: &dyn Core) -> cadence::Triggers {
+        cadence::analyze(&self.expr, core.supports(Feature::CartRamWrites))
     }
 }
 

@@ -4,9 +4,10 @@
 use std::sync::atomic::Ordering;
 
 use gbcli_core::{
-    Access, AddrFilter, BankSel, Core, Hit, Region, RunRequest, StopReason as CoreReason, Usage,
+    Access, AddrFilter, BankSel, Core, Hit, Region, RunRequest, StopReason as CoreReason,
+    StoreFilter, Usage,
 };
-use gbcli_protocol::{Cadence, Location, StepKind, StopReason, TimeMark, WatchAccess};
+use gbcli_protocol::{Location, StepKind, StopReason, TimeMark, WatchAccess};
 
 use super::record::record;
 use super::until::{Until, evaluate};
@@ -170,12 +171,9 @@ fn run(
         write.insert(BOOT_OFF, BankSel::Any);
     }
 
-    let until = condition.map(Until::new);
-    if let Some(until) = &until {
-        for (addr, bank) in &until.writes {
-            write.insert(*addr, *bank);
-        }
-    }
+    let until = condition.map(|c| Until::new(c, m.core()));
+    let no_stores = StoreFilter::new();
+    let stores = until.as_ref().map_or(&no_stores, |u| &u.triggers.stores);
 
     let mut used = Usage::default();
     let mut warnings: Vec<EvalWarning> = Vec::new();
@@ -249,9 +247,9 @@ fn run(
             }
         }
         let fine = goal.fine()
-            || until.as_ref().is_some_and(|u| {
-                matches!(u.cadence, Cadence::Scanline | Cadence::EveryInstruction)
-            });
+            || until
+                .as_ref()
+                .is_some_and(|u| u.triggers.scanline || u.triggers.every_instruction);
         let chunk = if fine { 1 } else { CHUNK };
         let before = m.core().registers();
         let ly_before = m.core().ppu().ly;
@@ -264,23 +262,23 @@ fn run(
         req.exec = &exec;
         req.read = &read;
         req.write = &write;
+        req.stores = stores;
         req.stop_at_frame =
-            goal == Goal::Frame || until.as_ref().is_some_and(|u| u.cadence == Cadence::Vblank);
+            goal == Goal::Frame || until.as_ref().is_some_and(|u| u.triggers.vblank);
         let stop = m.core_mut().run(&mut req)?;
         used += stop.used;
-        let fired = match &until {
-            Some(u) => {
-                let wrote = matches!(stop.reason, CoreReason::Candidate(hit) if hit.access == Access::Write);
-                wrote
-                    || match u.cadence {
-                        Cadence::Writes => false,
-                        Cadence::Vblank => stop.used.frames > 0,
-                        Cadence::Scanline => m.core().ppu().ly != ly_before,
-                        Cadence::EveryInstruction => stop.used.instructions > 0,
-                    }
-            }
-            None => false,
-        };
+        // Any trigger that fired: the set, not the costliest alone. A write
+        // to an armed byte, or any write hit at all (re-evaluating costs less
+        // than telling them apart).
+        let fired = until.as_ref().is_some_and(|u| {
+            let t = &u.triggers;
+            let wrote = matches!(stop.reason, CoreReason::Candidate(hits)
+                if hits.overflowed() || hits.iter().any(|h| h.access == Access::Write));
+            wrote
+                || (t.every_instruction && stop.used.instructions > 0)
+                || (t.vblank && stop.used.frames > 0)
+                || (t.scanline && m.core().ppu().ly != ly_before)
+        });
         let decided = match stop.reason {
             CoreReason::Locked { opcode } => Some(StopReason::IllegalOpcode { opcode }),
             CoreReason::Stopped => Some(StopReason::Stopped),
@@ -293,8 +291,12 @@ fn run(
                     None
                 }
             }
-            CoreReason::Candidate(hit) => {
-                let stopped = decide(m, &compiled, &goal, hit, opts, &mut warnings);
+            CoreReason::Candidate(hits) => {
+                // In access order: the first hit that is a real stop wins.
+                let stopped = hits.iter().try_fold(None, |found, hit| match found {
+                    Some(_) => Ok(found),
+                    None => decide(m, &compiled, &goal, *hit, opts, &mut warnings),
+                });
                 match stopped {
                     // The stop is where the breakpoint or watch hit; the
                     // error says why its condition couldn't be decided.

@@ -61,15 +61,24 @@ uint16_t gbcli_bank_for(GB_gameboy_t *gb, uint16_t addr)
     }
 }
 
-// The offset into cart RAM that a CPU access at addr (A000-BFFF) reaches, or
-// -1 when it reaches no RAM (disabled, RTC mapped) or the mapper is one whose
-// RAM path we don't mirror (MBC2, MBC7, HuC1/3, TPP1, camera).
-int32_t gbcli_cart_ram_offset(GB_gameboy_t *gb, uint16_t addr)
+// Whether gbcli_cart_ram_offset mirrors this mapper's cart RAM path, so every
+// change to cart RAM is a CPU write it can place. Not MBC2, MBC7, HuC1/3,
+// TPP1 or the camera: their RAM paths have modes and side channels we don't
+// mirror.
+bool gbcli_cart_ram_mirrored(GB_gameboy_t *gb)
 {
     switch (gb->cartridge_type->mbc_type) {
-        case GB_NO_MBC: case GB_MBC1: case GB_MBC3: case GB_MBC5: case GB_MMM01: break;
-        default: return -1;
+        case GB_NO_MBC: case GB_MBC1: case GB_MBC3: case GB_MBC5: case GB_MMM01: return true;
+        default: return false;
     }
+}
+
+// The offset into cart RAM that a CPU write at addr (A000-BFFF) reaches, as
+// write_mbc_ram computes it, or -1 when it reaches no RAM (disabled, RTC
+// mapped) or the mapper isn't one gbcli_cart_ram_mirrored covers.
+int32_t gbcli_cart_ram_offset(GB_gameboy_t *gb, uint16_t addr)
+{
+    if (!gbcli_cart_ram_mirrored(gb)) return -1;
     if (!gb->mbc_ram_enable || !gb->mbc_ram || !gb->mbc_ram_size) return -1;
     if (gb->cartridge_type->has_rtc && gb->mbc3.rtc_mapped) return -1;
     uint8_t bank = gb->mbc_ram_bank;

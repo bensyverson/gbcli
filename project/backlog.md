@@ -68,3 +68,11 @@ What: sprite sheets of 8x8 objects (today `assets/sprites/` is 8x16 only, as the
 
 What: the objects-per-line check from OAM during a run ("frame 120, line 64: 12 objects; 2 will not draw", research doc, `obj_per_line`), and a preview drawn from gbcli's own analysis when an image fails its checks (today only converted images get one; a problem names its tiles instead). Why parked: the build-time checks answer the asset question; the runtime one belongs with the OAM views, and a failing image's tiles are already listed. Un-park when an agent misses a flicker the build-time check can't see (sprites from several sheets on one line), or asks to see a failing image.
 
+
+## 2026-11-07 — Color art matched to named palettes, tile by tile
+
+**What:** under `build --gbc`, a color background drawn in the colors of the named palettes in `assets/palettes.txt` gets, for each tile, the named palette that holds all its colors; tiles no named palette holds are packed automatically as today. That gives plain-gbcli backgrounds several named, swappable palettes (grass and roof, then `grass_night` and `roof_night`) with no extra file. A tile drawn only in colors several palettes share (plain white) matches more than one; it takes one by a rule (first in the file) with a warning, since the choice decides how it looks after a swap.
+
+**Why parked:** Ben chose one named palette per indexed image for Stage 10 (plan question 4, [2026-11-07-gbc-images-plan.md](2026-11-07-gbc-images-plan.md)). This is an addition to it, with nothing to migrate. LoadHigh assigns palettes per tile kind itself and doesn't need it. A per-tile palette PNG was considered and dropped in favor of this.
+
+**Un-park when:** a project (or the agent eval) needs a multi-palette background with named run-time swaps in plain gbcli, and writing the attribute map by hand is the stumble.

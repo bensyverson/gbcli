@@ -1,6 +1,6 @@
 # Plan: GBC images in dual mode (`build --gbc`)
 
-2026-11-07, leaf `k5Afkg`. **Status: revision 2, draft for Ben's review. Not imported.** Once Ben approves, the `tasks:` block is imported under the root `9b5RBA` as its own stage. After that, the tracker is the plan.
+2026-11-07, leaf `k5Afkg`. **Status: revision 2, approved by Ben 2026-11-07 and imported under the root `9b5RBA` as Stage 10.** The tracker is now the plan.
 
 The evidence is in [2026-11-07-gbc-images-research.md](2026-11-07-gbc-images-research.md).
 
@@ -76,6 +76,8 @@ sprites/hero.png = ember
 - `run` gets a `gbc` model alias. A dual ROM is checked in two sessions, one per model, because restore refuses a model change.
 
 ## Questions for Ben
+
+> **Answered by Ben, 2026-11-07.** Question 4: the recommendation, one named palette per indexed image (after asking what it implies: only indexed art is held to one palette; color art keeps up to 8 per background). A third way that surfaced in the discussion, color art matched tile by tile to named palettes, is in [backlog.md](backlog.md). Question 5: the recommendation. Questions 1-3 and 6-10: the recommendations, accepted as written.
 
 Each question gives the recommended answer first and names the leaf that waits on it.
 

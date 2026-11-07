@@ -4,13 +4,13 @@ use super::ExprError;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Tok {
-    /// A number and whether it carried a radix prefix (`$`, `0x`, `%`).
+    /// A number and the radix prefix it carried (`$`, `0x`, `%`).
     /// `value` is `None` for unprefixed digits that aren't decimal (`41AB`),
     /// which only a bank-qualified address (`03:41AB`, hex) accepts.
     Num {
         value: Option<i64>,
         raw: String,
-        prefixed: bool,
+        prefix: Prefix,
     },
     Ident(String),
     Op(&'static str),
@@ -19,6 +19,18 @@ pub enum Tok {
     LParen,
     RParen,
     Colon,
+}
+
+/// The radix prefix a number was written with. A region offset or a
+/// bank-qualified part takes hex alone, as the address grammar does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Prefix {
+    /// Bare digits: decimal in an expression, hex in an address part.
+    None,
+    /// `$` or `0x`.
+    Hex,
+    /// `%`.
+    Binary,
 }
 
 const OPS: [&str; 20] = [
@@ -56,7 +68,12 @@ pub fn lex(text: &str) -> Result<Vec<(usize, Tok)>, ExprError> {
             let end = take_while(i + 1, |c| c.is_ascii_alphanumeric());
             let digits = &text[i + 1..end];
             i = end;
-            number(text, start, digits, radix, true)?
+            let prefix = if radix == 16 {
+                Prefix::Hex
+            } else {
+                Prefix::Binary
+            };
+            number(text, start, digits, radix, prefix)?
         } else if c.is_ascii_digit() {
             let (radix, from) = if text[i..].starts_with("0x") || text[i..].starts_with("0X") {
                 (16, i + 2)
@@ -66,7 +83,12 @@ pub fn lex(text: &str) -> Result<Vec<(usize, Tok)>, ExprError> {
             let end = take_while(from, |c| c.is_ascii_alphanumeric());
             let digits = &text[from..end];
             i = end;
-            number(text, start, digits, radix, radix == 16)?
+            let prefix = if radix == 16 {
+                Prefix::Hex
+            } else {
+                Prefix::None
+            };
+            number(text, start, digits, radix, prefix)?
         } else if c.is_ascii_alphabetic() || c == '_' || c == '.' {
             let end = take_while(i, |c| {
                 c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '#' | '@')
@@ -101,10 +123,10 @@ fn number(
     at: usize,
     digits: &str,
     radix: u32,
-    prefixed: bool,
+    prefix: Prefix,
 ) -> Result<Tok, ExprError> {
     let value = i64::from_str_radix(digits, radix).ok();
-    if value.is_none() && prefixed {
+    if value.is_none() && prefix != Prefix::None {
         let end = (at + digits.len() + 2).min(text.len());
         return Err(ExprError::syntax(
             at,
@@ -114,6 +136,6 @@ fn number(
     Ok(Tok::Num {
         value,
         raw: digits.to_string(),
-        prefixed,
+        prefix,
     })
 }

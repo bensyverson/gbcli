@@ -46,7 +46,7 @@ pub fn primer() -> String {
         Then:   gbcli show --session demo    gbcli read pc frame --session demo\n\
         New:    gbcli doctor, then gbcli new game (a starter that builds and runs)\n\
         Learn:  gbcli help hardware (the DMG on one page), gbcli help traps,\n\
-        \x20       gbcli opcode 'jr nz' (bytes, cycles, flags)\n\
+        \x20       gbcli opcode 'jr nz, .loop' (bytes, cycles, flags)\n\
         \n\
         Help:   gbcli VERB --help (one worked example each)\n\
         \x20       gbcli recipes (goal → command)\n\

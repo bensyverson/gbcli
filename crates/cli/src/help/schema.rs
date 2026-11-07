@@ -49,7 +49,7 @@ build   dir?: PATH  src?: [PATH]  include?: [PATH]  out?: PATH
         restore?: CHECKPOINT  (into session, whose ROM must be the build's)
 doctor  —
 new     dir: PATH
-opcode  query: TEXT  ("$20", "$CB37", "jr nz", "ld a, [hl+]")
+opcode  query: TEXT  ("$20", "$CB37", "jr nz, .loop", "ld a, [hl+]")
         (build, doctor, new and opcode need no session; paths are relative
         to the server's working directory)
 power_cycle  sav?: PATH  rtc_advance?: "45s"|"30m"|"12h"|"7d"
@@ -97,7 +97,7 @@ Examples:
   {"id":"27","session":"game","op":"build","args":{"dir":"game","restore":"start"}}
   {"id":"28","op":"doctor"}
   {"id":"29","op":"new","args":{"dir":"game"}}
-  {"id":"30","op":"opcode","args":{"query":"jr nz"}}
+  {"id":"30","op":"opcode","args":{"query":"jr nz, .loop"}}
   {"id":"31","op":"power_cycle","args":{"sav":"game.sav","rtc_advance":"8h"}}
   {"id":"32","op":"sav","args":{"path":"game.sav"}}
 "#;

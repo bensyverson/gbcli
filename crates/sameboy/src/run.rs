@@ -7,9 +7,10 @@
 //! SameBoy locks the CPU on an illegal opcode (IE=0, halted) without telling
 //! anyone, so the loop checks the opcode the next step will execute before
 //! running it (`gbcli_pre_run` in the shim). Execution filters are checked the
-//! same way, so a breakpoint stops before its instruction runs; read and write
-//! filters are checked in SameBoy's memory callbacks (`watch.rs`) and stop
-//! after the instruction that made the access.
+//! same way, and first, so a breakpoint stops before its instruction runs,
+//! even one on an illegal opcode; read and write filters are checked in
+//! SameBoy's memory callbacks (`watch.rs`) and stop after the instruction
+//! that made the access.
 
 use gbcli_core::{
     Access, CoreError, CpuStep, Event, EventKinds, EventSink, Feature, FirstStep, FrameTag, Hit,
@@ -130,19 +131,6 @@ pub(crate) fn run(core: &mut SameBoy, req: &mut RunRequest<'_>) -> Result<Stop, 
         if let Some(kind) = req.budget.exhausted(&used) {
             return Ok(stop(core, StopReason::Budget(kind), used));
         }
-        let mut opcode = 0;
-        // SAFETY: a side-effect-free check on a live instance, outside GB_run.
-        match unsafe { sb::gbcli_pre_run(gb, &mut opcode) } {
-            sb::GBCLI_PRE_ILLEGAL => {
-                return Ok(stop(core, StopReason::Locked { opcode }, used));
-            }
-            // Passing time, GB_run takes a STOP step (four T-cycles), as
-            // SameBoy's own frontend does.
-            sb::GBCLI_PRE_STOPPED if req.in_stop == InStop::End => {
-                return Ok(stop(core, StopReason::Stopped, used));
-            }
-            _ => {}
-        }
         // SAFETY: `regs` points into the live instance.
         let pc = unsafe { (*regs).pc };
         // By default a run never stops on an execution hit before its first
@@ -176,6 +164,21 @@ pub(crate) fn run(core: &mut SameBoy, req: &mut RunRequest<'_>) -> Result<Stop, 
                 };
                 return Ok(stop(core, StopReason::Candidate(Hits::one(hit)), used));
             }
+        }
+        // After the execution filters, so an address that holds an illegal
+        // opcode is reached before the CPU locks up on it.
+        let mut opcode = 0;
+        // SAFETY: a side-effect-free check on a live instance, outside GB_run.
+        match unsafe { sb::gbcli_pre_run(gb, &mut opcode) } {
+            sb::GBCLI_PRE_ILLEGAL => {
+                return Ok(stop(core, StopReason::Locked { opcode }, used));
+            }
+            // Passing time, GB_run takes a STOP step (four T-cycles), as
+            // SameBoy's own frontend does.
+            sb::GBCLI_PRE_STOPPED if req.in_stop == InStop::End => {
+                return Ok(stop(core, StopReason::Stopped, used));
+            }
+            _ => {}
         }
         if arming.armed() || tapping {
             let ticks = core.ticks;
@@ -315,16 +318,20 @@ fn pass_exec(core: &mut SameBoy, sink: &mut dyn EventSink, pc: u16, before: Befo
     });
 }
 
-/// Logs an LCD-off the step at `pc` made, stamped with the step's start.
+/// Logs an LCD-off the step at `pc` made, stamped with the step's start and
+/// the last published frame's number (not `core.vblanks`, which counts the
+/// CGB repeat vblanks SameBoy publishes no frame for).
 fn log_lcd_off(core: &mut SameBoy, pc: u16) {
-    let (at, vblanks) = (Ticks(core.ticks), core.vblanks);
+    let at = Ticks(core.ticks);
     let hooks = core.hooks_mut();
-    if let (Some(line), Some(log)) = (hooks.lcd_off_line.take(), &mut hooks.lcd_off_log) {
+    let line = hooks.lcd_toggles.take().and_then(|t| t.off_line());
+    let frame = hooks.frame.tag.map_or(0, |tag| tag.number);
+    if let (Some(line), Some(log)) = (line, &mut hooks.lcd_off_log) {
         log.push(LcdOff {
             pc,
             line,
             at,
-            vblanks,
+            frame,
         });
     }
 }

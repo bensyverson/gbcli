@@ -76,7 +76,7 @@ fn first_of(m: &Machine, since: &Since, off: &LcdOff) -> LcdOffOutsideVblank {
         pc: off.pc,
         symbol: symbol_at(m, off.pc),
         line: off.line,
-        frame: off.vblanks as i64 - mark.frame as i64,
+        frame: off.frame as i64 - mark.frame as i64,
         more: 0,
     }
 }

@@ -461,6 +461,26 @@ fn a_region_offset_is_hex_prefixed_or_not_as_in_the_address_grammar() {
     }
 }
 
+/// The address grammar reads a region offset or a bank-qualified part as
+/// hex only, so `%10` is refused there; a condition refused it too, rather
+/// than reading binary 2 (leaf dwM7t6).
+#[test]
+fn a_binary_region_offset_or_bank_part_is_refused_as_in_the_address_grammar() {
+    for bad in ["[sram:%10]", "[%1:4000]", "[01:%100]"] {
+        let e = Condition::compile(bad, None).expect_err(bad);
+        assert!(e.to_string().contains("hex"), "{bad}: {e}");
+        assert!(
+            address_grammar_refuses(bad),
+            "{bad}: the address grammar refuses it"
+        );
+    }
+}
+
+fn address_grammar_refuses(bracketed: &str) -> bool {
+    let inner = bracketed.trim_start_matches('[').trim_end_matches(']');
+    crate::addr::parse(inner, None).is_err()
+}
+
 #[test]
 fn region_names_match_the_address_grammar() {
     let region = |text: &str| match parse(text) {

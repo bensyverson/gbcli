@@ -14,7 +14,8 @@ Memory map  https://gbdev.io/pandocs/Memory_Map.html#memory-map
   $E000-$FDFF (echo RAM) and $FEA0-$FEFF: Nintendo says not to use them
 
 Time: a dot is one T-cycle on DMG (two in CGB double speed); 4 dots make an
-M-cycle at normal speed. gbcli counts T-cycles (t, measure, --ticks).
+M-cycle at normal speed. gbcli counts T-cycles in t and measure; --ticks
+and ticks count 2^23 Hz ticks: two per T-cycle at normal speed, one at double.
   https://gbdev.io/pandocs/STAT.html#lcd-status-registers
   https://gbdev.io/pandocs/Rendering.html#terminology
 
@@ -100,5 +101,16 @@ mod tests {
             let just_a_link = pandocs_links(line).len() == 1 && !line.trim().contains(' ');
             assert!(line.chars().count() <= 80 || just_a_link, "{line}");
         }
+    }
+
+    /// `--ticks` counts 2^23 Hz ticks (`gbcli_core::Ticks`), not T-cycles:
+    /// `--ticks 1000` stops near t 500 at normal speed (leaf dwM7t6).
+    #[test]
+    fn the_cheat_sheet_says_a_tick_is_half_a_t_cycle() {
+        let flat = HARDWARE.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(
+            flat.contains("--ticks and ticks count 2^23 Hz ticks: two per T-cycle at normal speed"),
+            "{flat}"
+        );
     }
 }

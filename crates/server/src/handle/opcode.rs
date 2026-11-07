@@ -60,7 +60,7 @@ mod tests {
 
     #[test]
     fn opcode_answers_without_a_bundle_with_both_branch_costs() {
-        let response = ask("jr nz");
+        let response = ask("jr nz, .loop");
         let rows = response.outcome.expect("ok").opcodes.expect("rows");
         assert_eq!(rows.len(), 1);
         let r = &rows[0];

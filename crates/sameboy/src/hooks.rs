@@ -122,9 +122,36 @@ pub(crate) struct Hooks {
     pub lcd_turning_off: bool,
     /// The LCD-off log, while it is on.
     pub lcd_off_log: Option<Vec<gbcli_core::LcdOff>>,
-    /// The line the LCD turned off on during the current step, while the log
-    /// is on; the run loop logs it with the step's PC and time.
-    pub lcd_off_line: Option<u8>,
+    /// The LCD toggles of the current step, while the log is on; the run loop
+    /// logs an LCD-off from them with the step's PC and time.
+    pub lcd_toggles: Option<LcdToggles>,
+}
+
+/// The LCD's on/off toggles during one CPU step. One program write to LCDC
+/// can toggle the LCD several times: on SGB, SameBoy applies it as the new
+/// value, the old one and the new one again (`GB_CONFLICT_SGB_LCDC` in
+/// sm83_cpu.c), so an LCD-off fires off, on, off and a turn-on fires on,
+/// off, on. The step's one logical transition is the first toggle's
+/// direction, and only if the last toggle agrees with it.
+#[derive(Clone, Copy, Debug)]
+pub struct LcdToggles {
+    /// The direction of the step's first toggle (`true` turned the LCD on).
+    pub first_on: bool,
+    /// The display's line at the first toggle, read when it turned the LCD
+    /// off: after that, `GB_lcd_off` has reset the line counter to 0.
+    pub line: Option<u8>,
+    /// The direction of the step's last toggle.
+    pub last_on: bool,
+}
+
+impl LcdToggles {
+    /// The line the step turned the LCD off on, if its net effect turned
+    /// the LCD off.
+    pub fn off_line(self) -> Option<u8> {
+        (!self.first_on && !self.last_on)
+            .then_some(self.line)
+            .flatten()
+    }
 }
 
 impl Hooks {
@@ -154,7 +181,7 @@ impl Hooks {
             raster: None,
             lcd_turning_off: false,
             lcd_off_log: None,
-            lcd_off_line: None,
+            lcd_toggles: None,
         }
     }
 

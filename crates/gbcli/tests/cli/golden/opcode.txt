@@ -1,6 +1,19 @@
-$ gbcli opcode jr nz
+$ gbcli opcode jr nz, .loop
 exit 0
 opcode code=$20 asm="jr nz, e8" bytes=2 t=12 t_not_taken=8 m=3 m_not_taken=2 flags=----
+$ gbcli opcode xor a
+exit 0
+opcode code=$AF asm="xor a, a" bytes=1 t=4 m=1 flags=1000
+$ gbcli opcode jr nz
+exit 2
+--- stderr
+gbcli: bad_request: no form of `jr` matches `jr nz` as rgbasm writes it
+remedy: rgbasm needs every operand: `jr nz, e8`
+$ gbcli opcode ld a, (hl)
+exit 2
+--- stderr
+gbcli: bad_request: no form of `ld` matches `ld a, (hl)` as rgbasm writes it
+remedy: rgbasm writes it `ld a, [hl]`: `gbcli opcode 'ld a, [hl]'`
 $ gbcli opcode $CB7E
 exit 0
 opcode code=$CB7E asm="bit 7, [hl]" bytes=2 t=12 m=3 flags=Z01-

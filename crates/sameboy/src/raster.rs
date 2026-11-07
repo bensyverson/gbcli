@@ -25,7 +25,7 @@ use gbcli_core::{Event, Ticks};
 use sameboy_sys as sb;
 
 use crate::audio::tap_time;
-use crate::hooks::{Hooks, guard};
+use crate::hooks::{Hooks, LcdToggles, guard};
 
 /// The IO registers a raster event covers (FF00-FF7F), not HRAM or IE.
 fn is_io(addr: u16) -> bool {
@@ -86,14 +86,28 @@ pub(crate) unsafe extern "C" fn on_line(gb: *mut sb::GB_gameboy_t, line: u8) {
 /// SameBoy calls this from the LCDC write just before `GB_lcd_off` fires the
 /// line callback with line 0, so the flag marks that call as no line start.
 /// LCDC still has the LCD on at that point, so the display's line counter is
-/// the line the write landed on, which the LCD-off log keeps. Installed for
-/// the instance's lifetime: it fires only when the LCD turns on or off.
+/// the line the write landed on, which the LCD-off log keeps from the step's
+/// first toggle ([`LcdToggles`]). Installed for the instance's lifetime: it
+/// fires only when the LCD turns on or off.
 pub(crate) unsafe extern "C" fn on_lcd_status(gb: *mut sb::GB_gameboy_t, on: bool) {
     guard(gb, (), |hooks| {
         hooks.lcd_turning_off = !on;
-        if !on && hooks.in_run && hooks.lcd_off_log.is_some() {
-            // SAFETY: a side-effect-free accessor on the live instance.
-            hooks.lcd_off_line = u8::try_from(unsafe { sb::gbcli_ppu_line(gb) }).ok();
+        if !hooks.in_run || hooks.lcd_off_log.is_none() {
+            return;
+        }
+        match &mut hooks.lcd_toggles {
+            Some(toggles) => toggles.last_on = on,
+            None => {
+                // SAFETY: a side-effect-free accessor on the live instance.
+                let line = (!on)
+                    .then(|| u8::try_from(unsafe { sb::gbcli_ppu_line(gb) }).ok())
+                    .flatten();
+                hooks.lcd_toggles = Some(LcdToggles {
+                    first_on: on,
+                    line,
+                    last_on: on,
+                });
+            }
         }
     });
 }

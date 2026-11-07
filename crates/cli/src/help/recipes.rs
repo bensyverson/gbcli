@@ -86,7 +86,7 @@ How many cycles does X take?
   gbcli measure Work..Work.done --iterations 60 (T, M and share of a frame;
   --max T makes it an assertion that exits 1); gbcli help optimize for the loop
 How many bytes and cycles is an instruction, and which flags does it set?
-  gbcli opcode 'ld a, [hl+]', gbcli opcode jr nz, gbcli opcode '$CB37'
+  gbcli opcode 'ld a, [hl+]', gbcli opcode xor a, gbcli opcode '$CB37'
 A write, a HALT or a DMA does nothing, or the code runs wild
   gbcli help traps (VRAM in mode 3, LCD off, the HALT bug, OAM DMA, old RGBDS)
 Where does my frame time go?

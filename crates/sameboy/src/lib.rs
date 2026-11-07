@@ -420,7 +420,7 @@ impl Core for SameBoy {
     fn set_lcd_off_log(&mut self, on: bool) -> Result<(), CoreError> {
         let hooks = self.hooks_mut();
         hooks.lcd_off_log = on.then(Vec::new);
-        hooks.lcd_off_line = None;
+        hooks.lcd_toggles = None;
         Ok(())
     }
 

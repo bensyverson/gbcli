@@ -49,7 +49,7 @@ pub fn doctor(inv: &Invocation) -> Command {
     request(only_json(inv), Op::Doctor)
 }
 
-/// `opcode`: the words of the query, joined, so `gbcli opcode jr nz` needs
+/// `opcode`: the words of the query, joined, so `gbcli opcode xor a` needs
 /// no quotes.
 pub fn opcode(inv: &Invocation) -> Command {
     let query = inv.positionals.join(" ");

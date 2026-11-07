@@ -284,9 +284,10 @@ pub struct LcdOff {
     pub line: u8,
     /// The start of the writing step.
     pub at: Ticks,
-    /// Vblanks since power-on when it happened, as a
-    /// [`FrameTag`](crate::FrameTag) numbers frames.
-    pub vblanks: u64,
+    /// The [`FrameTag`](crate::FrameTag) number of the last complete frame
+    /// when it happened (0 before the first), as a stop record numbers
+    /// frames: a vblank that publishes no frame (a CGB repeat) doesn't count.
+    pub frame: u64,
 }
 
 /// Receives events during a run. Must not call back into the core.

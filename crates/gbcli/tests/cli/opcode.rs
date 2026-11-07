@@ -9,7 +9,10 @@ fn opcode_looks_up_by_text_and_byte_and_needs_nothing() {
     std::fs::remove_file(p.path("demo.gb")).unwrap();
     let mut out = String::new();
     for args in [
-        &["opcode", "jr nz"][..],
+        &["opcode", "jr nz, .loop"][..],
+        &["opcode", "xor", "a"],
+        &["opcode", "jr nz"],
+        &["opcode", "ld a, (hl)"],
         &["opcode", "$CB7E"],
         &["opcode", "ld", "a,", "[hl+]"],
         &["opcode", "ld a, [wSpeed]"],

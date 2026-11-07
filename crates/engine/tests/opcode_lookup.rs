@@ -67,7 +67,7 @@ fn a_mnemonic_lists_every_form_in_opcode_order() {
 
 #[test]
 fn case_and_spacing_dont_matter() {
-    assert_eq!(one("JR  NZ").opcode, Opcode::Base(0x20));
+    assert_eq!(one("JR  NZ, .Loop").opcode, Opcode::Base(0x20));
     assert_eq!(one("ld a,[ hl + ]").opcode, Opcode::Base(0x2A));
 }
 

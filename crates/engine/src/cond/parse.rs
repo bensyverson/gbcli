@@ -1,6 +1,6 @@
 //! A precedence-climbing parser with C precedence.
 
-use super::lex::{Tok, lex};
+use super::lex::{Prefix, Tok, lex};
 use super::names;
 use super::{BinOp, Expr, ExprError, Place, UnOp, Width};
 use crate::addr::banked_area;
@@ -243,14 +243,24 @@ fn region_offset(at: usize, tok: &Tok) -> Result<u32, ExprError> {
         })
 }
 
+/// Hex with `$` or `0x`, or bare; not `%` binary, which the address
+/// grammar refuses in these parts.
 fn hex_value(tok: &Tok) -> Option<i64> {
     match tok {
         Tok::Num {
             value,
-            prefixed: true,
+            prefix: Prefix::Hex,
             ..
         } => *value,
-        Tok::Num { raw, .. } => i64::from_str_radix(raw, 16).ok(),
+        Tok::Num {
+            raw,
+            prefix: Prefix::None,
+            ..
+        } => i64::from_str_radix(raw, 16).ok(),
+        Tok::Num {
+            prefix: Prefix::Binary,
+            ..
+        } => None,
         Tok::Ident(raw) if raw.bytes().all(|b| b.is_ascii_hexdigit()) => {
             i64::from_str_radix(raw, 16).ok()
         }

@@ -23,14 +23,17 @@ pub const OPCODE_VERB: VerbSpec = VerbSpec {
             prints one `opcode` row per match: code, asm, bytes, T-cycles t and M-cycles m \
             (a conditional branch also gives t_not_taken and m_not_taken), and flags as \
             Z N H C (the letter: set by the result; 0 or 1: forced; -: untouched). QUERY is \
-            a byte ($20, 0x20), $CB and a byte ($CB37), or an instruction as RGBDS writes it; \
-            words after the first are joined with spaces. A mnemonic alone lists every form; \
-            an operand that isn't a register, condition or placeholder is data or a label, so \
-            'ld a, 5' finds ld a, n8 and 'ld [wFoo], a' finds ld [a16], a. Quote anything \
-            with brackets, which the shell may expand. No match is bad_request (exit 2) \
-            with the nearest mnemonic or how to list the forms.",
+            a byte ($20, 0x20), $CB and a byte ($CB37), or an instruction with every operand, \
+            exactly as rgbasm 1.0.4 takes it ('xor a', 'cp 5', 'ldi a, [hl]', \
+            'ld [$ff00+c], a'); words after the first are joined with spaces. A mnemonic \
+            alone lists every form; an operand that isn't a register, condition or \
+            placeholder is data or a label, so 'ld a, 5' finds ld a, n8 and \
+            'ld [wFoo], a' finds ld [a16], a. Quote anything with brackets, which the shell \
+            may expand. A line rgbasm refuses ('jr nz', 'ld a, (hl)', 'ld [c], a') is \
+            bad_request (exit 2), with the spelling rgbasm takes, the nearest mnemonic or \
+            how to list the forms.",
     example: (
-        "gbcli opcode 'jr nz'",
+        "gbcli opcode 'jr nz, .loop'",
         "prints jr nz, e8: 2 bytes, 12 T-cycles taken and 8 not taken, flags untouched",
     ),
 };

@@ -24,7 +24,7 @@ First:  gbcli run game.gb --session demo --frames 120 --shot first.png
 Then:   gbcli show --session demo    gbcli read pc frame --session demo
 New:    gbcli doctor, then gbcli new game (a starter that builds and runs)
 Learn:  gbcli help hardware (the DMG on one page), gbcli help traps,
-        gbcli opcode 'jr nz' (bytes, cycles, flags)
+        gbcli opcode 'jr nz, .loop' (bytes, cycles, flags)
 
 Help:   gbcli VERB --help (one worked example each)
         gbcli recipes (goal → command)

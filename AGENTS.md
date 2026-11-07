@@ -25,7 +25,7 @@ gbcli is an agent-friendly Game Boy development tool for homebrew developers wor
 - [scripts/disasm/gen_opcodes.py](scripts/disasm/gen_opcodes.py) — regenerates the disassembler's table from [crates/engine/data/gb-opcodes/](crates/engine/data/gb-opcodes/SOURCE) (gbdev opcode JSON, CC0); `--check` fails if the table is stale
 - [scripts/vendor-sameboy.sh](scripts/vendor-sameboy.sh) and [scripts/build-roms.sh](scripts/build-roms.sh) — re-vendor SameBoy at a commit; rebuild the committed boot ROMs and test ROMs (needs RGBDS); [scripts/sameboy-core-hash.sh](scripts/sameboy-core-hash.sh) hashes a `Core/` tree for the check that the vendored one is upstream's plus `patches/`
 
-<!-- agents:begin core@3cc73e -->
+<!-- agents:begin core@ffe7d8 -->
 ## Working rules
 
 **Understand the why.** If the goal behind a request isn't clear, ask before solving — beware the XY problem.
@@ -64,6 +64,7 @@ gbcli is an agent-friendly Game Boy development tool for homebrew developers wor
 - **On the main thread, read `project/agents/delegation.md` in full before you begin, so whether to delegate is a choice, not a default.** A subagent skips this: its brief is its scope, and it doesn’t delegate further.
 - **Unless the user says they're around, assume they aren't.** Make the call yourself when it's safe and a two-way door, queue the rest, and report every decision at the end. While they're around, bring questions as they come up, including ones an agent raises mid-flight.
 - **Before starting, say what needs the user's eyes.**
+- **Get independent review of the code you land**, at the triggers in `project/agents/review.md`, and before handoff.
 - **Keep working while there's work; once past your context line, start nothing new.** The main thread's line is 33%, a subagent's 40% (read with contextfill; never estimate). Those are defaults: when the contextfill hook names a line, its line wins. The line is where wrapping up begins: finishing what's in flight and handing off happen after it, however far past it that takes. It is not a cutoff, so until you reach it, keep taking on work; don't start wrapping up early. A delegating main thread: delegation.md ▸ Carving the work.
 
 ## Git
@@ -109,7 +110,7 @@ Defaults, not laws. When we break one, we do it consciously and say so in the re
 - **The head of `AGENTS.md` lists where the docs live; keep that list current with documentation, but exclude project/ docs such as plans and research.**
 <!-- agents:end docs -->
 
-<!-- agents:begin index@f4b312 -->
+<!-- agents:begin index@114667 -->
 ## Situational instructions
 
 These files carry instructions for specific situations. When one applies, read the file before acting and follow it.
@@ -122,4 +123,5 @@ These files carry instructions for specific situations. When one applies, read t
 | Before dispatching any subagent | `project/agents/delegation.md` |
 | The first time a tool call is refused or denied, and before briefing a subagent | `project/agents/harness.md` |
 | Before building or extending a command-line tool | `project/agents/cli-design.md` |
+| Before handoff, when a job container closes, and before building on unreviewed code | `project/agents/review.md` |
 <!-- agents:end index -->

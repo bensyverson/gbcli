@@ -44,6 +44,10 @@ pub struct Handler {
     /// The current request's interrupt flag, which the watchdog sets when
     /// the request outlives `wall_guard`; runs poll it.
     interrupt: Arc<AtomicBool>,
+    /// What the core said it can't do during the current request, for the
+    /// gap ledger whether the request succeeds or fails (a run's raster
+    /// timeline names them without failing).
+    gaps_found: Vec<gbcli_core::Gap>,
 }
 
 /// The machine left by the last request, and which head it is: a session
@@ -102,6 +106,7 @@ impl Handler {
             watchdog: Watchdog::new(),
             wall_guard: WALL_GUARD,
             interrupt: Arc::new(AtomicBool::new(false)),
+            gaps_found: Vec::new(),
         }
     }
 
@@ -347,6 +352,8 @@ mod listing_tests;
 mod measure_tests;
 #[cfg(test)]
 mod profile_tests;
+#[cfg(test)]
+mod raster_tests;
 
 #[cfg(test)]
 mod tests {

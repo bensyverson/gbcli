@@ -11,6 +11,7 @@ mod keys;
 mod listing;
 mod parse;
 mod profile;
+mod raster;
 mod request;
 mod response;
 mod rev;
@@ -40,6 +41,7 @@ pub use profile::{
     CpuSpeedName, CycleStats, FrameBudgetMade, FrameBudgetRow, MeasureArgs, MeasureMade,
     PercentStats, ProfileArgs, ProfileMade, Real, RoutineRow, RunMeasure,
 };
+pub use raster::{RasterLineRow, RasterMade, RasterWriteRow};
 pub use request::{
     BreakArgs, CheckpointArgs, DeleteArgs, EventsArgs, Op, PruneArgs, ReadArgs, Request,
     RestoreArgs, RmArgs, RunArgs, Start, StepArgs, WatchArgs, WriteArg, WriteArgs, WriteKind,

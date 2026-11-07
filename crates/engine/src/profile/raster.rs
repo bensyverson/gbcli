@@ -8,7 +8,7 @@
 
 use gbcli_core::{
     Budget, Core, CoreError, Event, EventKinds, EventSink, Feature, Gap, IoReg, PpuMode,
-    RunRequest, Support, Ticks,
+    RunRequest, Stop, Support, Ticks,
 };
 
 use crate::machine::Machine;
@@ -62,6 +62,14 @@ pub struct RasterTimeline {
     /// One entry per missing feature ([`Feature::PpuDot`],
     /// [`Feature::PpuModeEvents`]), for the gap ledger.
     pub gaps: Vec<Gap>,
+}
+
+/// A timeline and how the run that recorded it ended: a run cut short (an
+/// illegal opcode, STOP with nothing to wake it) has fewer frames than asked.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RasterRun {
+    pub timeline: RasterTimeline,
+    pub stop: Stop,
 }
 
 /// The sink that builds a [`RasterTimeline`]; public so any run that takes a
@@ -136,7 +144,17 @@ impl EventSink for Raster {
     fn event(&mut self, event: Event) {
         match event {
             Event::Scanline { ly, at } => {
-                self.open(Some(ly), Some(at));
+                // A write on the line's first tick can arrive before its
+                // start, which carries the same time; it opened the row.
+                if let Some(last) = self.timeline.lines.last_mut()
+                    && last.line == Some(ly)
+                    && last.start.is_none()
+                    && last.writes.iter().all(|w| w.at >= at)
+                {
+                    last.start = Some(at);
+                } else {
+                    self.open(Some(ly), Some(at));
+                }
             }
             Event::IoWrite {
                 reg,
@@ -162,13 +180,16 @@ impl EventSink for Raster {
 
 impl Machine {
     /// Runs `frames` frames recording the raster timeline. The machine
-    /// moves, as a run does.
-    pub fn raster(&mut self, frames: u32) -> Result<RasterTimeline, CoreError> {
+    /// moves, as a run does; the stop says whether it ran them all.
+    pub fn raster(&mut self, frames: u32) -> Result<RasterRun, CoreError> {
         let mut sink = Raster::new(self.core());
         let mut req = RunRequest::new(Budget::frames(u64::from(frames)));
         req.sink = Some(&mut sink);
-        self.core_mut().run(&mut req)?;
-        Ok(sink.finish())
+        let stop = self.core_mut().run(&mut req)?;
+        Ok(RasterRun {
+            timeline: sink.finish(),
+            stop,
+        })
     }
 }
 
@@ -226,6 +247,17 @@ mod tests {
                 (0, Some(153), None, 1),
                 (1, Some(0), Some(1824), 0),
             ]
+        );
+    }
+
+    #[test]
+    fn a_start_reported_after_a_write_on_its_first_tick_fills_that_row() {
+        // The core reports a write on a line's first tick before that
+        // line's start event, which carries the same time.
+        let got = rows(&[start(145, 0), write(Some(146), 912), start(146, 912)]);
+        assert_eq!(
+            got,
+            vec![(0, Some(145), Some(0), 0), (0, Some(146), Some(912), 1)]
         );
     }
 

@@ -10,6 +10,7 @@ use crate::error::ErrorBody;
 use crate::keys::KeyEvent;
 use crate::listing::{CheckpointRow, SymbolRow};
 use crate::profile::{FrameBudgetMade, MeasureMade, ProfileMade};
+use crate::raster::RasterMade;
 use crate::request::WriteKind;
 use crate::rev::Rev;
 use crate::session::{EventLogLine, GapCount, SessionRow};
@@ -153,6 +154,8 @@ pub struct ResultBody {
     pub profile: Option<ProfileMade>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub frame_budget: Option<FrameBudgetMade>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raster: Option<RasterMade>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub equiv: Option<EquivMade>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

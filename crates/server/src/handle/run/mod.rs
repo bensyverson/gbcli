@@ -8,6 +8,7 @@ mod equiv;
 mod filmstrip;
 mod measure;
 mod probes;
+mod raster;
 
 use gbcli_bundle::{SessionStore, Start, validate_checkpoint_name};
 use gbcli_core::Budget;
@@ -199,7 +200,10 @@ impl Handler {
         let measured = plan
             .probes
             .measure(&mut machine, &interrupt, self.wall_guard);
-        let (profile, frame_budget) = plan.probes.finish(&machine);
+        let collected_probes = plan.probes.finish(&machine);
+        // The core's gaps reach the ledger whether or not the request fails.
+        self.gaps_found
+            .extend(collected_probes.gaps.iter().cloned());
         // The files after the shot are written only when everything before
         // them succeeded: the filmstrip, then the audio, whose per-channel
         // replays run the request four more times.
@@ -250,8 +254,9 @@ impl Handler {
             shot,
             filmstrip: strip,
             measure: measured,
-            profile,
-            frame_budget,
+            profile: collected_probes.profile,
+            frame_budget: collected_probes.frame_budget,
+            raster: collected_probes.raster,
             audio: sound,
             keys_unapplied,
             checkpoint,

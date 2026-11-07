@@ -39,11 +39,11 @@ USAGE
 The experiment verb. In this order, whatever the order of the flags: start
 from --at, the head, or the boot handoff; apply --patch, --poke and --write in
 the order given; schedule --keys; run until --until holds, --to is reached, a
-breakpoint or watch fires, or the budget ends (--profile and --frame-budget
-collect during the run); --measure on a copy of the stop; evaluate --read;
-save --shot; save the audio (--audio-log, --wav, --piano, --spectrogram); save
---checkpoint. The stop becomes the session's new head. A ROM argument is the
-same as --rom.
+breakpoint or watch fires, or the budget ends (--profile, --frame-budget and
+--raster collect during the run); --measure on a copy of the stop; evaluate
+--read; save --shot; save the audio (--audio-log, --wav, --piano,
+--spectrogram); save --checkpoint. The stop becomes the session's new head. A
+ROM argument is the same as --rom.
 
 CLASS
   act: advances or changes the machine and saves the new head; needs a session (name one with a ROM to create it).
@@ -75,6 +75,7 @@ FLAGS
   --profile               cycles per routine over the run, by .sym, most exclusive cycles first
   --top N                 with --profile: only the N routines with the most exclusive cycles
   --frame-budget          each frame's active and idle (HALT) T-cycles over the run, and the lag frames: frames in which the CPU never halted
+  --raster                each IO-register write the run made, by frame and line: register, value, writer's PC and ticks into the line (912 per line)
   --keys TOKENS           press and release buttons: 'A@0 -A@2 START@10' (frame offsets)
   --keys-file FILE        key tokens from a file, after --keys; # starts a comment
 

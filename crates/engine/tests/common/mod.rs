@@ -43,6 +43,26 @@ pub fn booted_cgb(rom: &[u8]) -> SameBoy {
     core
 }
 
+/// A ROM from the pinned test-ROM corpus (`$GBCLI_TEST_ROMS`, else
+/// `tests/corpus/fetched/`) by its path inside it. Fails loudly, never skips.
+pub fn corpus_rom(path: &str) -> Vec<u8> {
+    let dir = match std::env::var_os("GBCLI_TEST_ROMS") {
+        Some(dir) => std::path::PathBuf::from(dir),
+        None => {
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus/fetched")
+        }
+    };
+    let suite = path.split('/').next().unwrap_or(path);
+    let full = dir.join(path);
+    std::fs::read(&full).unwrap_or_else(|err| {
+        panic!(
+            "test ROM {} is missing ({err}). Fetch it from the repo root with:\n    \
+             python3 -I scripts/corpus/fetch.py --only {suite}",
+            full.display()
+        )
+    })
+}
+
 pub fn run(core: &mut dyn Core, budget: Budget) {
     core.run(&mut RunRequest::new(budget)).expect("run");
 }

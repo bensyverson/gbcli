@@ -6,10 +6,11 @@ mod common;
 
 use common::{cgb_machine, machine, quick_dmg};
 use gbcli_core::{
-    Budget, Core, CoreError, Event, EventKinds, EventSink, Feature, Gap, IoReg, RunRequest, Ticks,
+    Budget, BudgetKind, Core, CoreConfig, CoreError, Event, EventKinds, EventSink, Feature, Gap,
+    IoReg, Model, RunRequest, StopReason, Ticks,
 };
-use gbcli_engine::Symbols;
 use gbcli_engine::profile::{RasterLine, RasterTimeline};
+use gbcli_engine::{Backend, Machine, Symbols};
 
 const ROM: &[u8] = include_bytes!("roms/raster.gb");
 const SYM: &str = include_str!("roms/raster.sym");
@@ -183,7 +184,7 @@ fn a_raster_sink_leaves_the_emulation_unchanged() {
 
 fn timeline(frames: u32) -> RasterTimeline {
     let mut m = machine(ROM, Some(SYM));
-    m.raster(frames).expect("raster")
+    m.raster(frames).expect("raster").timeline
 }
 
 /// The rows that hold writes, as (frame, line, [(register, value)]).
@@ -300,9 +301,57 @@ fn the_timeline_moves_the_machine_as_a_run_does() {
 #[test]
 fn a_cgb_timeline_places_the_writes_on_the_same_lines() {
     let mut m = cgb_machine(ROM, Some(SYM));
-    let t = m.raster(4).expect("raster");
+    let t = m.raster(4).expect("raster").timeline;
     assert_eq!(written_rows(&t), written_rows(&timeline(4)));
     let starts: Vec<Ticks> = t.lines.iter().filter_map(|r| r.start).collect();
     let phase = starts[0].0 % LINE;
     assert!(starts.iter().all(|s| s.0 % LINE == phase));
+}
+
+/// cgb-acid-hell through the real CGB boot ROM (the quick one leaves it
+/// spinning with the LCD off): it writes BCPD on the very tick some lines
+/// start, which SameBoy's display reaches before it moves to the next line.
+fn acid_hell_timeline() -> RasterTimeline {
+    let rom = common::corpus_rom("cgb-acid-hell/cgb-acid-hell.gbc");
+    let config = CoreConfig::new(Model::CgbE, rom);
+    let mut m = Machine::new(Backend::sameboy(), config, None).expect("machine");
+    m.raster(400).expect("raster").timeline
+}
+
+#[test]
+fn a_write_on_a_lines_first_tick_joins_that_line() {
+    let t = acid_hell_timeline();
+    let mut at_zero = 0;
+    for r in &t.lines {
+        for w in &r.writes {
+            let Some(into) = r.ticks_into_line(w) else {
+                continue;
+            };
+            assert!(
+                into < LINE,
+                "{:?} pc={:#06x} at {} is {into} ticks into line {:?} of frame {}",
+                w.reg,
+                w.pc,
+                w.at.0,
+                r.line,
+                r.frame
+            );
+            at_zero += usize::from(into == 0);
+        }
+    }
+    assert!(at_zero > 0, "no write landed on a line's first tick");
+}
+
+#[test]
+fn the_timeline_says_how_its_run_ended() {
+    let mut m = machine(ROM, Some(SYM));
+    let run = m.raster(2).expect("raster");
+    assert_eq!(run.stop.reason, StopReason::Budget(BudgetKind::Frames));
+    assert_eq!(run.stop.at, m.core().now());
+
+    // An illegal opcode at $0150 locks the CPU before the first frame ends.
+    let mut m = machine(&common::program(&[0x00, 0xD3]), None);
+    let run = m.raster(10).expect("raster");
+    assert_eq!(run.stop.reason, StopReason::Locked { opcode: 0xD3 });
+    assert_eq!(run.stop.pc, 0x0151);
 }

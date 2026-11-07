@@ -48,3 +48,15 @@ exit 2
 --- stderr
 gbcli: bad_request: --top only applies with --profile
 remedy: add --profile, or drop it
+$ gbcli run --instructions 30000 --frame-budget --session demo
+exit 0
+stop budget_exhausted kind=instructions pc=$0168 bank=0 symbol=Work+$5 frame=10 t=724168 since=boot ticks=13210552 ly=38 shown=10 vblank=normal
+budget frames=5 instructions=30000/30000 ticks=746432
+frame_budget frames=5 partial=1 lag=5
+frame_cost index=0 active_t=70216 idle_t=0 lag=1
+frame_cost index=1 active_t=70224 idle_t=0 lag=1
+frame_cost index=2 active_t=70232 idle_t=0 lag=1
+frame_cost index=3 active_t=70220 idle_t=0 lag=1
+frame_cost index=4 active_t=70220 idle_t=0 lag=1
+frame_cost index=5 active_t=22104 idle_t=0 partial=1
+rev s3

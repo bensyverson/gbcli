@@ -440,9 +440,26 @@ void gbcli_audio_restart(GB_gameboy_t *gb)
 // on, or -1 with the LCD off. This is SameBoy's own line counter, which
 // reaches 153 (LY reads 0 for most of that line) and changes exactly where
 // the LCD line callback fires.
+//
+// One tick is the exception (leaf 1smQHz): the state machine returns from the
+// sleep that ends a line once its cycles reach exactly 0 (GB_SLEEP's <= 0),
+// and moves to the next line, firing the callback, only when it is next
+// handed cycles. A write landing then is on the next line's first tick, which
+// is where the line callback later stamps that line's start, so it counts as
+// the next line. The sleeps that end a line: 31 (lines 0-143), 13 (144-152,
+// so 152 ends into 153, which has no callback) and 17 (153).
 int gbcli_ppu_line(GB_gameboy_t *gb)
 {
     if (!(gb->io_registers[GB_IO_LCDC] & GB_LCDC_ENABLE)) return -1;
+    if (gb->display_cycles == 0) {
+        switch (gb->display_state) {
+            case 31:
+            case 13:
+                return gb->current_line + 1;
+            case 17:
+                return 0;
+        }
+    }
     return gb->current_line;
 }
 

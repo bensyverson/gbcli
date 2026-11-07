@@ -1,38 +1,51 @@
 //! What a run measures besides its stop (design §11 step 5): `--measure` on a
-//! copy of the stop, and `--profile` and `--frame-budget`, collected from the
-//! run's own execution events so its breakpoints, budget and keys still apply.
+//! copy of the stop, and `--profile`, `--frame-budget` and `--raster`,
+//! collected from the run's own events so its breakpoints, budget and keys
+//! still apply.
 
 use std::cell::RefCell;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
-use gbcli_core::{Event, EventKinds, EventSink};
+use gbcli_core::{Event, EventKinds, EventSink, Gap};
 use gbcli_engine::Machine;
-use gbcli_engine::profile::{FrameBudget, FrameSplit, MeasureSpec, Profile, Routines};
+use gbcli_engine::profile::{FrameBudget, FrameSplit, MeasureSpec, Profile, Raster, Routines};
 use gbcli_protocol::{
-    ErrorBody, ErrorCode, FrameBudgetMade, FrameBudgetRow, MeasureMade, ProfileMade, RoutineRow,
-    RunArgs,
+    ErrorBody, ErrorCode, FrameBudgetMade, FrameBudgetRow, MeasureMade, ProfileMade, RasterMade,
+    RoutineRow, RunArgs,
 };
 
 use super::super::Failure;
 use super::super::writes::parse_location;
 use super::budget::DEFAULT_FRAMES;
 use super::measure::{measure_on, spec};
+use super::raster::raster_made;
 
-/// The run's sinks: the profiler's and the frame split's, either or both.
+/// The run's sinks: the profiler's, the frame split's and the raster
+/// timeline's, any of them.
 #[derive(Default)]
 pub(super) struct Sinks {
     routines: Option<Routines>,
     split: Option<FrameSplit>,
     frames: Vec<FrameBudget>,
+    raster: Option<Raster>,
 }
 
 impl EventSink for Sinks {
+    /// What the sinks present want, so a core arms nothing else.
     fn kinds(&self) -> EventKinds {
-        EventKinds {
-            exec: true,
-            ..EventKinds::default()
-        }
+        let all = [
+            self.routines.as_ref().map(EventSink::kinds),
+            self.split.as_ref().map(EventSink::kinds),
+            self.raster.as_ref().map(EventSink::kinds),
+        ];
+        all.into_iter()
+            .flatten()
+            .fold(EventKinds::default(), |a, k| EventKinds {
+                exec: a.exec || k.exec,
+                raster: a.raster || k.raster,
+                ppu_modes: a.ppu_modes || k.ppu_modes,
+            })
     }
 
     fn event(&mut self, event: Event) {
@@ -41,6 +54,9 @@ impl EventSink for Sinks {
         }
         if let Some(s) = &mut self.split {
             s.event(event);
+        }
+        if let Some(r) = &mut self.raster {
+            r.event(event);
         }
     }
 }
@@ -79,11 +95,12 @@ impl Probes {
             }
             None => None,
         };
-        let sinks = (args.profile.is_some() || args.frame_budget).then(|| {
+        let sinks = (args.profile.is_some() || args.frame_budget || args.raster).then(|| {
             RefCell::new(Sinks {
                 routines: args.profile.as_ref().map(|_| Routines::new()),
                 split: args.frame_budget.then(FrameSplit::default),
                 frames: Vec::new(),
+                raster: args.raster.then(|| Raster::new(machine.core())),
             })
         });
         Ok(Probes {
@@ -114,21 +131,38 @@ impl Probes {
         Some(measure_on(machine, &spec, (from, to), None, guard))
     }
 
-    /// The profile and the frame budget the run collected.
-    pub(super) fn finish(
-        &self,
-        machine: &Machine,
-    ) -> (Option<ProfileMade>, Option<FrameBudgetMade>) {
+    /// What the run's sinks collected.
+    pub(super) fn finish(&self, machine: &Machine) -> Collected {
         let Some(sinks) = &self.sinks else {
-            return (None, None);
+            return Collected::default();
         };
         let sinks = std::mem::take(&mut *sinks.borrow_mut());
         let profile = sinks
             .routines
             .map(|r| profile_made(r.finish(machine.symbols()), self.top));
-        let budget = sinks.split.map(|_| frame_budget_made(&sinks.frames));
-        (profile, budget)
+        let frames = &sinks.frames;
+        let frame_budget = sinks
+            .split
+            .map(|mut split| frame_budget_made(frames, split.cut()));
+        let timeline = sinks.raster.map(Raster::finish);
+        let gaps = timeline.as_ref().map_or(Vec::new(), |t| t.gaps.clone());
+        Collected {
+            profile,
+            frame_budget,
+            raster: timeline.as_ref().map(raster_made),
+            gaps,
+        }
     }
+}
+
+/// What a run's sinks collected, and the features the core lacked for them,
+/// for the gap ledger.
+#[derive(Default)]
+pub(super) struct Collected {
+    pub(super) profile: Option<ProfileMade>,
+    pub(super) frame_budget: Option<FrameBudgetMade>,
+    pub(super) raster: Option<RasterMade>,
+    pub(super) gaps: Vec<Gap>,
 }
 
 fn profile_made(p: Profile, top: Option<u32>) -> ProfileMade {
@@ -159,16 +193,66 @@ fn profile_made(p: Profile, top: Option<u32>) -> ProfileMade {
     }
 }
 
-fn frame_budget_made(frames: &[FrameBudget]) -> FrameBudgetMade {
+/// The whole frames, then `rest`, the frame the run stopped in, as a partial
+/// row if it has any cycles: a run that stops at a vblank has none.
+fn frame_budget_made(frames: &[FrameBudget], rest: FrameBudget) -> FrameBudgetMade {
+    let whole = frames.iter().map(|f| FrameBudgetRow {
+        active_t: f.active_t,
+        idle_t: f.idle_t,
+        lag: Some(f.lag),
+        partial: false,
+    });
+    let partial = (rest.active_t + rest.idle_t > 0).then_some(FrameBudgetRow {
+        active_t: rest.active_t,
+        idle_t: rest.idle_t,
+        lag: None,
+        partial: true,
+    });
     FrameBudgetMade {
-        frames: frames
-            .iter()
-            .map(|f| FrameBudgetRow {
-                active_t: f.active_t,
-                idle_t: f.idle_t,
-                lag: f.lag,
-            })
-            .collect(),
+        frames: whole.chain(partial).collect(),
         lag: frames.iter().filter(|f| f.lag).count() as u64,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn raster() -> Raster {
+        let config =
+            gbcli_core::CoreConfig::new(gbcli_core::Model::DmgB, crate::fixture::V1.to_vec());
+        let machine = Machine::new(gbcli_engine::Backend::sameboy(), config, None).expect("core");
+        Raster::new(machine.core())
+    }
+
+    #[test]
+    fn a_raster_only_run_asks_the_core_for_no_execution_events() {
+        let sinks = Sinks {
+            raster: Some(raster()),
+            ..Sinks::default()
+        };
+        let want = EventKinds {
+            exec: false,
+            raster: true,
+            ppu_modes: false,
+        };
+        assert_eq!(sinks.kinds(), want);
+    }
+
+    #[test]
+    fn the_kinds_are_those_of_the_sinks_present() {
+        let split = Sinks {
+            split: Some(FrameSplit::default()),
+            ..Sinks::default()
+        };
+        assert!(split.kinds().exec && !split.kinds().raster);
+        let both = Sinks {
+            routines: Some(Routines::new()),
+            raster: Some(raster()),
+            ..Sinks::default()
+        };
+        let k = both.kinds();
+        assert!(k.exec && k.raster && !k.ppu_modes, "{k:?}");
+        assert_eq!(Sinks::default().kinds(), EventKinds::default());
     }
 }

@@ -23,6 +23,7 @@ impl Handler {
         let rev_after = meta.rev;
         let mut gap_map = std::collections::BTreeMap::new();
         let mut code = None;
+        let mut gaps = std::mem::take(&mut self.gaps_found);
         let response = match outcome {
             Ok(result) => {
                 let stop = result.stop.as_ref().map(summary);
@@ -31,22 +32,25 @@ impl Handler {
             Err(Failure { body, gap }) => {
                 code = Some(body.code);
                 let stop = body.stop.as_ref().map(summary);
-                if let Some(gap) = gap {
-                    let _ = self.bundle.append_gap(
-                        Some(store.name()),
-                        request.op.name(),
-                        gap.feature,
-                        gap.reason,
-                    );
-                    if let Ok(counts) = self.bundle.session_gap_counts(store.name()) {
-                        for row in counts {
-                            gap_map.insert(row.feature, row.count);
-                        }
-                    }
-                }
+                gaps.extend(gap);
                 (Response::failed(id, Some(rev_after), *body), stop)
             }
         };
+        if !gaps.is_empty() {
+            for gap in &gaps {
+                let _ = self.bundle.append_gap(
+                    Some(store.name()),
+                    request.op.name(),
+                    gap.feature,
+                    gap.reason,
+                );
+            }
+            if let Ok(counts) = self.bundle.session_gap_counts(store.name()) {
+                for row in counts {
+                    gap_map.insert(row.feature, row.count);
+                }
+            }
+        }
         let (response, stop) = response;
         let _ = store.append_events(&[EventLogLine {
             at: gbcli_bundle::now_secs(),

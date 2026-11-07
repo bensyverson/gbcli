@@ -1,10 +1,12 @@
-//! Rows for the cycle profiler: a measurement, a routine profile and a frame
-//! budget. Means print to one decimal and frame shares to three; `--json`
-//! carries them whole.
+//! Rows for the cycle profiler: a measurement, a routine profile, a frame
+//! budget and a raster timeline. Means print to one decimal and frame shares
+//! to three; `--json` carries them whole.
 
-use gbcli_protocol::{CycleStats, FrameBudgetMade, MeasureMade, PercentStats, ProfileMade};
+use gbcli_protocol::{
+    CycleStats, FrameBudgetMade, MeasureMade, PercentStats, ProfileMade, RasterMade,
+};
 
-use super::row::{Row, addr};
+use super::row::{Row, addr, byte};
 
 pub fn measure(m: &MeasureMade) -> String {
     let speed = serde_json::to_value(m.speed).expect("serializes");
@@ -58,9 +60,14 @@ pub fn profile(p: &ProfileMade) -> String {
     out
 }
 
+/// `frame_budget frames= [partial=1] lag=`: the whole frames, and whether a
+/// last row holds the frame the run stopped in; then one `frame_cost` row
+/// each, the partial one with no `lag=`.
 pub fn frame_budget(b: &FrameBudgetMade) -> String {
+    let partial = b.frames.iter().filter(|f| f.partial).count();
     let mut out = Row::new("frame_budget")
-        .field("frames", b.frames.len())
+        .field("frames", b.frames.len() - partial)
+        .opt("partial", (partial > 0).then_some(partial))
         .field("lag", b.lag)
         .line();
     for (i, f) in b.frames.iter().enumerate() {
@@ -68,7 +75,41 @@ pub fn frame_budget(b: &FrameBudgetMade) -> String {
             .field("index", i)
             .field("active_t", f.active_t)
             .field("idle_t", f.idle_t)
-            .flag("lag", f.lag)
+            .opt("lag", f.lag.map(u8::from))
+            .opt("partial", f.partial.then_some(1))
+            .line();
+    }
+    out
+}
+
+/// `raster frames= lines= written=`, then each line with writes and its
+/// writes under it. A line with the LCD off reads `line=off`; a line with no
+/// reported start has no `start=` and its writes no `into=`.
+pub fn raster(t: &RasterMade) -> String {
+    let mut out = Row::new("raster")
+        .field("frames", t.frames)
+        .field("lines", t.lines)
+        .field("written", t.rows.len())
+        .line();
+    for r in &t.rows {
+        let line = r.line.map_or_else(|| "off".to_string(), |l| l.to_string());
+        out += &Row::new("raster_line")
+            .field("frame", r.frame)
+            .field("line", line)
+            .opt("start", r.start)
+            .line();
+        for w in &r.writes {
+            out += &Row::new("raster_write")
+                .field("reg", &w.reg)
+                .field("value", byte(w.value))
+                .field("pc", addr(w.pc))
+                .opt("into", w.ticks_into_line)
+                .line();
+        }
+    }
+    for feature in &t.unsupported {
+        out += &Row::new("raster_unsupported")
+            .field("feature", feature)
             .line();
     }
     out

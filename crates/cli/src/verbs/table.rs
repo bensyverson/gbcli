@@ -56,7 +56,7 @@ pub const VERBS: &[VerbSpec] = &[
         about: "The experiment verb. In this order, whatever the order of the flags: start \
                 from --at, the head, or the boot handoff; apply --patch, --poke and --write \
                 in the order given; schedule --keys; run until --until holds, --to is reached, a breakpoint or \
-                watch fires, or the budget ends (--profile and --frame-budget collect during the \
+                watch fires, or the budget ends (--profile, --frame-budget and --raster collect during the \
                 run); --measure on a copy of the stop; evaluate --read; save --shot; save the audio \
                 (--audio-log, --wav, --piano, --spectrogram); save --checkpoint. The stop \
                 becomes the session's new head. A ROM argument is the same as --rom.",

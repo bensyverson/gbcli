@@ -170,6 +170,9 @@ pub struct RunArgs {
     /// Active and idle cycles of each frame the run completed, and lag frames.
     #[serde(default, skip_serializing_if = "is_false")]
     pub frame_budget: bool,
+    /// The IO-register writes the run made, by frame and line.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub raster: bool,
     /// Save the stop state under this name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checkpoint: Option<String>,

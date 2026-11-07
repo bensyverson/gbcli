@@ -133,6 +133,9 @@ pub fn rows(r: &ResultBody) -> String {
     if let Some(b) = &r.frame_budget {
         out += &profile::frame_budget(b);
     }
+    if let Some(t) = &r.raster {
+        out += &profile::raster(t);
+    }
     if let Some(e) = &r.equiv {
         out += &equiv::rows(e);
     }

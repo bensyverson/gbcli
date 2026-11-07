@@ -1,0 +1,45 @@
+$ gbcli run raster.gb --frames 2 --raster --session ras
+exit 0
+stop budget_exhausted kind=frames pc=$0199 bank=0 symbol=BgpHBlank.ly_u8 frame=2 t=140272 since=boot ticks=12042760 ly=144 shown=2 vblank=normal
+budget frames=2/2 instructions=15997 ticks=280544
+raster frames=3 lines=307 written=8
+raster_line frame=0 line=144
+raster_write reg=rLCDC value=$91 pc=$0159
+raster_line frame=1 line=40 start=11807448
+raster_write reg=rSCX value=$10 pc=$016B into=268
+raster_line frame=1 line=80 start=11843928
+raster_write reg=rBGP value=$1B pc=$017D into=260
+raster_line frame=1 line=120 start=11880408
+raster_write reg=rBGP value=$E4 pc=$0197 into=644
+raster_line frame=1 line=144 start=11902296
+raster_write reg=rSCX value=$00 pc=$01A0 into=92
+raster_write reg=rLYC value=$1E pc=$01A4 into=136
+raster_write reg=rSTAT value=$40 pc=$01A8 into=176
+raster_write reg=rIF value=$00 pc=$01AF into=250
+raster_line frame=2 line=40 start=11947896
+raster_write reg=rSCX value=$10 pc=$016B into=332
+raster_line frame=2 line=80 start=11984376
+raster_write reg=rBGP value=$1B pc=$017D into=260
+raster_line frame=2 line=120 start=12020856
+raster_write reg=rBGP value=$E4 pc=$0197 into=644
+raster_unsupported feature=ppu_dot
+raster_unsupported feature=ppu_mode_events
+rev s1
+$ gbcli run --frames 1 --raster --json --session ras
+exit 0
+{"id":"cli","ok":true,"rev":"s2","result":{"stop":{"reason":"budget_exhausted","kind":"frames","pc":409,"bank":0,"symbol":"BgpHBlank.ly_u8","time":{"ticks":12183208,"t":210496,"since":{"kind":"boot"},"frame":3,"ly":144,"dot":null},"frame_shown":{"n":3,"vblank":"normal"},"budget":{"ticks":140448,"instructions":9423,"frames":1,"limits":{"frames":1},"defaulted":false}},"reads":[],"raster":{"frames":2,"lines":154,"rows":[{"frame":0,"line":144,"start":null,"writes":[{"reg":"rSCX","value":0,"pc":416,"ticks_into_line":null},{"reg":"rLYC","value":30,"pc":420,"ticks_into_line":null},{"reg":"rSTAT","value":64,"pc":424,"ticks_into_line":null},{"reg":"rIF","value":0,"pc":431,"ticks_into_line":null}]},{"frame":1,"line":40,"start":12088344,"writes":[{"reg":"rSCX","value":16,"pc":363,"ticks_into_line":332}]},{"frame":1,"line":80,"start":12124824,"writes":[{"reg":"rBGP","value":27,"pc":381,"ticks_into_line":260}]},{"frame":1,"line":120,"start":12161304,"writes":[{"reg":"rBGP","value":228,"pc":407,"ticks_into_line":644}]}],"unsupported":["ppu_dot","ppu_mode_events"]}},"warnings":[]}
+$ gbcli run illegal.gb --frames 5 --raster --session ill
+exit 0
+stop illegal_opcode opcode=$D3 pc=$0156 bank=0 frame=0 t=48 since=boot ticks=11762312 ly=144 shown=0 vblank=normal
+budget frames=0/5 instructions=6 ticks=96
+raster frames=0 lines=0 written=0
+raster_unsupported feature=ppu_dot
+raster_unsupported feature=ppu_mode_events
+rev s1
+$ gbcli run stop.gb --frames 2 --session stop
+exit 0
+stop budget_exhausted kind=frames pc=$015D bank=0 frame=2 t=140272 since=boot ticks=12042760 ly=144 shown=2 vblank=artificial
+budget frames=2/2 instructions=35056 ticks=280544
+rev s1
+--- stderr
+warning: the CPU is in STOP, which only a key in a selected joypad row (JOYP, $FF00) ends; hold one with `run --keys`

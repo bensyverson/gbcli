@@ -247,6 +247,11 @@ pub const RUN: &[FlagSpec] = &[
         "each frame's active and idle (HALT) T-cycles over the run, and the lag frames: \
          frames in which the CPU never halted",
     ),
+    switch(
+        "raster",
+        "each IO-register write the run made, by frame and line: register, value, writer's \
+         PC and ticks into the line (912 per line)",
+    ),
     value(
         "keys",
         "TOKENS",

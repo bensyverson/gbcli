@@ -9,7 +9,10 @@
 //! and then runs it through them, so that is the chunk's end minus what the
 //! display has not run yet (`gbcli_display_unrun`). Where SameBoy splits a
 //! chunk (a scheduled WY check, a line overrun) the stamp can be late by the
-//! rest of the chunk.
+//! rest of the chunk. A write's line is the display's line counter, except
+//! on the tick a line ends, where SameBoy has not yet moved to the next line
+//! (`gbcli_ppu_line` counts it as the next one); the line callback then
+//! comes after that write, with the same time.
 //!
 //! **Gaps.** SameBoy fires no line callback for line 153 or for the first
 //! line after the LCD is turned on, so those lines have no start; a write on

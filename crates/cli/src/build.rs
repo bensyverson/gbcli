@@ -262,6 +262,7 @@ fn run(inv: &Invocation, env: &Env) -> Result<RunArgs, Usage> {
         measure: profile::run_measure(inv)?.map(Box::new),
         profile: profile::run_profile(inv)?,
         frame_budget: inv.has("frame-budget"),
+        raster: inv.has("raster"),
         keys: video::keys(inv, env)?,
     })
 }

@@ -49,3 +49,7 @@ The worktree guard refused plain commands that only *mentioned* a path under `/U
 ## 2026-11-07 — the worktree guard reads a file named `SOURCE` as the shell's `source`
 
 In an isolated worktree, `cat crates/engine/data/gb-opcodes/SOURCE` was refused ("runs a string through SOURCE, which can't be verified"), as was a heredoc piped into a command next to `cargo`. Read such files with the Read tool, and keep each Bash call to one plain command (leaf 7qzbqc).
+
+## 2026-11-07 — the hook's suite time is noise under low-power mode or parallel agents
+
+The pre-commit hook warned 103–142 s against the 30 s budget all session, while the Mac was in low-power mode and several agents (and other sessions' Go builds, load average 48–167) were compiling. No single test was slow (largest about 6 s alone). Don't chase a hook warning taken under load; re-time with `python3 -I scripts/bench/test-times.py` on an idle machine, out of low-power mode (`pmset -g | grep lowpowermode`), before moving tests to the pre-release suite.

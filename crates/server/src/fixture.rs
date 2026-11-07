@@ -22,6 +22,15 @@ pub const V3: &[u8] = include_bytes!("../../engine/tests/roms/rebuild_v3.gb");
 pub const V3_SYM: &[u8] = include_bytes!("../../engine/tests/roms/rebuild_v3.sym");
 /// Logs the held buttons at every vblank (`joypad.asm`).
 pub const JOYPAD: &[u8] = include_bytes!("../../engine/tests/roms/joypad.gb");
+/// Writes SCX and BGP on known lines every frame, and four registers on line
+/// 144 (`raster.asm`).
+pub const RASTER: &[u8] = include_bytes!("../../engine/tests/roms/raster.gb");
+pub const RASTER_SYM: &str = include_str!("../../engine/tests/roms/raster.sym");
+/// Executes STOP with the direction row selected, so only a direction key
+/// wakes it (`stop_wake.asm`).
+pub const STOP_WAKE: &[u8] = include_bytes!("../../sameboy/tests/roms/stop_wake.gb");
+/// Executes an illegal opcode after a few instructions (`illegal.asm`).
+pub const ILLEGAL: &[u8] = include_bytes!("../../sameboy/tests/roms/illegal.gb");
 /// Plays notes on all four channels for about 32 frames, then turns the APU
 /// off and writes a register while it is off (`tune.asm`).
 pub const TUNE: &[u8] = include_bytes!("../../audio/tests/roms/tune.gb");

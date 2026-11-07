@@ -19,7 +19,7 @@ run     at? from?: "boot"|"power-on"  since?: "boot"|"power-on"|CHECKPOINT
         read?: [EXPR]  checkpoint?: NAME  allow_uninit?: bool
         keys?: ["A@0", "-A@2", …]  shot?: SHOT
         measure?: {from: ADDR, to: ADDR}  profile?: {top?: N}
-        frame_budget?: bool
+        frame_budget?: bool  raster?: bool
 measure from: ADDR  to: ADDR  at?  iterations?: N  max_t?: N
         frames? instructions? ticks?: N
 equiv   frames: N  b?: {rom?: PATH, sym?: PATH, writes?: [WRITE]}  at?  from?
@@ -51,7 +51,7 @@ Response, one line per request:
   {"id", "ok": false, "rev"?, "error": {"code", "exit", "message", "remedy",
    "stop"?, "result"?}, "warnings"}
 result holds only the fields the op fills: stop, reads, shot, measure, profile,
-frame_budget, equiv, view, symbols,
+frame_budget, raster, equiv, view, symbols,
 checkpoints, keys_unapplied, writes, checkpoint, restored, breakpoint, watch,
 deleted, registers, ppu, sessions, events, gaps, pruned, kept, busy, removed.
 `gbcli VERB --json` prints the whole response line, as serve writes it.

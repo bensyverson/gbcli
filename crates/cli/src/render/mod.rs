@@ -1,8 +1,9 @@
-//! Responses as rows (the default) or as the protocol's result object
-//! (`--json`). stdout carries the answer; warnings and errors go to stderr.
+//! Responses as rows (the default) or as the response line `gbcli serve`
+//! writes (`--json`). stdout carries the answer; warnings and errors go to stderr.
 
 mod row;
 mod stop;
+mod video;
 
 use std::io::Write;
 
@@ -14,32 +15,33 @@ use row::{addr, byte, bytes, hex, utc};
 
 /// Prints a response and returns the exit code: 0, or the error's own.
 pub fn response(response: &Response, json: bool, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    if json {
+        // Exactly the line `gbcli serve` writes, so `rev` comes along.
+        let text = serde_json::to_string(response).expect("a response always serializes");
+        emit(out, &format!("{text}\n"));
+        return match &response.outcome {
+            Ok(_) => 0,
+            Err(body) => error(err, body),
+        };
+    }
     for warning in &response.warnings {
         emit(err, &format!("warning: {warning}\n"));
     }
+    let rev = || match response.rev {
+        Some(rev) => Row::new("rev").word(&rev.to_string()).line(),
+        None => String::new(),
+    };
     match &response.outcome {
         Ok(result) => {
-            if json {
-                let text = serde_json::to_string(result).expect("a result always serializes");
-                emit(out, &format!("{text}\n"));
-            } else {
-                emit(out, &rows(result));
-                if let Some(rev) = response.rev {
-                    emit(out, &Row::new("rev").word(&rev.to_string()).line());
-                }
-            }
+            emit(out, &rows(result));
+            emit(out, &rev());
             0
         }
         Err(body) => {
-            if json {
-                let text = serde_json::to_string(body).expect("an error always serializes");
-                emit(out, &format!("{text}\n"));
-            } else if let Some(stop) = &body.stop {
+            if let Some(stop) = &body.stop {
                 // The state the failure left is still the answer's data.
                 emit(out, &stop::rows(stop));
-                if let Some(rev) = response.rev {
-                    emit(out, &Row::new("rev").word(&rev.to_string()).line());
-                }
+                emit(out, &rev());
             }
             error(err, body)
         }
@@ -113,6 +115,7 @@ pub fn rows(r: &ResultBody) -> String {
             .opt("hex", hex(read.value))
             .line();
     }
+    out += &video::rows(r);
     if let Some(cp) = &r.checkpoint {
         out += &Row::new("checkpoint")
             .field("name", &cp.name)

@@ -1,8 +1,9 @@
 //! The entries. Order within a class is the order the primer lists them.
 
 use super::flags::{
-    BATCH, BREAK, CREATE, EVENTS, OUTPUT, PRUNE, READ, RM, RUN, SERVE, SESSION, WATCH,
+    BATCH, BREAK, CREATE, EVENTS, OUTPUT, PRUNE, READ, RM, RUN, SERVE, SESSION, SHOT_OPTIONS, WATCH,
 };
+use super::table_read::{CHECKPOINTS_VERB, SHOT_VERB, SYM_VERB, VIEW_VERB};
 use super::{Arity, Class, Verb, VerbSpec};
 
 const NONE: Arity = Arity {
@@ -35,18 +36,19 @@ pub const VERBS: &[VerbSpec] = &[
         name: "run",
         class: Class::Act,
         summary: "advance the machine to a stop, then read and save",
-        usage: "[ROM] [--frames N | --until EXPR | --to ADDR] [--read EXPR]… [flags]",
+        usage: "[ROM] [--frames N | --until EXPR | --to ADDR] [--keys TOKENS] [--read EXPR]… \
+                [--shot PATH] [flags]",
         arity: Arity {
             min: 0,
             max: Some(1),
             name: "ROM",
         },
         flags: RUN,
-        groups: SESSION_VERB,
+        groups: &[SHOT_OPTIONS, SESSION, OUTPUT],
         about: "The experiment verb. In this order, whatever the order of the flags: start \
                 from --at, the head, or the boot handoff; apply --patch, --poke and --write \
-                in the order given; run until --until holds, --to is reached, a breakpoint or \
-                watch fires, or the budget ends; evaluate --read; save --checkpoint. The stop \
+                in the order given; schedule --keys; run until --until holds, --to is reached, a breakpoint or \
+                watch fires, or the budget ends; evaluate --read; save --shot; save --checkpoint. The stop \
                 becomes the session's new head. A ROM argument is the same as --rom.",
         example: (
             "gbcli run game.gb --session dx --until 'u16[wFrame] >= 60' --read wSpriteX",
@@ -203,6 +205,10 @@ pub const VERBS: &[VerbSpec] = &[
             "prints the frame counter and the current scanline",
         ),
     },
+    SHOT_VERB,
+    VIEW_VERB,
+    SYM_VERB,
+    CHECKPOINTS_VERB,
     VerbSpec {
         verb: Verb::Events,
         name: "events",

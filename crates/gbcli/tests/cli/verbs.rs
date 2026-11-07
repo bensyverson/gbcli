@@ -29,6 +29,24 @@ const SCRIPT: &[&[&str]] = &[
         "--read",
         "u16[wFrame]",
     ],
+    &[
+        "run",
+        "--frames",
+        "1",
+        "--keys",
+        "A@0 -A@1 START@5",
+        "--shot",
+        "run.png",
+        "--scale",
+        "1",
+    ],
+    &["shot", "shot.png", "--scale", "1", "--crop", "0,0,16,8"],
+    &["shot", "live.png", "--live", "--scale", "1"],
+    &["view", "tiles"],
+    &["view", "oam", "--png", "oam.png", "--scale", "1"],
+    &["view", "map", "--map", "window"],
+    &["sym", "Work*"],
+    &["checkpoints"],
     &["events", "--limit", "2"],
     &["read", "[$FEA0]"],
 ];
@@ -66,7 +84,7 @@ fn every_verb_prints_rows() {
 }
 
 #[test]
-fn every_verb_prints_the_protocol_result_with_json() {
+fn every_verb_prints_the_serve_response_with_json() {
     golden("verbs.json.txt", &transcript("json", &["--json"]));
 }
 
@@ -106,6 +124,31 @@ fn batch_prints_one_row_per_line_and_exits_with_the_first_failure() {
 #[test]
 fn batch_with_json_prints_each_response_line() {
     golden("batch.json.txt", &batch("batch-json", &["--json"]));
+}
+
+#[test]
+fn json_prints_the_serve_response_line_rev_included() {
+    let setup = ["run", "demo.gb", "--session", "demo", "--frames", "1"];
+    let cli = Project::new("json-line-cli");
+    let served = Project::new("json-line-serve");
+    for p in [&cli, &served] {
+        assert_eq!(p.gbcli(&setup).code, 0);
+    }
+    for (args, line) in [
+        (
+            &["read", "u16[wFrame]", "--session", "demo", "--json"][..],
+            r#"{"id":"cli","session":"demo","op":"read","args":{"reads":["u16[wFrame]"]}}"#,
+        ),
+        (
+            &["read", "[wNope]", "--session", "demo", "--json"][..],
+            r#"{"id":"cli","session":"demo","op":"read","args":{"reads":["[wNope]"]}}"#,
+        ),
+    ] {
+        let mine = cli.gbcli(args);
+        let theirs = served.gbcli_with(&["serve"], &[], Some(&format!("{line}\n")));
+        assert_eq!(mine.stdout, theirs.stdout, "{args:?}");
+        assert!(mine.stdout.contains(r#""rev":"s1""#), "{}", mine.stdout);
+    }
 }
 
 #[test]

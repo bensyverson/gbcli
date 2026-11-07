@@ -6,8 +6,8 @@ use std::path::PathBuf;
 use gbcli_core::Model;
 use gbcli_protocol::{
     BreakArgs, CheckpointArgs, DeleteArgs, EventsArgs, Op, PruneArgs, ReadArgs, Request,
-    RestoreArgs, Rev, RmArgs, RunArgs, StepArgs, StepKind, WatchAccess, WatchArgs, WriteArgs,
-    WriteKind, model_from_name,
+    RestoreArgs, Rev, RmArgs, RunArgs, ShotReadArgs, StepArgs, StepKind, SymArgs, WatchAccess,
+    WatchArgs, WriteArgs, WriteKind, model_from_name,
 };
 
 use crate::Env;
@@ -91,7 +91,14 @@ pub fn build(inv: Invocation, env: &Env) -> Result<Command, Usage> {
                 target: target(&inv, env, None)?,
             });
         }
-        Verb::Run => Op::Run(run(&inv)?),
+        Verb::Run => Op::Run(run(&inv, env)?),
+        Verb::Shot => Op::Shot(ShotReadArgs {
+            shot: video::shot(&inv, &inv.positionals[0])?,
+            since: inv.one("since").map(values::since),
+        }),
+        Verb::View => Op::View(video::view(&inv)?),
+        Verb::Sym => Op::Sym(SymArgs { pattern: pos(0) }),
+        Verb::Checkpoints => Op::Checkpoints,
         Verb::Step => Op::Step(StepArgs {
             unit: match inv.positionals.first() {
                 Some(unit) => values::step_unit(unit)?,
@@ -205,7 +212,7 @@ fn help(topic: Option<&str>) -> Result<Command, Usage> {
     })
 }
 
-fn run(inv: &Invocation) -> Result<RunArgs, Usage> {
+fn run(inv: &Invocation, env: &Env) -> Result<RunArgs, Usage> {
     let budget = |flag| inv.one(flag).map(|n| values::count(flag, n)).transpose();
     let mut writes = Vec::new();
     for (flag, value) in &inv.flags {
@@ -230,9 +237,8 @@ fn run(inv: &Invocation) -> Result<RunArgs, Usage> {
         read: inv.all("read").map(str::to_string).collect(),
         checkpoint: inv.one("checkpoint").map(str::to_string),
         allow_uninit: inv.has("allow-uninit"),
-        // The --shot and --keys flags land with the verbs for those ops.
-        shot: None,
-        keys: Vec::new(),
+        shot: video::run_shot(inv)?.map(Box::new),
+        keys: video::keys(inv, env)?,
     })
 }
 
@@ -305,6 +311,8 @@ fn target(inv: &Invocation, env: &Env, rom: Option<String>) -> Result<Target, Us
         create,
     })
 }
+
+mod video;
 
 #[cfg(test)]
 mod tests;

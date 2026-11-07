@@ -164,7 +164,8 @@ Exit codes — one table for every command; errors print to stderr as
 `gbcli: CODE: message` and `remedy: next command`.
 
   0  success
-  1  the asserted condition is false: predicate_false
+  1  the answer is no: predicate_false frame_not_normal (the shot's frame
+     wasn't a normal one; --any-frame takes it anyway)
   2  usage: bad_request bad_address bad_expression ambiguous_symbol
      unknown_symbol refused (a flag is needed)
   3  budget or conflict: budget_exhausted rev_mismatch session_busy
@@ -250,6 +251,6 @@ mod tests {
                 }
             }
         }
-        assert_eq!(seen, 23, "every code in the closed set");
+        assert_eq!(seen, 24, "every code in the closed set");
     }
 }

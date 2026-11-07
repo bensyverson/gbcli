@@ -46,7 +46,10 @@ fn the_primer_is_at_most_40_lines() {
     let run = Project::new("primer").gbcli(&[]);
     assert_eq!(run.code, 0);
     assert!(run.stdout.lines().count() <= 40);
-    assert!(run.stdout.contains("gbcli run game.gb --session demo"));
+    assert!(
+        run.stdout
+            .contains("gbcli run game.gb --session demo --frames 120 --shot first.png")
+    );
 }
 
 #[test]

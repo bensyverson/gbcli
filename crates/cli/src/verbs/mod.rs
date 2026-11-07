@@ -4,8 +4,9 @@
 
 mod flags;
 mod table;
+mod table_read;
 
-pub use flags::{OUTPUT, SESSION};
+pub use flags::{OUTPUT, SESSION, SHOT_OPTIONS};
 pub use table::VERBS;
 
 /// What a verb does, and so what it needs before it can run (design §12).
@@ -66,6 +67,10 @@ pub enum Verb {
     Patch,
     Show,
     Read,
+    Shot,
+    View,
+    Sym,
+    Checkpoints,
     Events,
     Gaps,
     Sessions,
@@ -83,7 +88,7 @@ pub enum Verb {
 }
 
 /// One flag. `value` names its argument; `None` makes it a switch.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct FlagSpec {
     pub long: &'static str,
     pub short: Option<char>,

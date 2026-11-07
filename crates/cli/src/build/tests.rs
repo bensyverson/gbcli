@@ -192,3 +192,122 @@ fn help_routes_topics_verbs_recipes_and_schema() {
         u.remedy
     );
 }
+
+#[test]
+fn run_takes_a_shot_with_its_options_and_refuses_them_without_one() {
+    let Op::Run(args) = request(&[
+        "run",
+        "--frames",
+        "3",
+        "--shot",
+        "a.png",
+        "--scale",
+        "2",
+        "--crop",
+        "0,8,16,24",
+        "--live",
+        "--any-frame",
+    ])
+    .1
+    else {
+        panic!()
+    };
+    let shot = args.shot.expect("a shot");
+    assert_eq!(shot.path, "a.png");
+    assert_eq!(shot.scale, Some(2));
+    assert_eq!(
+        shot.crop,
+        Some(gbcli_protocol::Crop {
+            x: 0,
+            y: 8,
+            width: 16,
+            height: 24
+        })
+    );
+    assert!(shot.live && shot.any_frame);
+    let Op::Run(args) = request(&["run", "--shot", "b.png"]).1 else {
+        panic!()
+    };
+    assert_eq!(
+        args.shot.unwrap().scale,
+        None,
+        "the server owns the default"
+    );
+    let u = command(&["run", "--scale", "2"]).unwrap_err();
+    assert_eq!(u.message, "--scale only applies with --shot");
+    let u = command(&["run", "--shot", "a.png", "--crop", "1,2,3"]).unwrap_err();
+    assert_eq!(u.message, "--crop takes X,Y,W,H, not `1,2,3`");
+}
+
+#[test]
+fn keys_and_a_keys_file_concatenate_and_a_bad_token_is_a_usage_error() {
+    let file = std::env::temp_dir().join(format!("gbcli-keys-{}.txt", std::process::id()));
+    std::fs::write(&file, "START@10 # menu\n-START@12\n").unwrap();
+    let path = file.display().to_string();
+    let Op::Run(args) = request(&["run", "--keys", "A@0 -A@2", "--keys-file", &path]).1 else {
+        panic!()
+    };
+    let text: Vec<String> = args.keys.iter().map(|k| k.to_string()).collect();
+    assert_eq!(text, vec!["A@0", "-A@2", "START@10", "-START@12"]);
+    std::fs::remove_file(&file).unwrap();
+    let u = command(&["run", "--keys", "Q@1"]).unwrap_err();
+    assert!(u.message.contains("`Q@1`"), "{}", u.message);
+    assert!(u.remedy.contains("A@0"), "{}", u.remedy);
+    let u = command(&["run", "--keys-file", "/nonexistent/keys.txt"]).unwrap_err();
+    assert!(
+        u.message.starts_with("can't read /nonexistent/keys.txt"),
+        "{}",
+        u.message
+    );
+}
+
+#[test]
+fn the_read_verbs_for_shots_views_symbols_and_checkpoints_build_their_ops() {
+    let Op::Shot(args) = request(&[
+        "shot",
+        "s.png",
+        "--scale",
+        "1",
+        "--any-frame",
+        "--since",
+        "power-on",
+    ])
+    .1
+    else {
+        panic!()
+    };
+    assert_eq!(args.shot.path, "s.png");
+    assert_eq!(args.shot.scale, Some(1));
+    assert!(args.shot.any_frame);
+    assert_eq!(args.since, Some(TimeBase::PowerOn));
+    let Op::View(args) = request(&[
+        "view", "map", "--map", "9c00", "--png", "m.png", "--scale", "2",
+    ])
+    .1
+    else {
+        panic!()
+    };
+    assert_eq!(args.what, gbcli_protocol::ViewKind::Map);
+    assert_eq!(args.map, Some(gbcli_protocol::MapSel::Map9C00));
+    let png = args.png.unwrap();
+    assert_eq!((png.path.as_str(), png.scale), ("m.png", Some(2)));
+    let Op::View(args) = request(&["view", "oam"]).1 else {
+        panic!()
+    };
+    assert_eq!((args.map, args.png), (None, None));
+    assert_eq!(
+        command(&["view", "sprites"]).unwrap_err().message,
+        "`sprites` isn't tiles, map or oam"
+    );
+    assert_eq!(
+        command(&["view", "tiles", "--scale", "2"])
+            .unwrap_err()
+            .message,
+        "--scale only applies with --png"
+    );
+    let Op::Sym(args) = request(&["sym", "Main*"]).1 else {
+        panic!()
+    };
+    assert_eq!(args.pattern, "Main*");
+    assert!(matches!(request(&["checkpoints"]).1, Op::Checkpoints));
+}

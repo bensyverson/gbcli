@@ -9,6 +9,16 @@ Run until something is true
   gbcli run --until 'u16[wFrame] >= 60'
 Run to a routine
   gbcli run --to Main.loop
+See the screen
+  gbcli shot now.png (the head), or gbcli run --frames 60 --shot after.png
+Why is the screen blank?
+  gbcli shot blank.png --any-frame, then gbcli read '[rLCDC]' (bit 7: LCD on)
+Press buttons during a run
+  gbcli run --frames 30 --keys 'START@5 -START@7' (or --keys-file keys.txt)
+Look at tiles, the background map or sprites
+  gbcli view tiles, gbcli view map --map window, gbcli view oam
+Find a symbol's address
+  gbcli sym 'Player*'
 Read variables, registers or IO
   gbcli read '[wSpeed]' 'u16[wFrame]' pc '[rLCDC]'
 Where is the machine, and why did it stop?
@@ -23,6 +33,8 @@ Turn the LCD on as the program would
   gbcli write rLCDC=0x91
 Keep a state to come back to
   gbcli checkpoint before, later gbcli restore before or gbcli run --at before
+What can I restore?
+  gbcli checkpoints
 Undo the last run, step or write
   gbcli undo
 Step through code

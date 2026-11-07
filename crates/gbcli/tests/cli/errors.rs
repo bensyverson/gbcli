@@ -35,6 +35,25 @@ fn usage_errors_name_near_misses_and_the_next_command() {
 }
 
 #[test]
+fn frame_not_normal_offers_any_frame_and_keeps_the_run() {
+    let p = Project::with_session("frame-not-normal");
+    let run = p.gbcli(&[
+        "run",
+        "--session",
+        "demo",
+        "--frames",
+        "2",
+        "--write",
+        "rLCDC=0",
+        "--shot",
+        "off.png",
+    ]);
+    run.fails(1, "frame_not_normal", "pass --any-frame");
+    assert!(run.stdout.ends_with("rev s1\n"), "{}", run.stdout);
+    assert!(!p.path("off.png").exists());
+}
+
+#[test]
 fn bad_request_lists_the_checkpoints_that_exist() {
     let p = Project::with_session("bad-request");
     p.gbcli(&["restore", "nosuch", "--session", "demo"]).fails(

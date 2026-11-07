@@ -17,6 +17,14 @@ run     at? from?: "boot"|"power-on"  since?: "boot"|"power-on"|CHECKPOINT
         until?: EXPR  to?: ADDR  frames? instructions? ticks?: N
         writes?: [{kind: "bus"|"poke"|"patch", target: ADDR, bytes: HEX}]
         read?: [EXPR]  checkpoint?: NAME  allow_uninit?: bool
+        keys?: ["A@0", "-A@2", …]  shot?: SHOT
+shot    shot: SHOT  since?
+        SHOT = {path: PATH, scale?: 1-8, crop?: {x, y, width, height},
+                live?: bool, any_frame?: bool}
+view    what: "tiles"|"map"|"oam"  map?: "background"|"window"|"9800"|"9c00"
+        png?: {path: PATH, scale?: N}
+sym     pattern: GLOB
+checkpoints  —
 step    unit?: "instruction"|"over"|"out"|"frame"|"scanline"
 show    —
 read    reads: [EXPR]  since?  allow_uninit?
@@ -36,9 +44,10 @@ Response, one line per request:
   {"id", "ok": true, "rev"?: "sN", "result": {…}, "warnings": [TEXT]}
   {"id", "ok": false, "rev"?, "error": {"code", "exit", "message", "remedy",
    "stop"?}, "warnings"}
-result holds only the fields the op fills: stop, reads, writes, checkpoint,
-restored, breakpoint, watch, deleted, registers, ppu, sessions, events, gaps,
-pruned, kept, busy, removed. `gbcli VERB --json` prints exactly this object.
+result holds only the fields the op fills: stop, reads, shot, view, symbols,
+checkpoints, keys_unapplied, writes, checkpoint, restored, breakpoint, watch,
+deleted, registers, ppu, sessions, events, gaps, pruned, kept, busy, removed.
+`gbcli VERB --json` prints the whole response line, as serve writes it.
 
 Examples:
   {"id":"1","session":"dx","op":"run","args":{"frames":120}}
@@ -59,6 +68,11 @@ Examples:
   {"id":"16","op":"gaps"}
   {"id":"17","op":"prune","args":{"unused_for":"7d"}}
   {"id":"18","op":"rm","args":{"name":"dx","with_checkpoints":true}}
+  {"id":"19","op":"run","args":{"frames":120,"keys":["START@10","-START@12"],"shot":{"path":"a.png"}}}
+  {"id":"20","op":"shot","args":{"shot":{"path":"now.png","scale":2,"any_frame":true}}}
+  {"id":"21","op":"view","args":{"what":"map","map":"window","png":{"path":"m.png"}}}
+  {"id":"22","op":"sym","args":{"pattern":"w*"}}
+  {"id":"23","op":"checkpoints"}
 "#;
 
 #[cfg(test)]
@@ -80,6 +94,6 @@ mod tests {
         }
         ops.sort();
         ops.dedup();
-        assert_eq!(ops.len(), 16, "one example per op: {ops:?}");
+        assert_eq!(ops.len(), 20, "one example per op: {ops:?}");
     }
 }

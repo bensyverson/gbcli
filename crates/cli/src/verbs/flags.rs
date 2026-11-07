@@ -108,6 +108,30 @@ pub const ALLOW_UNINIT: FlagSpec = switch(
 );
 pub const IF: FlagSpec = value("if", "EXPR", "stop only when this condition holds");
 
+pub const SCALE: FlagSpec = value(
+    "scale",
+    "N",
+    "pixels per Game Boy pixel in the PNG, 1 to 16 (default 4)",
+);
+
+/// How a screenshot is taken: by `run --shot` and by `shot`.
+pub const SHOT_OPTIONS: &[FlagSpec] = &[
+    SCALE,
+    value(
+        "crop",
+        "X,Y,W,H",
+        "only this rectangle of the 160x144 screen, in Game Boy pixels",
+    ),
+    switch(
+        "live",
+        "the pixels drawn so far this frame, not the last complete frame",
+    ),
+    switch(
+        "any-frame",
+        "take the last frame even if it isn't a normal one (LCD off, blank)",
+    ),
+];
+
 pub const RUN: &[FlagSpec] = &[
     value(
         "at",
@@ -151,6 +175,33 @@ pub const RUN: &[FlagSpec] = &[
     repeated("read", "EXPR", "evaluate at the stop; repeat for more"),
     value("checkpoint", "NAME", "save the stop state under this name"),
     ALLOW_UNINIT,
+    value(
+        "shot",
+        "PATH",
+        "save a PNG of the screen at the stop (see the shot flags)",
+    ),
+    value(
+        "keys",
+        "TOKENS",
+        "press and release buttons: 'A@0 -A@2 START@10' (frame offsets)",
+    ),
+    value(
+        "keys-file",
+        "FILE",
+        "key tokens from a file, after --keys; # starts a comment",
+    ),
+];
+
+pub const SHOT: &[FlagSpec] = &[SINCE];
+
+pub const VIEW: &[FlagSpec] = &[
+    value(
+        "map",
+        "WHICH",
+        "for view map: background (default), window, 9800 or 9c00",
+    ),
+    value("png", "PATH", "also save the view as a PNG"),
+    SCALE,
 ];
 
 pub const READ: &[FlagSpec] = &[SINCE, ALLOW_UNINIT];

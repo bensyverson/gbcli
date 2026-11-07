@@ -3,11 +3,11 @@ exit 0
 gbcli — a headless, deterministic Game Boy emulator for agents.
 
 Each command opens a named session (.gbcli/sessions/NAME/), does one thing to
-its machine, saves it and prints rows; --json prints the protocol's result.
+its machine, saves it and prints rows; --json prints the response line.
 
   act        run, step, checkpoint, restore, undo, write, poke, patch
              advance or change the machine; the stop becomes the head
-  read       show, read, events, gaps, sessions
+  read       show, read, shot, view, sym, checkpoints, events, gaps, sessions
              look without changing the head
   configure  sessions prune, sessions rm, break, watch, delete
              change the session's settings
@@ -16,7 +16,7 @@ its machine, saves it and prints rows; --json prints the protocol's result.
   help       help, recipes, schema, version
              no session, ROM or network needed
 
-First:  gbcli run game.gb --session demo --frames 120
+First:  gbcli run game.gb --session demo --frames 120 --shot first.png
 Then:   gbcli show --session demo    gbcli read pc frame --session demo
 
 Help:   gbcli VERB --help (one worked example each)
@@ -30,13 +30,14 @@ exit 0
 gbcli run — advance the machine to a stop, then read and save
 
 USAGE
-  gbcli run [ROM] [--frames N | --until EXPR | --to ADDR] [--read EXPR]… [flags]
+  gbcli run [ROM] [--frames N | --until EXPR | --to ADDR] [--keys TOKENS] [--read EXPR]… [--shot PATH] [flags]
 
 The experiment verb. In this order, whatever the order of the flags: start
 from --at, the head, or the boot handoff; apply --patch, --poke and --write in
-the order given; run until --until holds, --to is reached, a breakpoint or
-watch fires, or the budget ends; evaluate --read; save --checkpoint. The stop
-becomes the session's new head. A ROM argument is the same as --rom.
+the order given; schedule --keys; run until --until holds, --to is reached, a
+breakpoint or watch fires, or the budget ends; evaluate --read; save --shot;
+save --checkpoint. The stop becomes the session's new head. A ROM argument is
+the same as --rom.
 
 CLASS
   act: advances or changes the machine and saves the new head; needs a session (name one with a ROM to create it).
@@ -56,8 +57,17 @@ FLAGS
   --read EXPR…            evaluate at the stop; repeat for more
   --checkpoint NAME       save the stop state under this name
   --allow-uninit          read never-written bytes as their power-on values, with a warning
+  --shot PATH             save a PNG of the screen at the stop (see the shot flags)
+  --keys TOKENS           press and release buttons: 'A@0 -A@2 START@10' (frame offsets)
+  --keys-file FILE        key tokens from a file, after --keys; # starts a comment
 
-MORE FLAGS
+SHOT FLAGS (how the PNG is taken)
+  --scale N               pixels per Game Boy pixel in the PNG, 1 to 16 (default 4)
+  --crop X,Y,W,H          only this rectangle of the 160x144 screen, in Game Boy pixels
+  --live                  the pixels drawn so far this frame, not the last complete frame
+  --any-frame             take the last frame even if it isn't a normal one (LCD off, blank)
+
+SESSION FLAGS (every session verb)
   -s, --session NAME      the session to use (default: GBCLI_SESSION); naming a new one with a ROM creates it
   --rom FILE              the ROM a new session is created from; an existing session refuses another ROM
   --sym FILE              the .sym for a new session (default: the ROM's name with .sym, if it exists)
@@ -66,7 +76,7 @@ MORE FLAGS
   --rev sN                refuse a change if the session is no longer at this revision
   --allow-rom-change      load a stored state even though the ROM was rebuilt and the check refuses it
 
-MORE FLAGS
+OUTPUT FLAGS (every verb that sends a request)
   --json                  print the protocol's result object instead of rows
   --dir PATH              find .gbcli/ from PATH instead of the working directory (GBCLI_DIR overrides both)
   --as NAME               who is asking, for the event log (default: GBCLI_AS)
@@ -91,7 +101,7 @@ CLASS
 FLAGS
   --with-checkpoints      remove the session even though it holds named checkpoints
 
-MORE FLAGS
+OUTPUT FLAGS (every verb that sends a request)
   --json                  print the protocol's result object instead of rows
   --dir PATH              find .gbcli/ from PATH instead of the working directory (GBCLI_DIR overrides both)
   --as NAME               who is asking, for the event log (default: GBCLI_AS)
@@ -116,7 +126,7 @@ FLAGS
   --if EXPR               stop only when this condition holds
   --once                  delete the watch after it fires once
 
-MORE FLAGS
+SESSION FLAGS (every session verb)
   -s, --session NAME      the session to use (default: GBCLI_SESSION); naming a new one with a ROM creates it
   --rom FILE              the ROM a new session is created from; an existing session refuses another ROM
   --sym FILE              the .sym for a new session (default: the ROM's name with .sym, if it exists)
@@ -125,7 +135,7 @@ MORE FLAGS
   --rev sN                refuse a change if the session is no longer at this revision
   --allow-rom-change      load a stored state even though the ROM was rebuilt and the check refuses it
 
-MORE FLAGS
+OUTPUT FLAGS (every verb that sends a request)
   --json                  print the protocol's result object instead of rows
   --dir PATH              find .gbcli/ from PATH instead of the working directory (GBCLI_DIR overrides both)
   --as NAME               who is asking, for the event log (default: GBCLI_AS)

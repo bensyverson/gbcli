@@ -1,81 +1,105 @@
 $ gbcli run demo.gb --frames 2 --read u16[wFrame] --session demo --json
 exit 0
-{"stop":{"reason":"budget_exhausted","kind":"frames","pc":355,"bank":0,"symbol":"Work","time":{"ticks":12042792,"t":140288,"since":{"kind":"boot"},"frame":2,"ly":144,"dot":null},"frame_shown":{"n":2,"vblank":"normal"},"budget":{"ticks":280576,"instructions":11276,"frames":2,"limits":{"frames":2},"defaulted":false}},"reads":[{"expr":"u16[wFrame]","value":1251}]}
+{"id":"cli","ok":true,"rev":"s1","result":{"stop":{"reason":"budget_exhausted","kind":"frames","pc":355,"bank":0,"symbol":"Work","time":{"ticks":12042792,"t":140288,"since":{"kind":"boot"},"frame":2,"ly":144,"dot":null},"frame_shown":{"n":2,"vblank":"normal"},"budget":{"ticks":280576,"instructions":11276,"frames":2,"limits":{"frames":2},"defaulted":false}},"reads":[{"expr":"u16[wFrame]","value":1251}]},"warnings":[]}
 $ gbcli step --session demo --json
 exit 0
-{"stop":{"reason":"step_done","unit":"instruction","pc":358,"bank":0,"symbol":"Work+$3","time":{"ticks":12042824,"t":140304,"since":{"kind":"boot"},"frame":2,"ly":144,"dot":null},"frame_shown":{"n":2,"vblank":"normal"},"budget":{"ticks":32,"instructions":1,"frames":0,"limits":{},"defaulted":false}}}
+{"id":"cli","ok":true,"rev":"s2","result":{"stop":{"reason":"step_done","unit":"instruction","pc":358,"bank":0,"symbol":"Work+$3","time":{"ticks":12042824,"t":140304,"since":{"kind":"boot"},"frame":2,"ly":144,"dot":null},"frame_shown":{"n":2,"vblank":"normal"},"budget":{"ticks":32,"instructions":1,"frames":0,"limits":{},"defaulted":false}}},"warnings":[]}
 $ gbcli step frame --session demo --json
 exit 0
-{"stop":{"reason":"step_done","unit":"frame","pc":364,"bank":0,"symbol":"Work+$9","time":{"ticks":12183208,"t":210496,"since":{"kind":"boot"},"frame":3,"ly":144,"dot":null},"frame_shown":{"n":3,"vblank":"normal"},"budget":{"ticks":140384,"instructions":5644,"frames":1,"limits":{},"defaulted":false}}}
+{"id":"cli","ok":true,"rev":"s3","result":{"stop":{"reason":"step_done","unit":"frame","pc":364,"bank":0,"symbol":"Work+$9","time":{"ticks":12183208,"t":210496,"since":{"kind":"boot"},"frame":3,"ly":144,"dot":null},"frame_shown":{"n":3,"vblank":"normal"},"budget":{"ticks":140384,"instructions":5644,"frames":1,"limits":{},"defaulted":false}}},"warnings":[]}
 $ gbcli show --session demo --json
 exit 0
-{"stop":{"reason":"step_done","unit":"frame","pc":364,"bank":0,"symbol":"Work+$9","time":{"ticks":12183208,"t":210496,"since":{"kind":"boot"},"frame":3,"ly":144,"dot":null},"frame_shown":{"n":3,"vblank":"normal"},"budget":{"ticks":140384,"instructions":5644,"frames":1,"limits":{},"defaulted":false}},"registers":{"a":0,"f":0,"b":0,"c":19,"d":0,"e":216,"h":192,"l":0,"sp":49186,"pc":364,"af":0,"bc":19,"de":216,"hl":49152,"flags":{"z":false,"n":false,"h":false,"c":false},"ime":false,"halted":false,"double_speed":false},"ppu":{"ly":144,"mode":"vblank","lcd_on":true}}
+{"id":"cli","ok":true,"rev":"s3","result":{"stop":{"reason":"step_done","unit":"frame","pc":364,"bank":0,"symbol":"Work+$9","time":{"ticks":12183208,"t":210496,"since":{"kind":"boot"},"frame":3,"ly":144,"dot":null},"frame_shown":{"n":3,"vblank":"normal"},"budget":{"ticks":140384,"instructions":5644,"frames":1,"limits":{},"defaulted":false}},"registers":{"a":0,"f":0,"b":0,"c":19,"d":0,"e":216,"h":192,"l":0,"sp":49186,"pc":364,"af":0,"bc":19,"de":216,"hl":49152,"flags":{"z":false,"n":false,"h":false,"c":false},"ime":false,"halted":false,"double_speed":false},"ppu":{"ly":144,"mode":"vblank","lcd_on":true}},"warnings":[]}
 $ gbcli read u16[wFrame] pc frame --session demo --json
 exit 0
-{"reads":[{"expr":"u16[wFrame]","value":1878},{"expr":"pc","value":364},{"expr":"frame","value":3}]}
+{"id":"cli","ok":true,"rev":"s3","result":{"reads":[{"expr":"u16[wFrame]","value":1878},{"expr":"pc","value":364},{"expr":"frame","value":3}]},"warnings":[]}
 $ gbcli break Work --session demo --json
 exit 0
-{"breakpoint":{"id":1,"at":{"addr":355,"bank":null,"symbol":"Work"}}}
+{"id":"cli","ok":true,"rev":"s3","result":{"breakpoint":{"id":1,"at":{"addr":355,"bank":null,"symbol":"Work"}}},"warnings":[]}
 $ gbcli watch write wFrame --once --session demo --json
 exit 0
-{"watch":{"id":2,"access":"write","at":{"addr":49152,"bank":null,"symbol":"wFrame"}}}
+{"id":"cli","ok":true,"rev":"s3","result":{"watch":{"id":2,"access":"write","at":{"addr":49152,"bank":null,"symbol":"wFrame"}}},"warnings":[]}
 $ gbcli run --session demo --json
 exit 0
-{"stop":{"reason":"breakpoint","id":1,"pc":355,"bank":0,"symbol":"Work","time":{"ticks":12183336,"t":210560,"since":{"kind":"boot"},"frame":3,"ly":144,"dot":null},"frame_shown":{"n":3,"vblank":"normal"},"budget":{"ticks":128,"instructions":4,"frames":0,"limits":{"frames":600},"defaulted":true}},"reads":[]}
+{"id":"cli","ok":true,"rev":"s4","result":{"stop":{"reason":"breakpoint","id":1,"pc":355,"bank":0,"symbol":"Work","time":{"ticks":12183336,"t":210560,"since":{"kind":"boot"},"frame":3,"ly":144,"dot":null},"frame_shown":{"n":3,"vblank":"normal"},"budget":{"ticks":128,"instructions":4,"frames":0,"limits":{"frames":600},"defaulted":true}},"reads":[]},"warnings":[]}
 $ gbcli delete 1 --session demo --json
 exit 0
-{"deleted":{"id":1,"found":true}}
+{"id":"cli","ok":true,"rev":"s4","result":{"deleted":{"id":1,"found":true}},"warnings":[]}
 $ gbcli run --session demo --json
 exit 0
-{"stop":{"reason":"watchpoint","id":2,"access":"write","addr":49152,"old":86,"new":87,"writer_pc":363,"pc":364,"bank":0,"symbol":"Work+$9","time":{"ticks":12183432,"t":210608,"since":{"kind":"boot"},"frame":3,"ly":144,"dot":null},"frame_shown":{"n":3,"vblank":"normal"},"budget":{"ticks":96,"instructions":5,"frames":0,"limits":{"frames":600},"defaulted":true}},"reads":[]}
+{"id":"cli","ok":true,"rev":"s5","result":{"stop":{"reason":"watchpoint","id":2,"access":"write","addr":49152,"old":86,"new":87,"writer_pc":363,"pc":364,"bank":0,"symbol":"Work+$9","time":{"ticks":12183432,"t":210608,"since":{"kind":"boot"},"frame":3,"ly":144,"dot":null},"frame_shown":{"n":3,"vblank":"normal"},"budget":{"ticks":96,"instructions":5,"frames":0,"limits":{"frames":600},"defaulted":true}},"reads":[]},"warnings":[]}
 $ gbcli checkpoint before --session demo --json
 exit 0
-{"checkpoint":{"name":"before","path":".gbcli/sessions/demo/checkpoints/before.gbck","frame":3,"rev":"s5"}}
+{"id":"cli","ok":true,"rev":"s5","result":{"checkpoint":{"name":"before","path":".gbcli/sessions/demo/checkpoints/before.gbck","frame":3,"rev":"s5"}},"warnings":[]}
 $ gbcli poke wSpeed=2 --session demo --json
 exit 0
-{"writes":[{"kind":"poke","target":"wSpeed","bytes":"02","addr":49154}]}
+{"id":"cli","ok":true,"rev":"s6","result":{"writes":[{"kind":"poke","target":"wSpeed","bytes":"02","addr":49154}]},"warnings":[]}
 $ gbcli write wSpeed=3,4 --session demo --json
 exit 0
-{"writes":[{"kind":"bus","target":"wSpeed","bytes":"0304","addr":49154}]}
+{"id":"cli","ok":true,"rev":"s7","result":{"writes":[{"kind":"bus","target":"wSpeed","bytes":"0304","addr":49154}]},"warnings":[]}
 $ gbcli patch 00:0200=0 --session demo --json
 exit 0
-{"writes":[{"kind":"patch","target":"00:0200","bytes":"00"}]}
+{"id":"cli","ok":true,"rev":"s8","result":{"writes":[{"kind":"patch","target":"00:0200","bytes":"00"}]},"warnings":[]}
 $ gbcli restore before --session demo --json
 exit 0
-{"restored":{"name":"before","rev":"s9","frame":3}}
+{"id":"cli","ok":true,"rev":"s9","result":{"restored":{"name":"before","rev":"s9","frame":3}},"warnings":[]}
 $ gbcli undo --session demo --json
 exit 0
-{"restored":{"name":null,"rev":"s10","frame":3}}
+{"id":"cli","ok":true,"rev":"s10","result":{"restored":{"name":null,"rev":"s10","frame":3}},"warnings":[]}
 $ gbcli run --until u16[wFrame] >= 2500 --read u16[wFrame] --session demo --json
 exit 0
-{"stop":{"reason":"predicate","text":"u16[wFrame] >= 2500","cadence":"writes","pc":364,"bank":0,"symbol":"Work+$9","time":{"ticks":12322600,"t":280192,"since":{"kind":"boot"},"frame":3,"ly":142,"dot":null},"frame_shown":{"n":3,"vblank":"normal"},"budget":{"ticks":139168,"instructions":5593,"frames":0,"limits":{"frames":600},"defaulted":true}},"reads":[{"expr":"u16[wFrame]","value":2500}]}
+{"id":"cli","ok":true,"rev":"s11","result":{"stop":{"reason":"predicate","text":"u16[wFrame] >= 2500","cadence":"writes","pc":364,"bank":0,"symbol":"Work+$9","time":{"ticks":12322600,"t":280192,"since":{"kind":"boot"},"frame":3,"ly":142,"dot":null},"frame_shown":{"n":3,"vblank":"normal"},"budget":{"ticks":139168,"instructions":5593,"frames":0,"limits":{"frames":600},"defaulted":true}},"reads":[{"expr":"u16[wFrame]","value":2500}]},"warnings":[]}
+$ gbcli run --frames 1 --keys A@0 -A@1 START@5 --shot run.png --scale 1 --session demo --json
+exit 0
+{"id":"cli","ok":true,"rev":"s12","result":{"stop":{"reason":"budget_exhausted","kind":"frames","pc":358,"bank":0,"symbol":"Work+$3","time":{"ticks":12323656,"t":280720,"since":{"kind":"boot"},"frame":4,"ly":144,"dot":null},"frame_shown":{"n":4,"vblank":"normal"},"budget":{"ticks":1056,"instructions":41,"frames":1,"limits":{"frames":1},"defaulted":false}},"reads":[],"shot":{"path":"run.png","width":160,"height":144,"scale":1,"since":{"kind":"boot"},"frame":{"kind":"complete","n":4,"vblank":"normal"}},"keys_unapplied":["START@5"]},"warnings":["the run stopped after 1 frames, before 1 key event(s): START@5"]}
+$ gbcli shot shot.png --scale 1 --crop 0,0,16,8 --session demo --json
+exit 0
+{"id":"cli","ok":true,"rev":"s12","result":{"shot":{"path":"shot.png","width":16,"height":8,"scale":1,"since":{"kind":"boot"},"frame":{"kind":"complete","n":4,"vblank":"normal"}}},"warnings":[]}
+$ gbcli shot live.png --live --scale 1 --session demo --json
+exit 0
+{"id":"cli","ok":true,"rev":"s12","result":{"shot":{"path":"live.png","width":160,"height":144,"scale":1,"since":{"kind":"boot"},"frame":{"kind":"live_partial","ppu":{"ly":144,"mode":"vblank","lcd_on":true},"ticks":12323656,"after":4}}},"warnings":[]}
+$ gbcli view tiles --session demo --json
+exit 0
+{"id":"cli","ok":true,"rev":"s12","result":{"view":{"data":{"kind":"tiles","tiles":[{"bank":0,"index":1,"rows":["11110000","11110000","11111100","11111100","11111100","11111100","11110011","11110011"]},{"bank":0,"index":2,"rows":["00111100","00111100","00111100","00111100","00111100","00111100","00111100","00111100"]},{"bank":0,"index":3,"rows":["11110000","11110000","11110000","11110000","00000000","00000000","11110011","11110011"]},{"bank":0,"index":4,"rows":["00000000","00000000","00000000","00000000","00000000","00000000","11001111","11001111"]},{"bank":0,"index":5,"rows":["00000000","00000000","00001111","00001111","00111111","00111111","00001111","00001111"]},{"bank":0,"index":6,"rows":["00000000","00000000","00000000","00000000","11000000","11000000","00001111","00001111"]},{"bank":0,"index":7,"rows":["00000000","00000000","00000000","00000000","00000000","00000000","11110000","11110000"]},{"bank":0,"index":8,"rows":["00000000","00000000","00000000","00000000","00000000","00000000","11110011","11110011"]},{"bank":0,"index":9,"rows":["00000000","00000000","00000000","00000000","00000000","00000000","11000000","11000000"]},{"bank":0,"index":10,"rows":["00000011","00000011","00000011","00000011","00000011","00000011","11111111","11111111"]},{"bank":0,"index":11,"rows":["11000000","11000000","11000000","11000000","11000000","11000000","11000011","11000011"]},{"bank":0,"index":12,"rows":["00000000","00000000","00000000","00000000","00000000","00000000","11111100","11111100"]},{"bank":0,"index":13,"rows":["11110011","11110011","11110000","11110000","11110000","11110000","11110000","11110000"]},{"bank":0,"index":14,"rows":["00111100","00111100","11111100","11111100","11111100","11111100","00111100","00111100"]},{"bank":0,"index":15,"rows":["11110011","11110011","11110011","11110011","11110011","11110011","11110011","11110011"]},{"bank":0,"index":16,"rows":["11110011","11110011","11000011","11000011","11000011","11000011","11000011","11000011"]},{"bank":0,"index":17,"rows":["11001111","11001111","11001111","11001111","11001111","11001111","11001111","11001111"]},{"bank":0,"index":18,"rows":["00111100","00111100","00111111","00111111","00111100","00111100","00001111","00001111"]},{"bank":0,"index":19,"rows":["00111100","00111100","11111100","11111100","00000000","00000000","11111100","11111100"]},{"bank":0,"index":20,"rows":["11111100","11111100","11110000","11110000","11110000","11110000","11110000","11110000"]},{"bank":0,"index":21,"rows":["11110011","11110011","11110011","11110011","11110011","11110011","11110000","11110000"]},{"bank":0,"index":22,"rows":["11000011","11000011","11000011","11000011","11000011","11000011","11111111","11111111"]},{"bank":0,"index":23,"rows":["11001111","11001111","11001111","11001111","11001111","11001111","11000011","11000011"]},{"bank":0,"index":24,"rows":["00001111","00001111","00001111","00001111","00001111","00001111","11111100","11111100"]},{"bank":0,"index":25,"rows":["00111100","01000010","10111001","10100101","10111001","10100101","01000010","00111100"]}],"blank":359}}},"warnings":[]}
+$ gbcli view oam --png oam.png --scale 1 --session demo --json
+exit 0
+{"id":"cli","ok":true,"rev":"s12","result":{"view":{"data":{"kind":"oam","height":8,"objects":[{"index":0,"y":183,"x":255,"tile":0,"flags":0,"screen_x":247,"screen_y":167,"on_screen":false,"dropped_by_line_limit":false},{"index":1,"y":255,"x":247,"tile":0,"flags":33,"screen_x":239,"screen_y":239,"on_screen":false,"dropped_by_line_limit":false},{"index":2,"y":255,"x":255,"tile":0,"flags":2,"screen_x":247,"screen_y":239,"on_screen":false,"dropped_by_line_limit":false},{"index":3,"y":255,"x":251,"tile":0,"flags":0,"screen_x":243,"screen_y":239,"on_screen":false,"dropped_by_line_limit":false},{"index":4,"y":111,"x":239,"tile":0,"flags":8,"screen_x":231,"screen_y":95,"on_screen":false,"dropped_by_line_limit":false},{"index":5,"y":110,"x":255,"tile":0,"flags":11,"screen_x":247,"screen_y":94,"on_screen":false,"dropped_by_line_limit":false},{"index":6,"y":247,"x":255,"tile":22,"flags":0,"screen_x":247,"screen_y":231,"on_screen":false,"dropped_by_line_limit":false},{"index":7,"y":86,"x":255,"tile":0,"flags":2,"screen_x":247,"screen_y":70,"on_screen":false,"dropped_by_line_limit":false},{"index":8,"y":183,"x":191,"tile":32,"flags":1,"screen_x":183,"screen_y":167,"on_screen":false,"dropped_by_line_limit":false},{"index":9,"y":187,"x":255,"tile":0,"flags":20,"screen_x":247,"screen_y":171,"on_screen":false,"dropped_by_line_limit":false},{"index":10,"y":255,"x":245,"tile":70,"flags":0,"screen_x":237,"screen_y":239,"on_screen":false,"dropped_by_line_limit":false},{"index":11,"y":127,"x":254,"tile":107,"flags":4,"screen_x":246,"screen_y":111,"on_screen":false,"dropped_by_line_limit":false},{"index":12,"y":223,"x":247,"tile":0,"flags":4,"screen_x":239,"screen_y":207,"on_screen":false,"dropped_by_line_limit":false},{"index":13,"y":252,"x":255,"tile":179,"flags":2,"screen_x":247,"screen_y":236,"on_screen":false,"dropped_by_line_limit":false},{"index":14,"y":239,"x":254,"tile":0,"flags":32,"screen_x":246,"screen_y":223,"on_screen":false,"dropped_by_line_limit":false},{"index":15,"y":255,"x":255,"tile":128,"flags":40,"screen_x":247,"screen_y":239,"on_screen":false,"dropped_by_line_limit":false},{"index":16,"y":247,"x":253,"tile":0,"flags":2,"screen_x":245,"screen_y":231,"on_screen":false,"dropped_by_line_limit":false},{"index":17,"y":255,"x":241,"tile":0,"flags":81,"screen_x":233,"screen_y":239,"on_screen":false,"dropped_by_line_limit":false},{"index":18,"y":255,"x":255,"tile":4,"flags":0,"screen_x":247,"screen_y":239,"on_screen":false,"dropped_by_line_limit":false},{"index":19,"y":251,"x":255,"tile":0,"flags":0,"screen_x":247,"screen_y":235,"on_screen":false,"dropped_by_line_limit":false},{"index":20,"y":255,"x":223,"tile":64,"flags":4,"screen_x":215,"screen_y":239,"on_screen":false,"dropped_by_line_limit":false},{"index":21,"y":159,"x":255,"tile":0,"flags":76,"screen_x":247,"screen_y":143,"on_screen":false,"dropped_by_line_limit":false},{"index":22,"y":255,"x":255,"tile":128,"flags":33,"screen_x":247,"screen_y":239,"on_screen":false,"dropped_by_line_limit":false},{"index":23,"y":255,"x":215,"tile":128,"flags":65,"screen_x":207,"screen_y":239,"on_screen":false,"dropped_by_line_limit":false},{"index":24,"y":251,"x":175,"tile":0,"flags":1,"screen_x":167,"screen_y":235,"on_screen":false,"dropped_by_line_limit":false},{"index":25,"y":255,"x":255,"tile":136,"flags":129,"screen_x":247,"screen_y":239,"on_screen":false,"dropped_by_line_limit":false},{"index":26,"y":250,"x":255,"tile":0,"flags":32,"screen_x":247,"screen_y":234,"on_screen":false,"dropped_by_line_limit":false},{"index":27,"y":123,"x":254,"tile":16,"flags":0,"screen_x":246,"screen_y":107,"on_screen":false,"dropped_by_line_limit":false},{"index":28,"y":253,"x":255,"tile":192,"flags":4,"screen_x":247,"screen_y":237,"on_screen":false,"dropped_by_line_limit":false},{"index":29,"y":255,"x":235,"tile":0,"flags":2,"screen_x":227,"screen_y":239,"on_screen":false,"dropped_by_line_limit":false},{"index":30,"y":255,"x":254,"tile":0,"flags":18,"screen_x":246,"screen_y":239,"on_screen":false,"dropped_by_line_limit":false},{"index":31,"y":55,"x":255,"tile":152,"flags":1,"screen_x":247,"screen_y":39,"on_screen":false,"dropped_by_line_limit":false},{"index":32,"y":255,"x":255,"tile":40,"flags":0,"screen_x":247,"screen_y":239,"on_screen":false,"dropped_by_line_limit":false},{"index":33,"y":190,"x":255,"tile":4,"flags":32,"screen_x":247,"screen_y":174,"on_screen":false,"dropped_by_line_limit":false},{"index":34,"y":255,"x":255,"tile":0,"flags":10,"screen_x":247,"screen_y":239,"on_screen":false,"dropped_by_line_limit":false},{"index":35,"y":255,"x":191,"tile":8,"flags":152,"screen_x":183,"screen_y":239,"on_screen":false,"dropped_by_line_limit":false},{"index":36,"y":252,"x":253,"tile":10,"flags":0,"screen_x":245,"screen_y":236,"on_screen":false,"dropped_by_line_limit":false},{"index":37,"y":247,"x":251,"tile":0,"flags":0,"screen_x":243,"screen_y":231,"on_screen":false,"dropped_by_line_limit":false},{"index":38,"y":255,"x":252,"tile":0,"flags":0,"screen_x":244,"screen_y":239,"on_screen":false,"dropped_by_line_limit":false},{"index":39,"y":159,"x":159,"tile":0,"flags":0,"screen_x":151,"screen_y":143,"on_screen":true,"dropped_by_line_limit":false}]},"png":{"path":"oam.png","width":71,"height":44,"scale":1}}},"warnings":[]}
+$ gbcli view map --map window --session demo --json
+exit 0
+{"id":"cli","ok":true,"rev":"s12","result":{"view":{"data":{"kind":"map","area":"9800","addressing":"8000","background":true,"ids":["00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 01 02 03 04 05 06 07 08 09 0a 0b 0c 19 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 0d 0e 0f 10 11 12 13 14 15 16 17 18 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00","00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00"]}}},"warnings":[]}
+$ gbcli sym Work* --session demo --json
+exit 0
+{"id":"cli","ok":true,"rev":"s12","result":{"symbols":[{"name":"Work","bank":0,"addr":355,"area":"rom0"},{"name":"Work.done","bank":0,"addr":368,"area":"rom0"}]},"warnings":[]}
+$ gbcli checkpoints --session demo --json
+exit 0
+{"id":"cli","ok":true,"rev":"s12","result":{"checkpoints":[{"at":"before","rev":"s5","frame":3,"rom_matches":true},{"at":"~1","rev":"s11","frame":3,"rom_matches":true},{"at":"~2","rev":"s10","frame":3,"rom_matches":true},{"at":"~3","rev":"s9","frame":3,"rom_matches":true},{"at":"~4","rev":"s8","frame":3,"rom_matches":true},{"at":"~5","rev":"s7","frame":3,"rom_matches":true},{"at":"~6","rev":"s6","frame":3,"rom_matches":true},{"at":"~7","rev":"s5","frame":3,"rom_matches":true},{"at":"~8","rev":"s4","frame":3,"rom_matches":true}]},"warnings":[]}
 $ gbcli events --limit 2 --session demo --json
 exit 0
-{"events":[{"at":*,"op":"undo","ok":true,"rev_before":"s9","rev_after":"s10"},{"at":*,"op":"run","args":{"until":"u16[wFrame] >= 2500","read":["u16[wFrame]"]},"ok":true,"rev_before":"s10","rev_after":"s11","stop":{"reason":"predicate","text":"u16[wFrame] >= 2500","cadence":"writes","pc":364,"frame":3,"ticks":12322600}}]}
+{"id":"cli","ok":true,"rev":"s12","result":{"events":[{"at":*,"op":"sym","args":{"pattern":"Work*"},"ok":true,"rev_before":"s12","rev_after":"s12"},{"at":*,"op":"checkpoints","ok":true,"rev_before":"s12","rev_after":"s12"}]},"warnings":[]}
 $ gbcli read [$FEA0] --session demo --json
 exit 5
-{"code":"unsupported","exit":5,"message":"unsupported (ExtraOam): FEA0-FEFF has no backing store to read without a bus read","remedy":"the core can't extra_oam: FEA0-FEFF has no backing store to read without a bus read — see `gbcli doctor --core`"}
+{"id":"cli","ok":false,"rev":"s12","error":{"code":"unsupported","exit":5,"message":"unsupported (ExtraOam): FEA0-FEFF has no backing store to read without a bus read","remedy":"the core can't extra_oam: FEA0-FEFF has no backing store to read without a bus read — see `gbcli doctor --core`"},"warnings":[]}
 --- stderr
 gbcli: unsupported: unsupported (ExtraOam): FEA0-FEFF has no backing store to read without a bus read
 remedy: the core can't extra_oam: FEA0-FEFF has no backing store to read without a bus read — see `gbcli doctor --core`
 $ gbcli gaps --json
 exit 0
-{"gaps":[{"feature":"extra_oam","count":1}]}
+{"id":"cli","ok":true,"result":{"gaps":[{"feature":"extra_oam","count":1}]},"warnings":[]}
 $ gbcli sessions --json
 exit 0
-{"sessions":[{"name":"demo","rom":"demo.gb","head_frame":87,"rev":"s11","size_bytes":*,"last_used":*,"checkpoints":1}]}
+{"id":"cli","ok":true,"result":{"sessions":[{"name":"demo","rom":"demo.gb","head_frame":88,"rev":"s12","size_bytes":*,"last_used":*,"checkpoints":1}]},"warnings":[]}
 $ gbcli sessions prune --unused-for 7d --json
 exit 0
-{"pruned":[],"kept":[],"busy":[]}
+{"id":"cli","ok":true,"result":{"pruned":[],"kept":[],"busy":[]},"warnings":[]}
 $ gbcli sessions rm demo --json
 exit 2
-{"code":"refused","exit":2,"message":"session \"demo\" has 1 named checkpoint(s): before","remedy":"delete them first, or pass --with-checkpoints (before would go)"}
+{"id":"cli","ok":false,"error":{"code":"refused","exit":2,"message":"session \"demo\" has 1 named checkpoint(s): before","remedy":"delete them first, or pass --with-checkpoints (before would go)"},"warnings":[]}
 --- stderr
 gbcli: refused: session "demo" has 1 named checkpoint(s): before
 remedy: delete them first, or pass --with-checkpoints (before would go)
 $ gbcli sessions rm demo --with-checkpoints --json
 exit 0
-{"removed":"demo"}
+{"id":"cli","ok":true,"result":{"removed":"demo"},"warnings":[]}
 $ gbcli sessions --json
 exit 0
-{"sessions":[]}
+{"id":"cli","ok":true,"result":{"sessions":[]},"warnings":[]}

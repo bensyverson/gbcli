@@ -79,11 +79,355 @@ stop predicate cadence=writes pc=$016C bank=0 symbol=Work+$9 frame=3 t=280192 si
 budget frames=0/600 instructions=5593 ticks=139168 defaulted
 read expr=u16[wFrame] value=2500 hex=$09C4
 rev s11
+$ gbcli run --frames 1 --keys A@0 -A@1 START@5 --shot run.png --scale 1 --session demo
+exit 0
+stop budget_exhausted kind=frames pc=$0166 bank=0 symbol=Work+$3 frame=4 t=280720 since=boot ticks=12323656 ly=144 shown=4 vblank=normal
+budget frames=1/1 instructions=41 ticks=1056
+shot path=run.png width=160 height=144 scale=1 frame="complete frame 4 since boot (vblank normal)"
+key_unapplied event=START@5
+rev s12
+--- stderr
+warning: the run stopped after 1 frames, before 1 key event(s): START@5
+$ gbcli shot shot.png --scale 1 --crop 0,0,16,8 --session demo
+exit 0
+shot path=shot.png width=16 height=8 scale=1 frame="complete frame 4 since boot (vblank normal)"
+rev s12
+$ gbcli shot live.png --live --scale 1 --session demo
+exit 0
+shot path=live.png width=160 height=144 scale=1 frame="live partial frame: LY 144 (vblank), after complete frame 4 since boot"
+rev s12
+$ gbcli view tiles --session demo
+exit 0
+tiles shown=25 blank=359
+tile bank=0 index=1
+  11110000
+  11110000
+  11111100
+  11111100
+  11111100
+  11111100
+  11110011
+  11110011
+tile bank=0 index=2
+  00111100
+  00111100
+  00111100
+  00111100
+  00111100
+  00111100
+  00111100
+  00111100
+tile bank=0 index=3
+  11110000
+  11110000
+  11110000
+  11110000
+  00000000
+  00000000
+  11110011
+  11110011
+tile bank=0 index=4
+  00000000
+  00000000
+  00000000
+  00000000
+  00000000
+  00000000
+  11001111
+  11001111
+tile bank=0 index=5
+  00000000
+  00000000
+  00001111
+  00001111
+  00111111
+  00111111
+  00001111
+  00001111
+tile bank=0 index=6
+  00000000
+  00000000
+  00000000
+  00000000
+  11000000
+  11000000
+  00001111
+  00001111
+tile bank=0 index=7
+  00000000
+  00000000
+  00000000
+  00000000
+  00000000
+  00000000
+  11110000
+  11110000
+tile bank=0 index=8
+  00000000
+  00000000
+  00000000
+  00000000
+  00000000
+  00000000
+  11110011
+  11110011
+tile bank=0 index=9
+  00000000
+  00000000
+  00000000
+  00000000
+  00000000
+  00000000
+  11000000
+  11000000
+tile bank=0 index=10
+  00000011
+  00000011
+  00000011
+  00000011
+  00000011
+  00000011
+  11111111
+  11111111
+tile bank=0 index=11
+  11000000
+  11000000
+  11000000
+  11000000
+  11000000
+  11000000
+  11000011
+  11000011
+tile bank=0 index=12
+  00000000
+  00000000
+  00000000
+  00000000
+  00000000
+  00000000
+  11111100
+  11111100
+tile bank=0 index=13
+  11110011
+  11110011
+  11110000
+  11110000
+  11110000
+  11110000
+  11110000
+  11110000
+tile bank=0 index=14
+  00111100
+  00111100
+  11111100
+  11111100
+  11111100
+  11111100
+  00111100
+  00111100
+tile bank=0 index=15
+  11110011
+  11110011
+  11110011
+  11110011
+  11110011
+  11110011
+  11110011
+  11110011
+tile bank=0 index=16
+  11110011
+  11110011
+  11000011
+  11000011
+  11000011
+  11000011
+  11000011
+  11000011
+tile bank=0 index=17
+  11001111
+  11001111
+  11001111
+  11001111
+  11001111
+  11001111
+  11001111
+  11001111
+tile bank=0 index=18
+  00111100
+  00111100
+  00111111
+  00111111
+  00111100
+  00111100
+  00001111
+  00001111
+tile bank=0 index=19
+  00111100
+  00111100
+  11111100
+  11111100
+  00000000
+  00000000
+  11111100
+  11111100
+tile bank=0 index=20
+  11111100
+  11111100
+  11110000
+  11110000
+  11110000
+  11110000
+  11110000
+  11110000
+tile bank=0 index=21
+  11110011
+  11110011
+  11110011
+  11110011
+  11110011
+  11110011
+  11110000
+  11110000
+tile bank=0 index=22
+  11000011
+  11000011
+  11000011
+  11000011
+  11000011
+  11000011
+  11111111
+  11111111
+tile bank=0 index=23
+  11001111
+  11001111
+  11001111
+  11001111
+  11001111
+  11001111
+  11000011
+  11000011
+tile bank=0 index=24
+  00001111
+  00001111
+  00001111
+  00001111
+  00001111
+  00001111
+  11111100
+  11111100
+tile bank=0 index=25
+  00111100
+  01000010
+  10111001
+  10100101
+  10111001
+  10100101
+  01000010
+  00111100
+rev s12
+$ gbcli view oam --png oam.png --scale 1 --session demo
+exit 0
+oam height=8
+object index=0 y=183 x=255 tile=$00 flags=$00 screen_x=247 screen_y=167 on_screen=0 dropped_by_line_limit=0
+object index=1 y=255 x=247 tile=$00 flags=$21 screen_x=239 screen_y=239 on_screen=0 dropped_by_line_limit=0
+object index=2 y=255 x=255 tile=$00 flags=$02 screen_x=247 screen_y=239 on_screen=0 dropped_by_line_limit=0
+object index=3 y=255 x=251 tile=$00 flags=$00 screen_x=243 screen_y=239 on_screen=0 dropped_by_line_limit=0
+object index=4 y=111 x=239 tile=$00 flags=$08 screen_x=231 screen_y=95 on_screen=0 dropped_by_line_limit=0
+object index=5 y=110 x=255 tile=$00 flags=$0B screen_x=247 screen_y=94 on_screen=0 dropped_by_line_limit=0
+object index=6 y=247 x=255 tile=$16 flags=$00 screen_x=247 screen_y=231 on_screen=0 dropped_by_line_limit=0
+object index=7 y=86 x=255 tile=$00 flags=$02 screen_x=247 screen_y=70 on_screen=0 dropped_by_line_limit=0
+object index=8 y=183 x=191 tile=$20 flags=$01 screen_x=183 screen_y=167 on_screen=0 dropped_by_line_limit=0
+object index=9 y=187 x=255 tile=$00 flags=$14 screen_x=247 screen_y=171 on_screen=0 dropped_by_line_limit=0
+object index=10 y=255 x=245 tile=$46 flags=$00 screen_x=237 screen_y=239 on_screen=0 dropped_by_line_limit=0
+object index=11 y=127 x=254 tile=$6B flags=$04 screen_x=246 screen_y=111 on_screen=0 dropped_by_line_limit=0
+object index=12 y=223 x=247 tile=$00 flags=$04 screen_x=239 screen_y=207 on_screen=0 dropped_by_line_limit=0
+object index=13 y=252 x=255 tile=$B3 flags=$02 screen_x=247 screen_y=236 on_screen=0 dropped_by_line_limit=0
+object index=14 y=239 x=254 tile=$00 flags=$20 screen_x=246 screen_y=223 on_screen=0 dropped_by_line_limit=0
+object index=15 y=255 x=255 tile=$80 flags=$28 screen_x=247 screen_y=239 on_screen=0 dropped_by_line_limit=0
+object index=16 y=247 x=253 tile=$00 flags=$02 screen_x=245 screen_y=231 on_screen=0 dropped_by_line_limit=0
+object index=17 y=255 x=241 tile=$00 flags=$51 screen_x=233 screen_y=239 on_screen=0 dropped_by_line_limit=0
+object index=18 y=255 x=255 tile=$04 flags=$00 screen_x=247 screen_y=239 on_screen=0 dropped_by_line_limit=0
+object index=19 y=251 x=255 tile=$00 flags=$00 screen_x=247 screen_y=235 on_screen=0 dropped_by_line_limit=0
+object index=20 y=255 x=223 tile=$40 flags=$04 screen_x=215 screen_y=239 on_screen=0 dropped_by_line_limit=0
+object index=21 y=159 x=255 tile=$00 flags=$4C screen_x=247 screen_y=143 on_screen=0 dropped_by_line_limit=0
+object index=22 y=255 x=255 tile=$80 flags=$21 screen_x=247 screen_y=239 on_screen=0 dropped_by_line_limit=0
+object index=23 y=255 x=215 tile=$80 flags=$41 screen_x=207 screen_y=239 on_screen=0 dropped_by_line_limit=0
+object index=24 y=251 x=175 tile=$00 flags=$01 screen_x=167 screen_y=235 on_screen=0 dropped_by_line_limit=0
+object index=25 y=255 x=255 tile=$88 flags=$81 screen_x=247 screen_y=239 on_screen=0 dropped_by_line_limit=0
+object index=26 y=250 x=255 tile=$00 flags=$20 screen_x=247 screen_y=234 on_screen=0 dropped_by_line_limit=0
+object index=27 y=123 x=254 tile=$10 flags=$00 screen_x=246 screen_y=107 on_screen=0 dropped_by_line_limit=0
+object index=28 y=253 x=255 tile=$C0 flags=$04 screen_x=247 screen_y=237 on_screen=0 dropped_by_line_limit=0
+object index=29 y=255 x=235 tile=$00 flags=$02 screen_x=227 screen_y=239 on_screen=0 dropped_by_line_limit=0
+object index=30 y=255 x=254 tile=$00 flags=$12 screen_x=246 screen_y=239 on_screen=0 dropped_by_line_limit=0
+object index=31 y=55 x=255 tile=$98 flags=$01 screen_x=247 screen_y=39 on_screen=0 dropped_by_line_limit=0
+object index=32 y=255 x=255 tile=$28 flags=$00 screen_x=247 screen_y=239 on_screen=0 dropped_by_line_limit=0
+object index=33 y=190 x=255 tile=$04 flags=$20 screen_x=247 screen_y=174 on_screen=0 dropped_by_line_limit=0
+object index=34 y=255 x=255 tile=$00 flags=$0A screen_x=247 screen_y=239 on_screen=0 dropped_by_line_limit=0
+object index=35 y=255 x=191 tile=$08 flags=$98 screen_x=183 screen_y=239 on_screen=0 dropped_by_line_limit=0
+object index=36 y=252 x=253 tile=$0A flags=$00 screen_x=245 screen_y=236 on_screen=0 dropped_by_line_limit=0
+object index=37 y=247 x=251 tile=$00 flags=$00 screen_x=243 screen_y=231 on_screen=0 dropped_by_line_limit=0
+object index=38 y=255 x=252 tile=$00 flags=$00 screen_x=244 screen_y=239 on_screen=0 dropped_by_line_limit=0
+object index=39 y=159 x=159 tile=$00 flags=$00 screen_x=151 screen_y=143 on_screen=1 dropped_by_line_limit=0
+png path=oam.png width=71 height=44 scale=1
+rev s12
+$ gbcli view map --map window --session demo
+exit 0
+map area=9800 addressing=8000 background=1
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 01 02 03 04 05 06 07 08 09 0a 0b 0c 19 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 0d 0e 0f 10 11 12 13 14 15 16 17 18 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+rev s12
+$ gbcli sym Work* --session demo
+exit 0
+symbol name=Work bank=0 addr=$0163 area=rom0
+symbol name=Work.done bank=0 addr=$0170 area=rom0
+rev s12
+$ gbcli checkpoints --session demo
+exit 0
+saved at=before rev=s5 frame=3 rom_matches=1
+saved at=~1 rev=s11 frame=3 rom_matches=1
+saved at=~2 rev=s10 frame=3 rom_matches=1
+saved at=~3 rev=s9 frame=3 rom_matches=1
+saved at=~4 rev=s8 frame=3 rom_matches=1
+saved at=~5 rev=s7 frame=3 rom_matches=1
+saved at=~6 rev=s6 frame=3 rom_matches=1
+saved at=~7 rev=s5 frame=3 rom_matches=1
+saved at=~8 rev=s4 frame=3 rom_matches=1
+rev s12
 $ gbcli events --limit 2 --session demo
 exit 0
-event at=* op=undo ok=1 rev_before=s9 rev_after=s10
-event at=* op=run ok=1 rev_before=s10 rev_after=s11 stop=predicate pc=$016C frame=3 args={"read":["u16[wFrame]"],"until":"u16[wFrame] >= 2500"}
-rev s11
+event at=* op=sym ok=1 rev_before=s12 rev_after=s12 args={"pattern":"Work*"}
+event at=* op=checkpoints ok=1 rev_before=s12 rev_after=s12
+rev s12
 $ gbcli read [$FEA0] --session demo
 exit 5
 --- stderr
@@ -94,7 +438,7 @@ exit 0
 gap feature=extra_oam count=1
 $ gbcli sessions
 exit 0
-session name=demo rom=demo.gb rev=s11 head_frame=87 checkpoints=1 size_bytes=* last_used=*
+session name=demo rom=demo.gb rev=s12 head_frame=88 checkpoints=1 size_bytes=* last_used=*
 $ gbcli sessions prune --unused-for 7d
 exit 0
 pruned none

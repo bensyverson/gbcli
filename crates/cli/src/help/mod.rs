@@ -9,7 +9,7 @@ pub use recipes::RECIPES;
 pub use schema::SCHEMA;
 pub use topics::Topic;
 
-use crate::verbs::{Class, OUTPUT, SESSION, VERBS, VerbSpec};
+use crate::verbs::{Class, OUTPUT, SESSION, SHOT_OPTIONS, VERBS, VerbSpec};
 
 /// Bare `gbcli`: what it is, the verbs by class, the first command and
 /// where help lives. At most 40 lines (design §12).
@@ -18,7 +18,7 @@ pub fn primer() -> String {
         "gbcli — a headless, deterministic Game Boy emulator for agents.\n\
          \n\
          Each command opens a named session (.gbcli/sessions/NAME/), does one thing to\n\
-         its machine, saves it and prints rows; --json prints the protocol's result.\n\
+         its machine, saves it and prints rows; --json prints the response line.\n\
          \n",
     );
     for class in Class::ALL {
@@ -36,7 +36,7 @@ pub fn primer() -> String {
         );
     }
     out += "\n\
-        First:  gbcli run game.gb --session demo --frames 120\n\
+        First:  gbcli run game.gb --session demo --frames 120 --shot first.png\n\
         Then:   gbcli show --session demo    gbcli read pc frame --session demo\n\
         \n\
         Help:   gbcli VERB --help (one worked example each)\n\
@@ -78,9 +78,12 @@ pub fn verb(spec: &VerbSpec) -> String {
         out += &flag_lines(own.into_iter());
     }
     for group in spec.groups {
-        let heading = if std::ptr::eq(*group, SESSION) {
+        // By content: a const slice has no stable address to compare.
+        let heading = if *group == SESSION {
             "SESSION FLAGS (every session verb)"
-        } else if std::ptr::eq(*group, OUTPUT) {
+        } else if *group == SHOT_OPTIONS {
+            "SHOT FLAGS (how the PNG is taken)"
+        } else if *group == OUTPUT {
             "OUTPUT FLAGS (every verb that sends a request)"
         } else {
             "MORE FLAGS"

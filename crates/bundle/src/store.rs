@@ -8,7 +8,9 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use gbcli_core::{BootRom, Budget, CoreConfig, Model};
-use gbcli_engine::{Backend, Checkpoint, LoadOptions, Machine, RunOptions, SaveMeta, SetupError};
+use gbcli_engine::{
+    Backend, Checkpoint, LoadOptions, Machine, RunOptions, SaveMeta, SetupError, sha256,
+};
 use gbcli_protocol::{Location, Rev, SessionFile, SessionRow, model_name};
 
 use crate::bundle::{Bundle, now_secs, validate_name};
@@ -275,14 +277,18 @@ impl SessionStore {
         Ok(Vec::new())
     }
 
+    /// Keyed on the core identity too, so an entry another build of the core
+    /// wrote is never reused: its state may have another layout.
     fn boot_cache_path(&self, cp: &Checkpoint) -> PathBuf {
         let h = &cp.header;
+        let core = sha256(format!("{}\0{}", h.core.backend, h.core.commit).as_bytes());
         let key = format!(
-            "{}-{}-{}-{}",
+            "{}-{}-{}-{}-{}",
             &h.rom_sha256.to_string()[..16],
             model_name(h.model),
             &h.boot_rom_sha256.to_string()[..16],
-            h.seed
+            h.seed,
+            &core.to_string()[..16]
         );
         self.bundle.cache_dir().join(format!("boot-{key}.gbck"))
     }
@@ -770,6 +776,26 @@ mod tests {
             store.checkpoint_or_history(Rev(2), "~9"),
             Err(StoreError::CheckpointMissing { .. })
         ));
+    }
+
+    #[test]
+    fn a_boot_cache_entry_from_another_core_identity_is_not_reused() {
+        let f = Fixture::new("boot-cache-identity");
+        let store = f.bundle.session("demo").unwrap();
+        let mut machine = store.create(&f.source()).unwrap();
+        // A loadable entry at power-on, as another build of the core would have
+        // written it: reused, it would leave the machine short of the handoff.
+        let mut foreign = machine.capture(SaveMeta::default());
+        foreign.header.core.commit = "0000000+patches.0000000000000000".into();
+        store.write_boot_cache(&foreign).unwrap();
+
+        let warnings = store
+            .to_handoff(&mut machine, &LoadOptions::default())
+            .unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert!(machine.boot().is_some());
+        let cached = fs::read_dir(f.bundle.cache_dir()).unwrap().count();
+        assert_eq!(cached, 2, "each identity keeps its own entry");
     }
 
     #[test]

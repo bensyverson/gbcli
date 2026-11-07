@@ -149,6 +149,40 @@ fn a_blob_the_core_rejects_is_a_mismatch_naming_both_commits() {
     assert!(!err.remedy().is_empty());
 }
 
+/// A checkpoint as the build before the layer-identity patch wrote it: the
+/// core identity is the bare SameBoy commit, and the SameBoy backend's blob is
+/// format 2, which has no patch-set field (the 8-byte length and its bytes
+/// after the magic and version).
+fn from_before_the_layer_patch(mut cp: Checkpoint) -> Checkpoint {
+    let (commit, _) = cp.header.core.commit.split_once('+').expect("a patch set");
+    cp.header.core.commit = commit.to_string();
+    let n = u64::from_le_bytes(cp.blob[12..20].try_into().unwrap()) as usize;
+    let mut blob = cp.blob[..8].to_vec();
+    blob.extend_from_slice(&2u32.to_le_bytes());
+    blob.extend_from_slice(&cp.blob[20 + n..]);
+    cp.blob = blob;
+    cp
+}
+
+#[test]
+fn a_checkpoint_from_before_the_layer_patch_is_refused_with_a_remedy() {
+    let saved = from_before_the_layer_patch(in_work().capture(meta()));
+    let err = in_work()
+        .restore(&saved, &LoadOptions::default())
+        .unwrap_err();
+    let CheckpointError::CoreRejected { saved: s, ours, .. } = &err else {
+        panic!("{err:?}");
+    };
+    assert_ne!(s.commit, ours.commit);
+    let text = err.to_string();
+    assert!(text.contains("layer-identity patch"), "{text}");
+    assert!(
+        err.remedy().contains("re-create the state"),
+        "{}",
+        err.remedy()
+    );
+}
+
 #[test]
 fn an_unknown_boot_rom_is_refused_naming_its_hash() {
     let mut saved = in_work().capture(meta());

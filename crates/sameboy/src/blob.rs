@@ -1,13 +1,25 @@
 //! The backend's state blob: SameBoy's save state plus what SameBoy doesn't
 //! save and the wrapper owns (emulated time, the vblank count, the last
 //! complete frame). Little-endian throughout.
+//!
+//! A blob records the patch set it was saved under, and a load under another
+//! one is refused: SameBoy accepts a smaller saved section and shifts every
+//! later field, so a patch that changes a struct's layout would otherwise load
+//! silently and diverge (`project/2026-11-06-sameboy-vendoring.md`).
 
 use gbcli_core::{CoreError, FrameTag, Ticks, VblankKind};
+use sameboy_sys as sb;
 
 use crate::hooks::FrameCopy;
 
 const MAGIC: &[u8; 8] = b"GBCLISB\0";
-const VERSION: u32 = 2;
+/// 3 adds the patch set; 2 is the last format from before the layer-identity
+/// patch grew SameBoy's saved video section.
+const VERSION: u32 = 3;
+const BEFORE_LAYER_PATCH: u32 = 2;
+/// What every refusal of a state this build can't read tells the caller to do.
+const REMEDY: &str = "load it with the gbcli build that saved it, or re-create the state \
+                      from the ROM";
 
 /// Everything in a blob, decoded.
 #[derive(Clone, Debug, Default)]
@@ -25,11 +37,17 @@ pub(crate) struct Blob {
 }
 
 pub(crate) fn encode(blob: &Blob) -> Vec<u8> {
+    encode_with_patch_set(blob, sb::PATCH_SET)
+}
+
+fn encode_with_patch_set(blob: &Blob, patch_set: &str) -> Vec<u8> {
     let frame = &blob.frame;
     let mut out =
-        Vec::with_capacity(64 + frame.shades.len() + frame.rgb.len() * 4 + blob.sameboy.len());
+        Vec::with_capacity(96 + frame.shades.len() + frame.rgb.len() * 4 + blob.sameboy.len());
     out.extend_from_slice(MAGIC);
     out.extend_from_slice(&VERSION.to_le_bytes());
+    out.extend_from_slice(&(patch_set.len() as u64).to_le_bytes());
+    out.extend_from_slice(patch_set.as_bytes());
     out.extend_from_slice(&blob.model.to_le_bytes());
     out.extend_from_slice(&blob.ticks.to_le_bytes());
     out.extend_from_slice(&blob.vblanks.to_le_bytes());
@@ -62,8 +80,25 @@ pub(crate) fn decode(bytes: &[u8]) -> Result<Blob, CoreError> {
     if r.take(MAGIC.len())? != MAGIC {
         return Err(invalid("wrong magic"));
     }
-    if r.u32()? != VERSION {
-        return Err(invalid("unknown version"));
+    match r.u32()? {
+        VERSION => {}
+        BEFORE_LAYER_PATCH => {
+            return Err(unreadable(format!(
+                "the state is format {BEFORE_LAYER_PATCH}, saved before the layer-identity patch \
+                 changed SameBoy's state layout; this build reads format {VERSION}"
+            )));
+        }
+        other => return Err(invalid(&format!("unknown version {other}"))),
+    }
+    let n = r.len()?;
+    let patch_set = r.take(n)?;
+    if patch_set != sb::PATCH_SET.as_bytes() {
+        return Err(unreadable(format!(
+            "the state was saved under SameBoy patch set {}, this build has {}, and a patch \
+             may change the state layout",
+            String::from_utf8_lossy(patch_set),
+            sb::PATCH_SET
+        )));
     }
     let model = r.u32()?;
     let ticks = r.u64()?;
@@ -170,6 +205,13 @@ fn code_kind(code: u8) -> Result<VblankKind, CoreError> {
     }
 }
 
+/// A gbcli state blob this build can't read, with the remedy.
+fn unreadable(why: String) -> CoreError {
+    CoreError::InvalidState {
+        reason: format!("{why}; {REMEDY}"),
+    }
+}
+
 fn invalid(what: &str) -> CoreError {
     CoreError::InvalidState {
         reason: format!("not a gbcli SameBoy state blob: {what}"),
@@ -256,6 +298,49 @@ mod tests {
         for len in 0..bytes.len() {
             assert!(decode(&bytes[..len]).is_err(), "accepted {len} bytes");
         }
+    }
+
+    /// Format 2, the last before the layer-identity patch: format 3 without
+    /// the patch-set field after the version.
+    fn encode_format_2(blob: &Blob) -> Vec<u8> {
+        let v3 = encode(blob);
+        let patch_set_len = u64::from_le_bytes(v3[12..20].try_into().unwrap()) as usize;
+        let mut out = MAGIC.to_vec();
+        out.extend_from_slice(&2u32.to_le_bytes());
+        out.extend_from_slice(&v3[20 + patch_set_len..]);
+        out
+    }
+
+    fn reason(err: CoreError) -> String {
+        match err {
+            CoreError::InvalidState { reason } => reason,
+            other => panic!("expected InvalidState, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_format_2_blob_from_before_the_layer_patch_is_refused_with_a_remedy() {
+        let reason = reason(decode(&encode_format_2(&sample(false))).unwrap_err());
+        assert!(reason.contains("format 2"), "{reason}");
+        assert!(reason.contains("layer-identity patch"), "{reason}");
+        assert!(reason.contains("re-create the state"), "{reason}");
+    }
+
+    #[test]
+    fn a_blob_from_another_patch_set_is_refused_naming_both() {
+        let bytes = encode_with_patch_set(&sample(false), "0123456789abcdef");
+        let reason = reason(decode(&bytes).unwrap_err());
+        assert!(reason.contains("0123456789abcdef"), "{reason}");
+        assert!(reason.contains(sb::PATCH_SET), "{reason}");
+        assert!(reason.contains("re-create the state"), "{reason}");
+    }
+
+    #[test]
+    fn a_blob_records_this_builds_patch_set() {
+        let bytes = encode(&sample(false));
+        assert_eq!(u32::from_le_bytes(bytes[8..12].try_into().unwrap()), 3);
+        let n = u64::from_le_bytes(bytes[12..20].try_into().unwrap()) as usize;
+        assert_eq!(&bytes[20..20 + n], sb::PATCH_SET.as_bytes());
     }
 
     #[test]

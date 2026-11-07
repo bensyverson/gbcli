@@ -9,7 +9,13 @@
 use std::fs;
 use std::path::Path;
 
+#[path = "patch_set.rs"]
+mod patch_set;
+
 const SAMEBOY: &str = "SameBoy";
+/// gbcli's patches over SameBoy, already applied to `SameBoy/Core`; their hash
+/// is part of the core identity a save state records.
+const PATCHES: &str = "patches";
 /// Our C accessors over SameBoy internals, compiled with the same flags.
 const SHIM: &str = "shim/gbcli_shim.c";
 
@@ -50,6 +56,18 @@ fn main() {
     let root = Path::new(SAMEBOY);
     println!("cargo::rerun-if-changed={SAMEBOY}");
     println!("cargo::rerun-if-changed={SHIM}");
+    println!("cargo::rerun-if-changed={PATCHES}");
+    println!("cargo::rerun-if-changed=patch_set.rs");
+
+    // The core identity: a save state from another commit or another patch
+    // set may have another layout (`project/2026-11-06-sameboy-vendoring.md`).
+    let commit = fs::read_to_string(root.join("COMMIT")).expect("read SameBoy/COMMIT");
+    let patch_set = patch_set::hash(Path::new(PATCHES));
+    println!("cargo::rustc-env=GBCLI_SAMEBOY_PATCH_SET={patch_set}");
+    println!(
+        "cargo::rustc-env=GBCLI_SAMEBOY_CORE_VERSION={}+patches.{patch_set}",
+        commit.trim_ascii_end()
+    );
 
     let version = makefile_value(&root.join("version.mk"), "VERSION");
     let copyright_year = copyright_year(&root.join("LICENSE"));

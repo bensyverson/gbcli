@@ -17,9 +17,10 @@ fn main() -> ExitCode {
         Some("serve") => serve_command(args.collect()),
         Some("version") => {
             println!(
-                "gbcli {} (SameBoy {})",
+                "gbcli {} (SameBoy {}+patches.{})",
                 env!("CARGO_PKG_VERSION"),
                 &sameboy_sys::SAMEBOY_COMMIT[..7],
+                &sameboy_sys::PATCH_SET[..8],
             );
             ExitCode::SUCCESS
         }
@@ -32,10 +33,11 @@ fn main() -> ExitCode {
         }
         None => {
             eprintln!(
-                "gbcli {} (SameBoy {}): only `serve` and `version` are built. \
+                "gbcli {} (SameBoy {}+patches.{}): only `serve` and `version` are built. \
                  `gbcli serve --session <name> --rom <file>` speaks JSON Lines over stdio.",
                 env!("CARGO_PKG_VERSION"),
                 &sameboy_sys::SAMEBOY_COMMIT[..7],
+                &sameboy_sys::PATCH_SET[..8],
             );
             ExitCode::from(2)
         }

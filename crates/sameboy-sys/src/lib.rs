@@ -13,6 +13,13 @@ use std::marker::{PhantomData, PhantomPinned};
 /// The vendored SameBoy commit (`SameBoy/COMMIT`, written by `scripts/vendor-sameboy.sh`).
 pub const SAMEBOY_COMMIT: &str = include_str!("../SameBoy/COMMIT").trim_ascii_end();
 
+/// The hash of gbcli's patch set (`patches/`), computed by `build.rs`: 16 hex digits.
+pub const PATCH_SET: &str = env!("GBCLI_SAMEBOY_PATCH_SET");
+
+/// The core identity a save state records: `<commit>+patches.<PATCH_SET>`.
+/// Changing any file in `patches/` changes it, so no number needs bumping by hand.
+pub const CORE_VERSION: &str = env!("GBCLI_SAMEBOY_CORE_VERSION");
+
 /// SameBoy's open-source boot ROMs (Expat; `bootroms/LICENSE`), built from
 /// `SameBoy/BootROMs/*.asm` by `scripts/build-roms.sh`.
 pub mod boot_roms {

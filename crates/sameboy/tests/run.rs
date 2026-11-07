@@ -10,11 +10,13 @@ use gbcli_core::{
 use gbcli_sameboy::SameBoy;
 
 #[test]
-fn info_names_the_backend_its_commit_and_model() {
+fn info_names_the_backend_its_commit_patch_set_and_model() {
     let core = quick_dmg(BUSY);
     let info = core.info();
     assert_eq!(info.backend, "sameboy");
-    assert_eq!(info.version, sameboy_sys::SAMEBOY_COMMIT);
+    assert_eq!(info.version, sameboy_sys::CORE_VERSION);
+    assert!(info.version.starts_with(sameboy_sys::SAMEBOY_COMMIT));
+    assert!(info.version.ends_with(sameboy_sys::PATCH_SET));
     assert_eq!(info.model, Model::DmgB);
 }
 

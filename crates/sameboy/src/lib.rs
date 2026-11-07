@@ -172,7 +172,7 @@ impl Core for SameBoy {
     fn info(&self) -> CoreInfo {
         CoreInfo {
             backend: "sameboy",
-            version: sb::SAMEBOY_COMMIT,
+            version: sb::CORE_VERSION,
             model: self.model,
         }
     }

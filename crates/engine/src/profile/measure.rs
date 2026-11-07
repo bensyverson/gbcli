@@ -4,7 +4,8 @@
 use std::fmt;
 
 use gbcli_core::{
-    AddrFilter, BankSel, Budget, Core, CoreError, InStop, RunRequest, StopReason, Ticks, Usage,
+    AddrFilter, BankSel, Budget, Core, CoreError, FirstStep, InStop, RunRequest, StopReason, Ticks,
+    Usage,
 };
 use gbcli_protocol::Location;
 
@@ -219,9 +220,10 @@ impl Runner<'_> {
         filter.matches(pc, mem::bank_at(self.core, pc))
     }
 
-    /// Runs until PC arrives at `filter` (the core never stops on an
-    /// execution hit before its first instruction, so this always moves).
-    /// Every KEY1 write stops the core and the speed is checked at every
+    /// Runs until PC arrives at `filter`, after at least one instruction: the
+    /// leg's first run leaves its first step unchecked, so this always moves.
+    /// A run resumed after a KEY1 write checks its first step, since the
+    /// instruction after the write may be the arrival. Every KEY1 write stops the core and the speed is checked at every
     /// stop: a switch clears KEY1's arm bit, so switching back needs another
     /// KEY1 write, where the first switch shows. A switch and back can't
     /// hide between two checks.
@@ -231,8 +233,11 @@ impl Runner<'_> {
         (iteration, leg): (u32, Leg),
     ) -> Result<(), MeasureError> {
         let completed = iteration;
+        let mut first_step = FirstStep::Run;
         loop {
             let mut req = RunRequest::new(self.budget.remaining_after(&self.used));
+            req.first_step = first_step;
+            first_step = FirstStep::Check;
             // No key comes during a measurement, so a STOP nothing can wake
             // ends it rather than spending the budget.
             req.in_stop = InStop::End;

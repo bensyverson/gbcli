@@ -12,12 +12,12 @@
 //! after the instruction that made the access.
 
 use gbcli_core::{
-    Access, CoreError, CpuStep, Event, EventKinds, EventSink, Feature, FrameTag, Hit, Hits, InStop,
-    RunRequest, Stop, StopReason, Ticks, Usage,
+    Access, CoreError, CpuStep, Event, EventKinds, EventSink, Feature, FirstStep, FrameTag, Hit,
+    Hits, InStop, RunRequest, Stop, StopReason, Ticks, Usage,
 };
 use sameboy_sys as sb;
 
-use crate::hooks::{Hooks, on_exec, vblank_kind};
+use crate::hooks::{Hooks, Wake, on_exec, vblank_kind};
 use crate::raster;
 use crate::watch::{self, Armed};
 use crate::{SameBoy, unsupported_err};
@@ -100,6 +100,7 @@ impl Drop for Arming {
             }
             if self.exec {
                 hooks.executed = None;
+                hooks.wake = None;
                 sb::GB_set_execution_callback(self.gb, None);
             }
             if self.raster {
@@ -146,12 +147,12 @@ pub(crate) fn run(core: &mut SameBoy, req: &mut RunRequest<'_>) -> Result<Stop, 
         }
         // SAFETY: `regs` points into the live instance.
         let pc = unsafe { (*regs).pc };
-        // A run never stops on an execution hit before its first step, so
-        // resuming from a breakpoint makes progress. In HALT or STOP, PC
-        // already points past it, but the next step is an idle tick (or a
-        // wake, which SameBoy never folds into running that instruction).
+        // By default a run never stops on an execution hit before its first
+        // step, so resuming from a breakpoint makes progress. In HALT or
+        // STOP, PC already points past it, but the next step is an idle tick
+        // (or a wake, which SameBoy never folds into running that instruction).
         if check_exec
-            && used.instructions > 0
+            && (used.instructions > 0 || req.first_step == FirstStep::Check)
             && req.exec.may_match(pc)
             // SAFETY: plain reads of a live instance outside GB_run.
             && !unsafe { sb::gbcli_halted(gb) || sb::gbcli_stopped(gb) }
@@ -181,40 +182,43 @@ pub(crate) fn run(core: &mut SameBoy, req: &mut RunRequest<'_>) -> Result<Stop, 
         }
 
         let before = exec_events.then(|| {
-            core.hooks_mut().executed = None;
             // SAFETY: plain reads of a live instance outside GB_run.
-            unsafe { ((*regs).sp, sb::gbcli_bank_for(gb, pc)) }
+            let (sp, bank, double_speed, halted) = unsafe {
+                (
+                    (*regs).sp,
+                    sb::gbcli_bank_for(gb, pc),
+                    sb::gbcli_double_speed(gb),
+                    sb::gbcli_halted(gb) && !sb::gbcli_stopped(gb),
+                )
+            };
+            let hooks = core.hooks_mut();
+            hooks.executed = None;
+            hooks.wake = halted.then_some(Wake::Halted);
+            if halted && !arming.read {
+                // SAFETY: installs our callback on the live instance outside GB_run.
+                unsafe { sb::GB_set_read_memory_callback(gb, Some(watch::on_read)) };
+            }
+            Before {
+                sp,
+                bank,
+                double_speed,
+                halted,
+            }
         });
 
         // SAFETY: no reference into the hooks is alive across this call.
         let ticks = u64::from(unsafe { sb::GB_run(gb) });
+        if before.is_some_and(|b| b.halted) && !arming.read {
+            // SAFETY: removes our callback outside GB_run.
+            unsafe { sb::GB_set_read_memory_callback(gb, None) };
+        }
         if kinds.raster
             && let Some(sink) = req.sink.as_mut()
         {
             pass_raster(core.hooks_mut(), &mut **sink);
         }
-        if let (Some((sp_before, bank)), Some(sink)) = (before, req.sink.as_mut()) {
-            // SAFETY: plain reads of a live instance outside GB_run.
-            let (sp_after, next_pc, double_speed) =
-                unsafe { ((*regs).sp, (*regs).pc, sb::gbcli_double_speed(gb)) };
-            // SAFETY: a side-effect-free accessor on a live instance outside GB_run.
-            let next_bank = unsafe { sb::gbcli_bank_for(gb, next_pc) };
-            let step = match core.hooks().executed {
-                Some(opcode) => CpuStep::Instruction { opcode },
-                None if sp_after == sp_before.wrapping_sub(2) => CpuStep::Interrupt,
-                None => CpuStep::Idle,
-            };
-            sink.event(Event::Exec {
-                pc,
-                bank,
-                step,
-                ticks: ticks as u32,
-                sp_before,
-                sp_after,
-                next_pc,
-                next_bank,
-                double_speed,
-            });
+        if let (Some(before), Some(sink)) = (before, req.sink.as_mut()) {
+            pass_exec(core, &mut **sink, pc, before, ticks as u32);
         }
         core.ticks += ticks;
         used.ticks += ticks;
@@ -248,6 +252,63 @@ pub(crate) fn run(core: &mut SameBoy, req: &mut RunRequest<'_>) -> Result<Stop, 
             return Ok(stop(core, StopReason::Frame, used));
         }
     }
+}
+
+/// The CPU state an execution event needs from before its step.
+#[derive(Clone, Copy)]
+struct Before {
+    sp: u16,
+    bank: u16,
+    double_speed: bool,
+    /// In HALT (not STOP) as the step began.
+    halted: bool,
+}
+
+/// Sends the step at `pc` to the sink. A step that began in HALT and left it
+/// to dispatch or run an instruction is sent as two: the HALT cycles SameBoy
+/// runs first in the same step (`GB_cpu_run` in sm83_cpu.c advances 2 to 4
+/// cycles in its halted branch before acting) as an idle step, then the rest.
+/// The speed is the one the step began at: a speed-switching step mixes both.
+fn pass_exec(core: &mut SameBoy, sink: &mut dyn EventSink, pc: u16, before: Before, ticks: u32) {
+    let gb = core.raw();
+    // SAFETY: plain reads of a live instance outside GB_run.
+    let (sp_after, next_pc) = unsafe { ((*core.regs).sp, (*core.regs).pc) };
+    // SAFETY: a side-effect-free accessor on a live instance outside GB_run.
+    let next_bank = unsafe { sb::gbcli_bank_for(gb, next_pc) };
+    let hooks = core.hooks_mut();
+    let step = match hooks.executed {
+        Some(opcode) => CpuStep::Instruction { opcode },
+        None if sp_after == before.sp.wrapping_sub(2) => CpuStep::Interrupt,
+        None => CpuStep::Idle,
+    };
+    let idle = match hooks.wake.take() {
+        Some(Wake::At(idle)) if step != CpuStep::Idle => idle.min(ticks),
+        _ => 0,
+    };
+    if idle > 0 {
+        sink.event(Event::Exec {
+            pc,
+            bank: before.bank,
+            step: CpuStep::Idle,
+            ticks: idle,
+            sp_before: before.sp,
+            sp_after: before.sp,
+            next_pc: pc,
+            next_bank: before.bank,
+            double_speed: before.double_speed,
+        });
+    }
+    sink.event(Event::Exec {
+        pc,
+        bank: before.bank,
+        step,
+        ticks: ticks - idle,
+        sp_before: before.sp,
+        sp_after,
+        next_pc,
+        next_bank,
+        double_speed: before.double_speed,
+    });
 }
 
 /// Hands the step's raster events to the sink, keeping the buffer.

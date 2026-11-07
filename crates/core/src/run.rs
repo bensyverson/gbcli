@@ -130,6 +130,19 @@ pub enum InStop {
     End,
 }
 
+/// Whether a run checks its execution filters before its first step.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FirstStep {
+    /// Run the first step unchecked, so a run resumed from a breakpoint
+    /// makes progress instead of stopping there again.
+    #[default]
+    Run,
+    /// Check it like every other step, for a caller resuming after a stop
+    /// that was not an execution hit (a write watch), where an arrival at
+    /// the current PC is new.
+    Check,
+}
+
 /// One run: a budget, the candidate filters, and optional event taps.
 ///
 /// The core only filters; the engine decides (design §2.1). A filter hit ends
@@ -138,6 +151,8 @@ pub struct RunRequest<'a> {
     pub budget: Budget,
     /// Candidate breakpoints, checked before each instruction executes.
     pub exec: &'a AddrFilter,
+    /// Whether `exec` is checked before the first step too.
+    pub first_step: FirstStep,
     /// Candidate read watches, checked after the access.
     pub read: &'a AddrFilter,
     /// Candidate write watches, checked as the access happens.
@@ -166,6 +181,7 @@ impl<'a> RunRequest<'a> {
         RunRequest {
             budget,
             exec: &EMPTY,
+            first_step: FirstStep::Run,
             read: &EMPTY,
             write: &EMPTY,
             veto: &EMPTY,
@@ -195,7 +211,8 @@ pub enum CpuStep {
     /// An interrupt was dispatched: the return address was pushed and PC set
     /// to the vector (0 if a write to IE during the push cancelled it).
     Interrupt,
-    /// No instruction ran: a HALT or STOP tick, or waking from HALT.
+    /// No instruction ran: a HALT or STOP tick, a wake from HALT without a
+    /// dispatch, or the HALT cycles of a step that then dispatches or runs one.
     Idle,
 }
 
@@ -222,7 +239,10 @@ pub enum Event {
     /// The PPU started a line. A core may miss some line starts; a write
     /// still carries its line.
     Scanline { ly: u8, at: Ticks },
-    /// One CPU step, sent after it completes.
+    /// One CPU step, sent after it completes. A step that leaves HALT to
+    /// dispatch or run an instruction is sent as two, when the core can
+    /// split it: the HALT cycles it ran first as [`CpuStep::Idle`], then the
+    /// rest.
     Exec {
         /// PC and its bank before the step.
         pc: u16,
@@ -235,7 +255,9 @@ pub enum Event {
         /// PC after the step, and the bank mapped there.
         next_pc: u16,
         next_bank: u16,
-        /// Whether the CPU ran at double speed during the step.
+        /// Whether the CPU ran at double speed as the step began. A step
+        /// that switches speed (a CGB STOP, or a HALT tick the switch lands
+        /// in) mixes both, and is counted at this one.
         double_speed: bool,
     },
 }

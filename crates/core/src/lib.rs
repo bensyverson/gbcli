@@ -26,8 +26,8 @@ pub use region::{
     FrameRef, FrameTag, Layer, LayerMap, Pixels, Region, RegionView, VblankKind, WrittenView,
 };
 pub use run::{
-    Budget, BudgetKind, CpuStep, Event, EventKinds, EventSink, InStop, PpuMode, RunRequest,
-    StepUnit, Usage,
+    Budget, BudgetKind, CpuStep, Event, EventKinds, EventSink, FirstStep, InStop, PpuMode,
+    RunRequest, StepUnit, Usage,
 };
 pub use state::{
     BootRom, CoreConfig, CoreInfo, IoReg, JoypadBounce, Keys, Model, PpuStatus, Registers,

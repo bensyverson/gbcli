@@ -9,7 +9,7 @@
 ; HaltLoop waits for each vblank in HALT, and the vblank handler counts
 ; frames in wFrames: a game that finishes its work in time.
 ; SpeedSwitch (CGB only) switches to double speed between two labels; the
-; tests jump to it by setting PC.
+; tests jump to it by setting PC, as they do to Key1Poke.
 
 SECTION "VBlank vector", ROM0[$40]
 VBlankVector:
@@ -62,6 +62,14 @@ SpeedSwitch:
     nop
 .after:
     jr SpeedSwitch.after
+
+; Writes KEY1 without arming a switch, so `measure`'s KEY1 watch stops the
+; run right before .after, an arrival it must still see.
+Key1Poke:
+    xor a
+    ldh [$FF4D], a
+.after:
+    jr Key1Poke
 
 HaltLoop:
     ld a, $91

@@ -249,11 +249,10 @@ fn halting() -> Machine {
     m
 }
 
-/// An interrupt dispatch, which the opcode table doesn't list: 5 M-cycles,
-/// plus the M-cycle SameBoy spends leaving HALT in the same step (`GB_cpu_run`
-/// in sm83_cpu.c advances 4 T in its halted branch, then dispatches). The
-/// profile charges the whole step to the handler.
-const DISPATCH_T: u64 = 20 + 4;
+/// An interrupt dispatch, which the opcode table doesn't list: 5 M-cycles
+/// (`GB_cpu_run`'s dispatch branch in sm83_cpu.c). The HALT cycles SameBoy
+/// runs before it in the same step are idle, not the handler's.
+const DISPATCH_T: u64 = 20;
 
 #[test]
 fn an_interrupt_handler_is_a_routine_entered_at_its_vector() {

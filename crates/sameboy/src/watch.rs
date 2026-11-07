@@ -18,7 +18,7 @@
 use gbcli_core::{Access, AddrFilter, Hit, Hits, Region, StoreFilter, WrittenView, canonical_addr};
 use sameboy_sys as sb;
 
-use crate::hooks::{Hooks, guard};
+use crate::hooks::{Hooks, Wake, guard};
 
 /// The filters of the run in progress. Raw pointers: they borrow from the
 /// `RunRequest`, and the run loop clears them before it returns.
@@ -179,6 +179,12 @@ fn peek(gb: *mut sb::GB_gameboy_t, addr: u16) -> Option<u8> {
 
 pub(crate) unsafe extern "C" fn on_read(gb: *mut sb::GB_gameboy_t, addr: u16, data: u8) -> u8 {
     guard(gb, data, |hooks| {
+        // An OAM DMA read is not the CPU's, and DMA runs during HALT.
+        // SAFETY: plain reads of the live instance from inside its callback.
+        if hooks.wake == Some(Wake::Halted) && !unsafe { sb::gbcli_in_dma_read(gb) } {
+            // SAFETY: as above.
+            hooks.wake = Some(Wake::At(unsafe { sb::gbcli_cycles_since_run(gb) }));
+        }
         let Some(armed) = hooks.armed else {
             return data;
         };

@@ -361,6 +361,10 @@ int gbcli_pre_run(GB_gameboy_t *gb, uint8_t *opcode)
 // ticks): from inside a callback, how far into the instruction it fired.
 unsigned gbcli_cycles_since_run(GB_gameboy_t *gb) { return gb->cycles_since_run; }
 
+// Whether the read in progress is OAM DMA's (GB_dma_run in memory.c sets the
+// flag around its reads), so a read callback can tell it from the CPU's.
+bool gbcli_in_dma_read(GB_gameboy_t *gb) { return gb->in_dma_read; }
+
 // gbcli_apu_write_effect's answers.
 enum {
     GBCLI_APU_WRITE_APPLIED = 0,

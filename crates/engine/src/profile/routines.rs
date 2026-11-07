@@ -8,8 +8,11 @@
 //! frame's SP). Programs manage the stack themselves, so when the shadow and
 //! real stacks disagree the real one wins:
 //!
-//! - **A RET that reads no frame's slot** (`push hl; ret`, a computed jump)
-//!   is a jump: nothing is popped (`ret_jumps`).
+//! - **A RET that reads a slot above the root's stack** (one pushed before
+//!   the profile began) returns from the root: any open frames unwind, and
+//!   the routine it returns into becomes the root.
+//! - **A RET that reads no frame's slot** otherwise (`push hl; ret`, a
+//!   computed jump) is a jump: nothing is popped (`ret_jumps`).
 //! - **A RET that reads a deeper frame's slot** pops the frames above it as
 //!   unwound, then that frame (`unwound`).
 //! - **SP rising past a frame's slot without a RET** (`pop hl` or `add sp`
@@ -20,9 +23,18 @@
 //!
 //! **Charging.** A step's cycles go to the routine on top before the step, so
 //! a CALL is the caller's and a RET the callee's; an interrupt dispatch is the
-//! handler's. The routine running when the profile began is the root: it has
-//! no calls, and its inclusive cost is the whole profile. Inclusive cost is
-//! counted once per routine however deep it recurses.
+//! handler's. Inclusive cost is counted once per routine however deep it
+//! recurses.
+//!
+//! **The root** is the outermost routine the profile has seen running, named
+//! by the address it was first seen at: at first the step the profile began
+//! at, which may be mid-routine (`Leaf+$2`). When it returns (a RET or RETI
+//! reading a return address pushed before the profile began), the routine it
+//! returns into becomes the root, named by the return address
+//! (`MainLoop+$3`): its entry was never seen. A root that returned keeps the
+//! cycles it ran and counts its inclusive cost to its return; the current
+//! root has no calls, and its inclusive cost is the whole profile, since it
+//! was running, under its callees, all along.
 
 use std::collections::HashMap;
 
@@ -101,6 +113,9 @@ struct Cost {
 #[derive(Default)]
 pub struct Routines {
     root: Option<Entry>,
+    /// SP as the root runs: a RET reading a slot at or above it returns
+    /// from the root.
+    root_sp: u16,
     stack: Vec<Frame>,
     costs: HashMap<Entry, Cost>,
     total_t: u64,
@@ -133,9 +148,7 @@ impl EventSink for Routines {
         } = event
         {
             if self.root.is_none() {
-                let root = Entry { bank, addr: pc };
-                self.root = Some(root);
-                self.costs.entry(root).or_default();
+                self.set_root(Entry { bank, addr: pc }, sp_before);
             }
             let t = u64::from(ticks) / if double_speed { 1 } else { 2 };
             let callee = Entry {
@@ -161,7 +174,7 @@ impl EventSink for Routines {
                 {
                     self.push(callee, pc.wrapping_add(len), sp_after);
                 } else if is_return(opcode) && sp_after == sp_before.wrapping_add(2) {
-                    self.ret(sp_before, next_pc);
+                    self.ret(sp_before, callee, sp_after);
                 }
             }
             while self.stack.last().is_some_and(|f| f.sp < sp_after) {
@@ -183,11 +196,7 @@ impl Routines {
         while !self.stack.is_empty() {
             self.pop();
         }
-        if let Some(root) = self.root {
-            let cost = self.costs.entry(root).or_default();
-            cost.inclusive_t = self.total_t;
-            cost.exclusive_t += self.root_exclusive_t;
-        }
+        self.end_root();
         let mut routines: Vec<RoutineCost> = self
             .costs
             .into_iter()
@@ -212,6 +221,21 @@ impl Routines {
             idle_t: self.idle_t,
             ticks: Ticks(self.ticks),
             shadow: self.shadow,
+        }
+    }
+
+    fn set_root(&mut self, root: Entry, sp: u16) {
+        self.root = Some(root);
+        self.root_sp = sp;
+        self.costs.entry(root).or_default();
+    }
+
+    /// Closes the root's books: it ran from the start of the profile to now.
+    fn end_root(&mut self) {
+        if let Some(root) = self.root {
+            let cost = self.costs.entry(root).or_default();
+            cost.inclusive_t += self.total_t;
+            cost.exclusive_t += std::mem::take(&mut self.root_exclusive_t);
         }
     }
 
@@ -240,17 +264,27 @@ impl Routines {
         }
     }
 
-    /// A taken RET that read the return-address slot at `sp`.
-    fn ret(&mut self, sp: u16, to: u16) {
+    /// A taken RET that read the return-address slot at `sp` and went `to`,
+    /// leaving SP at `sp_after`.
+    fn ret(&mut self, sp: u16, to: Entry, sp_after: u16) {
         let Some(depth) = self.stack.iter().rposition(|f| f.sp == sp) else {
-            self.shadow.ret_jumps += 1;
+            if sp >= self.root_sp {
+                self.shadow.unwound += self.stack.len() as u64;
+                while !self.stack.is_empty() {
+                    self.pop();
+                }
+                self.end_root();
+                self.set_root(to, sp_after);
+            } else {
+                self.shadow.ret_jumps += 1;
+            }
             return;
         };
         while self.stack.len() > depth + 1 {
             self.shadow.unwound += 1;
             self.pop();
         }
-        if self.stack[depth].ret != to {
+        if self.stack[depth].ret != to.addr {
             self.shadow.mismatched += 1;
         }
         self.pop();

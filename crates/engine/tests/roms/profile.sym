@@ -11,7 +11,9 @@
 00:0174 SpeedSwitch
 00:0178 SpeedSwitch.before
 00:017b SpeedSwitch.after
-00:017d HaltLoop
-00:0189 HaltLoop.wait
-00:018d VBlank
+00:017d Key1Poke
+00:0180 Key1Poke.after
+00:0182 HaltLoop
+00:018e HaltLoop.wait
+00:0192 VBlank
 00:c000 wFrames

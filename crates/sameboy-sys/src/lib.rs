@@ -268,6 +268,8 @@ unsafe extern "C" {
     pub fn gbcli_sync_apu(gb: *mut GB_gameboy_t);
     /// Ticks since the current `GB_run` began, read from inside a callback.
     pub fn gbcli_cycles_since_run(gb: *mut GB_gameboy_t) -> c_uint;
+    /// Whether the read in progress is OAM DMA's, from inside a read callback.
+    pub fn gbcli_in_dma_read(gb: *mut GB_gameboy_t) -> bool;
     /// One of the `GBCLI_APU_WRITE_*` codes: what the APU will do with a
     /// write to `addr`, read from inside the write callback.
     pub fn gbcli_apu_write_effect(gb: *mut GB_gameboy_t, addr: u16) -> c_int;

@@ -18,6 +18,17 @@ const LOG_LINES: usize = 256;
 /// The largest screen SameBoy draws (SGB with border).
 pub(crate) const SCREEN_PIXELS: usize = 256 * 224;
 
+/// Where a step that began in HALT left it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Wake {
+    /// Not yet: no CPU bus access so far this step.
+    Halted,
+    /// At the CPU's first bus access, this many ticks into the step: the
+    /// dispatch's or the instruction's first read, so the ticks before it
+    /// are the HALT cycles SameBoy ran first in the same step.
+    At(u32),
+}
+
 /// The DMG palette whose "colors" are shade indices, so the encoder hands back
 /// raw shades: SameBoy maps shade `s` (0 lightest) to `colors[3 - s]`, and
 /// `colors[4]` is the LCD-off color.
@@ -101,6 +112,9 @@ pub(crate) struct Hooks {
     /// The opcode SameBoy's execution callback saw this step, while a run's
     /// sink wants execution events; `None` when the step ran no instruction.
     pub executed: Option<u8>,
+    /// While a step that began in HALT runs under an execution sink: how
+    /// far into it the CPU left HALT.
+    pub wake: Option<Wake>,
     /// The raster events of the current step, while a run's sink wants them.
     pub raster: Option<Vec<gbcli_core::Event>>,
     /// Set as the LCD turns off, so the line callback SameBoy then fires is
@@ -131,6 +145,7 @@ impl Hooks {
             step_ticks: 0,
             in_run: false,
             executed: None,
+            wake: None,
             raster: None,
             lcd_turning_off: false,
         }

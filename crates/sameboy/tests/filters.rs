@@ -4,8 +4,8 @@ mod common;
 
 use common::*;
 use gbcli_core::{
-    Access, AddrFilter, BankSel, Budget, Core, CoreConfig, CoreError, Feature, Hit, Model, Region,
-    RunRequest, Stop, StopReason, StoreFilter, Support, WriteTracking,
+    Access, AddrFilter, BankSel, Budget, Core, CoreConfig, CoreError, Feature, FirstStep, Hit,
+    Model, Region, RunRequest, Stop, StopReason, StoreFilter, Support, WriteTracking,
 };
 use gbcli_sameboy::SameBoy;
 
@@ -50,6 +50,19 @@ fn a_breakpoint_on_a_banked_address_fires_only_in_that_bank() {
     let second = run_with(&mut core, |r| r.exec = &exec);
     assert_eq!(hit(&second).bank, 2);
     assert!(second.used.instructions > 10, "{:?}", second.used);
+}
+
+#[test]
+fn a_run_that_checks_its_first_step_stops_at_once_on_a_breakpoint_at_pc() {
+    let mut core = quick_dmg(BANKED);
+    let exec = filter(&[(0x4000, BankSel::Bank(2))]);
+    run_with(&mut core, |r| r.exec = &exec);
+    let again = run_with(&mut core, |r| {
+        r.exec = &exec;
+        r.first_step = FirstStep::Check;
+    });
+    assert_eq!(hit(&again).addr, 0x4000);
+    assert_eq!(again.used.instructions, 0, "{:?}", again.used);
 }
 
 #[test]

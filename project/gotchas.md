@@ -33,3 +33,7 @@ A `run_in_background` Bash command that ran past ~595 s died with `time: command
 ## 2026-11-06 — SameBoy publishes a blank frame after the LCD is turned on, after rendering it
 
 On the first vblank after LCDC's enable bit is written, `GB_display_vblank` (display.c:235) fills `gb->screen` with the LCD-off colour *before* calling the vblank callback, while `frame_skip_state` is still `GB_FRAMESKIP_LCD_TURNED_ON` (it is cleared right after the callback returns, display.c:2213–2225). The frame's pixels are therefore the blank screen even though the PPU just rendered a full frame; anything captured during that render and published at the same vblank (as the layer tags are) describes pixels the caller will never see. Detect it from the callback with `gbcli_frame_scrubbed` and publish no side data for that frame. It shows up as an apparently one-frame lag between pixels and tags (observed 2026-11-06, leaf n2WX5r).
+
+## 2026-11-06 — WRAM is random at power-on, so a test ROM's unset flag picks a branch by seed
+
+SameBoy randomizes RAM at power-on (seeded, so it is the same every run), and `quick_dmg` does not clear it. `layers.gb` chose its quiet or VRAM-reading loop from `$C000`, and the test only wrote it for the busy variant, so the "quiet" variant silently ran the busy loop too and the batched renderer (`render_line`) was never tested. Write every flag a test ROM reads (`select_loop` in `crates/sameboy/tests/layers.rs`), or have the ROM clear it, and check a claimed code path with an observation (leaf XKaz0o).

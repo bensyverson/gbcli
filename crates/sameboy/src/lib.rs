@@ -21,7 +21,7 @@ use gbcli_core::{
 };
 use sameboy_sys as sb;
 
-use hooks::{Hooks, LAYER_BACKGROUND};
+use hooks::Hooks;
 pub use support::builtin_boot_rom;
 pub(crate) use support::unsupported_err;
 use support::{sameboy_model, support};
@@ -141,6 +141,26 @@ impl SameBoy {
         ((w * h) as usize).min(hooks::SCREEN_PIXELS)
     }
 
+    /// Why this core can't capture pixel layers, if it can't.
+    fn layers_refusal(&self) -> Option<&'static str> {
+        if self.model.is_sgb() {
+            Some(support::SGB_LAYERS_REASON)
+        } else if !self.hooks().rendering {
+            Some(support::RENDERING_OFF_LAYERS_REASON)
+        } else {
+            None
+        }
+    }
+
+    /// Whether no pixel of the frame in progress has been drawn yet: the LCD
+    /// is off, or the PPU is in vblank or in line 0's OAM scan. STAT and LY in
+    /// the IO array describe how far the PPU has run, and it draws nothing
+    /// ahead of that, even while it batches.
+    fn frame_untouched(&self) -> bool {
+        let ppu = self.ppu();
+        !ppu.lcd_on || ppu.mode == PpuMode::VBlank || (ppu.ly == 0 && ppu.mode == PpuMode::OamScan)
+    }
+
     fn raw(&self) -> *mut sb::GB_gameboy_t {
         self.gb.as_ptr()
     }
@@ -179,8 +199,9 @@ impl Core for SameBoy {
 
     fn supports(&self, feature: Feature) -> Support {
         match feature {
-            Feature::PixelLayers if self.model.is_sgb() => Support::No {
-                reason: support::SGB_LAYERS_REASON,
+            Feature::PixelLayers => match self.layers_refusal() {
+                Some(reason) => Support::No { reason },
+                None => Support::Yes,
             },
             // SAFETY: a plain query on a live instance.
             Feature::CartRamWrites if !unsafe { sb::gbcli_cart_ram_mirrored(self.raw()) } => {
@@ -287,11 +308,11 @@ impl Core for SameBoy {
         let frame = &self.hooks().frame;
         if frame.tag.is_none() || frame.layers.len() != (frame.width * frame.height) as usize {
             return Err(CoreError::InvalidState {
-                reason:
-                    "the last complete frame has no layer map: capture had just been turned on, \
-                         or the frame was not rendered normally (LCD off, or the blank frame after \
-                         the LCD is turned on)"
-                        .into(),
+                reason: "the last complete frame has no layer map: it was already being drawn, or \
+                         done, when capture was turned on or a state was loaded, or it was not \
+                         rendered normally (LCD off, or the blank frame after the LCD is turned \
+                         on); run another frame"
+                    .into(),
             });
         }
         Ok(LayerMap {
@@ -302,21 +323,22 @@ impl Core for SameBoy {
     }
 
     fn set_pixel_layers(&mut self, on: bool) -> Result<(), CoreError> {
-        if on && self.model.is_sgb() {
+        if on && let Some(reason) = self.layers_refusal() {
             return Err(CoreError::Unsupported {
                 feature: Feature::PixelLayers,
-                reason: support::SGB_LAYERS_REASON,
+                reason,
             });
         }
+        if on == self.hooks().layers_on {
+            return Ok(());
+        }
         let gb = self.raw();
+        let fresh = self.frame_untouched();
         let hooks = self.hooks_mut();
         if on {
-            // A frame already in progress was only partly tagged: drop it and
-            // leave a clean background map for the next one.
             hooks.layers_on = true;
-            hooks.layers_skip_next = true;
-            hooks.layers.fill(LAYER_BACKGROUND);
             hooks.frame.layers.clear();
+            hooks.restart_capture(fresh);
             // SAFETY: the buffer lives in `hooks`, which outlives the instance.
             unsafe { sb::gbcli_set_layer_buffer(gb, hooks.layers.as_mut_ptr()) };
         } else {
@@ -409,7 +431,7 @@ impl Core for SameBoy {
                 .tracking
                 .as_ref()
                 .map_or_else(Vec::new, |t| t.words()),
-            frame: self.hooks().frame.clone(),
+            frame: self.hooks().frame.without_layers(),
             screen: self.hooks().screen[..self.screen_pixels()].to_vec(),
             sameboy,
         })
@@ -453,8 +475,15 @@ impl Core for SameBoy {
         }
         self.ticks = blob.ticks;
         self.vblanks = blob.vblanks;
+        let fresh = self.frame_untouched();
         let hooks = self.hooks_mut();
+        // The blob carries no layer map, so the loaded frame has none.
         hooks.frame = blob.frame;
+        if hooks.layers_on {
+            // The buffer holds the old timeline's tags for the rows the loaded
+            // frame has already drawn.
+            hooks.restart_capture(fresh);
+        }
         // In place: SameBoy holds a pointer to this buffer.
         hooks.screen[..blob.screen.len()].copy_from_slice(&blob.screen);
         if let Some(tracking) = &mut hooks.tracking {

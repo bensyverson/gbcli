@@ -17,9 +17,6 @@ use crate::watch::{Armed, Tracking};
 const LOG_LINES: usize = 256;
 /// The largest screen SameBoy draws (SGB with border).
 pub(crate) const SCREEN_PIXELS: usize = 256 * 224;
-/// The layer tag for "background" in SameBoy's side buffer; the others are
-/// `1` for the window and `2 + n` for OAM object `n` (see display.c).
-pub(crate) const LAYER_BACKGROUND: u8 = 0;
 
 /// The DMG palette whose "colors" are shade indices, so the encoder hands back
 /// raw shades: SameBoy maps shade `s` (0 lightest) to `colors[3 - s]`, and
@@ -41,6 +38,18 @@ pub(crate) struct FrameCopy {
 }
 
 impl FrameCopy {
+    /// A copy for the state blob, which never encodes the layer map.
+    pub fn without_layers(&self) -> FrameCopy {
+        FrameCopy {
+            tag: self.tag,
+            width: self.width,
+            height: self.height,
+            shades: self.shades.clone(),
+            rgb: self.rgb.clone(),
+            layers: Vec::new(),
+        }
+    }
+
     pub fn pixels(&self) -> Pixels<'_> {
         if self.rgb.is_empty() {
             Pixels::Shades(&self.shades)
@@ -58,8 +67,9 @@ pub(crate) struct Hooks {
     pub layers: Box<[u8]>,
     /// Whether `layers` is attached to SameBoy.
     pub layers_on: bool,
-    /// Whether the next vblank ends a frame that was only partly captured, so
-    /// its tags must not be published.
+    /// Whether the next vblank ends a frame that was only partly captured on
+    /// this timeline (capture turned on, or a state loaded, mid-frame), so its
+    /// tags must not be published.
     pub layers_skip_next: bool,
     pub dmg_shades: bool,
     pub rendering: bool,
@@ -84,7 +94,7 @@ impl Hooks {
     pub fn new(dmg_shades: bool, rendering: bool) -> Self {
         Hooks {
             screen: vec![0; SCREEN_PIXELS].into_boxed_slice(),
-            layers: vec![LAYER_BACKGROUND; SCREEN_PIXELS].into_boxed_slice(),
+            layers: vec![sb::GBCLI_LAYER_BACKGROUND; SCREEN_PIXELS].into_boxed_slice(),
             layers_on: false,
             layers_skip_next: false,
             dmg_shades,
@@ -99,6 +109,14 @@ impl Hooks {
             hit: None,
             tracking: None,
         }
+    }
+
+    /// Starts collecting tags from a clean buffer. Unless the frame in
+    /// progress is `fresh` (no pixel of it drawn yet), it is only partly
+    /// captured on this timeline, so its map is dropped at the next vblank.
+    pub fn restart_capture(&mut self, fresh: bool) {
+        self.layers.fill(sb::GBCLI_LAYER_BACKGROUND);
+        self.layers_skip_next = !fresh;
     }
 }
 
@@ -158,47 +176,47 @@ pub(crate) unsafe extern "C" fn on_vblank(gb: *mut sb::GB_gameboy_t, kind: sb::G
     let (width, height) = unsafe { (sb::GB_get_screen_width(gb), sb::GB_get_screen_height(gb)) };
     guard(gb, (), |hooks| {
         hooks.vblank = Some(kind);
-        hooks.frame_copied = false;
-        if !hooks.rendering || vblank_kind(kind).is_none() {
-            return;
-        }
-        let n = (width * height) as usize;
-        let live = &hooks.screen[..n.min(SCREEN_PIXELS)];
-        let frame = &mut hooks.frame;
-        frame.width = width;
-        frame.height = height;
-        if hooks.dmg_shades {
-            frame.rgb.clear();
-            frame.shades.clear();
-            frame.shades.extend(live.iter().map(|&p| shade(p)));
-        } else {
-            frame.shades.clear();
-            frame.rgb.clear();
-            frame.rgb.extend_from_slice(live);
+        let n = ((width * height) as usize).min(SCREEN_PIXELS);
+        let publish = hooks.rendering && vblank_kind(kind).is_some();
+        if publish {
+            let live = &hooks.screen[..n];
+            let frame = &mut hooks.frame;
+            frame.width = width;
+            frame.height = height;
+            if hooks.dmg_shades {
+                frame.rgb.clear();
+                frame.shades.clear();
+                frame.shades.extend(live.iter().map(|&p| shade(p)));
+            } else {
+                frame.shades.clear();
+                frame.rgb.clear();
+                frame.rgb.extend_from_slice(live);
+            }
         }
         if hooks.layers_on {
-            // Not every published frame was rendered: an LCD-off or artificial
-            // frame, and the blank frame SameBoy substitutes at the first vblank
-            // after the LCD is turned on, get no layer map. The buffer of a
-            // partly captured frame is dropped too.
-            let rendered = vblank_kind(kind) == Some(VblankKind::Normal)
-                && !hooks.layers_skip_next
-                // SAFETY: a plain read of the live instance, inside its callback.
-                && !unsafe { sb::gbcli_frame_scrubbed(gb) };
-            frame.layers.clear();
-            if rendered {
-                frame.layers.extend(
-                    hooks.layers[..n.min(SCREEN_PIXELS)]
-                        .iter()
-                        .map(|&t| layer(t)),
-                );
+            if publish {
+                // Not every published frame was rendered: an LCD-off or
+                // artificial frame, and the blank frame SameBoy substitutes at
+                // the first vblank after the LCD is turned on, get no layer
+                // map. Nor does a frame only partly captured on this timeline.
+                let rendered = vblank_kind(kind) == Some(VblankKind::Normal)
+                    && !hooks.layers_skip_next
+                    // SAFETY: a plain read of the live instance, inside its callback.
+                    && !unsafe { sb::gbcli_frame_scrubbed(gb) };
+                hooks.frame.layers.clear();
+                if rendered {
+                    let tags = &hooks.layers[..n];
+                    hooks.frame.layers.extend(tags.iter().map(|&t| layer(t)));
+                }
             }
+            // Every vblank, published or not (a CGB repeat keeps the previous
+            // frame on screen), ends the frame the buffer was collecting: the
+            // next one is captured whole, and starts clean, so whatever the
+            // renderer doesn't tag (an LCD-off frame, a border) is background.
             hooks.layers_skip_next = false;
-            // Start the next frame clean: everything the renderer doesn't tag
-            // (an LCD-off frame, a border) is background.
-            hooks.layers.fill(LAYER_BACKGROUND);
+            hooks.layers.fill(sb::GBCLI_LAYER_BACKGROUND);
         }
-        hooks.frame_copied = true;
+        hooks.frame_copied = publish;
     });
 }
 
@@ -222,11 +240,14 @@ fn shade(pixel: u32) -> u8 {
     }
 }
 
-/// SameBoy's side-buffer tag back to a [`Layer`] (see `display.c`).
+/// SameBoy's side-buffer tag (`GBCLI_LAYER_*`, the patched `display.h`) back
+/// to a [`Layer`]: the one place the encoding is decoded.
 fn layer(tag: u8) -> Layer {
     match tag {
-        0 => Layer::Background,
-        1 => Layer::Window,
-        n => Layer::Object { index: n - 2 },
+        sb::GBCLI_LAYER_BACKGROUND => Layer::Background,
+        sb::GBCLI_LAYER_WINDOW => Layer::Window,
+        n => Layer::Object {
+            index: n - sb::GBCLI_LAYER_OBJECT,
+        },
     }
 }

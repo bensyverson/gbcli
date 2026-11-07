@@ -80,3 +80,9 @@ pub(crate) const CART_RAM_REASON: &str = "this mapper's cart RAM path (MBC2, MBC
 /// pixel the mask hid.
 pub(crate) const SGB_LAYERS_REASON: &str =
     "the SGB path composites its border and mask modes outside the PPU's mixing point";
+
+/// Why layer capture is refused with rendering off: SameBoy then skips the
+/// mixing point (`display.c` drops every pixel before it), so no tag is
+/// written and no frame is published.
+pub(crate) const RENDERING_OFF_LAYERS_REASON: &str = "rendering is off, so the PPU never mixes a pixel; build the core with Rendering::On \
+     to capture layers";

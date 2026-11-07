@@ -241,6 +241,19 @@ unsafe extern "C" {
     pub fn gbcli_pre_run(gb: *mut GB_gameboy_t, opcode: *mut u8) -> c_int;
 }
 
+/// A per-pixel layer tag (`GBCLI_LAYER_*`, the patched `display.h`): what
+/// SameBoy writes to the buffer `gbcli_set_layer_buffer` attaches.
+pub const GBCLI_LAYER_BACKGROUND: u8 = 0;
+pub const GBCLI_LAYER_WINDOW: u8 = 1;
+/// An object's tag is this plus its OAM index (0-39).
+pub const GBCLI_LAYER_OBJECT: u8 = 2;
+
+unsafe extern "C" {
+    /// The C values of the three `GBCLI_LAYER_*` names, in that order
+    /// (`shim/gbcli_layers.c`), so a test can check the constants above.
+    pub static gbcli_layer_tags: [u8; 3];
+}
+
 /// `gbcli_pre_run`: run the next step.
 pub const GBCLI_PRE_RUN: c_int = 0;
 /// `gbcli_pre_run`: the next step would execute an illegal opcode.

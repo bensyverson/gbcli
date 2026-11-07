@@ -53,11 +53,15 @@ pub trait Core {
     fn last_complete_frame(&self) -> Option<FrameRef<'_>>;
     /// Which layer drew each pixel of the last complete frame
     /// ([`Feature::PixelLayers`]). Capture is off until
-    /// [`set_pixel_layers`](Core::set_pixel_layers) turns it on; the map is not
-    /// part of the state blob, so a load clears it until the next frame.
+    /// [`set_pixel_layers`](Core::set_pixel_layers) turns it on. Only a frame
+    /// captured whole gets a map: the map is not part of the state blob, so a
+    /// load clears it, and a frame already under way when capture was turned
+    /// on or a state was loaded has none (a frame loaded or enabled during
+    /// vblank, before any of it is drawn, does).
     fn pixel_layers(&self) -> Result<LayerMap<'_>, CoreError>;
-    /// Turns per-pixel layer capture on or off. Off by default. The default is
-    /// for a core without it, so adding this method broke no backend.
+    /// Turns per-pixel layer capture on or off. Off by default; turning it on
+    /// again keeps the current map. The default is for a core without it, so
+    /// adding this method broke no backend.
     fn set_pixel_layers(&mut self, _on: bool) -> Result<(), CoreError> {
         Err(CoreError::Unsupported {
             feature: Feature::PixelLayers,

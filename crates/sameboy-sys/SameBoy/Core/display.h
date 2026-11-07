@@ -30,13 +30,21 @@ typedef struct {
     uint8_t pixel; // Color, 0-3
     uint8_t palette; // Palette, 0 - 7 (CGB); 0-1 in DMG (or just 0 for BG)
     uint8_t priority; // Object priority – 0 in DMG, OAM index in CGB
-    bool bg_priority; // For object FIFO – the BG priority bit. For the BG FIFO – the CGB attributes priority bit
+    bool bg_priority; // For object FIFO – the BG priority bit. For the BG FIFO – the CGB attributes priority bit
     /* gbcli: which layer fetched the pixel. On the BG FIFO, `window` is set when
        the row came from the window map; on the OAM FIFO, `object` is the OAM
        index of the object that won the pixel. Not read by SameBoy itself. */
     uint8_t window;
     uint8_t object;
 } GB_fifo_item_t;
+
+/* gbcli: the per-pixel layer tags display.c writes to gb->layer_buffer. An
+   object's tag is GBCLI_LAYER_OBJECT plus its OAM index (0-39). */
+enum {
+    GBCLI_LAYER_BACKGROUND = 0,
+    GBCLI_LAYER_WINDOW = 1,
+    GBCLI_LAYER_OBJECT = 2,
+};
 
 #define GB_FIFO_LENGTH 8
 typedef struct {

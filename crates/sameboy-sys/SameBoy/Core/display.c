@@ -166,9 +166,9 @@ static void fifo_overlay_object_row(GB_fifo_t *fifo, uint8_t lower, uint8_t uppe
 #define BORDERED_HEIGHT 224
 #define VIRTUAL_LINES (LCDC_PERIOD / LINE_LENGTH) // = 154
 
-/* gbcli: per-pixel layer tags. 0 is background, 1 is window, 2 + n is OAM
-   object n. Written only when a layer buffer is attached (capture is on), and
-   written nowhere else: no read, no state and no pixel depends on it. */
+/* gbcli: per-pixel layer tags (GBCLI_LAYER_*, display.h). Written only when a
+   layer buffer is attached (capture is on), and written nowhere else: no read,
+   no state and no pixel depends on it. */
 static inline void layer_store(GB_gameboy_t *gb, unsigned x, unsigned y, uint8_t layer)
 {
     if (likely(gb->layer_buffer == NULL) || unlikely(gb->border_mode == GB_BORDER_ALWAYS)) return;
@@ -777,11 +777,11 @@ static void render_pixel_if_possible(GB_gameboy_t *gb)
         }
     }
     
-    uint8_t layer = (bg_enabled && fifo_item->window)? 1 : 0;
+    uint8_t layer = (bg_enabled && fifo_item->window)? GBCLI_LAYER_WINDOW : GBCLI_LAYER_BACKGROUND;
     
     if (draw_oam) {
         uint8_t pixel = oam_fifo_item->pixel;
-        layer = 2 + oam_fifo_item->object;
+        layer = GBCLI_LAYER_OBJECT + oam_fifo_item->object;
         if (!gb->cgb_mode) {
             /* Todo: Verify access timings */
             pixel = ((gb->io_registers[oam_fifo_item->palette? GB_IO_OBP1 : GB_IO_OBP0] >> (pixel << 1)) & 3);
@@ -1268,11 +1268,11 @@ static void render_line(GB_gameboy_t *gb)
                 if (!gb->cgb_mode) {
                     pixel = ((gb->io_registers[GB_IO_OBP0 + object_buffer_pointer->palette] >> (pixel << 1)) & 3);
                 }
-                layer_store(gb, 160 - i - 1, gb->current_line, 2 + object_buffer_pointer->object);
+                layer_store(gb, 160 - i - 1, gb->current_line, GBCLI_LAYER_OBJECT + object_buffer_pointer->object);
                 *(p++) = gb->object_palettes_rgb[pixel + (object_buffer_pointer->palette & 7) * 4];
             }
             else {
-                layer_store(gb, 160 - i - 1, gb->current_line, 0);
+                layer_store(gb, 160 - i - 1, gb->current_line, GBCLI_LAYER_BACKGROUND);
                 *(p++) = bg;
             }
             object_buffer_pointer++;
@@ -1294,13 +1294,13 @@ static void render_line(GB_gameboy_t *gb)
     
 #define DO_PIXEL() \
 uint8_t pixel = (data0 >> 7) | ((data1 >> 7) << 1);\
-uint8_t layer = 0;\
+uint8_t layer = GBCLI_LAYER_BACKGROUND;\
 data0 <<= 1;\
 data1 <<= 1;\
 \
 if (unlikely(object_buffer_pointer->pixel) && (pixel == 0 || !(object_buffer_pointer->bg_priority || (attributes & 0x80)) || !(gb->io_registers[GB_IO_LCDC] & GB_LCDC_BG_EN))) {\
     pixel = object_buffer_pointer->pixel;\
-    layer = 2 + object_buffer_pointer->object;\
+    layer = GBCLI_LAYER_OBJECT + object_buffer_pointer->object;\
     if (!gb->cgb_mode) {\
         pixel = ((gb->io_registers[GB_IO_OBP0 + object_buffer_pointer->palette] >> (pixel << 1)) & 3);\
     }\
@@ -1310,7 +1310,7 @@ else {\
     if (!gb->cgb_mode) {\
         pixel = ((gb->io_registers[GB_IO_BGP] >> (pixel << 1)) & 3);\
     }\
-    layer = fetching_window? 1 : 0;\
+    layer = fetching_window? GBCLI_LAYER_WINDOW : GBCLI_LAYER_BACKGROUND;\
     *(p++) = gb->background_palettes_rgb[pixel + (attributes & 7) * 4];\
 }\
 layer_store(gb, pixels, gb->current_line, layer);\

@@ -1,10 +1,12 @@
 gbcli's per-pixel layer-identity patch for SameBoy ea667ad.
 
-Observation only: display.c writes one byte per drawn pixel (0 background,
-1 window, 2+n OAM object n) into an optional side buffer, and reads that new
-pointer only to test it. display.h carries the tag on the BG and OAM FIFO
-items; gb.h holds the buffer pointer. With no buffer attached the extra work
-is a single predictable branch per pixel.
+Observation only: display.c writes one tag per drawn pixel (GBCLI_LAYER_*,
+named in display.h: background, window, or GBCLI_LAYER_OBJECT + the OAM index)
+into an optional side buffer, and reads that new pointer only to test it.
+display.h carries the tag on the BG and OAM FIFO items; gb.h holds the buffer
+pointer. With no buffer attached, the work left is a predictable branch per
+pixel, the two extra FIFO-item bytes and their stores, and the OAM index kept
+in render_line's object buffer (see the vendoring doc for the measured cost).
 
 Applied by scripts/vendor-sameboy.sh after re-vendoring. The vendored tree in
 this repository already has it applied, so a normal build needs no patch step.
@@ -57,9 +59,9 @@ Rebase it (do not drop it) if SameBoy's commit moves.
  #define BORDERED_HEIGHT 224
  #define VIRTUAL_LINES (LCDC_PERIOD / LINE_LENGTH) // = 154
  
-+/* gbcli: per-pixel layer tags. 0 is background, 1 is window, 2 + n is OAM
-+   object n. Written only when a layer buffer is attached (capture is on), and
-+   written nowhere else: no read, no state and no pixel depends on it. */
++/* gbcli: per-pixel layer tags (GBCLI_LAYER_*, display.h). Written only when a
++   layer buffer is attached (capture is on), and written nowhere else: no read,
++   no state and no pixel depends on it. */
 +static inline void layer_store(GB_gameboy_t *gb, unsigned x, unsigned y, uint8_t layer)
 +{
 +    if (likely(gb->layer_buffer == NULL) || unlikely(gb->border_mode == GB_BORDER_ALWAYS)) return;
@@ -74,11 +76,11 @@ Rebase it (do not drop it) if SameBoy's commit moves.
          }
      }
 +    
-+    uint8_t layer = (bg_enabled && fifo_item->window)? 1 : 0;
++    uint8_t layer = (bg_enabled && fifo_item->window)? GBCLI_LAYER_WINDOW : GBCLI_LAYER_BACKGROUND;
      
      if (draw_oam) {
          uint8_t pixel = oam_fifo_item->pixel;
-+        layer = 2 + oam_fifo_item->object;
++        layer = GBCLI_LAYER_OBJECT + oam_fifo_item->object;
          if (!gb->cgb_mode) {
              /* Todo: Verify access timings */
              pixel = ((gb->io_registers[oam_fifo_item->palette? GB_IO_OBP1 : GB_IO_OBP0] >> (pixel << 1)) & 3);
@@ -122,11 +124,11 @@ Rebase it (do not drop it) if SameBoy's commit moves.
                  if (!gb->cgb_mode) {
                      pixel = ((gb->io_registers[GB_IO_OBP0 + object_buffer_pointer->palette] >> (pixel << 1)) & 3);
                  }
-+                layer_store(gb, 160 - i - 1, gb->current_line, 2 + object_buffer_pointer->object);
++                layer_store(gb, 160 - i - 1, gb->current_line, GBCLI_LAYER_OBJECT + object_buffer_pointer->object);
                  *(p++) = gb->object_palettes_rgb[pixel + (object_buffer_pointer->palette & 7) * 4];
              }
              else {
-+                layer_store(gb, 160 - i - 1, gb->current_line, 0);
++                layer_store(gb, 160 - i - 1, gb->current_line, GBCLI_LAYER_BACKGROUND);
                  *(p++) = bg;
              }
              object_buffer_pointer++;
@@ -134,13 +136,13 @@ Rebase it (do not drop it) if SameBoy's commit moves.
      
  #define DO_PIXEL() \
  uint8_t pixel = (data0 >> 7) | ((data1 >> 7) << 1);\
-+uint8_t layer = 0;\
++uint8_t layer = GBCLI_LAYER_BACKGROUND;\
  data0 <<= 1;\
  data1 <<= 1;\
  \
  if (unlikely(object_buffer_pointer->pixel) && (pixel == 0 || !(object_buffer_pointer->bg_priority || (attributes & 0x80)) || !(gb->io_registers[GB_IO_LCDC] & GB_LCDC_BG_EN))) {\
      pixel = object_buffer_pointer->pixel;\
-+    layer = 2 + object_buffer_pointer->object;\
++    layer = GBCLI_LAYER_OBJECT + object_buffer_pointer->object;\
      if (!gb->cgb_mode) {\
          pixel = ((gb->io_registers[GB_IO_OBP0 + object_buffer_pointer->palette] >> (pixel << 1)) & 3);\
      }\
@@ -148,7 +150,7 @@ Rebase it (do not drop it) if SameBoy's commit moves.
      if (!gb->cgb_mode) {\
          pixel = ((gb->io_registers[GB_IO_BGP] >> (pixel << 1)) & 3);\
      }\
-+    layer = fetching_window? 1 : 0;\
++    layer = fetching_window? GBCLI_LAYER_WINDOW : GBCLI_LAYER_BACKGROUND;\
      *(p++) = gb->background_palettes_rgb[pixel + (attributes & 7) * 4];\
  }\
 +layer_store(gb, pixels, gb->current_line, layer);\
@@ -187,12 +189,10 @@ Rebase it (do not drop it) if SameBoy's commit moves.
                      gb->data_for_sel_glitch = gb->vram_ppu_blocked? 0xFF : gb->vram[gb->object_low_line_address + 1];
 --- a/crates/sameboy-sys/SameBoy/Core/display.h
 +++ b/crates/sameboy-sys/SameBoy/Core/display.h
-@@ -30,7 +30,12 @@
-     uint8_t pixel; // Color, 0-3
+@@ -31,8 +31,21 @@
      uint8_t palette; // Palette, 0 - 7 (CGB); 0-1 in DMG (or just 0 for BG)
      uint8_t priority; // Object priority – 0 in DMG, OAM index in CGB
--    bool bg_priority; // For object FIFO – the BG priority bit. For the BG FIFO – the CGB attributes priority bit
-+    bool bg_priority; // For object FIFO – the BG priority bit. For the BG FIFO – the CGB attributes priority bit
+     bool bg_priority; // For object FIFO – the BG priority bit. For the BG FIFO – the CGB attributes priority bit
 +    /* gbcli: which layer fetched the pixel. On the BG FIFO, `window` is set when
 +       the row came from the window map; on the OAM FIFO, `object` is the OAM
 +       index of the object that won the pixel. Not read by SameBoy itself. */
@@ -200,15 +200,26 @@ Rebase it (do not drop it) if SameBoy's commit moves.
 +    uint8_t object;
  } GB_fifo_item_t;
  
++/* gbcli: the per-pixel layer tags display.c writes to gb->layer_buffer. An
++   object's tag is GBCLI_LAYER_OBJECT plus its OAM index (0-39). */
++enum {
++    GBCLI_LAYER_BACKGROUND = 0,
++    GBCLI_LAYER_WINDOW = 1,
++    GBCLI_LAYER_OBJECT = 2,
++};
++
  #define GB_FIFO_LENGTH 8
+ typedef struct {
+     GB_fifo_item_t fifo[GB_FIFO_LENGTH];
 --- a/crates/sameboy-sys/SameBoy/Core/gb.h
 +++ b/crates/sameboy-sys/SameBoy/Core/gb.h
-@@ -676,6 +676,9 @@
+@@ -676,6 +676,10 @@
  
          /* I/O */
          uint32_t *screen;
-+        /* gbcli: optional per-pixel layer tags, one byte per 160-pixel row; NULL
-+           when capture is off. Owned by the caller of gbcli_set_layer_buffer. */
++        /* gbcli: optional per-pixel layer tags (GBCLI_LAYER_*), one byte per
++           pixel in rows of 160; NULL when capture is off. Owned by the caller
++           of gbcli_set_layer_buffer. */
 +        uint8_t *layer_buffer;
          uint32_t background_palettes_rgb[0x20];
          uint32_t object_palettes_rgb[0x20];

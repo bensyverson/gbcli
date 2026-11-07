@@ -8,7 +8,16 @@ static uint32_t px[256*224];
 static uint32_t enc(GB_gameboy_t *gb, uint8_t r, uint8_t g, uint8_t b){ return (r<<16)|(g<<8)|b; }
 static void logcb(GB_gameboy_t *gb, const char *s, GB_log_attributes_t a){ }
 static char *noin(GB_gameboy_t *gb){ return NULL; }
-static double now(void){ struct timespec t; clock_gettime(CLOCK_MONOTONIC,&t); return t.tv_sec+t.tv_nsec/1e9; }
+// -DSB_BENCH_CPU_TIME times with the process's CPU clock instead of the wall clock
+// (scripts/bench/layer-patch-cost/run.sh), so a loaded machine inflates it less.
+#ifdef SB_BENCH_CPU_TIME
+#define SB_CLOCK CLOCK_PROCESS_CPUTIME_ID
+#define SB_CLOCK_NAME "cpu"
+#else
+#define SB_CLOCK CLOCK_MONOTONIC
+#define SB_CLOCK_NAME "wall"
+#endif
+static double now(void){ struct timespec t; clock_gettime(SB_CLOCK,&t); return t.tv_sec+t.tv_nsec/1e9; }
 int main(int argc, char **argv){
   int frames = atoi(argv[2]); int render = atoi(argv[3]);
   GB_random_set_enabled(false);
@@ -25,7 +34,7 @@ int main(int argc, char **argv){
   size_t n = GB_get_save_state_size(gb); uint8_t *s = malloc(n); GB_save_state_to_buffer(gb, s);
   t0 = now(); for (int i=0;i<10000;i++) GB_load_state_from_buffer(gb, s, n); double lt = (now()-t0)/10000;
   t0 = now(); for (int i=0;i<10000;i++) GB_save_state_to_buffer(gb, s); double st = (now()-t0)/10000;
-  printf("frames=%d emulated=%.2fs wall=%.3fs speed=%.1fx realtime (%.0f fps) state=%zuB load=%.1fus save=%.1fus render=%d\n",
+  printf("frames=%d emulated=%.2fs " SB_CLOCK_NAME "=%.3fs speed=%.1fx realtime (%.0f fps) state=%zuB load=%.1fus save=%.1fus render=%d\n",
     frames, ns/1e9, dt, (ns/1e9)/dt, frames/dt, n, lt*1e6, st*1e6, render);
   return 0;
 }

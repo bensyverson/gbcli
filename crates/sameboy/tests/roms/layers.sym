@@ -9,5 +9,11 @@
 00:01a3 Main.bgmap
 00:01b5 Main.winmap
 00:01c3 Main.oam
-00:0210 Main.loop
-00:0218 Main.busy
+00:01cf Main.copy
+00:01fc Main.loop
+00:0204 Main.busy
+00:0209 Stat
+00:020d Stat.wait
+00:0219 VBlank
+00:0222 Objects
+00:0242 Objects.end

@@ -22,6 +22,8 @@ gbcli                           # the primer: what the tool does and where to go
 
 ## Learn more
 
+- [docs/architecture.md](docs/architecture.md) — which crate owns what
+- [docs/development.md](docs/development.md) — setting up a checkout and running the tests
 - [project/](project/) — plans, findings and decisions
 - [Pan Docs](https://gbdev.io/pandocs/) — the Game Boy hardware reference
 

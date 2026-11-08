@@ -1,6 +1,6 @@
 # Benchmarks
 
-Re-runnable measurements behind figures in `project/2026-11-06-backend-evaluation.md` and, for `workspace-build`, the head of `AGENTS.md`.
+Re-runnable measurements behind figures in `project/2026-11-06-backend-evaluation.md` and the build-cost figures below.
 
 ## test-times.py
 
@@ -86,7 +86,14 @@ cd scripts/bench/rust-build && SAMEBOY=/path/to/SameBoy cargo build   # time cle
 
 ## workspace-build
 
-gbcli's own debug build times: a clean `cargo build --workspace`, then incremental builds after touching the binary crate (`crates/gbcli/src/main.rs`) and the engine crate (`crates/engine/src/lib.rs`); prints the median of N runs for each incremental case. Uses `target/bench-workspace-build`, so the normal build cache is untouched. Figures are recorded in the head of `AGENTS.md`.
+gbcli's own debug build times: a clean `cargo build --workspace`, then incremental builds after touching the binary crate (`crates/gbcli/src/main.rs`) and the engine crate (`crates/engine/src/lib.rs`); prints the median of N runs for each incremental case. Uses `target/bench-workspace-build`, so the normal build cache is untouched.
+
+Figures (debug; Apple M1, 8 CPUs, rustc 1.99.1, Apple clang 21; `scripts/bench/workspace-build/run.sh 3`):
+
+- 2026-11-06, after stage 3, SameBoy at `-O3`: clean 13.2 s; incremental 0.35 s after touching the binary crate and 1.11 s after touching the engine crate (medians of 3). The stage-1 figures were clean 7.5 s and incremental 0.32/0.31 s; the added crates and the server's dependency edge widened the rebuild.
+- 2026-11-06, dev profile at `opt-level = 1`, under host load: clean 16.4 s, incremental 0.24 s (binary) and 0.87 s (engine), against 10.7, 0.26 and 0.94 s at opt-level 0 in the same sitting.
+
+Re-run it when the crates grow and add a dated line here.
 
 ```sh
 scripts/bench/workspace-build/run.sh      # optional arg: runs per incremental case (default 5)

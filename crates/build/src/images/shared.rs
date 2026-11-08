@@ -23,7 +23,7 @@ use super::pixels::{Pixels, Rgba, hex};
 use super::shades::{Moved, Shading, name};
 
 const REMEDY: &str = "make them distinct if the difference matters: recolor one, or declare \
-                      each shade's color in assets/palette.txt (gbcli help images); if it \
+                      each shade's color on the dmg line of assets/palettes.txt (gbcli help images); if it \
                       doesn't, draw them in one color";
 
 /// What sharing means for one image.
@@ -39,7 +39,7 @@ pub(crate) struct Shared {
 /// The rule as a warning words it.
 fn rule(choice: ShadeChoice) -> String {
     match (choice.rule, choice.palette) {
-        (ShadeRule::Declared, _) => "declared (assets/palette.txt)".into(),
+        (ShadeRule::Declared, _) => "declared (the dmg line of assets/palettes.txt)".into(),
         (ShadeRule::Known, Some(p)) => format!("known ({})", p.name()),
         (ShadeRule::Known, None) => "known".into(),
         (ShadeRule::Stretched, _) => {
@@ -143,8 +143,8 @@ pub(crate) fn stretched(
                     usize::from(nearest.abs_diff(given)),
                     1,
                     message,
-                    "declare assets/palette.txt to pick the shades yourself (gbcli help \
-                     images); or add colors that span the shades, so the stretch has less to do",
+                    "declare the dmg line of assets/palettes.txt to pick the shades yourself \
+                     (gbcli help images); or add colors that span the shades, so the stretch has less to do",
                 )
             })
         })
@@ -325,7 +325,7 @@ mod tests {
         );
         assert!(w.message.contains("#101010 is in 1 tile"), "{}", w.message);
         assert!(w.message.contains("rule, stretched"), "{}", w.message);
-        assert!(w.remedy.contains("assets/palette.txt"), "{}", w.remedy);
+        assert!(w.remedy.contains("assets/palettes.txt"), "{}", w.remedy);
     }
 
     #[test]

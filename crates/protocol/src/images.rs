@@ -1,11 +1,19 @@
 //! What `build` reports about the images it converted (design §12, Build,
 //! the 2026-11-07 image update): each PNG under `assets/bg/` and
 //! `assets/sprites/`, what it became, and every hardware limit it breaks.
-//! `gbcli-build` makes them and the CLI prints them.
+//! `gbcli-build` makes them and the CLI prints them. A GBC build adds each
+//! image's GBC version (`GbcImage`) and what the images share
+//! (`GbcImagesMade`); these are the seam a client converting assets
+//! without a build (LoadHigh) reads, so `images.inc` is generated from
+//! them and the two can't disagree.
 
 use serde::{Deserialize, Serialize};
 
 use crate::toolchain::Severity;
+
+mod gbc;
+
+pub use gbc::{GbcImage, GbcImagesMade, ImageArt};
 
 /// Which convention an image follows, from its directory.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -16,6 +24,10 @@ pub enum ImageKind {
     /// `assets/sprites/*.png`: a sheet of 8x16 objects, as unique 8x16 units
     /// and one object list per frame.
     Sprites,
+    /// `assets/tiles/*.png`: a tileset, as unique 8x8 background tiles and
+    /// no map; the program (or a client such as LoadHigh) builds its own
+    /// maps from [`ImageAsset::tile_indices`].
+    Tiles,
 }
 
 impl ImageKind {
@@ -24,6 +36,7 @@ impl ImageKind {
         match self {
             ImageKind::Bg => "bg",
             ImageKind::Sprites => "sprites",
+            ImageKind::Tiles => "tiles",
         }
     }
 }
@@ -79,13 +92,30 @@ pub enum ImageLimit {
     /// With `image`, the colors are in that image; without, they share the
     /// shade only across images, and `message` names the images each is in.
     SharedShade,
-    /// `assets/palette.txt`, the declared shades, isn't four `#rrggbb`
-    /// lines; `line` names the line when one is at fault.
+    /// `assets/palettes.txt` doesn't read: a line that is neither a
+    /// palette nor an assignment, a palette without four colors, a
+    /// duplicate name or assignment, an unknown palette, an image the
+    /// project doesn't have, or `dmg` assigned to an image. `line` names
+    /// the line when one is at fault.
     PaletteFile,
     /// The stretched shade rule put a color two or more shades from its
-    /// plain nearest shade. A warning: declaring `assets/palette.txt` picks
+    /// plain nearest shade. A warning: a `dmg` line in `assets/palettes.txt` picks
     /// the shades instead.
     ShadeStretched,
+    /// GBC: 8 palettes. Per background, its packed palettes (or its one
+    /// assigned palette); across all sheets, the packed OBJ palettes plus
+    /// one per distinct assigned palette. `count` is the lower bound on the
+    /// palettes needed (⌈colors / 4⌉, ⌈colors / 3⌉ for sheets) or the
+    /// palettes placed, whichever is larger; `tiles` are the tiles that
+    /// landed in palette 9 or later.
+    GbcPalettes,
+    /// GBC: 4 colors in one background tile, or 3 opaque colors (plus
+    /// transparent) in one object; `tiles` names the tiles at fault.
+    GbcTileColors,
+    /// `name.dmg.png`, the DMG version that overrides the one derived from
+    /// a color image, isn't the color image's size; `count` and `max` are
+    /// its width and the color image's when they differ, else the heights.
+    DmgOverrideSize,
 }
 
 impl ImageLimit {
@@ -109,6 +139,9 @@ impl ImageLimit {
             ImageLimit::SharedShade => "shared_shade",
             ImageLimit::PaletteFile => "palette_file",
             ImageLimit::ShadeStretched => "shade_stretched",
+            ImageLimit::GbcPalettes => "gbc_palettes",
+            ImageLimit::GbcTileColors => "gbc_tile_colors",
+            ImageLimit::DmgOverrideSize => "dmg_override_size",
         }
     }
 }
@@ -150,8 +183,8 @@ pub struct ImageProblem {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ShadeRule {
-    /// `assets/palette.txt` lists shades 0-3; each color takes its nearest
-    /// entry's shade.
+    /// The `dmg` line of `assets/palettes.txt` lists shades 0-3; each color
+    /// takes its nearest entry's shade, in RGB555.
     Declared,
     /// Every color belongs to one known palette, which maps them exactly.
     Known,
@@ -239,6 +272,18 @@ pub struct ImageAsset {
     /// The converted data drawn as the hardware shows it, then its unique
     /// tiles by use, most used first.
     pub preview: String,
+    /// Where each source tile went: its index in the tile data, one entry
+    /// per 8x8 tile of the image (8x16 unit of a sheet), rows top to bottom,
+    /// left to right in each. None for a sheet's fully transparent unit,
+    /// which takes no tile. The same on both machines: tiles are
+    /// deduplicated on the (DMG tile, GBC tile) pair. A tileset's result is
+    /// this map; a background's is also its tilemap.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tile_indices: Vec<Option<u32>>,
+    /// The GBC version, when the build's target is the GBC. Every image has
+    /// a DMG version, so this is the only per-image sign of the target.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gbc: Option<GbcImage>,
 }
 
 /// The images a build converted, and where the program finds them.
@@ -251,9 +296,12 @@ pub struct ImagesMade {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub problems: Vec<ImageProblem>,
     /// The rule that gave every image's colors their shades; none when the
-    /// build stopped before choosing (a bad `assets/palette.txt`).
+    /// build stopped before choosing (a bad `assets/palettes.txt`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shades: Option<ShadeChoice>,
+    /// What the images share on the GBC, when the target is the GBC.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gbc: Option<GbcImagesMade>,
 }
 
 impl ImagesMade {
@@ -264,136 +312,4 @@ impl ImagesMade {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_problem_spells_its_limit_snake_case_and_drops_what_it_lacks() {
-        let p = ImageProblem {
-            image: Some("assets/bg/town.png".into()),
-            limit: ImageLimit::BgTilesMap,
-            severity: Severity::Error,
-            count: 291,
-            max: 256,
-            tiles: vec![TileAt { x: 3, y: 4 }],
-            line: None,
-            message: "too many".into(),
-            remedy: "fewer".into(),
-        };
-        let json = serde_json::to_string(&p).unwrap();
-        assert_eq!(
-            json,
-            r#"{"image":"assets/bg/town.png","limit":"bg_tiles_map","severity":"error","count":291,"max":256,"tiles":[{"x":3,"y":4}],"message":"too many","remedy":"fewer"}"#
-        );
-        assert_eq!(serde_json::from_str::<ImageProblem>(&json).unwrap(), p);
-    }
-
-    #[test]
-    fn a_shared_shade_warning_round_trips_as_shared_shade() {
-        let p = ImageProblem {
-            image: Some("assets/bg/cave.png".into()),
-            limit: ImageLimit::SharedShade,
-            severity: Severity::Warning,
-            count: 2,
-            max: 1,
-            tiles: vec![TileAt { x: 1, y: 0 }],
-            line: None,
-            message: "one shade".into(),
-            remedy: "distinct".into(),
-        };
-        let json = serde_json::to_string(&p).unwrap();
-        assert_eq!(
-            json,
-            r#"{"image":"assets/bg/cave.png","limit":"shared_shade","severity":"warning","count":2,"max":1,"tiles":[{"x":1,"y":0}],"message":"one shade","remedy":"distinct"}"#
-        );
-        assert_eq!(serde_json::from_str::<ImageProblem>(&json).unwrap(), p);
-    }
-
-    #[test]
-    fn a_palette_file_problem_carries_its_line() {
-        let p = ImageProblem {
-            image: Some("assets/palette.txt".into()),
-            limit: ImageLimit::PaletteFile,
-            severity: Severity::Error,
-            count: 2,
-            max: 4,
-            tiles: Vec::new(),
-            line: Some(3),
-            message: "not a color".into(),
-            remedy: "one #rrggbb a line".into(),
-        };
-        let json = serde_json::to_string(&p).unwrap();
-        assert_eq!(
-            json,
-            r#"{"image":"assets/palette.txt","limit":"palette_file","severity":"error","count":2,"max":4,"line":3,"message":"not a color","remedy":"one #rrggbb a line"}"#
-        );
-        assert_eq!(serde_json::from_str::<ImageProblem>(&json).unwrap(), p);
-    }
-
-    #[test]
-    fn the_shade_rule_round_trips_with_its_known_palette() {
-        let made = ImagesMade {
-            shades: Some(ShadeChoice {
-                rule: ShadeRule::Known,
-                palette: Some(KnownPalette::PeaGreens),
-            }),
-            ..ImagesMade::default()
-        };
-        let json = serde_json::to_string(&made).unwrap();
-        assert_eq!(
-            json,
-            r#"{"images":[],"shades":{"rule":"known","palette":"pea_greens"}}"#
-        );
-        assert_eq!(serde_json::from_str::<ImagesMade>(&json).unwrap(), made);
-        for rule in [
-            ShadeRule::Declared,
-            ShadeRule::Known,
-            ShadeRule::Stretched,
-            ShadeRule::Nearest,
-        ] {
-            assert_eq!(serde_json::to_value(rule).unwrap(), rule.name());
-        }
-        for palette in KnownPalette::ALL {
-            assert_eq!(serde_json::to_value(palette).unwrap(), palette.name());
-        }
-        let names: Vec<&str> = KnownPalette::ALL.iter().map(|p| p.name()).collect();
-        assert_eq!(
-            names,
-            [
-                "dmg_grays",
-                "pea_greens",
-                "gb_studio_greens",
-                "pocket_grays"
-            ]
-        );
-    }
-
-    #[test]
-    fn every_limit_name_matches_the_wire() {
-        use ImageLimit::*;
-        for limit in [
-            BgTilesMap,
-            VramTiles,
-            ObjTiles,
-            DmgPalette,
-            SizeMultiple8,
-            ObjPair8x16,
-            ObjNoTransparency,
-            ObjPerLine,
-            ObjTotal,
-            FrameGrid,
-            FrameSpan,
-            RomxBank,
-            Alpha,
-            RgbgfxAgrees,
-            SharedShade,
-            PaletteFile,
-            ShadeStretched,
-        ] {
-            assert_eq!(serde_json::to_value(limit).unwrap(), limit.name());
-        }
-        for kind in [ImageKind::Bg, ImageKind::Sprites] {
-            assert_eq!(serde_json::to_value(kind).unwrap(), kind.dir());
-        }
-    }
-}
+mod tests;

@@ -13,6 +13,8 @@ fn help_works_with_no_preconditions_and_leaves_no_trace() {
         &["sessions", "rm", "-h"],
         &["help", "watch"],
         &["help", "time"],
+        &["help", "rgbds"],
+        &["build", "--help"],
     ] {
         let run = p.gbcli(args);
         assert_eq!(run.code, 0, "{args:?}: {}", run.stderr);
@@ -28,7 +30,6 @@ fn help_works_with_no_preconditions_and_leaves_no_trace() {
         &["help", "exit-codes"],
         &["help", "hardware"],
         &["help", "optimize"],
-        &["help", "rgbds"],
         &["help", "music"],
         &["recipes"],
         &["schema"],

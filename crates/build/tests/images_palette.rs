@@ -1,7 +1,7 @@
 //! Which DMG shade each color takes (Ben's second ruling, 2026-11-07): the
 //! first rule that applies, decided once for the whole project, so one
-//! color is one shade in every image. 1. Declared: `assets/palette.txt`
-//! lists the colors of shades 0-3. 2. Known: every color belongs to one
+//! color is one shade in every image. 1. Declared: the `dmg` line of
+//! `assets/palettes.txt` lists the colors of shades 0-3. 2. Known: every color belongs to one
 //! known palette. 3. Otherwise lightness is stretched over the project's
 //! colors, then each takes the nearest shade.
 
@@ -103,8 +103,8 @@ fn a_declared_palette_wins_over_a_known_one() {
     let (temp, options) = starter("palette-declared");
     // Declared darkest first, so the grays take the shades backward.
     fs::write(
-        temp.path("demo/assets/palette.txt"),
-        "# shade 0 first\n#000000\n#555555  # dark\n\n#aaaaaa\n#ffffff\n",
+        temp.path("demo/assets/palettes.txt"),
+        "# shade 0 first\n\ndmg: #000000 #555555 #aaaaaa #ffffff  # dark first\n",
     )
     .unwrap();
     write_png(&temp.path("demo/assets/bg/grays.png"), 8, 8, |x, _| {
@@ -126,8 +126,8 @@ fn a_declared_palette_wins_over_a_known_one() {
 fn colors_take_the_shade_of_the_nearest_declared_color() {
     let (temp, options) = starter("palette-declared-near");
     fs::write(
-        temp.path("demo/assets/palette.txt"),
-        "#e0f0e0\n#a0b0a0\n#506050\n#102010\n",
+        temp.path("demo/assets/palettes.txt"),
+        "dmg: #e0f0e0 #a0b0a0 #506050 #102010\n",
     )
     .unwrap();
     write_png(&temp.path("demo/assets/bg/moss.png"), 8, 8, |x, _| {
@@ -193,7 +193,7 @@ fn a_color_the_stretch_moves_far_is_drawn_as_given_with_a_warning() {
     }
     assert!(
         p.remedy
-            .contains("declare assets/palette.txt to pick the shades yourself"),
+            .contains("declare the dmg line of assets/palettes.txt to pick the shades yourself"),
         "{}",
         p.remedy
     );
@@ -216,14 +216,14 @@ fn a_project_of_one_lightness_keeps_the_nearest_shade() {
 fn a_malformed_palette_file_is_an_error_naming_its_line() {
     let (temp, options) = starter("palette-bad");
     fs::write(
-        temp.path("demo/assets/palette.txt"),
-        "# lightest first\n#ffffff\n#aaaa\n#555555\n#000000\n",
+        temp.path("demo/assets/palettes.txt"),
+        "# lightest first\n\ndmg: #ffffff #aaaa #555555 #000000\n",
     )
     .unwrap();
     write_png(&temp.path("demo/assets/bg/sky.png"), 8, 8, |_, _| WHITE);
     let made = refused(&options);
     let p = problem(&made, ImageLimit::PaletteFile);
-    assert_eq!(p.image.as_deref(), Some("demo/assets/palette.txt"));
+    assert_eq!(p.image.as_deref(), Some("demo/assets/palettes.txt"));
     assert_eq!(p.severity, Severity::Error);
     assert_eq!(p.line, Some(3));
     assert!(p.message.contains("#aaaa"), "{}", p.message);
@@ -235,8 +235,8 @@ fn a_malformed_palette_file_is_an_error_naming_its_line() {
 fn a_palette_file_without_four_colors_is_an_error() {
     let (temp, options) = starter("palette-three");
     fs::write(
-        temp.path("demo/assets/palette.txt"),
-        "#ffffff\n#aaaaaa\n#000000\n",
+        temp.path("demo/assets/palettes.txt"),
+        "dmg: #ffffff #aaaaaa #000000\n",
     )
     .unwrap();
     write_png(&temp.path("demo/assets/bg/sky.png"), 8, 8, |_, _| WHITE);

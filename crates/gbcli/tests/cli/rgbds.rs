@@ -415,6 +415,25 @@ fn the_clis_build_is_the_serve_op() {
     assert_eq!(cli.stdout, theirs.stdout);
 }
 
+/// `--gbc` is the wire's `"target":"gbc"`, and the ROM it writes is dual
+/// mode ($0143 = $80).
+#[test]
+fn the_clis_gbc_build_is_the_serve_op_with_target_gbc() {
+    let p = Project::game("rgbds-gbc-same-path");
+    let cli = p.rgbds(&["build", "game", "--gbc", "--json"]);
+    assert_eq!(cli.code, 0, "{}", cli.stderr);
+    assert_eq!(fs::read(p.path("game/build/game.gb")).unwrap()[0x143], 0x80);
+    let run = p.rgbds(&["show", "--rom", "game/build/game.gb", "--session", "game"]);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    let input = r#"{"id":"cli","op":"build","args":{"dir":"game","target":"gbc"}}"#;
+    let theirs = p.gbcli_with(
+        &["serve"],
+        &[("PATH", &rgbds_dir())],
+        Some(&format!("{input}\n")),
+    );
+    assert_eq!(cli.stdout, theirs.stdout);
+}
+
 /// `gbcli build ARGS --json` and `gbcli serve` given the CLI's request line
 /// (`id` "cli"): the same answer, and the ROM as it was. A palette change in
 /// the source means a build that ran would have rewritten the ROM.
@@ -516,6 +535,8 @@ fn the_loop_in_rows_and_json() {
         &["new", "game"],
         &["build", "game"],
         &["build", "game", "--json"],
+        &["build", "game", "--gbc"],
+        &["build", "game", "--gbc", "--json"],
     ];
     for args in scripts {
         transcript += &p.rgbds(args).transcript(args, &p.dir);

@@ -2,7 +2,7 @@
 //! takes the shade the project's rule gives it even when another already
 //! has it, both draw in that shade, and the build warns, naming the colors,
 //! the shade, the rule and the tiles, so an artist who meant the difference
-//! can redraw or declare `assets/palette.txt`.
+//! can redraw or declare the `dmg` line of `assets/palettes.txt`.
 
 mod common;
 mod pngs;
@@ -64,7 +64,7 @@ fn black_and_near_black_build_both_black_with_a_warning_naming_both() {
         "{}",
         p.remedy
     );
-    assert!(p.remedy.contains("assets/palette.txt"), "{}", p.remedy);
+    assert!(p.remedy.contains("assets/palettes.txt"), "{}", p.remedy);
     // Not one known palette (#101010), so the project's lightness is
     // stretched, white to black, and the warning says so.
     assert_eq!(

@@ -2,8 +2,8 @@
 //! (lightest) to 3, and images may be drawn in any colors. Ben's rulings
 //! (2026-11-07): the shade is decided once for the whole project, so one
 //! color is one shade in every image, by the first rule that applies:
-//! 1. declared: `assets/palette.txt` lists shades 0-3, and each color takes
-//!    its nearest entry's shade;
+//! 1. declared: the `dmg` line of `assets/palettes.txt` lists shades 0-3,
+//!    and each color takes its nearest entry's shade, in RGB555;
 //! 2. known: every color belongs to one known palette, which maps exactly;
 //! 3. otherwise lightness is stretched over the project's colors (lightest
 //!    shade 0, darkest shade 3), then each takes the nearest shade; with one
@@ -15,7 +15,7 @@
 
 use std::collections::HashMap;
 
-use gbcli_protocol::{KnownPalette, ShadeChoice, ShadeRule};
+use gbcli_protocol::{GbcPalette, KnownPalette, ShadeChoice, ShadeRule};
 
 use super::census::{Key, key};
 use super::pixels::Rgba;
@@ -84,9 +84,9 @@ fn nearest(c: Rgba) -> u8 {
 }
 
 /// Chooses the shades of `colors`, every color in the project (fully
-/// transparent pixels aside), under `declared` when `assets/palette.txt`
-/// gives one.
-pub(crate) fn choose(declared: Option<&[Rgba; 4]>, colors: &[Rgba]) -> Shading {
+/// transparent pixels aside), under `declared` when `assets/palettes.txt`
+/// has a `dmg` line.
+pub(crate) fn choose(declared: Option<&GbcPalette>, colors: &[Rgba]) -> Shading {
     let shading = |rule, palette, shade: &dyn Fn(Rgba) -> u8| Shading {
         choice: ShadeChoice { rule, palette },
         by_key: colors.iter().map(|&c| (key(c), shade(c))).collect(),
@@ -121,16 +121,18 @@ fn round_shade(dark: u32, span: u32) -> u8 {
     ((u64::from(dark) * 6 + u64::from(span)) / (u64::from(span) * 2)) as u8
 }
 
-/// The shade of the declared entry nearest `c` (in RGB; ties go lighter).
-fn nearest_entry(entries: &[Rgba; 4], c: Rgba) -> u8 {
-    let distance = |e: &Rgba| -> u32 {
+/// The shade of the declared entry nearest `c`, both in RGB555 as rgbgfx
+/// reads them, so a color one with an entry to rgbgfx takes its shade
+/// (ties go lighter).
+fn nearest_entry(entries: &GbcPalette, c: Rgba) -> u8 {
+    let c = key(c);
+    let distance = |s: u8| -> u32 {
+        let e = entries.0[usize::from(s)].channels();
         (0..3)
             .map(|i| (i32::from(e[i]) - i32::from(c[i])).pow(2) as u32)
             .sum()
     };
-    (0..4u8)
-        .min_by_key(|&s| distance(&entries[usize::from(s)]))
-        .unwrap()
+    (0..4u8).min_by_key(|&s| distance(s)).unwrap()
 }
 
 /// The DMG's name for `shade`.
@@ -141,6 +143,7 @@ pub(crate) fn name(shade: u8) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gbcli_protocol::Rgb555;
 
     const W: Rgba = [255, 255, 255, 255];
     const L: Rgba = [170, 170, 170, 255];
@@ -161,6 +164,8 @@ mod tests {
 
     /// The rule `choose` picked for `colors`, and their shades.
     fn chosen(declared: Option<[Rgba; 4]>, colors: &[Rgba]) -> (ShadeChoice, Vec<u8>) {
+        let declared =
+            declared.map(|d| GbcPalette(d.map(|c| Rgb555::from_rgb888(c[0], c[1], c[2]))));
         let s = choose(declared.as_ref(), colors);
         (s.choice, s.shades(colors))
     }
@@ -226,6 +231,14 @@ mod tests {
         );
     }
 
+    /// #070707 is #000000 to rgbgfx (5 bits a channel), so it takes that
+    /// entry's shade, though in 8-bit RGB it is nearer #080808.
+    #[test]
+    fn a_color_one_in_rgb555_with_an_entry_takes_that_entrys_shade() {
+        let declared = [0xFFFFFF, 0xAAAAAA, 0x080808, 0x000000].map(rgb);
+        assert_eq!(chosen(Some(declared), &[rgb(0x070707)]).1, [3]);
+    }
+
     #[test]
     fn colors_from_two_palettes_are_stretched_over_the_project() {
         // A gray and a pea green: no one known palette holds both.
@@ -270,7 +283,8 @@ mod tests {
     /// Only the stretch moves colors; the other rules never name one.
     #[test]
     fn only_the_stretched_rule_names_moves() {
-        let s = choose(Some(&[B, D, L, W]), &[W, B]);
+        let declared = GbcPalette([B, D, L, W].map(|c| Rgb555::from_rgb888(c[0], c[1], c[2])));
+        let s = choose(Some(&declared), &[W, B]);
         assert_eq!((s.moved(W), s.moved(B)), (None, None));
     }
 

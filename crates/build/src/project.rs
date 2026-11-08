@@ -18,8 +18,8 @@ use std::path::{Component, Path, PathBuf};
 use std::time::Duration;
 
 use gbcli_protocol::{
-    BankOverflow, BuildMade, Diagnostic, ErrorBody, ErrorCode, OutputKind, OutputMade, ResultBody,
-    Severity, Tool,
+    BankOverflow, BuildMade, BuildTarget, Diagnostic, ErrorBody, ErrorCode, OutputKind, OutputMade,
+    ResultBody, Severity, Tool,
 };
 
 use crate::diagnostics;
@@ -45,6 +45,8 @@ pub struct BuildOptions {
     /// How long one tool run may take before it is stopped and the build
     /// fails; default [`TOOL_TIMEOUT`].
     pub tool_timeout: Duration,
+    /// The machine the ROM is for; default the DMG.
+    pub target: BuildTarget,
 }
 
 /// How long one rgbasm, rgblink or rgbfix run may take by default. The
@@ -62,6 +64,7 @@ impl BuildOptions {
             out: None,
             display_base,
             tool_timeout: TOOL_TIMEOUT,
+            target: BuildTarget::Dmg,
         }
     }
 }
@@ -194,6 +197,7 @@ pub fn build(tools: &Toolchain, options: &BuildOptions) -> Result<BuildMade, Bui
         again: again(&shown(&project), options),
         made: BuildMade {
             rgbds: tools.version().to_string(),
+            target: options.target,
             sources: layout.sources.iter().map(|s| shown(s)).collect(),
             outputs: Vec::new(),
             diagnostics: Vec::new(),
@@ -260,7 +264,11 @@ pub fn build(tools: &Toolchain, options: &BuildOptions) -> Result<BuildMade, Bui
         &staged.iter().collect::<Vec<_>>(),
     )?;
     let fixed = linked && {
-        let args = ["-v", "-p", "0xFF"].map(String::from).to_vec();
+        let mut args = ["-v", "-p", "0xFF"].map(String::from).to_vec();
+        if options.target == BuildTarget::Gbc {
+            // Dual mode: $0143 = $80. `-C` (GBC only, $C0) isn't offered.
+            args.push("-c".into());
+        }
         let rom = staged[0].display().to_string();
         run.step(
             Tool::Rgbfix,
@@ -471,6 +479,9 @@ fn again(dir: &str, options: &BuildOptions) -> String {
             words.push(flag.to_string());
             words.push(quote(&path.display().to_string()));
         }
+    }
+    if options.target == BuildTarget::Gbc {
+        words.push("--gbc".into());
     }
     words.join(" ")
 }

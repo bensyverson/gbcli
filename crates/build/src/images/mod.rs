@@ -12,7 +12,7 @@ mod bg;
 mod census;
 mod emit;
 mod find;
-mod palette;
+mod palettes;
 mod pixels;
 mod preview;
 mod run;
@@ -98,11 +98,23 @@ pub(crate) fn convert(
         diagnostics: Vec::new(),
         generated: None,
     };
-    let palette_shown = shown(&project.join(palette::PATH));
+    let palette_shown = shown(&project.join(palettes::PATH));
+    let assets = project.join("assets");
+    // Each image by its path under assets/, as an assignment names it.
+    let images: Vec<String> = sources
+        .iter()
+        .map(|s| {
+            let rel = s.path.strip_prefix(&assets).unwrap_or(&s.path);
+            rel.components()
+                .map(|c| c.as_os_str().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join("/")
+        })
+        .collect();
     if sources.is_empty() {
         // No images to shade, but a malformed palette file is still the
         // project's mistake to hear about.
-        return match palette::read(project, &palette_shown) {
+        return match palettes::read(project, &palette_shown, &images) {
             Ok(_) => Ok(None),
             Err(p) => {
                 made.problems.push(p);
@@ -121,8 +133,10 @@ pub(crate) fn convert(
     }
     // One color, one shade, in every image: the shades are chosen from the
     // whole project's colors before any image is planned.
-    let declared = match palette::read(project, &palette_shown) {
-        Ok(declared) => declared,
+    // With or without --gbc (plan question 10): `dmg` drives the cascade, the
+    // named palettes are checked, and an assigned image builds as DMG art.
+    let declared = match palettes::read(project, &palette_shown, &images) {
+        Ok(named) => named.and_then(|n| n.dmg),
         Err(p) => {
             made.problems.push(p);
             return Ok(Some(Converted { made, ..stopped }));
@@ -142,6 +156,9 @@ pub(crate) fn convert(
             ImageKind::Bg => bg::check(&image, &pixels, &shading).map(Plan::Bg),
             ImageKind::Sprites => {
                 sheet::check(&image, &s.stem, &pixels, s.frame, &shading).map(Plan::Sheet)
+            }
+            ImageKind::Tiles => {
+                unreachable!("find yields no tileset: assets/tiles/ isn't read yet")
             }
         };
         match checked {
@@ -332,6 +349,8 @@ fn asset(
         frames,
         objects,
         preview: String::new(),
+        tile_indices: Vec::new(),
+        gbc: None,
     }
 }
 

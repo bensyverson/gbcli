@@ -1,7 +1,8 @@
 //! The edges of the project-wide DMG shades (Ben's rulings, 2026-11-07):
 //! shared shades across images, the merged copy rgbgfx reads, a colorless
-//! project, and `assets/palette.txt`'s encodings and comments. From the
-//! review of the shade choice (leaf GTXXyr).
+//! project, and `assets/palettes.txt`'s encodings and comments. From the
+//! review of the shade choice (leaf GTXXyr); the palette cases moved from
+//! `assets/palette.txt` to its `dmg` line (leaf WmNCxc).
 
 mod common;
 mod pngs;
@@ -285,7 +286,7 @@ fn colors_sharing_a_shade_within_an_image_warn_only_for_that_image() {
 
 fn palette_build(name: &str, text: &[u8]) -> (common::Temp, Result<BuildMade, BuildError>) {
     let (temp, options) = starter(name);
-    fs::write(temp.path("demo/assets/palette.txt"), text).unwrap();
+    fs::write(temp.path("demo/assets/palettes.txt"), text).unwrap();
     write_png(&temp.path("demo/assets/bg/sky.png"), 8, 8, |x, _| {
         [WHITE, LIGHT, DARK, BLACK][(x / 2) as usize]
     });
@@ -297,7 +298,7 @@ fn palette_build(name: &str, text: &[u8]) -> (common::Temp, Result<BuildMade, Bu
 fn a_palette_file_with_crlf_is_read() {
     let (_t, r) = palette_build(
         "edge-pal-crlf",
-        b"# lightest\r\n#ffffff\r\n#aaaaaa # c\r\n#555555\r\n#000000\r\n",
+        b"# lightest\r\ndmg: #ffffff #aaaaaa #555555 #000000 # c\r\nsky: #fff #8c4 #363 #021\r\nbg/sky.png = sky\r\n",
     );
     let made = r.expect("a CRLF palette builds");
     assert_eq!(
@@ -311,7 +312,7 @@ fn a_palette_file_with_crlf_is_read() {
 fn a_palette_file_with_a_bom_is_read() {
     let (_t, r) = palette_build(
         "edge-pal-bom",
-        b"\xEF\xBB\xBF#ffffff\n#aaaaaa\n#555555\n#000000\n",
+        b"\xEF\xBB\xBFdmg: #ffffff #aaaaaa #555555 #000000\n",
     );
     match r {
         Ok(made) => assert_eq!(
@@ -333,7 +334,7 @@ fn a_palette_file_with_a_bom_is_read() {
 fn a_palette_file_not_in_utf8_is_refused_as_a_whole() {
     let (_t, r) = palette_build(
         "edge-pal-latin1",
-        b"#ffffff\n#aaaaaa\xA0\n#555555\n#000000\n",
+        b"dmg: #ffffff #aaaaaa\xA0 #555555 #000000\n",
     );
     let made = match r {
         Err(BuildError::Failed { made, .. }) => *made,
@@ -350,7 +351,7 @@ fn a_palette_file_not_in_utf8_is_refused_as_a_whole() {
 fn a_hash_then_a_tab_starts_a_comment() {
     let (_t, r) = palette_build(
         "edge-pal-tab",
-        b"#\tlightest first\n#ffffff\n#aaaaaa\n#555555\n#000000\n",
+        b"#\tlightest first\ndmg: #ffffff #aaaaaa #555555 #000000\n",
     );
     match r {
         Ok(_) => {}
@@ -365,12 +366,12 @@ fn a_hash_then_a_tab_starts_a_comment() {
     }
 }
 
-/// A palette.txt that is a directory: refused, without a panic, and said
+/// A palettes.txt that is a directory: refused, without a panic, and said
 /// to be a directory rather than text in the wrong encoding.
 #[test]
 fn a_palette_path_that_is_a_directory_is_refused_as_one() {
     let (temp, options) = starter("edge-pal-dir");
-    fs::create_dir_all(temp.path("demo/assets/palette.txt")).unwrap();
+    fs::create_dir_all(temp.path("demo/assets/palettes.txt")).unwrap();
     write_png(&temp.path("demo/assets/bg/sky.png"), 8, 8, |_, _| WHITE);
     let made = match build(&rgbds(), &options) {
         Err(BuildError::Failed { made, .. }) => *made,
@@ -381,26 +382,26 @@ fn a_palette_path_that_is_a_directory_is_refused_as_one() {
     assert!(!p.message.contains("UTF-8"), "{}", p.message);
 }
 
-/// A malformed palette.txt in a project with no images still stops the build.
+/// A malformed palettes.txt in a project with no images still stops the build.
 #[test]
 fn a_malformed_palette_is_refused_without_images() {
     let (temp, options) = starter("edge-pal-noimg");
-    fs::write(temp.path("demo/assets/palette.txt"), "garbage\n").unwrap();
+    fs::write(temp.path("demo/assets/palettes.txt"), "garbage\n").unwrap();
     let made = match build(&rgbds(), &options) {
         Err(BuildError::Failed { made, .. }) => *made,
-        other => panic!("a malformed assets/palette.txt passes without images: {other:?}"),
+        other => panic!("a malformed assets/palettes.txt passes without images: {other:?}"),
     };
     let p = problem(&made, ImageLimit::PaletteFile);
     assert_eq!(p.line, Some(1));
 }
 
-/// A well-formed palette.txt in a project with no images changes nothing.
+/// A well-formed palettes.txt in a project with no images changes nothing.
 #[test]
 fn a_good_palette_without_images_builds_as_before() {
     let (temp, options) = starter("edge-pal-noimg-ok");
     fs::write(
-        temp.path("demo/assets/palette.txt"),
-        "#ffffff\n#aaaaaa\n#555555\n#000000\n",
+        temp.path("demo/assets/palettes.txt"),
+        "dmg: #ffffff #aaaaaa #555555 #000000\nforest: #fff #8c4 #363 #021\n",
     )
     .unwrap();
     let made = build(&rgbds(), &options).unwrap();

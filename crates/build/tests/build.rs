@@ -7,7 +7,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use gbcli_build::{BuildError, BuildOptions, Toolchain, build, new_project};
-use gbcli_protocol::{ErrorCode, OutputKind, Severity, Tool};
+use gbcli_protocol::{BuildTarget, ErrorCode, OutputKind, Severity, Tool};
 
 use common::{Temp, failed, fake_tools, rgbds, starter};
 
@@ -97,6 +97,48 @@ fn a_syntax_error_is_a_structured_error_with_file_and_line() {
     );
     let carried = body.result.expect("the report rides in the error");
     assert_eq!(carried.build.as_ref(), Some(&made));
+}
+
+/// The CGB flag at $0143: $80 (dual mode, rgbfix -c) for the GBC target,
+/// $00 for the DMG; the header checksum holds either way, and the result
+/// says which target it built.
+#[test]
+fn the_gbc_target_writes_the_dual_mode_header_and_the_result_records_it() {
+    let checksum = |rom: &[u8]| {
+        rom[0x134..0x14D]
+            .iter()
+            .fold(0u8, |acc, &b| acc.wrapping_sub(b).wrapping_sub(1))
+    };
+    let (temp, mut options) = starter("gbc-header");
+    let made = build(&rgbds(), &options).unwrap();
+    assert_eq!(made.target, BuildTarget::Dmg);
+    let rom = fs::read(temp.path("demo/build/demo.gb")).unwrap();
+    assert_eq!(rom[0x143], 0x00);
+    assert_eq!(rom[0x14D], checksum(&rom));
+
+    options.target = BuildTarget::Gbc;
+    let made = build(&rgbds(), &options).unwrap();
+    assert_eq!(made.target, BuildTarget::Gbc);
+    let rom = fs::read(temp.path("demo/build/demo.gb")).unwrap();
+    assert_eq!(rom[0x143], 0x80);
+    assert_eq!(rom[0x14D], checksum(&rom));
+}
+
+/// A failed GBC build's remedy builds for the GBC again, and its report
+/// still names the target.
+#[test]
+fn a_failed_gbc_build_says_gbc_in_its_remedy() {
+    let (temp, mut options) = starter("gbc-failed");
+    options.target = BuildTarget::Gbc;
+    fs::write(temp.path("demo/src/extra.asm"), "\tjp Nowhere\n").unwrap();
+    let error = build(&rgbds(), &options).unwrap_err();
+    let body = error.body();
+    assert!(
+        body.remedy.ends_with("`gbcli build demo --gbc` again"),
+        "{}",
+        body.remedy
+    );
+    assert_eq!(failed(Err(error)).target, BuildTarget::Gbc);
 }
 
 #[test]

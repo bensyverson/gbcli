@@ -44,6 +44,7 @@ pub(crate) fn symbols(kind: ImageKind, label: &str, constant: &str) -> Vec<Strin
             &["Tiles", "TilesEnd", "Frames"],
             &["TILES", "FRAMES", "FRAME_WIDTH", "FRAME_HEIGHT", "OBP"],
         ),
+        ImageKind::Tiles => unreachable!("find yields no tileset: assets/tiles/ isn't read yet"),
     };
     let labels = labels.iter().map(|s| format!("{label}{s}"));
     let constants = constants.iter().map(|s| format!("{constant}_{s}"));

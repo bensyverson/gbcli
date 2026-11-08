@@ -29,6 +29,38 @@ pub struct BuildArgs {
     /// session, whose ROM must be the one just built.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub restore: Option<String>,
+    /// The machine the ROM is for; default the DMG, and left off the wire
+    /// then. `gbcli build --gbc` sends `"gbc"`.
+    #[serde(default, skip_serializing_if = "BuildTarget::is_dmg")]
+    pub target: BuildTarget,
+}
+
+/// The machine a build is for, which sets the header's CGB flag ($0143).
+/// User-facing names say "GBC" (Ben, 2026-11-07); Pan Docs calls the
+/// machine CGB. A GBC-only build (rgbfix `-C`, $0143 = $C0) is not offered.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BuildTarget {
+    /// The original Game Boy: rgbfix leaves $0143 at $00.
+    #[default]
+    Dmg,
+    /// Dual mode: GBC-enhanced, and still runs on the DMG. rgbfix `-c`
+    /// writes $0143 = $80.
+    Gbc,
+}
+
+impl BuildTarget {
+    pub fn is_dmg(&self) -> bool {
+        *self == BuildTarget::Dmg
+    }
+
+    /// The wire name: `dmg` or `gbc`.
+    pub fn name(self) -> &'static str {
+        match self {
+            BuildTarget::Dmg => "dmg",
+            BuildTarget::Gbc => "gbc",
+        }
+    }
 }
 
 /// `op: "new"`: a starter project in `dir`, relative to the server's
@@ -148,6 +180,8 @@ pub struct OutputMade {
 pub struct BuildMade {
     /// rgbasm's version, as it printed it.
     pub rgbds: String,
+    /// The machine the ROM was built for: `--gbc` makes it `gbc`.
+    pub target: BuildTarget,
     /// The sources assembled, in order.
     pub sources: Vec<String>,
     pub outputs: Vec<OutputMade>,
@@ -289,6 +323,41 @@ mod tests {
         let op = Op::Build(restoring);
         assert!(op.needs_bundle() && op.changes_session() && op.mutates_head());
         assert!(Op::Show.needs_bundle() && Op::Sessions.needs_bundle());
+    }
+
+    /// `target` is left out of a DMG build's args, as before the GBC target
+    /// existed, and is `"gbc"` for dual mode; the result always says it.
+    #[test]
+    fn the_build_target_is_dmg_by_default_and_gbc_on_the_wire() {
+        let dmg: BuildArgs = serde_json::from_str(r#"{"dir":"game"}"#).unwrap();
+        assert_eq!(dmg.target, BuildTarget::Dmg);
+        assert_eq!(serde_json::to_string(&dmg).unwrap(), r#"{"dir":"game"}"#);
+        let gbc: BuildArgs = serde_json::from_str(r#"{"dir":"game","target":"gbc"}"#).unwrap();
+        assert_eq!(gbc.target, BuildTarget::Gbc);
+        assert_eq!(
+            serde_json::to_string(&gbc).unwrap(),
+            r#"{"dir":"game","target":"gbc"}"#
+        );
+        assert!(serde_json::from_str::<BuildArgs>(r#"{"target":"cgb"}"#).is_err());
+        for target in [BuildTarget::Dmg, BuildTarget::Gbc] {
+            assert_eq!(serde_json::to_value(target).unwrap(), target.name());
+        }
+        let made = BuildMade {
+            rgbds: "1.0.4".into(),
+            target: BuildTarget::Dmg,
+            sources: Vec::new(),
+            outputs: Vec::new(),
+            diagnostics: Vec::new(),
+            images: None,
+            songs: Vec::new(),
+            overflow: None,
+        };
+        let json = serde_json::to_string(&made).unwrap();
+        assert_eq!(
+            json,
+            r#"{"rgbds":"1.0.4","target":"dmg","sources":[],"outputs":[],"diagnostics":[]}"#
+        );
+        assert_eq!(serde_json::from_str::<BuildMade>(&json).unwrap(), made);
     }
 
     #[test]

@@ -248,6 +248,7 @@ fn build(host: &Host, request: &Request, args: &BuildArgs) -> Result<Built, Box<
     options.src = args.src.iter().map(PathBuf::from).collect();
     options.include = args.include.iter().map(PathBuf::from).collect();
     options.out = args.out.as_ref().map(PathBuf::from);
+    options.target = args.target;
     let made = gbcli_build::build(&tools, &options).map_err(|e| {
         Box::new(Response::failed(id, None, e.body()).with_warnings(warnings.clone()))
     })?;

@@ -2,7 +2,7 @@
 //! which the server answers (design §12), so `serve` and `batch` build
 //! exactly as the CLI does. Only what argv alone can say is checked here.
 
-use gbcli_protocol::{BuildArgs, NewArgs, Op, OpcodeArgs};
+use gbcli_protocol::{BuildArgs, BuildTarget, NewArgs, Op, OpcodeArgs};
 
 use crate::Env;
 use crate::argv::Invocation;
@@ -21,6 +21,11 @@ pub fn build(inv: &Invocation, env: &Env) -> Result<Command, Usage> {
         include: inv.all("include").map(str::to_string).collect(),
         out: inv.one("out").map(str::to_string),
         restore: inv.one("restore").map(str::to_string),
+        target: if inv.has("gbc") {
+            BuildTarget::Gbc
+        } else {
+            BuildTarget::Dmg
+        },
     };
     if args.restore.is_none() {
         // --dir and --as only steer the restore's session; neither changes

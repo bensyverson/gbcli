@@ -69,6 +69,7 @@ pub fn rows(r: &ResultBody) -> String {
         let count = |s: Severity| b.diagnostics.iter().filter(|d| d.severity == s).count();
         out += &Row::new("build")
             .field("rgbds", &b.rgbds)
+            .field("target", b.target.name())
             .field("sources", b.sources.len())
             .field("errors", count(Severity::Error))
             .field("warnings", count(Severity::Warning))

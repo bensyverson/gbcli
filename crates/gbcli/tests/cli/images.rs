@@ -6,7 +6,7 @@
 use std::fs;
 use std::path::Path;
 
-use crate::common::Project;
+use crate::common::{Project, golden};
 
 const GRAYS: [[u8; 3]; 4] = [[0xFF; 3], [0xAA; 3], [0x55; 3], [0x00; 3]];
 
@@ -257,6 +257,37 @@ fn a_sprite_sheet_is_built_into_objects_that_show_on_screen_flipped_and_shaded()
     }
 }
 
+/// The images result of a DMG build of a background and a sheet, pinned
+/// whole: the GBC types (leaf ZA5Z7c) and the target (leaf vo5gRl) must
+/// leave a DMG build's `images` JSON as it was.
+#[test]
+fn a_dmg_builds_images_json_is_pinned() {
+    let p = Project::new("images-json");
+    assert_eq!(p.rgbds(&["new", "game"]).code, 0);
+    write_png(&p.path("game/assets/bg/sign.png"), 32, 16, sign);
+    let path = p.path("game/assets/sprites/hero.png");
+    let data: Vec<u8> = (0..16u32)
+        .flat_map(|y| (0..16u32).map(move |x| (x, y)))
+        .flat_map(|(x, y)| match hero(x, y) {
+            Some([r, g, b]) => [r, g, b, 0xFF],
+            None => [0, 0, 0, 0],
+        })
+        .collect();
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let mut encoder = png::Encoder::new(fs::File::create(&path).unwrap(), 16, 16);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    encoder
+        .write_header()
+        .unwrap()
+        .write_image_data(&data)
+        .unwrap();
+    let json = p.rgbds(&["build", "game", "--json"]);
+    assert_eq!(json.code, 0, "{}{}", json.stdout, json.stderr);
+    // The line as printed, so field order is pinned too.
+    golden("images.json.txt", &json.stdout);
+}
+
 #[test]
 fn an_over_budget_background_comes_back_as_its_limit_in_rows_and_json() {
     let p = Project::new("images-over");
@@ -307,13 +338,13 @@ fn a_malformed_palette_file_is_a_problem_row_naming_its_line() {
     assert_eq!(p.rgbds(&["new", "game"]).code, 0);
     write_png(&p.path("game/assets/bg/sky.png"), 8, 8, |_, _| GRAYS[0]);
     fs::write(
-        p.path("game/assets/palette.txt"),
-        "# lightest first\n#ffffff\n#aaaa\n#555555\n#000000\n",
+        p.path("game/assets/palettes.txt"),
+        "# lightest first\n\ndmg: #ffffff #aaaa #555555 #000000\n",
     )
     .unwrap();
     let built = p.rgbds(&["build", "game"]);
     assert_eq!(built.code, 4, "{}{}", built.stdout, built.stderr);
-    let row = "problem limit=palette_file severity=error image=game/assets/palette.txt count=";
+    let row = "problem limit=palette_file severity=error image=game/assets/palettes.txt count=";
     assert!(built.stdout.contains(row), "{row:?} in\n{}", built.stdout);
     assert!(built.stdout.contains(" line=3 "), "{}", built.stdout);
 }

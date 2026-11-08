@@ -12,6 +12,7 @@ mod images;
 mod keys;
 mod listing;
 mod opcode;
+mod palettes;
 mod parse;
 mod profile;
 mod raster;
@@ -43,12 +44,13 @@ pub use equiv::{
 };
 pub use error::{ErrorBody, ErrorCode};
 pub use images::{
-    ImageAsset, ImageKind, ImageLimit, ImageProblem, ImagesMade, KnownPalette, ShadeChoice,
-    ShadeRule, TileAt,
+    GbcImage, GbcImagesMade, ImageArt, ImageAsset, ImageKind, ImageLimit, ImageProblem, ImagesMade,
+    KnownPalette, ShadeChoice, ShadeRule, TileAt,
 };
 pub use keys::{Button, KEY_GRAMMAR, KeyAction, KeyError, KeyEvent, parse_keys};
 pub use listing::{CheckpointRow, SymArgs, SymbolArea, SymbolRow};
 pub use opcode::{OpcodeArgs, OpcodeRow};
+pub use palettes::{GbcPalette, NamedPalette, NamedPalettes, NotRgb555, Rgb555};
 pub use parse::{RequestError, parse_request};
 pub use profile::{
     CpuSpeedName, CycleStats, FrameBudgetMade, FrameBudgetRow, MeasureArgs, MeasureMade,
@@ -75,8 +77,9 @@ pub use stop::{
     TimeBase, vblank_name,
 };
 pub use toolchain::{
-    BankOverflow, BuildArgs, BuildMade, CheckMade, CheckName, CheckStatus, Diagnostic, DoctorMade,
-    NewArgs, NewMade, OutputKind, OutputMade, PlacedSection, Severity, SongBuilt, SourceLine, Tool,
+    BankOverflow, BuildArgs, BuildMade, BuildTarget, CheckMade, CheckName, CheckStatus, Diagnostic,
+    DoctorMade, NewArgs, NewMade, OutputKind, OutputMade, PlacedSection, Severity, SongBuilt,
+    SourceLine, Tool,
 };
 pub use video::{
     AddressingView, ImageMade, ImageOut, MapAreaView, MapSel, OamView, TileView, VideoData,

@@ -242,6 +242,11 @@ RGBDS — the loop: edit, build, restore, measure, with RGBDS from PATH.
                                rgbfix -v -p 0xFF. No build file: the layout
                                is the build; --src, --include, --out change it;
                                PNGs in assets/ too (gbcli help images)
+  gbcli build game --gbc       the same, for the GBC in dual mode: rgbfix -c
+                               sets $0143 = $80, so the ROM is GBC-enhanced
+                               and still runs on the DMG. (Pan Docs calls
+                               the GBC the CGB.) rgbfix -C (GBC only, $C0)
+                               isn't offered
   The loop, from inside game/:
     gbcli run build/game.gb --session game --frames 60 --checkpoint start
     (edit src/)
@@ -319,7 +324,7 @@ mod tests {
         // 2026-11-07): declared, known, stretched, one shade per color in
         // the whole project, shared shades warned, RGB555 colors one.
         for needle in [
-            "assets/palette.txt",
+            "assets/palettes.txt",
             "pea greens",
             "GB Studio",
             "Pocket",
@@ -332,6 +337,14 @@ mod tests {
             // (leaf GTXXyr); and a comment is '#' then a space or a tab.
             "across images",
             "space or tab",
+            // The named-palette file (leaf WmNCxc): the reserved dmg line,
+            // #rgb, assignments, a fifth color an error, and what a DMG
+            // build does with the rest.
+            "dmg:",
+            "#rgb is #rrggbb",
+            "bg/town.png = forest",
+            "a fifth",
+            "as DMG art",
         ] {
             assert!(text.contains(needle), "{needle} missing");
         }
@@ -344,6 +357,23 @@ mod tests {
             "TOWN_WIDTH",
             "HeroFrames",
             ".preview.png",
+        ] {
+            assert!(text.contains(needle), "{needle} missing");
+        }
+        assert!(text.lines().all(|l| l.chars().count() <= 80), "{text}");
+    }
+
+    /// "GBC" is the user-facing name (Ben, 2026-11-07); the topic maps it to
+    /// Pan Docs' CGB and to rgbfix's -c (dual mode) and -C (GBC only).
+    #[test]
+    fn the_rgbds_topic_maps_gbc_to_cgb_and_rgbfixs_flags() {
+        let text = Topic::from_name("rgbds").expect("an rgbds topic").text();
+        for needle in [
+            "gbcli build game --gbc",
+            "rgbfix -c",
+            "$0143 = $80",
+            "the GBC the CGB",
+            "rgbfix -C (GBC only",
         ] {
             assert!(text.contains(needle), "{needle} missing");
         }

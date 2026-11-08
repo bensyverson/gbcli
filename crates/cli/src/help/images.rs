@@ -10,9 +10,8 @@ Images — PNGs under assets/, converted by `gbcli build` with rgbgfx (RGBDS).
 Draw each image in up to 4 colors (sprites: 3 + transparent, alpha 0).
 Shades 0-3 (white to black) are chosen once for the whole project, so a
 color is one shade in every image, by the first rule that applies:
-  1. declared   assets/palette.txt: 4 lines of #rrggbb, shade 0 first ('#'
-                then a space or tab starts a comment); each color takes its
-                nearest line's shade
+  1. declared   the dmg line of assets/palettes.txt (below): the colors of
+                shades 0-3; each color takes its nearest entry's shade
   2. known      every color is in one palette: the DMG grays (#ffffff
                 #aaaaaa #555555 #000000), the DMG-01 pea greens (#9bbc0f
                 #8bac0f #306230 #0f380f), GB Studio's greens (#e0f8cf
@@ -28,6 +27,18 @@ and one for the project (no image=) for colors that share it only across
 images: colors one image holds, or chained through one, are a group (a/b);
 it lists each group with its images, and count= is the groups. Colors
 equal in RGB555 (5 bits a channel, as rgbgfx reads them) are one color.
+
+assets/palettes.txt names palettes, one a line, 4 colors, index 0 (the
+DMG's lightest) first, and assigns them to images by path under assets/:
+  dmg:    #e0f8d0 #88c070 #346856 #081820   # reserved: the shades above
+  forest: #fff #8c4 #363 #021               # #rgb is #rrggbb (#88cc44)
+  bg/town.png = forest
+Colors are #rrggbb or #rgb, kept as RGB555. Names are a lowercase letter,
+then lowercase letters, digits or _. '#' then a space or tab (or '#' last
+on a line) starts a comment; any other '#' word is a color, so a fifth
+color is an error. A build uses the dmg line, checks the rest, and builds
+an assigned image as DMG art; GBC color from the other palettes (build
+--gbc) isn't built yet.
 
 Every hardware limit is a `problem` row: limit, count, max, tiles=x,y (in
 the image's 8x8 grid; --json lists them all), message and remedy.
@@ -45,7 +56,9 @@ the image's 8x8 grid; --json lists them all), message and remedy.
   obj_no_transparency a warning: no transparent pixel, every object a block
   shared_shade        a warning: colors drawn in one shade (names them), in
                       one image or across images
-  palette_file        assets/palette.txt isn't 4 #rrggbb lines (line=N)
+  palette_file        assets/palettes.txt doesn't read: a bad line, a name
+                      defined or an image assigned twice, an unknown name
+                      or image, or dmg assigned (line=N)
   shade_stretched     a warning: the stretch put a color 2+ shades from its
                       nearest (e.g. #101010 beside only black, drawn white)
   alpha               a pixel half transparent, or any in a background

@@ -1,6 +1,6 @@
 //! The RGBDS loop: `new` and `build`, and `doctor` (a help verb).
 
-use super::flags::{ALLOW_ROM_CHANGE, CHANGE, JSON, OUTPUT, SESSION_FLAG, repeated, value};
+use super::flags::{ALLOW_ROM_CHANGE, CHANGE, JSON, OUTPUT, SESSION_FLAG, repeated, switch, value};
 use super::{Arity, Class, FlagSpec, Verb, VerbSpec};
 
 /// `build`'s own flags: the layout it assumes, and the checkpoint to reload.
@@ -19,6 +19,11 @@ const BUILD: &[FlagSpec] = &[
         "out",
         "FILE",
         "the ROM to write, with its .sym and .map beside it (default build/<project>.gb)",
+    ),
+    switch(
+        "gbc",
+        "build for the GBC in dual mode: rgbfix -c sets $0143 to $80, and the ROM still \
+         runs on the DMG",
     ),
     value(
         "restore",
@@ -66,8 +71,8 @@ pub const BUILD_VERB: VerbSpec = VerbSpec {
     name: "build",
     class: Class::Build,
     summary: "assemble, link and fix a project with RGBDS; errors with file and line",
-    usage: "[DIR] [--src DIR]… [--include DIR]… [--out FILE] [--session NAME --restore NAME] \
-            [flags]",
+    usage: "[DIR] [--src DIR]… [--include DIR]… [--out FILE] [--gbc] [--session NAME \
+            --restore NAME] [flags]",
     arity: Arity {
         min: 0,
         max: Some(1),

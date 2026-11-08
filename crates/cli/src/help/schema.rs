@@ -49,6 +49,7 @@ sessions, gaps   —
 prune   unused_for: "30m"|"12h"|"7d"
 rm      name: NAME  with_checkpoints?: bool
 build   dir?: PATH  src?: [PATH]  include?: [PATH]  out?: PATH
+        target?: "dmg"|"gbc"  ("gbc": dual mode, rgbfix -c; default "dmg")
         restore?: CHECKPOINT  (into session, whose ROM must be the build's)
 doctor  —
 new     dir: PATH
@@ -74,6 +75,23 @@ deleted, registers, ppu, sessions, events, gaps, pruned, kept, busy, removed,
 build, doctor, created, song, song_problem, opcodes, power_cycle, sav,
 flash_notes (run: each flash note, also a warning).
 `gbcli VERB --json` prints the whole response line, as serve writes it.
+
+GBC images, in result.build.images (gbcli help images). The types are
+defined; the GBC conversion that fills them is not built yet.
+  images[]  tile_indices?: [N|null]  (each 8x8 tile, each 8x16 unit of a
+            sheet, rows top to bottom; null: a transparent unit, no tile)
+            gbc?: {art: "color"|"indexed", palette?: NAME,
+            palettes?: [PALETTE], tile_palettes: [0-7|null]}
+            kind: "bg"|"sprites"|"tiles" (tiles: a tileset, no map)
+  gbc?: {obj_palettes: [PALETTE]}  (the 8 OBJ palettes every sheet shares)
+  problems[].limit also: gbc_palettes, gbc_tile_colors, dmg_override_size
+Named palettes (assets/palettes.txt reads into this):
+  {dmg?: PALETTE, palettes: [{name: NAME, colors: PALETTE}],
+   assignments?: {IMAGE: NAME}}   (IMAGE: its path under assets/)
+PALETTE = [RGB555 ×4], index 0 first. RGB555 = 0-32767, the word BCPD and
+OCPD take: red in bits 0-4, green 5-9, blue 10-14.
+  gbc   {"art":"indexed","palette":"forest","tile_palettes":[0,0,null]}
+  named {"dmg":[32767,21140,10570,0],"palettes":[{"name":"forest","colors":[32767,9009,6534,2176]}],"assignments":{"bg/town.png":"forest"}}
 
 Examples:
   {"id":"1","session":"dx","op":"run","args":{"frames":120}}
@@ -130,5 +148,46 @@ mod tests {
         ops.sort();
         ops.dedup();
         assert_eq!(ops.len(), 28, "one example per op: {ops:?}");
+    }
+
+    /// The GBC image types (leaf ZA5Z7c): their examples parse into the
+    /// protocol's own types, and every wire name they add is listed.
+    #[test]
+    fn the_gbc_image_types_are_listed_and_their_examples_parse() {
+        use gbcli_protocol::{GbcImage, ImageArt, ImageKind, ImageLimit, NamedPalettes};
+        let example = |tag: &str| {
+            SCHEMA
+                .lines()
+                .find_map(|l| l.trim().strip_prefix(tag))
+                .unwrap_or_else(|| panic!("no {tag:?} example"))
+                .trim()
+        };
+        let gbc: GbcImage = serde_json::from_str(example("gbc   ")).unwrap();
+        assert_eq!(
+            gbc.art,
+            ImageArt::Indexed {
+                palette: "forest".into()
+            }
+        );
+        let named: NamedPalettes = serde_json::from_str(example("named ")).unwrap();
+        assert_eq!(named.assignments["bg/town.png"], "forest");
+        assert!(named.dmg.is_some() && named.get("forest").is_some());
+        for limit in [
+            ImageLimit::GbcPalettes,
+            ImageLimit::GbcTileColors,
+            ImageLimit::DmgOverrideSize,
+        ] {
+            assert!(SCHEMA.contains(limit.name()), "{}", limit.name());
+        }
+        for word in [
+            "tile_indices",
+            "tile_palettes",
+            "obj_palettes",
+            "\"indexed\"",
+            "assignments",
+            ImageKind::Tiles.dir(),
+        ] {
+            assert!(SCHEMA.contains(word), "{word}");
+        }
     }
 }

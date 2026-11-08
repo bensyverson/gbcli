@@ -6,7 +6,9 @@ The evidence is in [2026-11-07-gbc-images-research.md](2026-11-07-gbc-images-res
 
 > **Revision 2 (2026-11-07), from the review of LoadHigh's assets design** (`../loadhigh/project/design/09-assets.md`), agreed by Ben and LoadHigh's agent before Ben answered revision 1. Four changes, all carried below:
 > 1. **Two kinds of art.** Color art, with palettes derived and packed automatically, stays the default. Beside it, **indexed art**: four-shade art colored on the GBC by a *named* palette, which a program can swap at run time. Explicit palette assignment leaves the backlog. Questions 4 and 5 are re-asked with new recommendations.
-> 2. **One named-palette file**, `assets/palettes.txt`, replaces ygc9bb's `assets/palette.txt` (unreleased, so no migration). The DMG shades are the reserved name `dmg`. `#rgb` is CSS shorthand for `#rrggbb`, rounded to RGB555 like every color.
+> 2. **One named-palette file**, `assets/palettes.txt`, replaces ygc9bb's `assets/palette.txt` (unreleased, so no migration). The DMG shades are the reserved name `dmg`. `#rgb` is CSS shorthand for `#rrggbb`, reduced to RGB555 like every color.
+>
+> **Correction (2026-11-07, leaf WmNCxc): "rounded" was wrong; colors are truncated to RGB555** (each channel's top 5 bits), which is how rgbgfx reads a PNG. Rounding would make a palette entry and a pixel written as the same `#rrggbb` two different colors. LoadHigh's side should truncate too.
 > 3. **The shared seam is gbcli's protocol types, not the file.** LoadHigh declares palettes in `.ldh` and sends the same struct the file parses into. The GBC conversion results land as protocol types first; `images.inc` is generated from them; a new `assets` op converts without building a ROM; and tilesets without maps are supported, since LoadHigh builds its own maps and attribute maps from tile kinds.
 > 4. **gbcli settles these, and LoadHigh passes them through:** the check names (`gbc_palettes`, `gbc_tile_colors`, GBC per Ben's naming ruling), the flip rule (no BG flips in dual mode), and the `name.dmg.png` override.
 
@@ -31,7 +33,7 @@ An agent making a Game Boy Color game draws its art in color. `gbcli build --gbc
 
 ```
 dmg:    #e0f8d0 #88c070 #346856 #081820   # reserved: the colors that mean shades 0-3 in the art
-forest: #fff #8c4 #363 #021                 # #rgb is #rrggbb (#8c4 = #88cc44), rounded to RGB555
+forest: #fff #8c4 #363 #021                 # #rgb is #rrggbb (#8c4 = #88cc44), truncated to RGB555
 ember:  #ffe #f80 #a20 #200
 bg/town.png = forest
 sprites/hero.png = ember
@@ -148,7 +150,7 @@ tasks:
         blockedBy: [types]
         desc: |
           Why: one file for plain gbcli users, parsed into the NamedPalettes protocol struct; it replaces ygc9bb's assets/palette.txt while that is unreleased (no migration). What, replacing crates/build/src/images/palette.rs:
-          - `name: c0 c1 c2 c3` lines, colors #rrggbb or CSS-shorthand #rgb, each rounded to RGB555; `path = name` assignment lines (path relative to assets/); comments, blank lines and BOM as today;
+          - `name: c0 c1 c2 c3` lines, colors #rrggbb or CSS-shorthand #rgb, each truncated to RGB555 (top 5 bits, as rgbgfx reads a PNG); `path = name` assignment lines (path relative to assets/); comments, blank lines and BOM as today;
           - `dmg` is reserved: the colors that mean shades 0-3, the first rule of the shade cascade (shades.rs), exactly as palette.txt was;
           - palette_file errors with the line: unknown name, missing image, duplicate name or assignment, dmg assigned to an image, a line that's neither form;
           - every named palette is emitted as data (labels in the api leaf); without --gbc, per plan question 10.

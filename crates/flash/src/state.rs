@@ -214,8 +214,9 @@ impl FlashChip {
     /// other than $FF its bytes as built, and returns those sectors'
     /// chip-address ranges. Across a rebuild, those bytes are the new
     /// build's code, however the other build's program left the sector; a
-    /// sector the build leaves erased (`rgbfix -p 0xFF`'s padding, or past
-    /// the image) holds no code, so a chip that took over that build's state
+    /// sector the build leaves erased holds no code (a gbcli build is $FF
+    /// wherever no section is: gaps, unused banks and rgbfix's tail; and
+    /// past the image), so a chip that took over that build's state
     /// ([`load`](FlashChip::load), [`power_on`](FlashChip::power_on))
     /// keeps the save there.
     pub fn revert_over_code(&mut self, rom: &mut [u8]) -> Vec<std::ops::Range<u32>> {

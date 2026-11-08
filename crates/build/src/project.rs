@@ -258,7 +258,11 @@ pub fn build(tools: &Toolchain, options: &BuildOptions) -> Result<BuildMade, Bui
         .iter()
         .map(|(_, p)| staging.path().join(p.file_name().expect("a file name")))
         .collect();
-    let mut args: Vec<String> = Vec::new();
+    // `-p 0xFF`: every byte no section holds (gaps, unused banks) is $FF,
+    // as erased flash is, not rgblink's $00; rgbfix pads the tail the same.
+    // A flash save carried across a rebuild relies on it: it is kept in a
+    // sector the build leaves all $FF (`FlashChip::revert_over_code`).
+    let mut args = ["-p", "0xFF"].map(String::from).to_vec();
     for (flag, path) in ["-o", "-n", "-m"].iter().zip(&staged) {
         args.extend([flag.to_string(), path.display().to_string()]);
     }

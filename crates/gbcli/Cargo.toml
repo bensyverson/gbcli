@@ -10,6 +10,7 @@ publish.workspace = true
 gbcli-cli.workspace = true
 
 [dev-dependencies]
+gbcli-build.workspace = true
 gbcli-bundle.workspace = true
 gbcli-core.workspace = true
 gbcli-music.workspace = true

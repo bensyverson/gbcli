@@ -13,7 +13,8 @@ power-cycle keeps the chip's contents. Across a rebuild (a power cycle, or any
 command that loads the head or a checkpoint) only the sectors the program
 changed come along, and none where the new image has code, a byte other than
 $FF (a warning names those: the save no longer fits beside the code); a save in
-the image's $FF padding stays. The chip is the board's size,
+a sector the image leaves $FF stays, and a gbcli build is $FF wherever no
+section is (gaps, unused banks, the tail). The chip is the board's size,
 the image at its start and erased past it; the mapper is the header's and
 reaches all of it.
 

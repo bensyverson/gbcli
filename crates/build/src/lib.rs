@@ -17,7 +17,7 @@ mod scaffold;
 mod toolchain;
 
 pub use diagnostics::parse as parse_diagnostics;
-pub use doctor::{BOOT_ROM_SIZES, DoctorInput, doctor};
+pub use doctor::{BOOT_ROM_SIZES, DoctorInput, GIT_LOCAL_ENV_VARS, doctor};
 pub use music::{MUSIC_DIR, MUSIC_OUT, song_problem};
 pub use project::{BuildError, BuildOptions, TOOL_TIMEOUT, build};
 pub use scaffold::{HARDWARE_INC, HUGEDRIVER, NewError, new_project};

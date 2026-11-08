@@ -69,6 +69,7 @@ dependencies = [
 name = "gbcli"
 version = "0.1.0"
 dependencies = [
+ "gbcli-build",
  "gbcli-bundle",
  "gbcli-cli",
  "gbcli-core",

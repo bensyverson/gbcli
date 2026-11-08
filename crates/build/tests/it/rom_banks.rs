@@ -68,3 +68,33 @@ fn a_header_that_names_an_mbc_builds_past_bank_1() {
         0x10000
     );
 }
+
+/// Code at the start and in the middle of bank 5, and nothing in banks 2-4.
+const SPARSE: &str = "SECTION \"Head\", ROMX[$4000], BANK[5]\ndb $C9\n\n\
+                      SECTION \"Middle\", ROMX[$7000], BANK[5]\ndb $C9\n";
+
+/// Every byte no section holds is $FF, as erased flash is: the carried-flash
+/// rule (`FlashChip::revert_over_code`) reads a build's non-$FF bytes as its
+/// code, so padding of any other value would drop a save kept there.
+#[test]
+fn every_byte_no_section_holds_is_ff_in_unused_banks_and_gaps_alike() {
+    let (temp, options) = starter("banks-padding");
+    let project = temp.path("demo");
+    without_music(&project);
+    cart_type(&project, 0x01);
+    fs::write(project.join("src/levels.asm"), SPARSE).unwrap();
+    build(&rgbds(), &options).unwrap();
+    let rom = fs::read(project.join("build/demo.gb")).unwrap();
+    assert_eq!(rom.len(), 0x2_0000, "six banks, padded to eight");
+    let not_ff = |range: std::ops::Range<usize>| range.filter(|&i| rom[i] != 0xFF).count();
+    assert_eq!(not_ff(0x8000..0x1_4000), 0, "banks 2-4, which hold nothing");
+    assert_eq!(rom[0x1_4000], 0xC9);
+    assert_eq!(not_ff(0x1_4001..0x1_7000), 0, "the gap in bank 5");
+    assert_eq!(rom[0x1_7000], 0xC9);
+    assert_eq!(
+        not_ff(0x1_7001..0x1_8000),
+        0,
+        "bank 5 past its last section"
+    );
+    assert_eq!(not_ff(0x1_8000..0x2_0000), 0, "banks 6-7, past the link");
+}

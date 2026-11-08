@@ -10,6 +10,7 @@ mod equiv;
 mod errors;
 mod filmstrip;
 mod flash;
+mod flash_build;
 mod help;
 mod honesty;
 mod images;

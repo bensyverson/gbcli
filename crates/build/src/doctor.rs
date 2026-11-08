@@ -229,14 +229,28 @@ fn gitignore(project: &Path, path_var: Option<&OsStr>, cwd: &Path) -> CheckMade 
     }
 }
 
-/// The variables that point git at a repository other than the one around
-/// its working directory.
-const GIT_REPOSITORY_VARS: [&str; 5] = [
+/// The variables git calls local to a repository (`git rev-parse
+/// --local-env-vars`, git 2.55.0): a git that runs a hook exports them for
+/// its own repository and its own `-c` settings, so a git asked about
+/// another repository runs without them, as git's own submodule code does.
+/// Written out rather than asked of git on each run, which would spawn git
+/// twice to answer once; a test checks it against the git on `PATH`.
+pub const GIT_LOCAL_ENV_VARS: [&str; 15] = [
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_CONFIG",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_CONFIG_COUNT",
+    "GIT_OBJECT_DIRECTORY",
     "GIT_DIR",
     "GIT_WORK_TREE",
+    "GIT_IMPLICIT_WORK_TREE",
+    "GIT_GRAFT_FILE",
     "GIT_INDEX_FILE",
+    "GIT_NO_REPLACE_OBJECTS",
+    "GIT_REPLACE_REF_BASE",
+    "GIT_PREFIX",
+    "GIT_SHALLOW_FILE",
     "GIT_COMMON_DIR",
-    "GIT_OBJECT_DIRECTORY",
 ];
 
 /// Whether git ignores `.gbcli/` in `project`, or `None` when no git on
@@ -247,8 +261,8 @@ fn git_ignores(project: &Path, path_var: Option<&OsStr>, cwd: &Path) -> Option<b
     // needs to match a path that doesn't exist yet.
     let mut command = Command::new(git);
     // The question is about the project's repository, which git finds from
-    // the directory; a git hook running gbcli exports these, naming its own.
-    for var in GIT_REPOSITORY_VARS {
+    // the directory.
+    for var in GIT_LOCAL_ENV_VARS {
         command.env_remove(var);
     }
     let status = command

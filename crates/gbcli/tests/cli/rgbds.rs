@@ -234,15 +234,38 @@ fn doctor_passes_with_the_pinned_rgbds_and_needs_no_session() {
 fn git_init(dir: &std::path::Path) {
     let mut init = std::process::Command::new("git");
     init.args(["init", "-q", "."]).current_dir(dir);
-    for var in [
-        "GIT_DIR",
-        "GIT_WORK_TREE",
-        "GIT_INDEX_FILE",
-        "GIT_COMMON_DIR",
-    ] {
+    for var in gbcli_build::GIT_LOCAL_ENV_VARS {
         init.env_remove(var);
     }
     assert!(init.status().expect("these tests need git").success());
+}
+
+#[test]
+fn doctor_asks_git_without_the_environments_config_either() {
+    // A git that runs a hook passes its `-c` settings on in
+    // GIT_CONFIG_PARAMETERS; they belong to that call, not to the project's
+    // repository, which here doesn't ignore .gbcli/.
+    let p = Project::new("rgbds-doctor-git-config");
+    git_init(&p.dir);
+    let excludes = p.path("excludes");
+    std::fs::write(&excludes, ".gbcli/\n").unwrap();
+    let path = format!("{}:/usr/bin:/bin", rgbds_dir());
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_gbcli"))
+        .arg("doctor")
+        .current_dir(&p.dir)
+        .env("PATH", &path)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null") // whatever this machine ignores
+        .env(
+            "GIT_CONFIG_PARAMETERS",
+            format!("'core.excludesfile={}'", excludes.display()),
+        )
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        stdout.contains("check name=gitignore status=warn "),
+        "{stdout}"
+    );
 }
 
 #[test]

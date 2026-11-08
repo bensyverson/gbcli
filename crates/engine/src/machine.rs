@@ -474,8 +474,8 @@ fn read_rom(core: &dyn Core, offset: u32, len: usize) -> Result<Vec<u8>, CoreErr
 /// reviews of fc85d19 and 6c5b029, as the integrator refined it in leaf
 /// ahKOkk): a carried sector where the new build's array holds a byte other
 /// than $FF holds its code, so it goes back to the build; a sector the build
-/// leaves erased (`rgbfix -p 0xFF`'s padding, or past the image) keeps the
-/// save. Returns the sectors given back.
+/// leaves erased (a gbcli build's $FF wherever no section is, or past the
+/// image) keeps the save. Returns the sectors given back.
 fn keep_the_build_code(core: &mut dyn Core) -> Result<Vec<std::ops::Range<u32>>, CoreError> {
     core.revert_flash_over_code()
 }

@@ -18,7 +18,8 @@ There is no build file: the layout is the build.
 - Every `.asm` under `src/` is assembled by rgbasm, with `include/` on the
   include path, into `build/obj/`.
 - rgblink links the objects into `build/{{name}}.gb`, with symbols in
-  `build/{{name}}.sym` and the memory map in `build/{{name}}.map`.
+  `build/{{name}}.sym` and the memory map in `build/{{name}}.map`. Every
+  byte no section holds is `$FF`, as erased flash is.
 - rgbfix fixes the header: logo, checksums, padding with `$FF`.
 - PNGs in `assets/bg/` and `assets/sprites/` are checked against the
   hardware's limits and converted by rgbgfx into `build/images/`, with

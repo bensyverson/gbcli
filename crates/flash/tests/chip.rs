@@ -378,7 +378,7 @@ fn contents_survive_a_power_cycle_and_a_cut_off_operation_is_noted() {
 }
 
 /// Across a rebuild, the new build's code is the bytes of its image that
-/// aren't $FF (erased flash, and `rgbfix -p 0xFF`'s padding): a chip that
+/// aren't $FF (erased flash, and a gbcli build's padding): a chip that
 /// took over another build's sectors gives back those where the image as
 /// built has code, and keeps those it leaves erased, inside the image or past
 /// it.

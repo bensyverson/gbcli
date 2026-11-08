@@ -4,7 +4,7 @@ use crate::common;
 
 use std::fs;
 
-use gbcli_build::{DoctorInput, doctor};
+use gbcli_build::{DoctorInput, GIT_LOCAL_ENV_VARS, doctor};
 use gbcli_protocol::{CheckMade, CheckName, CheckStatus, DoctorMade, ErrorCode};
 
 use common::{Temp, set_mode};
@@ -219,6 +219,23 @@ fn all_checks(project: &std::path::Path) -> DoctorMade {
     }
 }
 
+/// The doctor and the tests' `git init` clear one list; it holds every
+/// variable this machine's git calls local to a repository.
+#[test]
+fn the_git_env_list_holds_every_variable_git_calls_local() {
+    let out = std::process::Command::new("git")
+        .args(["rev-parse", "--local-env-vars"])
+        .output()
+        .expect("these tests need git on PATH");
+    assert!(out.status.success());
+    let named = String::from_utf8(out.stdout).unwrap();
+    let missing: Vec<&str> = named
+        .lines()
+        .filter(|var| !GIT_LOCAL_ENV_VARS.contains(var))
+        .collect();
+    assert_eq!(missing, Vec::<&str>::new());
+}
+
 #[test]
 fn whether_gbcli_is_ignored_is_asked_of_git_itself() {
     let temp = Temp::new("doctor-git-real");
@@ -226,12 +243,7 @@ fn whether_gbcli_is_ignored_is_asked_of_git_itself() {
     // the hook's repository (it once set core.bare there).
     let mut init = std::process::Command::new("git");
     init.args(["init", "-q", "."]).current_dir(&temp.0);
-    for var in [
-        "GIT_DIR",
-        "GIT_WORK_TREE",
-        "GIT_INDEX_FILE",
-        "GIT_COMMON_DIR",
-    ] {
+    for var in GIT_LOCAL_ENV_VARS {
         init.env_remove(var);
     }
     let init = init.status().expect("these tests need git on PATH");

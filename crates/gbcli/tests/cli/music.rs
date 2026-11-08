@@ -73,6 +73,9 @@ fn the_test_songs_piano_roll_and_spectrogram_are_pinned() {
         "piano.png",
         "--spectrogram",
         "spectrogram.png",
+        // Native pixels: the goldens pin what is drawn, not the default scale.
+        "--scale",
+        "1",
     ]);
     assert_eq!(run.code, 0, "{}", run.stderr);
     for (made, golden) in [

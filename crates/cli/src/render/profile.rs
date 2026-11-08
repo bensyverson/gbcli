@@ -60,15 +60,23 @@ pub fn profile(p: &ProfileMade) -> String {
     out
 }
 
-/// `frame_budget frames= [partial=1] lag=`: the whole frames, and whether a
-/// last row holds the frame the run stopped in; then one `frame_cost` row
-/// each, the partial one with no `lag=`.
+/// `frame_budget frames= [partial=1] lag= active_min= active_max=
+/// active_mean= busiest=`: the whole frames, whether a last row holds the
+/// frame the run stopped in, and the whole frames' summary; then one
+/// `frame_cost` row each, the partial one with no `lag=`.
 pub fn frame_budget(b: &FrameBudgetMade) -> String {
     let partial = b.frames.iter().filter(|f| f.partial).count();
     let mut out = Row::new("frame_budget")
         .field("frames", b.frames.len() - partial)
         .opt("partial", (partial > 0).then_some(partial))
         .field("lag", b.lag)
+        .opt("active_min", b.active_t.map(|s| s.min))
+        .opt("active_max", b.active_t.map(|s| s.max))
+        .opt(
+            "active_mean",
+            b.active_t.map(|s| format!("{:.1}", s.mean.0)),
+        )
+        .opt("busiest", b.busiest)
         .line();
     for (i, f) in b.frames.iter().enumerate() {
         out += &Row::new("frame_cost")

@@ -45,6 +45,12 @@ pub const TUNE: &[u8] = include_bytes!("../../audio/tests/roms/tune.gb");
 /// sequence, counting it in $C000 once it reads back (`flash_save.asm`).
 pub const FLASH_SAVE: &[u8] = include_bytes!("../../engine/tests/roms/flash_save.gb");
 pub const FLASH_SAVE_SYM: &[u8] = include_bytes!("../../engine/tests/roms/flash_save.sym");
+/// Writes wX first after the fourth vblank, then counts frames in it
+/// (`equiv_late.inc`); the B build keeps wX at another address.
+pub const LATE_A: &[u8] = include_bytes!("../../engine/tests/roms/equiv_late_a.gb");
+pub const LATE_A_SYM: &[u8] = include_bytes!("../../engine/tests/roms/equiv_late_a.sym");
+pub const LATE_B: &[u8] = include_bytes!("../../engine/tests/roms/equiv_late_b.gb");
+pub const LATE_B_SYM: &[u8] = include_bytes!("../../engine/tests/roms/equiv_late_b.sym");
 
 impl Fixture {
     /// A project directory with `demo.gb` and a `demo` session created.
@@ -60,6 +66,11 @@ impl Fixture {
     /// As [`Fixture::new`], over `rom` instead of V1.
     pub fn with_rom(name: &str, rom: &[u8]) -> Fixture {
         Fixture::build(name, rom, None, Model::DmgB, None)
+    }
+
+    /// As [`Fixture::with_rom`], with `sym` as `demo.sym` beside the ROM.
+    pub fn with_rom_sym(name: &str, rom: &[u8], sym: &[u8]) -> Fixture {
+        Fixture::build(name, rom, Some(sym), Model::DmgB, None)
     }
 
     /// As [`Fixture::with_rom`], on another model.

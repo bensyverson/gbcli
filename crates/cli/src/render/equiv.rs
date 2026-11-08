@@ -1,7 +1,9 @@
 //! Rows for the equivalence check: the verdict, each difference in the
 //! divergent frame, and where each side stopped and was saved.
 
-use gbcli_protocol::{ApuWriteMade, DifferenceMade, EquivMade, Location, SideMade, StopReason};
+use gbcli_protocol::{
+    ApuWriteMade, DifferenceMade, EquivMade, Location, SideMade, SideName, StopReason,
+};
 
 use super::row::{Row, addr, byte};
 use super::stop;
@@ -43,6 +45,7 @@ pub fn rows(e: &EquivMade) -> String {
                 a,
                 b,
                 count,
+                never_written,
             } => row
                 .field("kind", "ram")
                 .field("range", range)
@@ -51,7 +54,8 @@ pub fn rows(e: &EquivMade) -> String {
                 .field("b", byte(*b))
                 .field("a_addr", place(a_at))
                 .field("b_addr", place(b_at))
-                .field("count", count),
+                .field("count", count)
+                .opt("never_written", sides(never_written)),
             DifferenceMade::Apu { index, a, b } => row
                 .field("kind", "apu")
                 .field("index", index)
@@ -63,6 +67,18 @@ pub fn rows(e: &EquivMade) -> String {
     out += &side("a", &d.a);
     out += &side("b", &d.b);
     out
+}
+
+/// `a`, `b` or `a,b`; `None` for no side.
+fn sides(of: &[SideName]) -> Option<String> {
+    let names: Vec<&str> = of
+        .iter()
+        .map(|side| match side {
+            SideName::A => "a",
+            SideName::B => "b",
+        })
+        .collect();
+    (!names.is_empty()).then(|| names.join(","))
 }
 
 fn place(at: &Location) -> String {

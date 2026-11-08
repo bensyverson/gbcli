@@ -65,9 +65,9 @@ pub const VERBS: &[VerbSpec] = &[
                 (--audio-log, --wav, --piano, --spectrogram); save --checkpoint. The stop \
                 becomes the session's new head. A ROM argument is the same as --rom.",
         example: (
-            "gbcli run game.gb --session dx --until 'u16[wFrame] >= 60' --read wSpriteX",
+            "gbcli run game.gb --session dx --until 'u16[wFrame] >= 60' --read '[wSpriteX]'",
             "creates session dx from game.gb, runs to the frame where wFrame reaches 60, \
-             and prints the stop and wSpriteX",
+             and prints the stop and the byte in wSpriteX",
         ),
     },
     VerbSpec {
@@ -213,8 +213,9 @@ pub const VERBS: &[VerbSpec] = &[
         flags: READ,
         groups: READ_VERB,
         about: "Each argument is an expression (`gbcli help expressions`): [wFrame], \
-                u16[$C000], rLY, frame, pc. A byte the program never wrote is an error \
-                unless --allow-uninit.",
+                u16[$C000], rLY, frame, pc. A bare symbol is its address: wX prints \
+                where wX lives, [wX] (or u8[wX]) the byte it holds, u16[wX] two bytes. A \
+                byte the program never wrote is an error unless --allow-uninit.",
         example: (
             "gbcli read 'u16[wFrame]' rLY --session dx",
             "prints the frame counter and the current scanline",

@@ -23,10 +23,15 @@ use gbcli_view::Image;
 use super::super::Failure;
 use super::super::shot::{check_image, write_atomically};
 
-/// The scale of the audio images when the request gives none: their native
-/// pixels already spread a frame over four columns and a semitone over three
-/// rows.
-const AUDIO_SCALE: u32 = 1;
+/// The piano roll's scale when the request gives none. At 1 a short clip is
+/// a few dots (four columns a frame, three rows a semitone); its native width
+/// is capped at `piano::MAX_WIDTH`, so 2 keeps a long clip bounded too.
+const PIANO_SCALE: u32 = 2;
+
+/// The spectrogram's scale when the request gives none. Its width grows
+/// without a cap (64 columns a second), so a larger default would multiply a
+/// long capture's pixels; `--scale 4` reads a short clip.
+const SPECTROGRAM_SCALE: u32 = 1;
 
 /// What a run collected, taken from the core right after it.
 pub(super) struct Collected {
@@ -42,8 +47,14 @@ pub(super) fn check(args: &AudioArgs) -> Result<(), Failure> {
     if let Some(w) = &args.wav {
         check_wav(&w.path)?;
     }
-    for image in [&args.piano, &args.spectrogram].into_iter().flatten() {
-        check_image(&image.path, Some(image.scale.unwrap_or(AUDIO_SCALE)))?;
+    let images = [
+        (&args.piano, PIANO_SCALE),
+        (&args.spectrogram, SPECTROGRAM_SCALE),
+    ];
+    for (image, default) in images {
+        if let Some(image) = image {
+            check_image(&image.path, Some(image.scale.unwrap_or(default)))?;
+        }
     }
     Ok(())
 }
@@ -165,14 +176,14 @@ pub(super) fn deliver(
         Some(out) => {
             let spans = note_spans(&collected.snapshot, &log, collected.to);
             let roll = piano_roll(&spans, collected.from, collected.to, &PianoRoll::default());
-            Some(write_image(out, roll.map_err(audio_failure)?)?)
+            Some(write_image(out, roll.map_err(audio_failure)?, PIANO_SCALE)?)
         }
         None => None,
     };
     let spectrogram = match (&args.spectrogram, &collected.samples) {
         (Some(out), Some(mixed)) => {
             let image = spectrogram(mixed, "mixed").map_err(audio_failure)?;
-            Some(write_image(out, image)?)
+            Some(write_image(out, image, SPECTROGRAM_SCALE)?)
         }
         _ => None,
     };
@@ -231,8 +242,8 @@ fn channel_path(mixed: &Path, take: WavTake) -> PathBuf {
     mixed.with_file_name(name)
 }
 
-fn write_image(out: &ImageOut, image: Image) -> Result<ImageMade, Failure> {
-    let scale = out.scale.unwrap_or(AUDIO_SCALE);
+fn write_image(out: &ImageOut, image: Image, default: u32) -> Result<ImageMade, Failure> {
+    let scale = out.scale.unwrap_or(default);
     let image = image
         .scaled(scale)
         .map_err(|e| audio_failure(AudioError::Image(e)))?;

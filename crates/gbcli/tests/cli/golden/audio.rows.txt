@@ -60,6 +60,6 @@ wav take=square1 path=tune-square1.wav samples=21943 rate=32768
 wav take=square2 path=tune-square2.wav samples=21943 rate=32768
 wav take=wave path=tune-wave.wav samples=21943 rate=32768
 wav take=noise path=tune-noise.wav samples=21943 rate=32768
-piano path=piano.png width=160 height=291 scale=1
+piano path=piano.png width=320 height=582 scale=2
 spectrogram path=spectrogram.png width=43 height=256 scale=1
 rev s2

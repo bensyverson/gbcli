@@ -136,6 +136,10 @@ pub enum Difference {
         a: u8,
         b: u8,
         count: usize,
+        /// The sides on which that first byte has never been written since
+        /// power-on, so it holds a random power-on value: the program hasn't
+        /// initialized it yet, which is no fault of the rewrite.
+        never_written: Vec<Side>,
     },
     /// The frame's sound-register writes, from the first that differs; `None`
     /// where one side wrote fewer.

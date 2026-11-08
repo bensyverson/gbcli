@@ -111,6 +111,33 @@ fn the_audio_log_says_it_holds_only_this_runs_writes() {
     assert!(text.contains("writes made before the run"), "{text}");
 }
 
+/// The music topic's listening line shows how to enlarge a short clip's
+/// spectrogram, which is 64 columns a second at its default scale.
+#[test]
+fn the_music_topic_shows_scale_for_a_short_clips_spectrogram() {
+    let text = crate::help::Topic::from_name("music").unwrap().text();
+    assert!(text.contains("--spectrogram spec.png --scale 4"), "{text}");
+}
+
+/// run's example reads a variable's byte, not its address (a bare symbol is
+/// its address).
+#[test]
+fn run_example_reads_a_variables_byte() {
+    let text = verb(crate::verbs::by_name("run").unwrap());
+    assert!(text.contains("--read '[wSpriteX]'"), "{text}");
+}
+
+/// A bare symbol is its address in the grammar; the help shows the three
+/// forms that read what a variable holds.
+#[test]
+fn read_help_says_a_bare_symbol_is_its_address() {
+    let text = verb(crate::verbs::by_name("read").unwrap());
+    assert!(text.contains("A bare symbol is its address"), "{text}");
+    for form in ["[wX]", "u8[wX]", "u16[wX]"] {
+        assert!(text.contains(form), "{form}: {text}");
+    }
+}
+
 #[test]
 fn measure_help_offers_the_key_timeline() {
     let text = verb(crate::verbs::by_name("measure").unwrap());
@@ -157,4 +184,14 @@ fn the_scale_flag_names_the_run_images_it_scales() {
         text.contains("--filmstrip, --piano and --spectrogram"),
         "{text}"
     );
+}
+
+/// The server draws the piano roll at 2 unless told otherwise, and the rest
+/// at 1; the flag states both.
+#[test]
+fn the_scale_flag_states_each_run_images_default() {
+    let text = verb(VERBS.iter().find(|s| s.name == "run").unwrap()).replace('\n', " ");
+    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(text.contains("default 2 for --piano"), "{text}");
+    assert!(text.contains("1 for the others"), "{text}");
 }

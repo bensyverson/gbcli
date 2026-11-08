@@ -11,6 +11,7 @@ mod debugger;
 mod disasm_decode;
 mod disasm_table;
 mod equiv;
+mod equiv_late;
 mod event_sink;
 mod exec_candidates;
 mod flash_save;

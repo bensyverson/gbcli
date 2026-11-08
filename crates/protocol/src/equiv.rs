@@ -128,6 +128,10 @@ pub enum DifferenceMade {
         a: u8,
         b: u8,
         count: u64,
+        /// The sides on which that first byte has never been written since
+        /// power-on, so it holds a random power-on value.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        never_written: Vec<SideName>,
     },
     /// The frame's sound-register writes from the first that differs; absent
     /// where one side wrote fewer.
@@ -138,6 +142,14 @@ pub enum DifferenceMade {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         b: Option<ApuWriteMade>,
     },
+}
+
+/// One of the two sides: A is the session's ROM, B the other build.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SideName {
+    A,
+    B,
 }
 
 /// A sound-register write: the core's `ApuWrite`, which has no serde.

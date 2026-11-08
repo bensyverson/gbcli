@@ -71,7 +71,7 @@ Find who writes a variable
 Stop at a routine only in some cases
   gbcli break Main.loop --if 'a == 3', then gbcli run
 Try a value without rebuilding (what if wSpeed were 2?)
-  gbcli run --at before --poke wSpeed=2 --until 'u16[wFrame] >= 60' --read wSpriteX
+  gbcli run --at before --poke wSpeed=2 --until 'u16[wFrame] >= 60' --read '[wSpriteX]'
 Turn the LCD on as the program would
   gbcli write rLCDC=0x91
 Keep a state to come back to

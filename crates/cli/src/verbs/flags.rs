@@ -127,7 +127,8 @@ pub const SCALE: FlagSpec = value(
     "scale",
     "N",
     "pixels per Game Boy pixel in the PNG, 1 to 16 (default 4); on run, also pixels per \
-     image pixel in --filmstrip, --piano and --spectrogram (default 1)",
+     image pixel in --filmstrip, --piano and --spectrogram (default 2 for --piano, 1 for \
+     the others: try --scale 4 for a short clip's spectrogram)",
 );
 
 /// How a screenshot is taken: by `run --shot` and by `shot`.
@@ -254,7 +255,8 @@ pub const RUN: &[FlagSpec] = &[
     switch(
         "frame-budget",
         "each frame's active and idle (HALT) T-cycles over the run, and the lag frames: \
-         frames in which the CPU never halted",
+         frames in which the CPU never halted; the first row sums up the whole frames' \
+         active T-cycles (min, max, mean) and the busiest one",
     ),
     switch(
         "raster",

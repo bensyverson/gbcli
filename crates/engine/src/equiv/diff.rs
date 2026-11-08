@@ -80,17 +80,33 @@ fn nth(at: &Location, offset: u16) -> Location {
     }
 }
 
-/// The byte at `offset` into a range, in its own bank if it names one, else
-/// in the banks mapped now. Never a bus read.
-fn byte(core: &dyn Core, at: &Location, offset: u16) -> Result<u8, CoreError> {
+/// Where byte `offset` of a range lives: in its own bank if it names one,
+/// else in the banks mapped now.
+fn target(core: &dyn Core, at: &Location, offset: u16) -> Result<Target, CoreError> {
     let at = nth(at, offset);
-    let target = match at.bank {
-        Some(bank) => mem::target_in_bank(core, bank, at.addr)?,
-        None => mem::target(core, at.addr)?,
-    };
-    match target {
+    match at.bank {
+        Some(bank) => mem::target_in_bank(core, bank, at.addr),
+        None => mem::target(core, at.addr),
+    }
+}
+
+/// The byte at `offset` into a range. Never a bus read.
+fn byte(core: &dyn Core, at: &Location, offset: u16) -> Result<u8, CoreError> {
+    match target(core, at, offset)? {
         Target::Backing { region, offset } => mem::read_backing(core, region, offset),
         Target::Io(reg) => core.io_register(reg),
+    }
+}
+
+/// Whether the byte still holds its power-on value: neither the CPU nor a
+/// poke has written it. False where the core doesn't track writes (ROM,
+/// VRAM, registers), since there it can't tell.
+fn never_written(core: &dyn Core, at: &Location, offset: u16) -> bool {
+    match target(core, at, offset) {
+        Ok(Target::Backing { region, offset }) => core
+            .written(region)
+            .is_ok_and(|w| offset < w.len && w.never_written(offset)),
+        _ => false,
     }
 }
 
@@ -112,14 +128,19 @@ pub fn ram(r: &Resolved, a: &dyn Core, b: &dyn Core) -> Result<Option<Difference
             first.get_or_insert((offset, va, vb));
         }
     }
-    Ok(first.map(|(offset, a, b)| Difference::Ram {
+    Ok(first.map(|(offset, va, vb)| Difference::Ram {
         range: r.range.clone(),
         offset,
         a_at: nth(&r.a, offset),
         b_at: nth(&r.b, offset),
-        a,
-        b,
+        a: va,
+        b: vb,
         count,
+        never_written: [(Side::A, a, &r.a), (Side::B, b, &r.b)]
+            .into_iter()
+            .filter(|(_, core, at)| never_written(*core, at, offset))
+            .map(|(side, ..)| side)
+            .collect(),
     }))
 }
 

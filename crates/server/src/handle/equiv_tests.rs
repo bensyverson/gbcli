@@ -7,7 +7,7 @@ use std::time::Duration;
 use gbcli_engine::equiv::{EquivError, StartField, StartMismatch};
 use gbcli_protocol::{
     DifferenceMade, EquivArgs, EquivSide, ErrorCode, Op, RamRangeArg, ReadArgs, Response,
-    RestoreArgs, WriteArg, WriteKind,
+    RestoreArgs, SideName, WriteArg, WriteKind,
 };
 
 use super::Handler;
@@ -222,4 +222,94 @@ fn a_side_b_with_no_sym_names_the_flag_that_gives_it_one() {
     assert!(error.message.contains("side B"), "{}", error.message);
     assert!(error.message.contains("no .sym"), "{}", error.message);
     assert!(error.remedy.contains("--sym-b FILE"), "{}", error.remedy);
+}
+
+/// `equiv` over the late-init program (`equiv_late.inc`), comparing wX.
+fn late(b: EquivSide) -> EquivArgs {
+    EquivArgs {
+        b,
+        frames: 20,
+        ram: vec![RamRangeArg {
+            at: "wX".into(),
+            len: 1,
+        }],
+        ..EquivArgs::default()
+    }
+}
+
+/// The first divergence's wX difference.
+fn never_written(error: gbcli_protocol::ErrorBody) -> (u64, Vec<SideName>) {
+    let d = error
+        .result
+        .and_then(|r| r.equiv)
+        .and_then(|e| e.divergence)
+        .expect("a divergence");
+    let [DifferenceMade::Ram { never_written, .. }] = d.differences.as_slice() else {
+        panic!("expected wX to differ: {:?}", d.differences);
+    };
+    (d.frame, never_written.clone())
+}
+
+/// Side B is a build that moved wX, which both programs first write after
+/// the fourth vblank: at frame 1 each side reads its own never-written byte,
+/// at its own address. A checkpoint carries side A's RAM layout (and the
+/// rebuilt-ROM check refuses it on B), so the remedy is to initialize earlier.
+#[test]
+fn a_moved_byte_neither_side_has_written_says_so_and_to_initialize_it_earlier() {
+    use crate::fixture::{LATE_A, LATE_A_SYM, LATE_B, LATE_B_SYM};
+    let f = Fixture::with_rom_sym("equiv-late", LATE_A, LATE_A_SYM);
+    std::fs::write(f.dir.join("b.gb"), LATE_B).expect("rom b");
+    std::fs::write(f.dir.join("b.sym"), LATE_B_SYM).expect("sym b");
+    let args = late(EquivSide {
+        rom: Some("b.gb".into()),
+        ..EquivSide::default()
+    });
+    let error = equiv(&mut handler(&f), args).outcome.expect_err("diverged");
+    assert_eq!(error.code, ErrorCode::PredicateFalse);
+    assert!(
+        error.message.contains("never written on both sides"),
+        "{}",
+        error.message
+    );
+    let remedy = error.remedy.clone();
+    assert!(remedy.contains("power-on RAM is random"), "{remedy}");
+    assert!(
+        remedy.contains("initialize it before the first vblank"),
+        "{remedy}"
+    );
+    assert!(!remedy.contains("restore"), "{remedy}");
+    assert_eq!(never_written(error), (1, vec![SideName::A, SideName::B]));
+}
+
+/// Side B is the session's ROM with wX's first write (`ld [wX], a` at
+/// $0164) patched out: wX stays where it was, so a checkpoint saved after
+/// the program's init starts both sides past it.
+#[test]
+fn a_byte_one_side_never_wrote_names_that_side_and_a_checkpoint_after_init() {
+    use crate::fixture::{LATE_A, LATE_A_SYM};
+    let f = Fixture::with_rom_sym("equiv-late-patch", LATE_A, LATE_A_SYM);
+    let args = late(EquivSide {
+        writes: vec![WriteArg {
+            kind: WriteKind::Patch,
+            target: "$0164".into(),
+            bytes: vec![0x00; 3],
+        }],
+        ..EquivSide::default()
+    });
+    let error = equiv(&mut handler(&f), args).outcome.expect_err("diverged");
+    assert!(
+        error.message.contains("never written on side B"),
+        "{}",
+        error.message
+    );
+    // Only B never wrote it, so B may be missing the write: the remedy says
+    // so rather than only sending the reader past the init.
+    let remedy = error.remedy.clone();
+    assert!(remedy.contains("though side A wrote it"), "{remedy}");
+    assert!(remedy.contains("power-on RAM"), "{remedy}");
+    assert!(remedy.contains("--at a checkpoint"), "{remedy}");
+    assert!(remedy.contains("missing the write"), "{remedy}");
+    // wX is first written after the fourth vblank, which the program sees
+    // in the fifth frame.
+    assert_eq!(never_written(error), (5, vec![SideName::B]));
 }

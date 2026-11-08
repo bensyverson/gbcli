@@ -225,11 +225,13 @@ fn the_piano_roll_and_spectrogram_are_written_and_labeled() {
         "only what was asked"
     );
     let roll = audio.piano.expect("a piano roll");
-    assert_eq!((roll.path.as_str(), roll.scale), (piano.as_str(), 1));
-    // Four columns a frame, at scale 1; the run starts mid-frame.
+    // The roll's default scale is 2 (a short clip at 1 was a few dots, agent
+    // eval run 3); its native width is capped, so a long clip stays bounded.
+    assert_eq!((roll.path.as_str(), roll.scale), (piano.as_str(), 2));
+    // Four native columns a frame, at scale 2; the run starts mid-frame.
     let width = u64::from(roll.width);
     assert!(
-        (4 * (TUNE_FRAMES - 1)..=4 * TUNE_FRAMES).contains(&width),
+        (8 * (TUNE_FRAMES - 1)..=8 * TUNE_FRAMES).contains(&width),
         "{roll:?}"
     );
     let spec = audio.spectrogram.expect("a spectrogram");

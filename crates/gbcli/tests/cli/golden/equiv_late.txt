@@ -1,0 +1,36 @@
+$ gbcli equiv late_b.gb --frames 20 --ram wX --rom late_a.gb --session late
+exit 1
+equiv frames=0 diverged_at=1 ticks=140096
+difference kind=ram range=wX offset=0 a=$BF b=$9E a_addr=$C010 b_addr=$C020 count=1 never_written=a,b
+side a checkpoint=equiv-a path=.gbcli/sessions/late/checkpoints/equiv-a.gbck frame=1
+stop step_done unit=frame pc=$015F bank=0 symbol=Main.wait+$4 frame=1 t=70048 since=boot ticks=11902312 ly=144 shown=1 vblank=normal
+budget frames=1 instructions=17500 ticks=140096
+side b checkpoint=equiv-b path=.gbcli/sessions/late/checkpoints/equiv-b.gbck frame=1
+stop step_done unit=frame pc=$015F bank=0 symbol=Main.wait+$4 frame=1 t=70048 since=boot ticks=11902312 ly=144 shown=1 vblank=normal
+budget frames=1 instructions=17500 ticks=140096
+--- stderr
+gbcli: predicate_false: the sides diverge at frame 1: wX+0, never written on both sides; saved as equiv-a and equiv-b
+remedy: wX was never written on both sides (power-on RAM is random, so the two bytes differ by chance): initialize it before the first vblank, e.g. clear WRAM at startup (--at can't skip the init here: a checkpoint carries side A's RAM layout, and this build moved it)
+$ gbcli equiv --frames 20 --ram wX --patch $0164=0,0,0 --session late
+exit 1
+equiv frames=4 diverged_at=5 ticks=701888
+difference kind=ram range=wX offset=0 a=$00 b=$BF a_addr=$C010 b_addr=$C010 count=1 never_written=b
+side a checkpoint=equiv-a path=.gbcli/sessions/late/checkpoints/equiv-a.gbck frame=5
+stop step_done unit=frame pc=$016B bank=0 symbol=Main.count+$4 frame=5 t=350944 since=boot ticks=12464104 ly=144 shown=5 vblank=normal
+budget frames=1 instructions=17550 ticks=140448
+side b checkpoint=equiv-b path=.gbcli/sessions/late/checkpoints/equiv-b.gbck frame=5
+stop step_done unit=frame pc=$016B bank=0 symbol=Main.count+$4 frame=5 t=350944 since=boot ticks=12464104 ly=144 shown=5 vblank=normal
+budget frames=1 instructions=17553 ticks=140448
+--- stderr
+gbcli: predicate_false: the sides diverge at frame 5: wX+0, never written on side B; saved as equiv-a and equiv-b
+remedy: wX was never written on side B, though side A wrote it, so side B holds random power-on RAM there: if side B sets it later by design, start the comparison after the init (--at a checkpoint saved after it), or initialize it earlier; else side B is missing the write
+$ gbcli run --frames 6 --checkpoint inited --session late
+exit 0
+stop budget_exhausted kind=frames pc=$016B bank=0 symbol=Main.count+$4 frame=6 t=421168 since=boot ticks=12604552 ly=144 shown=6 vblank=normal
+budget frames=6/6 instructions=105252 ticks=842336
+checkpoint name=inited path=.gbcli/sessions/late/checkpoints/inited.gbck frame=6 rev=s1
+rev s1
+$ gbcli equiv --at inited --frames 20 --ram wX --patch $0164=0,0,0 --session late
+exit 0
+equiv frames=20
+rev s1

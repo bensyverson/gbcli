@@ -1,7 +1,7 @@
 use gbcli_bundle::SessionStore;
 use gbcli_engine::cond::{Condition, EvalCtx, EvalWarning, ExprError, oam_entry};
 use gbcli_engine::inspect::video::{ObjectAttributes, ObjectPalette, object_attributes};
-use gbcli_engine::{Machine, Since};
+use gbcli_engine::{Area, Machine, Since};
 use gbcli_protocol::{
     EventsArgs, OamEntryRead, PpuView, ReadArgs, ReadValue, RegistersView, ResultBody, SessionFile,
     TimeBase, TimeMark,
@@ -148,6 +148,20 @@ fn oam_view(e: &ObjectAttributes) -> OamEntryRead {
     }
 }
 
+/// A hint when the whole read is a bare RAM symbol. In the expression grammar
+/// a symbol is its address, which is right for a ROM label, but a reader who
+/// names a variable almost always wants what it holds.
+fn bare_ram_symbol(machine: &Machine, text: &str) -> Option<String> {
+    let name = text.trim();
+    let symbol = machine.symbols()?.get(name)?;
+    Area::of(symbol.addr).is_ram().then(|| {
+        format!(
+            "{name} is the address ${:04X}; [{name}] reads its byte, u16[{name}] two",
+            symbol.addr
+        )
+    })
+}
+
 /// Evaluates compiled reads; `allow_uninit` reads a never-written byte's
 /// power-on value with a warning instead of failing (design §8).
 pub(super) fn eval_reads(
@@ -188,6 +202,7 @@ pub(super) fn eval_reads(
                 gap: convert::gap_of_eval(&e),
             })?;
         warnings.extend(eval_warnings.iter().map(warning_text));
+        warnings.extend(bare_ram_symbol(machine, text));
         values.push(ReadValue {
             expr: text.clone(),
             value: Some(value),
@@ -224,6 +239,40 @@ mod tests {
         let events = store.events(None).unwrap();
         let last = events.last().expect("one event");
         assert_eq!(last.gaps.get("extra_oam"), Some(&1));
+    }
+
+    fn read_warnings(f: &Fixture, reads: &[&str]) -> Vec<String> {
+        let mut h = handler(f);
+        let response = h.handle(&request(Op::Read(ReadArgs {
+            reads: reads.iter().map(|r| r.to_string()).collect(),
+            since: None,
+            allow_uninit: true,
+        })));
+        assert!(response.outcome.is_ok(), "{:?}", response.outcome);
+        response.warnings
+    }
+
+    #[test]
+    fn a_bare_ram_symbol_reads_its_address_and_says_how_to_read_its_byte() {
+        let f = Fixture::with_sym("bare-ram");
+        let warnings = read_warnings(&f, &["wFrame"]);
+        let hint = warnings
+            .iter()
+            .find(|w| w.contains("wFrame"))
+            .unwrap_or_else(|| panic!("no hint: {warnings:?}"));
+        assert!(hint.contains("address $C000"), "{hint}");
+        assert!(hint.contains("[wFrame] reads its byte"), "{hint}");
+        assert!(hint.contains("u16[wFrame]"), "{hint}");
+    }
+
+    #[test]
+    fn a_rom_label_a_bracketed_symbol_or_a_sum_gets_no_hint() {
+        let f = Fixture::with_sym("bare-rom");
+        let warnings = read_warnings(&f, &["Main", "[wFrame]", "u16[wFrame]", "wFrame+1"]);
+        assert!(
+            !warnings.iter().any(|w| w.contains("reads its byte")),
+            "{warnings:?}"
+        );
     }
 
     #[test]

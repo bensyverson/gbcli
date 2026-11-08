@@ -14,7 +14,9 @@ Music — hUGETracker songs as text an agent can read and edit.
 In a project, `gbcli build` converts every .song or .uge in assets/music to
 hUGEDriver data (build/music/NAME.asm, label song_NAME); `gbcli new` makes
 assets/music/theme.song (the example below) and src/music.asm, which plays
-it. Then `gbcli run --frames 600 --audio-log --piano roll.png` to hear it.
+it. Then `gbcli run --frames 600 --audio-log --piano roll.png` to hear it;
+for a short clip, `--spectrogram spec.png --scale 4` to see its spectrum
+(the spectrogram is 64 columns a second at its default scale of 1).
 
 The data's labels are the song's: song_NAME.P0 for a pattern, and for
 routine N song_NAME__hUGE_Routine_N and song_NAME__end_hUGE_Routine_N, not

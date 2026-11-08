@@ -14,7 +14,7 @@ use gbcli_engine::equiv::{
 use gbcli_engine::{Checkpoint, Machine};
 use gbcli_protocol::{
     ApuWriteMade, AudioCompareName, CheckpointMade, DifferenceMade, DivergenceMade, EquivArgs,
-    EquivMade, ErrorBody, ErrorCode, ResultBody, SessionFile, SideMade,
+    EquivMade, ErrorBody, ErrorCode, ResultBody, SessionFile, SideMade, SideName,
 };
 
 use super::super::history::checkpoint_frame;
@@ -217,7 +217,13 @@ fn diverged(
 /// (plus the checkpoint's patches), so side B restores only when it ran the
 /// session's ROM; a side B built from another ROM would run on A's code, or
 /// be refused as `rom_changed`.
+/// A byte that was never written comes first: until the program sets it,
+/// stepping either side through the divergence shows nothing to fix.
 fn next_step(d: &Divergence, b_rom: Option<&str>) -> String {
+    unwritten_cause(d).unwrap_or_else(|| restore_step(d, b_rom))
+}
+
+fn restore_step(d: &Divergence, b_rom: Option<&str>) -> String {
     let [a_name, b_name] = SIDE_CHECKPOINTS;
     if d.a.checkpoint.header.rom_sha256 == d.b.checkpoint.header.rom_sha256 {
         return format!("`gbcli restore {b_name}` to see side B where it went wrong");
@@ -227,6 +233,60 @@ fn next_step(d: &Divergence, b_rom: Option<&str>) -> String {
         "side B ran {rom}, which this session can't restore, so its stop is in the \
          result; `gbcli restore {a_name}` shows side A where it went wrong"
     )
+}
+
+/// The likeliest cause when a compared byte still holds its power-on value:
+/// the program hasn't initialized it yet, and power-on RAM is random, so the
+/// two sides' bytes (at different addresses when the build moved them)
+/// differ by chance rather than by any fault of the rewrite. A checkpoint
+/// carries side A's RAM layout, so `--at` can start both sides past the
+/// program's init only while the byte sits at one address on both.
+fn unwritten_cause(d: &Divergence) -> Option<String> {
+    d.differences.iter().find_map(|x| match x {
+        Difference::Ram {
+            range,
+            never_written,
+            a_at,
+            b_at,
+            ..
+        } => {
+            let sides = sides(never_written)?;
+            let moved = (a_at.addr, a_at.bank) != (b_at.addr, b_at.bank);
+            let skip = if moved {
+                "initialize it before the first vblank, e.g. clear WRAM at startup (--at \
+                 can't skip the init here: a checkpoint carries side A's RAM layout, and \
+                 this build moved it)"
+            } else {
+                "start the comparison after the init (--at a checkpoint saved after it), \
+                 or initialize it earlier"
+            };
+            Some(match never_written.as_slice() {
+                [one] => {
+                    let other = if *one == Side::A { "side B" } else { "side A" };
+                    format!(
+                        "{range} was never written on {sides}, though {other} wrote it, \
+                         so {sides} holds random power-on RAM there: if {sides} sets it \
+                         later by design, {skip}; else {sides} is missing the write"
+                    )
+                }
+                _ => format!(
+                    "{range} was never written on {sides} (power-on RAM is random, so \
+                     the two bytes differ by chance): {skip}"
+                ),
+            })
+        }
+        _ => None,
+    })
+}
+
+/// "side A", "side B" or "both sides"; `None` for no side.
+fn sides(of: &[Side]) -> Option<&'static str> {
+    match of {
+        [] => None,
+        [Side::A] => Some("side A"),
+        [Side::B] => Some("side B"),
+        _ => Some("both sides"),
+    }
 }
 
 fn save_side(
@@ -253,7 +313,15 @@ fn describe(d: &Difference) -> String {
         Difference::Pixels { x, y, count, .. } => {
             format!("{count} pixels, the first at ({x}, {y})")
         }
-        Difference::Ram { range, offset, .. } => format!("{range}+{offset}"),
+        Difference::Ram {
+            range,
+            offset,
+            never_written,
+            ..
+        } => match sides(never_written) {
+            Some(sides) => format!("{range}+{offset}, never written on {sides}"),
+            None => format!("{range}+{offset}"),
+        },
         Difference::Apu { index, .. } => format!("sound write {index}"),
     }
 }
@@ -285,6 +353,7 @@ fn difference(d: Difference) -> DifferenceMade {
             a,
             b,
             count,
+            never_written,
         } => DifferenceMade::Ram {
             range,
             offset,
@@ -293,6 +362,13 @@ fn difference(d: Difference) -> DifferenceMade {
             a,
             b,
             count: count as u64,
+            never_written: never_written
+                .into_iter()
+                .map(|side| match side {
+                    Side::A => SideName::A,
+                    Side::B => SideName::B,
+                })
+                .collect(),
         },
         Difference::Apu { index, a, b } => DifferenceMade::Apu {
             index: index as u64,

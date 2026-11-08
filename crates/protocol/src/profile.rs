@@ -156,6 +156,14 @@ pub struct FrameBudgetMade {
     pub frames: Vec<FrameBudgetRow>,
     /// The lag frames among the whole ones.
     pub lag: u64,
+    /// The whole frames' active T-cycles: fewest, most and mean. Absent when
+    /// the run completed no frame.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_t: Option<CycleStats>,
+    /// The row index of the whole frame with the most active cycles (the
+    /// first, on a tie).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub busiest: Option<u64>,
 }
 
 fn is_zero(n: &u64) -> bool {

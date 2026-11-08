@@ -82,6 +82,7 @@ fn a_broken_clamp_diverges_in_ram_at_the_frame_it_first_runs() {
             a: 19,
             b: 20,
             count: 1,
+            never_written: vec![],
         }]
     );
     assert_ne!(addr(A_SYM, "wX"), addr(BROKEN_SYM, "wX"));

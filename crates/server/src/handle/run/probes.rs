@@ -11,8 +11,8 @@ use gbcli_core::{Event, EventKinds, EventSink, Gap};
 use gbcli_engine::Machine;
 use gbcli_engine::profile::{FrameBudget, FrameSplit, MeasureSpec, Profile, Raster, Routines};
 use gbcli_protocol::{
-    ErrorBody, ErrorCode, FrameBudgetMade, FrameBudgetRow, MeasureMade, ProfileMade, RasterMade,
-    RoutineRow, RunArgs,
+    CycleStats, ErrorBody, ErrorCode, FrameBudgetMade, FrameBudgetRow, MeasureMade, ProfileMade,
+    RasterMade, Real, RoutineRow, RunArgs,
 };
 
 use super::super::Failure;
@@ -208,9 +208,25 @@ fn frame_budget_made(frames: &[FrameBudget], rest: FrameBudget) -> FrameBudgetMa
         lag: None,
         partial: true,
     });
+    let active = || frames.iter().map(|f| f.active_t);
+    let busiest = active()
+        .enumerate()
+        .rev()
+        .max_by_key(|&(_, t)| t)
+        .map(|(i, _)| i as u64);
+    let active_t = active()
+        .min()
+        .zip(active().max())
+        .map(|(min, max)| CycleStats {
+            min,
+            max,
+            mean: Real(active().sum::<u64>() as f64 / frames.len() as f64),
+        });
     FrameBudgetMade {
         frames: whole.chain(partial).collect(),
         lag: frames.iter().filter(|f| f.lag).count() as u64,
+        active_t,
+        busiest,
     }
 }
 
@@ -254,5 +270,46 @@ mod tests {
         let k = both.kinds();
         assert!(k.exec && k.raster && !k.ppu_modes, "{k:?}");
         assert_eq!(Sinks::default().kinds(), EventKinds::default());
+    }
+
+    fn frame(active_t: u64, lag: bool) -> FrameBudget {
+        FrameBudget {
+            active_t,
+            idle_t: 70_224 - active_t,
+            lag,
+        }
+    }
+
+    #[test]
+    fn the_budget_sums_up_the_whole_frames_active_cycles_and_names_the_busiest() {
+        let frames = [frame(100, false), frame(400, true), frame(400, true)];
+        let rest = FrameBudget {
+            active_t: 9_000,
+            idle_t: 0,
+            lag: false,
+        };
+        let made = frame_budget_made(&frames, rest);
+        // The partial frame (9,000 T) is in the rows, not the summary.
+        assert_eq!(
+            made.active_t,
+            Some(CycleStats {
+                min: 100,
+                max: 400,
+                mean: Real(300.0),
+            })
+        );
+        assert_eq!(made.busiest, Some(1), "the first of the tied frames");
+        assert_eq!(made.lag, 2);
+    }
+
+    #[test]
+    fn a_budget_with_no_whole_frame_has_no_summary() {
+        let rest = FrameBudget {
+            active_t: 9_000,
+            idle_t: 0,
+            lag: false,
+        };
+        let made = frame_budget_made(&[], rest);
+        assert_eq!((made.active_t, made.busiest), (None, None));
     }
 }

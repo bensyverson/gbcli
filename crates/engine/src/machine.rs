@@ -389,6 +389,13 @@ impl Machine {
         }
         // 7. The rest: blob (counters, time, written bitmaps), keys, time bases.
         core.load(&cp.blob).map_err(|e| rejected(e.to_string()))?;
+        if rom_changed {
+            let sectors =
+                keep_the_build_code(core.as_mut()).map_err(|e| rejected(e.to_string()))?;
+            if !sectors.is_empty() {
+                warnings.push(LoadWarning::FlashSectorsDropped { sectors });
+            }
+        }
         core.set_keys(Keys(h.keys));
         if h.core.commit != ours.commit {
             warnings.push(LoadWarning::OtherCommit {
@@ -460,6 +467,17 @@ fn read_rom(core: &dyn Core, offset: u32, len: usize) -> Result<Vec<u8>, CoreErr
             value: u64::from(offset) + len as u64,
             limit: rom.len() as u64,
         })
+}
+
+/// The rule for a flash chip's changed sectors across a rebuild, which a
+/// restore and a power cycle both cross by it (the 2026-11-07 rulings on the
+/// reviews of fc85d19 and 6c5b029, as the integrator refined it in leaf
+/// ahKOkk): a carried sector where the new build's array holds a byte other
+/// than $FF holds its code, so it goes back to the build; a sector the build
+/// leaves erased (`rgbfix -p 0xFF`'s padding, or past the image) keeps the
+/// save. Returns the sectors given back.
+fn keep_the_build_code(core: &mut dyn Core) -> Result<Vec<std::ops::Range<u32>>, CoreError> {
+    core.revert_flash_over_code()
 }
 
 fn core_config(setup: &Setup, rom: &[u8]) -> CoreConfig {

@@ -1,10 +1,9 @@
 //! The power cycle (design §6, the 2026-11-07 battery-save ruling): the
 //! machine at power-on again, keeping what a cart keeps with the power off.
 
-use gbcli_core::flash::contents_past;
 use gbcli_core::{CoreError, SavClock};
 
-use super::{Machine, core_config};
+use super::{Machine, core_config, keep_the_build_code};
 
 /// Where a power cycle's battery-backed RAM and clock come from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -29,9 +28,10 @@ pub enum Flash<'a> {
     Keep,
     /// A [`Core::flash_contents`](gbcli_core::Core::flash_contents) from
     /// another core on the same board (the head's, across a rebuild). The
-    /// sectors that overlap this machine's ROM file are left out: the image
-    /// is this build's, and they are named in
-    /// [`PowerCycled::flash_sectors_dropped`].
+    /// sectors where this build's image has code (a byte other than $FF)
+    /// keep it, by the rule a restore across a ROM change follows too, and
+    /// are named in [`PowerCycled::flash_sectors_dropped`]; those it leaves
+    /// erased keep the save.
     Carried(&'a [u8]),
     /// A whole chip image, as [`Machine::flash_image`] exports it: every
     /// sector where it differs from the image as built becomes the chip's.
@@ -52,8 +52,8 @@ pub struct PowerCycled {
     /// may be another build's code.
     pub flash_sectors_in_image: usize,
     /// The chip-address ranges of the carried sectors ([`Flash::Carried`])
-    /// that overlap the ROM file's extent, which were not carried: the new
-    /// build's code lies there, so the save no longer fits beside it.
+    /// where the new build's image has code (a byte other than $FF), which
+    /// were not carried: the save no longer fits beside that code.
     pub flash_sectors_dropped: Vec<std::ops::Range<u32>>,
 }
 
@@ -99,15 +99,8 @@ impl Machine {
         match (flash, own.as_deref()) {
             (Flash::Keep, Some(contents)) => core.load_flash_contents(contents)?,
             (Flash::Carried(contents), _) => {
-                // Where the image lies is this build's code, however the
-                // other build's program left those sectors.
-                let split = contents_past(contents, self.rom.len() as u32).map_err(|e| {
-                    CoreError::InvalidState {
-                        reason: e.to_string(),
-                    }
-                })?;
-                core.load_flash_contents(&split.kept)?;
-                flash_sectors_dropped = split.dropped;
+                core.load_flash_contents(contents)?;
+                flash_sectors_dropped = keep_the_build_code(core.as_mut())?;
             }
             (Flash::Image(image), _) => {
                 let changed = core.load_flash_image(image)?;

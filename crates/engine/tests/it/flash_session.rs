@@ -165,6 +165,130 @@ fn a_rebuild_grown_into_the_carried_save_keeps_its_code_and_names_the_sector() {
     assert_eq!(cycled.flash_sectors_dropped, vec![sector]);
 }
 
+/// FLASH_SAVE grown to 256 KiB: banks 8-15, the sector the old build saved
+/// in included, are the new build's code (all RET).
+fn grown() -> Vec<u8> {
+    let mut grown = FLASH_SAVE.to_vec();
+    grown.resize(0x4_0000, 0xC9);
+    grown[0x148] = 0x03; // 256 KiB
+    grown
+}
+
+fn machine_over(rom: Vec<u8>, sym: Option<&str>) -> Machine {
+    let mut config = CoreConfig::new(Model::DmgB, rom);
+    config.flash = Some(FlashProfile::named("generic-wr-aaa-a9").unwrap());
+    Machine::new(Backend::sameboy(), config, sym).unwrap()
+}
+
+/// How many bytes of `rom` from the save's sector on the chip no longer holds.
+fn code_replaced(m: &Machine, rom: &[u8]) -> usize {
+    let chip = &m.core().region(Region::Rom).unwrap().bytes;
+    (SAVED_BYTE..rom.len())
+        .filter(|&i| chip[i] != rom[i])
+        .count()
+}
+
+fn dropped(warnings: &[gbcli_engine::LoadWarning]) -> Vec<std::ops::Range<u32>> {
+    warnings
+        .iter()
+        .find_map(|w| match w {
+            gbcli_engine::LoadWarning::FlashSectorsDropped { sectors, .. } => Some(sectors.clone()),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
+const FLASH_SAVE_SYM: &str = include_str!("../roms/flash_save.sym");
+
+/// A compatible rebuild (no live symbol moved) grown into the sector the old
+/// build saved in: the restore every op makes of the head keeps the new
+/// build's code there and names the sector (the 2026-11-07 ruling on the
+/// review of 6c5b029, the power cycle's rule).
+#[test]
+fn a_compatible_restore_over_a_grown_build_keeps_its_code_and_names_the_sector() {
+    let mut old = machine_over(FLASH_SAVE.to_vec(), Some(FLASH_SAVE_SYM));
+    run(&mut old, BOOT_AND_SAVE);
+    let saved = old.capture(meta());
+    let mut new = machine_over(grown(), Some(FLASH_SAVE_SYM));
+    let warnings = new.restore(&saved, &LoadOptions::default()).unwrap();
+    assert_eq!(code_replaced(&new, &grown()), 0, "{warnings:?}");
+    assert_eq!(dropped(&warnings), vec![0x3_0000..0x4_0000], "{warnings:?}");
+}
+
+/// The same crossing forced with `--allow-rom-change`.
+#[test]
+fn a_forced_restore_over_a_grown_build_keeps_its_code() {
+    let mut old = machine(Some("generic-wr-aaa-a9"));
+    run(&mut old, BOOT_AND_SAVE);
+    let saved = old.capture(meta());
+    let mut new = machine_over(grown(), None);
+    let forced = LoadOptions {
+        allow_rom_change: true,
+        ..LoadOptions::default()
+    };
+    let warnings = new.restore(&saved, &forced).unwrap();
+    assert_eq!(code_replaced(&new, &grown()), 0, "{warnings:?}");
+    assert_eq!(dropped(&warnings), vec![0x3_0000..0x4_0000], "{warnings:?}");
+}
+
+/// A rebuild that stays clear of the save: the restore keeps it, and says
+/// nothing about flash.
+#[test]
+fn a_restore_across_a_rebuild_keeps_the_save_past_the_image() {
+    let mut old = machine_over(FLASH_SAVE.to_vec(), Some(FLASH_SAVE_SYM));
+    run(&mut old, BOOT_AND_SAVE);
+    let saved = old.capture(meta());
+    let mut rebuilt = FLASH_SAVE.to_vec();
+    rebuilt[0x1_C001] = 0x77; // in the last bank, past the code
+    let mut new = machine_over(rebuilt, Some(FLASH_SAVE_SYM));
+    let warnings = new.restore(&saved, &LoadOptions::default()).unwrap();
+    assert_eq!(chip_byte(&new), 0x42, "{warnings:?}");
+    assert_eq!(dropped(&warnings), Vec::new(), "{warnings:?}");
+}
+
+/// FLASH_SAVE `rgbfix -p 0xFF`-padded to 256 KiB, so the save's sector
+/// (banks 12-15) lies in the image, all $FF; and that build with a byte
+/// changed elsewhere, as a rebuild that touches only code.
+fn padded_and_rebuilt() -> (Vec<u8>, Vec<u8>) {
+    let mut padded = FLASH_SAVE.to_vec();
+    padded.resize(0x4_0000, 0xFF);
+    padded[0x148] = 0x03; // 256 KiB
+    let mut rebuilt = padded.clone();
+    rebuilt[0x1_C001] = 0x77; // in bank 7, far from the save
+    (padded, rebuilt)
+}
+
+/// A save in the image's $FF padding is not the new build's code: a
+/// compatible rebuild elsewhere keeps it (the integrator's refinement of the
+/// 2026-11-07 ruling, leaf ahKOkk).
+#[test]
+fn a_restore_across_a_rebuild_keeps_a_save_in_the_images_padding() {
+    let (padded, rebuilt) = padded_and_rebuilt();
+    let mut old = machine_over(padded, Some(FLASH_SAVE_SYM));
+    run(&mut old, BOOT_AND_SAVE);
+    assert_eq!(chip_byte(&old), 0x42, "the old build saved");
+    let saved = old.capture(meta());
+    let mut new = machine_over(rebuilt, Some(FLASH_SAVE_SYM));
+    let warnings = new.restore(&saved, &LoadOptions::default()).unwrap();
+    assert_eq!(chip_byte(&new), 0x42, "{warnings:?}");
+    assert_eq!(dropped(&warnings), Vec::new(), "{warnings:?}");
+}
+
+/// The same crossing by a power cycle.
+#[test]
+fn a_power_cycle_across_a_rebuild_keeps_a_save_in_the_images_padding() {
+    let (padded, rebuilt) = padded_and_rebuilt();
+    let mut old = machine_over(padded, None);
+    run(&mut old, BOOT_AND_SAVE);
+    let contents = old.core_mut().flash_contents().unwrap().unwrap();
+    let mut new = machine_over(rebuilt, None);
+    let cycled = new
+        .power_cycle(Battery::Keep, Flash::Carried(&contents), 0)
+        .unwrap();
+    assert_eq!(chip_byte(&new), 0x42);
+    assert_eq!(cycled.flash_sectors_dropped, Vec::new());
+}
+
 #[test]
 fn a_flash_report_holds_each_note_as_a_warning_and_a_row_once() {
     let mut m = machine(Some("generic-wr-aaa-aa"));

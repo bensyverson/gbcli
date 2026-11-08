@@ -315,8 +315,34 @@ impl StoreError {
             LoadWarning::PatchOverChangedBytes { offset } => {
                 format!("a patch at ROM offset {offset:#x} differs from the bytes it recorded")
             }
+            LoadWarning::FlashSectorsDropped { sectors } => dropped_sectors_text(sectors),
         }
     }
+}
+
+/// The changed flash sectors where a rebuild's image has code, which kept
+/// it: each by chip address and 16 KiB bank. A restore and a power cycle
+/// across a rebuild both say it this way.
+fn dropped_sectors_text(sectors: &[std::ops::Range<u32>]) -> String {
+    let named: Vec<String> = sectors
+        .iter()
+        .map(|s| {
+            format!(
+                "${:05X}-${:05X} (banks {}-{})",
+                s.start,
+                s.end - 1,
+                s.start / 0x4000,
+                (s.end - 1) / 0x4000
+            )
+        })
+        .collect();
+    format!(
+        "the rebuilt ROM has code (bytes other than $FF) in the flash sector(s) the saved state's \
+         save was in: {}; the new build's code stays there and that part of the save was dropped, \
+         as the save no longer fits beside the code: keep the save in sectors the image leaves \
+         erased ($FF padding, or past its end)",
+        named.join(", ")
+    )
 }
 
 fn setup_code(e: &SetupError) -> ErrorCode {

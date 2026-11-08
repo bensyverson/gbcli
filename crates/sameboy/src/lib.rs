@@ -495,6 +495,10 @@ impl Core for SameBoy {
         self.import_flash(contents)
     }
 
+    fn revert_flash_over_code(&mut self) -> Result<Vec<std::ops::Range<u32>>, CoreError> {
+        Ok(self.revert_flash())
+    }
+
     fn load_flash_image(&mut self, image: &[u8]) -> Result<Vec<std::ops::Range<u32>>, CoreError> {
         self.import_flash_image(image)
     }

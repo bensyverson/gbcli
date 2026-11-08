@@ -9,9 +9,11 @@ Flash saves — a cart whose ROM is a flash chip the game writes its save to
 
 --flash BOARD fixes the cart's board when the session is created; checkpoints
 record it, a restore refuses a state from another board (or mask ROM), and
-power-cycle keeps the chip's contents, across a rebuild too: only the sectors
-the program changed come along, and none the new image reaches (a warning names
-those: the save no longer fits beside the code). The chip is the board's size,
+power-cycle keeps the chip's contents. Across a rebuild (a power cycle, or any
+command that loads the head or a checkpoint) only the sectors the program
+changed come along, and none where the new image has code, a byte other than
+$FF (a warning names those: the save no longer fits beside the code); a save in
+the image's $FF padding stays. The chip is the board's size,
 the image at its start and erased past it; the mapper is the header's and
 reaches all of it.
 

@@ -4,7 +4,6 @@
 
 use gbcli_flash::{
     BusyTicks, DataLines, FlashChip, FlashProfile, NoteKind, Operation, SectorRun, WritePin,
-    contents_past,
 };
 
 const ROM_SIZE: usize = 0x40000;
@@ -378,38 +377,44 @@ fn contents_survive_a_power_cycle_and_a_cut_off_operation_is_noted() {
     );
 }
 
-/// Across a rebuild, the new image's extent is the new build's: the sectors
-/// that overlap it leave the contents, and the rest power on as before.
+/// Across a rebuild, the new build's code is the bytes of its image that
+/// aren't $FF (erased flash, and `rgbfix -p 0xFF`'s padding): a chip that
+/// took over another build's sectors gives back those where the image as
+/// built has code, and keeps those it leaves erased, inside the image or past
+/// it.
 #[test]
-fn contents_past_an_image_drop_the_sectors_that_overlap_it() {
+fn a_chip_reverts_the_carried_sectors_where_the_build_has_code() {
     let mut cart = Cart::new(profile("generic-wr-aaa-a9"));
-    cart.bank = 4; // chip $10000: the sector at $10000
+    cart.bank = 4; // chip $10000: the sector at $10000, code in rom()
     cart.gbstudio_program(0x4000, 0x00);
     cart.wait(BusyTicks::TYPICAL.program);
-    cart.bank = SAVE_BANK; // chip $30000
+    cart.bank = SAVE_BANK; // chip $30000: all $FF in rom(), inside its 256 KiB
     cart.gbstudio_program(0x4000, 0x42);
     cart.wait(BusyTicks::TYPICAL.program);
     let contents = cart.chip.contents(cart.now, &cart.rom);
+    let state = cart.chip.save(&cart.rom);
 
-    let split = contents_past(&contents, 0x2_0000).expect("split");
-    assert_eq!(
-        split.dropped,
-        vec![std::ops::Range {
-            start: 0x1_0000,
-            end: 0x2_0000
-        }]
-    );
     let mut on = Cart::new(profile("generic-wr-aaa-a9"));
-    on.chip
-        .power_on(&split.kept, &mut on.rom)
-        .expect("power on");
-    assert_eq!(on.rom[0x1_0000], rom()[0x1_0000], "the image's byte");
-    assert_eq!(on.rom[0x3_0000], 0x42, "the save past the image");
+    on.chip.power_on(&contents, &mut on.rom).expect("power on");
+    assert_eq!(
+        on.chip.revert_over_code(&mut on.rom),
+        vec![0x1_0000..0x2_0000]
+    );
+    assert_eq!(on.rom[0x1_0000], rom()[0x1_0000], "the build's code");
+    assert_eq!(on.rom[0x3_0000], 0x42, "the save in the erased sector");
+    assert_eq!(
+        on.chip.revert_over_code(&mut on.rom),
+        Vec::new(),
+        "given back once"
+    );
 
-    let whole = contents_past(&contents, 0x1_0000).expect("split");
-    assert!(whole.dropped.is_empty(), "{:?}", whole.dropped);
-    assert_eq!(whole.kept, contents);
-    assert!(contents_past(b"junk", 0).is_err());
+    // A build that leaves the $10000 sector erased keeps that sector too.
+    let mut loaded = Cart::new(profile("generic-wr-aaa-a9"));
+    loaded.rom[0x1_0000..0x2_0000].fill(0xFF);
+    loaded.chip.load(&state, &mut loaded.rom).expect("load");
+    assert_eq!(loaded.chip.revert_over_code(&mut loaded.rom), Vec::new());
+    assert_eq!(loaded.rom[0x1_0000], 0x00);
+    assert_eq!(loaded.rom[0x3_0000], 0x42);
 }
 
 /// Each mask is its chip family's command decode (project/2026-11-07-flash-

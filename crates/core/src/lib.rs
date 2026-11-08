@@ -263,6 +263,17 @@ pub trait Core {
             reason: "this core doesn't model flash carts",
         })
     }
+    /// Gives every changed flash sector where this build's array holds a
+    /// byte other than $FF its bytes as built, and returns those sectors'
+    /// chip-address ranges
+    /// ([`FlashChip::revert_over_code`](gbcli_flash::FlashChip::revert_over_code)):
+    /// after taking over a state from another build, those bytes are this
+    /// build's code, and a sector it leaves erased keeps the save. A
+    /// mask-ROM cart has none, and neither has a core without flash carts
+    /// (the default).
+    fn revert_flash_over_code(&mut self) -> Result<Vec<std::ops::Range<u32>>, CoreError> {
+        Ok(Vec::new())
+    }
     /// Takes over a whole chip image at power-on (the chip's size, the bytes
     /// the CPU reads): every sector where it differs from the image as built
     /// becomes the chip's, the rest reads as built. Returns those sectors'

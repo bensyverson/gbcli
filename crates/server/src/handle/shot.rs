@@ -163,9 +163,12 @@ pub(super) fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), Failure>
 /// Writes every file or none: a directory in a file's place is refused
 /// before anything is written, then each goes to a temporary file beside it,
 /// and only once all of them are written does each replace its file, by a
-/// rename in its own directory. Every failure but one leaves the files as
-/// they were and no temporary file behind; the exception, a rename refused
-/// after another succeeded, needs a change on disk between the two.
+/// rename in its own directory. Every reported failure but one leaves the
+/// files as they were and no temporary file behind; the exception, a rename
+/// refused after another succeeded, needs a change on disk between the two.
+/// The renames are one at a time, so a process killed between them leaves
+/// the files it renamed new beside the rest old, and the rest's temporary
+/// files behind: atomic for each file, not for the set.
 pub(super) fn write_all_atomically(files: &[(&Path, &[u8])]) -> Result<(), Failure> {
     let io = |path: &Path, e: &dyn std::fmt::Display| {
         Failure::new(ErrorBody::new(

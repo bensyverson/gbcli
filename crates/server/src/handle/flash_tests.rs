@@ -12,7 +12,7 @@ use gbcli_protocol::{
 
 use super::Handler;
 use super::test_support::{handler, request, run_frames};
-use crate::fixture::{FLASH_SAVE, Fixture};
+use crate::fixture::{FLASH_SAVE, FLASH_SAVE_SYM, Fixture};
 
 /// Bank 12's first byte, where FLASH_SAVE programs $42.
 const SAVED_AT: usize = 0x3_0000;
@@ -169,6 +169,84 @@ fn a_rebuild_grown_into_the_save_keeps_its_code_and_names_the_sector() {
     ok(sav(&mut h, &f.dir.join("game.sav")));
     let image = fs::read(f.dir.join("game.flash.gb")).unwrap();
     assert_eq!(image[SAVED_AT], 0xC9, "the new build's code, not the save");
+}
+
+/// The same grown rebuild crossed by an ordinary `run`: it loads as
+/// compatible (no live symbol moved), and the head it saves under the new
+/// ROM's hash keeps the new build's code, through a later power cycle too
+/// (the ruling on the review of 6c5b029).
+#[test]
+fn a_run_across_a_grown_rebuild_keeps_its_code_and_names_the_sector() {
+    let f = Fixture::with_flash_sym(
+        "flash-grown-run",
+        FLASH_SAVE,
+        FLASH_SAVE_SYM,
+        "generic-wr-aaa-a9",
+    );
+    let mut h = handler(&f);
+    ok(run_frames(&mut h, SAVE_FRAMES));
+    let mut grown = FLASH_SAVE.to_vec();
+    grown.resize(0x4_0000, 0xC9); // banks 8-15: the new build's code
+    grown[0x148] = 0x03; // 256 KiB
+    fs::write(f.dir.join("demo.gb"), &grown).unwrap();
+    let (_, warnings) = ok(run_frames(&mut h, 1));
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.contains("$30000-$3FFFF (banks 12-15)") && w.contains("dropped")),
+        "{warnings:?}"
+    );
+    let replaced = |h: &mut Handler| {
+        ok(sav(h, &f.dir.join("game.sav")));
+        let image = fs::read(f.dir.join("game.flash.gb")).unwrap();
+        (SAVED_AT..grown.len())
+            .filter(|&i| image[i] != grown[i])
+            .count()
+    };
+    assert_eq!(replaced(&mut h), 0, "the old save replaced the new code");
+    ok(power_cycle(&mut h, None));
+    assert_eq!(replaced(&mut h), 0, "and came back on the power cycle");
+}
+
+/// FLASH_SAVE `rgbfix -p 0xFF`-padded to 256 KiB, as every gbcli build is:
+/// the save's sector lies in the image, all $FF.
+fn padded() -> Vec<u8> {
+    let mut padded = FLASH_SAVE.to_vec();
+    padded.resize(0x4_0000, 0xFF);
+    padded[0x148] = 0x03; // 256 KiB
+    padded
+}
+
+/// A rebuild that changes code far from a save kept in the image's $FF
+/// padding keeps the save, across a run and across a power cycle (the
+/// integrator's refinement, leaf ahKOkk).
+#[test]
+fn a_rebuild_elsewhere_keeps_a_save_in_the_images_padding() {
+    for crossing in ["run", "power_cycle"] {
+        let f = Fixture::with_flash_sym(
+            &format!("flash-padded-{crossing}"),
+            &padded(),
+            FLASH_SAVE_SYM,
+            "generic-wr-aaa-a9",
+        );
+        let mut h = handler(&f);
+        ok(run_frames(&mut h, SAVE_FRAMES));
+        let mut rebuilt = padded();
+        rebuilt[0x1_C001] = 0x77; // in bank 7, far from the save
+        fs::write(f.dir.join("demo.gb"), &rebuilt).unwrap();
+        let (_, warnings) = match crossing {
+            "run" => ok(run_frames(&mut h, 1)),
+            _ => ok(power_cycle(&mut h, None)),
+        };
+        assert!(
+            !warnings.iter().any(|w| w.contains("dropped")),
+            "{crossing}: {warnings:?}"
+        );
+        ok(sav(&mut h, &f.dir.join("game.sav")));
+        let image = fs::read(f.dir.join("game.flash.gb")).unwrap();
+        assert_eq!(image[SAVED_AT], 0x42, "{crossing}: the save stayed");
+        assert_eq!(image[0x1_C001], 0x77, "{crossing}: the new build's code");
+    }
 }
 
 #[test]

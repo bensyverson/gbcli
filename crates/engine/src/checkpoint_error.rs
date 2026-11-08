@@ -274,6 +274,13 @@ pub enum LoadWarning {
     },
     /// A forced load applied a patch over bytes that differ from the ones it replaced.
     PatchOverChangedBytes { offset: u32 },
+    /// The chip-address ranges of the changed flash sectors a load across a
+    /// ROM change did not carry, because the new build's array holds code
+    /// there (a byte other than $FF): the save no longer fits beside it. A
+    /// sector the build leaves erased keeps the save. A power cycle across a
+    /// rebuild drops the same sectors
+    /// ([`Machine::power_cycle`](crate::Machine::power_cycle)).
+    FlashSectorsDropped { sectors: Vec<std::ops::Range<u32>> },
 }
 
 #[cfg(test)]

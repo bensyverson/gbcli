@@ -44,6 +44,7 @@ pub const TUNE: &[u8] = include_bytes!("../../audio/tests/roms/tune.gb");
 /// Saves $42 to bank 12 of a flash chip with GB Studio's swapped-data
 /// sequence, counting it in $C000 once it reads back (`flash_save.asm`).
 pub const FLASH_SAVE: &[u8] = include_bytes!("../../engine/tests/roms/flash_save.gb");
+pub const FLASH_SAVE_SYM: &[u8] = include_bytes!("../../engine/tests/roms/flash_save.sym");
 
 impl Fixture {
     /// A project directory with `demo.gb` and a `demo` session created.
@@ -58,30 +59,41 @@ impl Fixture {
 
     /// As [`Fixture::new`], over `rom` instead of V1.
     pub fn with_rom(name: &str, rom: &[u8]) -> Fixture {
-        Fixture::build(name, rom, false, Model::DmgB, None)
+        Fixture::build(name, rom, None, Model::DmgB, None)
     }
 
     /// As [`Fixture::with_rom`], on another model.
     pub fn with_model(name: &str, rom: &[u8], model: Model) -> Fixture {
-        Fixture::build(name, rom, false, model, None)
+        Fixture::build(name, rom, None, model, None)
     }
 
     /// As [`Fixture::with_rom`], the cart on a flash board.
     pub fn with_flash(name: &str, rom: &[u8], board: &str) -> Fixture {
-        Fixture::build(name, rom, false, Model::DmgB, Some(board))
+        Fixture::build(name, rom, None, Model::DmgB, Some(board))
+    }
+
+    /// As [`Fixture::with_flash`], with `sym` as `demo.sym` beside the ROM.
+    pub fn with_flash_sym(name: &str, rom: &[u8], sym: &[u8], board: &str) -> Fixture {
+        Fixture::build(name, rom, Some(sym), Model::DmgB, Some(board))
     }
 
     fn make(name: &str, sym: bool) -> Fixture {
-        Fixture::build(name, V1, sym, Model::DmgB, None)
+        Fixture::build(name, V1, sym.then_some(V1_SYM), Model::DmgB, None)
     }
 
-    fn build(name: &str, rom: &[u8], sym: bool, model: Model, flash: Option<&str>) -> Fixture {
+    fn build(
+        name: &str,
+        rom: &[u8],
+        sym: Option<&[u8]>,
+        model: Model,
+        flash: Option<&str>,
+    ) -> Fixture {
         let dir = std::env::temp_dir().join(format!("gbcli-server-{}-{name}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).expect("temp project");
         fs::write(dir.join("demo.gb"), rom).expect("rom");
-        if sym {
-            fs::write(dir.join("demo.sym"), V1_SYM).expect("sym");
+        if let Some(sym) = sym {
+            fs::write(dir.join("demo.sym"), sym).expect("sym");
         }
         // Explicit: a GBCLI_DIR in the environment must not move the bundle.
         let bundle = Bundle::open_or_create_in(&dir, None).expect("bundle");
@@ -90,7 +102,7 @@ impl Fixture {
             bundle,
             flash: flash.map(str::to_string),
         };
-        fixture.create_session_on(sym, model);
+        fixture.create_session_on(sym.is_some(), model);
         fixture
     }
 

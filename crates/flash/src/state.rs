@@ -14,6 +14,8 @@ use crate::note::{NoteKind, Operation};
 
 const MAGIC: &[u8; 4] = b"GBFL";
 const VERSION: u8 = 1;
+/// What an erased flash byte reads.
+const ERASED: u8 = 0xFF;
 
 /// Which of the two layouts a byte string holds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -208,6 +210,32 @@ impl FlashChip {
         })
     }
 
+    /// Gives every changed sector where the array as built holds a byte
+    /// other than $FF its bytes as built, and returns those sectors'
+    /// chip-address ranges. Across a rebuild, those bytes are the new
+    /// build's code, however the other build's program left the sector; a
+    /// sector the build leaves erased (`rgbfix -p 0xFF`'s padding, or past
+    /// the image) holds no code, so a chip that took over that build's state
+    /// ([`load`](FlashChip::load), [`power_on`](FlashChip::power_on))
+    /// keeps the save there.
+    pub fn revert_over_code(&mut self, rom: &mut [u8]) -> Vec<std::ops::Range<u32>> {
+        let over_code: Vec<u32> = self
+            .pristine
+            .iter()
+            .filter(|(_, built)| built.iter().any(|&b| b != ERASED))
+            .map(|(&start, _)| start)
+            .collect();
+        over_code
+            .into_iter()
+            .map(|start| {
+                let built = self.pristine.remove(&start).expect("listed above");
+                let span = start as usize..start as usize + built.len();
+                rom[span].copy_from_slice(&built);
+                start..start + built.len() as u32
+            })
+            .collect()
+    }
+
     /// Makes the array hold `sectors` over the ROM it was built from.
     fn adopt(&mut self, sectors: &[(u32, Vec<u8>)], rom: &mut [u8]) {
         let keep: Vec<u32> = sectors.iter().map(|(start, _)| *start).collect();
@@ -235,8 +263,6 @@ struct Parsed {
     name: String,
     mode: Mode,
     toggle: bool,
-    /// The bytes before the sector count: everything but the sectors.
-    head_len: usize,
     sectors: Vec<(u32, Vec<u8>)>,
 }
 
@@ -276,7 +302,6 @@ fn parse(bytes: &[u8]) -> Result<Parsed, FlashStateError> {
         _ => return Err(bad("an unknown command state")),
     };
     let toggle = r.u8()? != 0;
-    let head_len = bytes.len() - r.0.len();
     let count = r.u32()?;
     let mut sectors = Vec::new();
     for _ in 0..count {
@@ -292,7 +317,6 @@ fn parse(bytes: &[u8]) -> Result<Parsed, FlashStateError> {
         name,
         mode,
         toggle,
-        head_len,
         sectors,
     })
 }
@@ -339,44 +363,4 @@ impl<'a> Reader<'a> {
     fn u64(&mut self) -> Result<u64, FlashStateError> {
         Ok(u64::from_le_bytes(self.take(8)?.try_into().unwrap()))
     }
-}
-
-/// A power-off contents split at the end of a new image
-/// ([`contents_past`]).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SplitContents {
-    /// The contents without the sectors that overlap the image.
-    pub kept: Vec<u8>,
-    /// Those sectors' chip-address ranges.
-    pub dropped: Vec<std::ops::Range<u32>>,
-}
-
-/// A [`FlashChip::contents`] without every sector that overlaps the chip's
-/// first `end` bytes, and those sectors: across a rebuild, where the new
-/// image lies is the new build's code, not the old build's save.
-pub fn contents_past(contents: &[u8], end: u32) -> Result<SplitContents, FlashStateError> {
-    let parsed = parse(contents)?;
-    if parsed.kind != Kind::PowerOff as u8 {
-        return Err(FlashStateError(
-            "a checkpoint's state where a power-off one was expected".to_string(),
-        ));
-    }
-    let (dropped, kept): (Vec<_>, Vec<_>) = parsed
-        .sectors
-        .into_iter()
-        .partition(|(start, _)| *start < end);
-    let mut out = contents[..parsed.head_len].to_vec();
-    out.extend_from_slice(&(kept.len() as u32).to_le_bytes());
-    for (start, bytes) in &kept {
-        out.extend_from_slice(&start.to_le_bytes());
-        out.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
-        out.extend_from_slice(bytes);
-    }
-    Ok(SplitContents {
-        kept: out,
-        dropped: dropped
-            .iter()
-            .map(|(start, bytes)| *start..*start + bytes.len() as u32)
-            .collect(),
-    })
 }

@@ -5,9 +5,9 @@
 use std::fs;
 use std::path::Path;
 
-use gbcli_bundle::{SessionStore, parse_duration};
+use gbcli_bundle::{SessionStore, StoreError, parse_duration};
 use gbcli_core::{CartClock, SavClock};
-use gbcli_engine::{Battery, Flash, LoadOptions, Machine, flash_image_path};
+use gbcli_engine::{Battery, Flash, LoadOptions, LoadWarning, Machine, flash_image_path};
 use gbcli_protocol::{
     BatteryFrom, ErrorBody, ErrorCode, FlashFileMade, FlashFrom, PowerCycleArgs, PowerCycleMade,
     ResultBody, SavArgs, SavClockState, SavMade, SessionFile,
@@ -66,6 +66,7 @@ impl Handler {
             .as_ref()
             .is_some_and(|h| h.header.rom_sha256 != machine.rom_sha256());
         let (mut head_state, mut head_flash) = (None, None);
+        let mut dropped = Vec::new();
         match &head {
             Some(head) if rom_rebuilt => {
                 // Only the battery (and a flash chip's changed sectors, the
@@ -74,6 +75,9 @@ impl Handler {
                 // header (the old ROM is gone), so the cart on disk decides
                 // whether there is a battery. A --sav (and its chip image)
                 // replaces what it holds.
+                // The restore gives the sectors where the new image has code
+                // back to it (the rule a power cycle carries by too), and
+                // names them.
                 let wants_flash = flash_session && image.is_none();
                 if file.is_none() || wants_flash {
                     let mut old = store.machine(meta).map_err(stored)?;
@@ -81,7 +85,16 @@ impl Handler {
                         allow_rom_change: true,
                         ..LoadOptions::default()
                     };
-                    store.restore(&mut old, head, &forced).map_err(stored)?;
+                    let loaded = old
+                        .restore(head, &forced)
+                        .map_err(|e| Failure::from_store(&StoreError::Checkpoint(e)))?;
+                    if wants_flash {
+                        dropped.extend(
+                            loaded
+                                .into_iter()
+                                .filter(|w| matches!(w, LoadWarning::FlashSectorsDropped { .. })),
+                        );
+                    }
                     let core = |e| Failure::from_core(&e);
                     if file.is_none() {
                         head_state = old.core_mut().battery_state().map_err(core)?;
@@ -134,11 +147,11 @@ impl Handler {
             ));
         }
         if !cycled.flash_sectors_dropped.is_empty() {
-            warnings.push(dropped_sectors_warning(
-                &cycled.flash_sectors_dropped,
-                machine.rom_len(),
-            ));
+            dropped.push(LoadWarning::FlashSectorsDropped {
+                sectors: cycled.flash_sectors_dropped.clone(),
+            });
         }
+        warnings.extend(dropped.iter().map(StoreError::warning_text));
         let from = match (file.is_some(), cycled.battery_bytes) {
             (true, _) => BatteryFrom::Sav,
             (false, Some(_)) => BatteryFrom::Head,
@@ -194,7 +207,8 @@ impl Handler {
         }
         // A flash session's save may live in the chip (GB Studio's
         // batteryless saves do), so the chip image goes beside the `.sav`;
-        // both are written or neither, as one alone is half a save.
+        // both are written or neither, as one alone is half a save (short
+        // of a kill between the two renames: `write_all_atomically`).
         let sav_path = Path::new(&args.path);
         let image_path = flash_image_path(sav_path);
         let mut files: Vec<(&Path, &[u8])> = Vec::new();
@@ -219,30 +233,6 @@ impl Handler {
             ..ResultBody::default()
         })
     }
-}
-
-/// The carried flash sectors a rebuild's image grew into, which kept the
-/// new build's code: each by chip address and 16 KiB bank.
-fn dropped_sectors_warning(sectors: &[std::ops::Range<u32>], rom_len: usize) -> String {
-    let named: Vec<String> = sectors
-        .iter()
-        .map(|s| {
-            let banks = (s.start / 0x4000, (s.end - 1) / 0x4000);
-            format!(
-                "${:05X}-${:05X} (banks {}-{})",
-                s.start,
-                s.end - 1,
-                banks.0,
-                banks.1
-            )
-        })
-        .collect();
-    format!(
-        "the rebuilt ROM's {rom_len} bytes reach into the flash sector(s) the head's save was \
-         in: {}; the new build's code stays there and that part of the save was dropped, as the \
-         save no longer fits beside the code: move it past the image's end",
-        named.join(", ")
-    )
 }
 
 /// The refusal of an advance past `clock`'s bound, in that cart's terms.

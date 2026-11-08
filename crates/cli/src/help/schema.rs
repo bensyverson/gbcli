@@ -67,7 +67,7 @@ sav     path: PATH   (writes the head's battery save, and on a flash session
 Response, one line per request:
   {"id", "ok": true, "rev"?: "sN", "result": {…}, "warnings": [TEXT]}
   {"id", "ok": false, "rev"?, "error": {"code", "exit", "message", "remedy",
-   "stop"?, "flash_notes"?, "result"?}, "warnings"}
+   "stop"?, "keys_unapplied"?, "flash_notes"?, "result"?}, "warnings"}
 result holds only the fields the op fills: stop, reads, shot, measure, profile,
 frame_budget, raster, equiv, view, symbols,
 checkpoints, keys_unapplied, writes, checkpoint, restored, breakpoint, watch,

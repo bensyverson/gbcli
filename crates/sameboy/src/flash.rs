@@ -165,6 +165,14 @@ impl SameBoy {
         }
     }
 
+    pub(crate) fn revert_flash(&mut self) -> Vec<std::ops::Range<u32>> {
+        let gb = self.raw();
+        match &mut self.hooks_mut().flash {
+            Some(chip) => chip.revert_over_code(rom(gb)),
+            None => Vec::new(),
+        }
+    }
+
     pub(crate) fn flash_notes(&mut self) -> FlashNotes {
         let hooks = self.hooks_mut();
         match (&mut hooks.flash, &mut hooks.unlocks) {

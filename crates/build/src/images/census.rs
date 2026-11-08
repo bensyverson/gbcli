@@ -55,6 +55,20 @@ pub(crate) fn tiles_where(pixels: &Pixels, hit: impl Fn(Rgba) -> bool) -> Vec<Ti
     found
 }
 
+/// The remedy's added sentence for a sheet drawn for GB Studio: no pixel is
+/// transparent, but some are its key green, which GB Studio draws as
+/// transparent and gbcli, keying nothing, draws as a color. The match is
+/// GB Studio's own (g > 249, r < 180, b < 20), so a slightly off green
+/// still counts.
+pub(crate) fn key_green_hint(pixels: &Pixels) -> Option<&'static str> {
+    let keyed = |p: &Rgba| p[1] > 249 && p[0] < 180 && p[2] < 20;
+    let opaque = pixels.rgba.iter().all(|p| p[3] != 0);
+    (opaque && pixels.rgba.iter().any(keyed)).then_some(
+        "; its green is GB Studio's transparent key #65ff00, which gbcli draws as a color: \
+         make those pixels alpha 0",
+    )
+}
+
 /// A problem with one image's palette: `colors` (most used first) is more
 /// than `max`, and the tiles holding the colors past `max` are the ones to
 /// redraw.

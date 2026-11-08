@@ -54,12 +54,6 @@ What: a `Core` accessor (and a stop-record or `read` field) for whether an MBC5 
 
 What: read SameBoy's HuC3 and TPP1 clock footers on `power-cycle --sav` without host time, as the MBC3 footer is read (`crates/sameboy-sys/shim/gbcli_battery.c`); today those carts' imports are refused as `unsupported` (`battery_save`), while export works. Why parked: neither is a must-have mapper (the cart research in the evaluation doc), and each footer is SameBoy's own struct, so the work is a parser per format. Un-park when: a homebrew project targets HuC3 or TPP1 and wants a save carried in from a file.
 
-## 2026-11-07 — CGB images
-
-> **Un-parked, 2026-11-07 (Ben):** a `--gbc` flag picks the target and dual mode is the goal. Research and a plan come first; see the job leaf "GBC images in dual mode".
-
-What: `build` converting images for a CGB target: rgbgfx `-m -a -p -N 256,256` (flip dedup, attribute map, palettes, both VRAM banks), the `cgb_palettes` check (8 BG + 8 OBJ palettes of 4, naming the tiles that force the ninth) and 768 VRAM tiles (research doc, Recommendations (a)). Why parked: `build` has no CGB target (rgbfix runs `-v -p 0xFF`, no `-C`), so nothing would choose these flags; the image leaf (WdnjHI) built the DMG checks. Un-park when the build gains a CGB switch, or an agent eval targets the CGB.
-
 ## 2026-11-07 — 8x8 objects and an engine-budget reserve for images
 
 What: sprite sheets of 8x8 objects (today `assets/sprites/` is 8x16 only, as the leaf specified), and a configurable reserve of tiles for an engine's font or HUD in the `vram_tiles` and `bg_tiles_map` checks. Why parked: both need a per-project setting, and `build` has no build file by design; neither has been asked for. Un-park when a user or the agent eval needs 8x8 sprites, or a starter grows a font that the image budget must leave room for (then decide where the setting lives: a directory such as `assets/sprites8/`, a name suffix, or a flag).
@@ -76,6 +70,32 @@ What: the objects-per-line check from OAM during a run ("frame 120, line 64: 12 
 **Why parked:** Ben chose one named palette per indexed image for Stage 10 (plan question 4, [2026-11-07-gbc-images-plan.md](2026-11-07-gbc-images-plan.md)). This is an addition to it, with nothing to migrate. LoadHigh assigns palettes per tile kind itself and doesn't need it. A per-tile palette PNG was considered and dropped in favor of this.
 
 **Un-park when:** a project (or the agent eval) needs a multi-palette background with named run-time swaps in plain gbcli, and writing the attribute map by hand is the stumble.
+
+> **Extended, 2026-11-07 (leaf YI5gQ6): this is the backlog's one entry for per-tile palette assignment in plain gbcli**, which Stage 10 left out (plan question 4: an indexed image takes one named palette). The other way weighed, a second, palette-index PNG per background, stays dropped (above). Until it lands, a program colors tiles differently by writing the attribute map itself, as LoadHigh does from tile kinds, or by drawing the background as color art, whose palettes are packed per tile but not named.
+
+## 2026-11-07 — GBC-only builds (`rgbfix -C`)
+
+**What:** a build for the GBC alone (header $C0), which a DMG refuses to run, and which is what the GBC-only features below need, since a dual ROM must still draw on a DMG.
+
+**Why parked:** Stage 10's goal is dual mode (Ben, 2026-11-07, plan question 7, [2026-11-07-gbc-images-plan.md](2026-11-07-gbc-images-plan.md)): one ROM for both machines. A GBC-only target means a second meaning for every image check (no DMG version, so no derived shades, no `.dmg.png`, no `dmg_palette` for color art) and a second starter path. `gbcli help rgbds` says `-C` isn't offered.
+
+**Un-park when:** a project wants GBC-only art or speed (double speed, HDMA, VRAM bank 1) and accepts losing the DMG, or a game's art can't fit dual mode's limits.
+
+## 2026-11-07 — VRAM bank 1 tiles and BG flips
+
+**What:** under the GBC, a background's tiles in both VRAM banks (768 tiles, not 384) and tiles deduplicated by X/Y flips, the bank and flip bits set in the attribute map (rgbgfx's `-m` and `-N 256,256`; [2026-11-07-asset-pipeline-research.md](2026-11-07-asset-pipeline-research.md), Recommendations (a)). This entry and the one above replace the CGB-images entry that Stage 10 un-parked.
+
+**Why parked:** in dual mode the one tilemap must draw on the DMG, whose map has no bank or flip bits and whose VRAM has one bank, so a tile kept only flipped, or only in bank 1, has no DMG version (plan, "Flips", and question 7). Sheets already flip on both machines, through OAM. So both features need a GBC-only build first.
+
+**Un-park when:** GBC-only builds land (the entry above), or a dual project runs out of `vram_tiles` or `bg_tiles_map` with art whose tiles are mirrors of each other.
+
+## 2026-11-07 — Per-scene palette budgets
+
+**What:** counting the GBC palettes resident at one time across the backgrounds and sheets a scene shows together, rather than per background (8 BG palettes) and across every sheet (8 OBJ palettes) as `gbc_palettes` does now.
+
+**Why parked:** gbcli can't see scenes: which images are on screen together is the program's choice, and the build has no file to say it (plan question 5: the build counts what it places, the program owns the rest, and palettes loaded only for swaps aren't counted). LoadHigh, which knows its scenes, counts its own. The cost: a program can load more palettes than a scene has slots for, or swap one into a slot another image still uses, and no check says so.
+
+**Un-park when:** plain gbcli gains a notion of a scene (a manifest or a build file), or an agent ships a scene whose palettes overflow and no check caught it.
 
 ## 2026-11-07 — `equiv --after N`: compare only from frame N
 

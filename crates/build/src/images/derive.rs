@@ -160,7 +160,9 @@ fn four_shades(
     );
     let remedy = format!(
         "draw the DMG version yourself as {dmg}, the same size, in at most 3 shades plus \
-         transparency; or recolor the sheet so its colors fall to 3 shades (gbcli help images)"
+         transparency; or recolor the sheet so its colors fall to 3 shades (gbcli help \
+         images){}",
+        super::census::key_green_hint(pixels).unwrap_or("")
     );
     Some(ImageProblem {
         tiles,

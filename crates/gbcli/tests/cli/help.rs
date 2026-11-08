@@ -14,6 +14,7 @@ fn help_works_with_no_preconditions_and_leaves_no_trace() {
         &["help", "watch"],
         &["help", "time"],
         &["help", "rgbds"],
+        &["help", "images"],
         &["build", "--help"],
         &["assets", "--help"],
         &["version", "--help"],

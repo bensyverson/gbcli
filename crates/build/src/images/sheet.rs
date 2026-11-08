@@ -107,6 +107,9 @@ pub(crate) fn check(
     if let Some(p) = census::alpha(image, pixels, true) {
         return Err(vec![p]);
     }
+    // The colors as drawn: the color image's under `--gbc`, whose DMG
+    // version is grays.
+    let key_green = census::key_green_hint(color.unwrap_or(pixels)).unwrap_or("");
     let colors = census::colors(pixels);
     if colors.len() > OBJ_SHADES {
         return Err(vec![census::too_many_colors(
@@ -115,8 +118,10 @@ pub(crate) fn check(
             &colors,
             OBJ_SHADES,
             "an object palette has 3 shades plus transparent",
-            "redraw it in at most 3 colors plus transparency, or split it into two sheets \
-             (each object picks OBP0 or OBP1)",
+            &format!(
+                "redraw it in at most 3 colors plus transparency, or split it into two sheets \
+                 (each object picks OBP0 or OBP1){key_green}"
+            ),
         )]);
     }
     let mut warnings = Vec::new();
@@ -132,7 +137,10 @@ pub(crate) fn check(
                     "{image} has no transparent pixel, so every object draws as a solid 8x16 \
                      block"
                 ),
-                "make the background transparent (alpha 0); color 0 of an object never draws",
+                &format!(
+                    "make the background transparent (alpha 0); color 0 of an object never \
+                     draws{key_green}"
+                ),
             )
         });
     }

@@ -77,3 +77,27 @@ Found by the main thread while checking: `gbcli gaps --help` said "needs a sessi
 | 6 | A zsh variable holding a command didn't split; macOS `sed -i`. | my-mistake, environment | none |
 
 **Gap ledger:** `gbcli gaps` printed `none` over five sessions.
+
+## Run 4 (binary at b486fc9)
+
+**Result:** all four parts done in about 25 gbcli calls (16 tool calls, 1.6 min).
+1. **Sprite:** RIGHT and DOWN held for 30 frames moved it +30/+30.
+2. **Sound:** `--audio-log` showed NR10-NR14 at the A press.
+3. **Cycles:** `measure VBlank..MainLoop.wait --at start --iterations 60 --keys 'RIGHT@0'` fell from 5,476 T to 1,376 T, a cut of 75%. `equiv build/fast.gb --session base --frames 600 --keys '…' --ram wShadowOAM` exited 0.
+4. **Background:** a checkerboard PNG built to 4 tiles, drawn behind the sprite.
+
+`help optimize` and `recipes` were "accurate and runnable as written", and `--out` kept the baseline intact. The agent tagged no stumble gbcli-error or gbcli-bug.
+
+**Stumbles** (all minor; fixes by agents eval-fix4 and the YI5gQ6 help leaf):
+
+| # | Stumble | Tag | Fix |
+|---|---|---|---|
+| 1 | BSD `sed` and `\n`. | my-mistake | none |
+| 2 | Not stated that an image's tile indices count from where its tiles are loaded, so hand-loaded tiles go after `<NAME>_TILES`. | docs | a line in `help images` (YI5gQ6) |
+| 3 | The starter's music driver plays on the channels a sound effect uses; the agent removed it by guess. | docs | a note in the starter and the music help |
+| 4 | `--frame-budget` printed 60 near-identical rows by default; the summary was already on its first row. Run 3 said the same. | verb | per-frame rows opt-in |
+| 5 | `equiv` success prints only `equiv frames=600`, not what was compared. | docs | the row names what it compared |
+| 6 | What `VBlank..MainLoop.wait` spans wasn't obvious. | docs | `help optimize` says it |
+| 7 | The spectrogram's axes aren't labeled. | docs | the help names the axes and the scale |
+
+**Gap ledger:** `none` (sessions `base` and `fast`).

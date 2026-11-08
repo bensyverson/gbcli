@@ -307,6 +307,9 @@ mod tests {
             SharedShade,
             PaletteFile,
             ShadeStretched,
+            GbcPalettes,
+            GbcTileColors,
+            DmgOverrideSize,
         ] {
             assert!(text.contains(limit.name()), "{} missing", limit.name());
         }
@@ -349,6 +352,45 @@ mod tests {
             ".preview.png",
         ] {
             assert!(text.contains(needle), "{needle} missing");
+        }
+        assert!(text.lines().all(|l| l.chars().count() <= 80), "{text}");
+    }
+
+    /// The GBC section (leaf YI5gQ6): the two kinds of art, the override,
+    /// every GBC label, where GBCLI_GBC comes from, a palette swap, and one
+    /// ROM verified in a session per model.
+    #[test]
+    fn the_images_topic_carries_the_gbc_convention_labels_and_recipes() {
+        let text = Topic::from_name("images").expect("an images topic").text();
+        for needle in [
+            "build --gbc",
+            "dual mode",
+            "color art",
+            "indexed art",
+            "town.dmg.png",
+            "TownTilesGbc",
+            "TownAttrmap",
+            "TownPalettes",
+            "HeroTilesGbc",
+            "ObjPalettesGbc",
+            "PaletteForest",
+            "FontAttrs",
+            "rgbasm -D GBCLI_GBC=1",
+            "IF DEF(GBCLI_GBC)",
+            // A palette swap: the named palette into palette RAM.
+            "rBCPS",
+            "PaletteEmber",
+            // One ROM, two sessions (restore refuses a model change).
+            "--model dmg",
+            "--model gbc",
+            // Agent eval run 4: tile indices count from the image's own
+            // first tile, so a program loading tiles at a base offsets them.
+            "own first tile",
+            "_TILES",
+            // GB Studio's key green, named, never keyed.
+            "#65ff00",
+        ] {
+            assert!(text.contains(needle), "{needle} missing:\n{text}");
         }
         assert!(text.lines().all(|l| l.chars().count() <= 80), "{text}");
     }

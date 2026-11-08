@@ -7,6 +7,7 @@
 //! protocol's [`ErrorBody`](gbcli_protocol::ErrorBody), so the CLI only
 //! wires and prints.
 
+mod assets;
 mod diagnostics;
 mod doctor;
 mod images;
@@ -16,12 +17,13 @@ mod project;
 mod scaffold;
 mod toolchain;
 
+pub use assets::{AssetsError, AssetsInput, AssetsOptions, assets};
 pub use diagnostics::parse as parse_diagnostics;
 pub use doctor::{BOOT_ROM_SIZES, DoctorInput, GIT_LOCAL_ENV_VARS, doctor};
 pub use music::{MUSIC_DIR, MUSIC_OUT, song_problem};
 pub use project::{BuildError, BuildOptions, TOOL_TIMEOUT, build};
 pub use scaffold::{HARDWARE_INC, HUGEDRIVER, NewError, new_project};
 pub use toolchain::{
-    INSTALL_COMMAND, PinMatch, RGBDS_PIN, ToolFound, ToolProblem, Toolchain, ToolchainError,
-    Version, install_remedy, probe, release_url,
+    INSTALL_COMMAND, ImageTool, PinMatch, RGBDS_PIN, ToolFound, ToolProblem, Toolchain,
+    ToolchainError, Version, install_remedy, probe, release_url,
 };

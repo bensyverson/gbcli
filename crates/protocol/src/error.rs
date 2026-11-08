@@ -41,8 +41,9 @@ pub enum ErrorCode {
     SymbolsUnreadable,
     /// The session's own files (`session.json`) don't parse.
     SessionUnreadable,
-    /// RGBDS refused the sources, or a step wrote no output (DX 10); the
-    /// diagnostics are in the error's `result`.
+    /// RGBDS refused the sources, a step wrote no output (DX 10), or an
+    /// image broke a limit (in a build, or in `assets`, which has no code
+    /// of its own); the report is in the error's `result`.
     BuildFailed,
     /// A song file (`.uge` or song text) is missing or malformed; the problem,
     /// located to a line and column or a byte offset, is in the error's `result`.

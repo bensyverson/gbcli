@@ -258,7 +258,7 @@ fn is_label(name: &str) -> bool {
 /// `<kind dir>/<file>.png` (any case of `png`), as the build names the
 /// images it finds: one directory of an [`ImageKind`], one file, `/`
 /// between, nothing that steps out or round about.
-fn is_image_path(path: &str) -> bool {
+pub(crate) fn is_image_path(path: &str) -> bool {
     let Some((dir, file)) = path.split_once('/') else {
         return false;
     };

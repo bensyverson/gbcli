@@ -232,6 +232,10 @@ RGBDS — the loop: edit, build, restore, measure, with RGBDS from PATH.
                                isn't offered. A session runs it on the DMG
                                unless made with --model gbc (a GBC in CGB
                                mode), so check a dual ROM in two sessions
+  gbcli assets game --json     the images alone, converted as build would,
+                               with rgbgfx alone and nothing written: tile
+                               maps and palettes; --manifest FILE instead
+                               of a project (gbcli help images)
   The loop, from inside game/:
     gbcli run build/game.gb --session game --frames 60 --checkpoint start
     (edit src/)

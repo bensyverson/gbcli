@@ -11,7 +11,7 @@ use crate::common::{Project, golden};
 /// The directory holding the pinned rgbasm (and, by the install, rgblink and
 /// rgbfix): the only `PATH` the loop is given, so nothing else on this
 /// machine can be what makes it work.
-fn rgbds_dir() -> String {
+pub(crate) fn rgbds_dir() -> String {
     let found = std::env::var_os("PATH").and_then(|path| {
         std::env::split_paths(&path)
             .map(|dir| dir.join("rgbasm"))

@@ -1,8 +1,9 @@
-//! `doctor`, `new`, `build`, `opcode` and `version`: argv to the protocol's
-//! ops, which the server answers (design §12), so `serve` and `batch` build
-//! exactly as the CLI does. Only what argv alone can say is checked here.
+//! `doctor`, `new`, `build`, `assets`, `opcode` and `version`: argv to the
+//! protocol's ops, which the server answers (design §12), so `serve` and
+//! `batch` build exactly as the CLI does. Only what argv alone can say is
+//! checked here.
 
-use gbcli_protocol::{BuildArgs, BuildTarget, NewArgs, Op, OpcodeArgs};
+use gbcli_protocol::{AssetManifest, AssetsArgs, BuildArgs, BuildTarget, NewArgs, Op, OpcodeArgs};
 
 use crate::Env;
 use crate::argv::Invocation;
@@ -43,6 +44,41 @@ pub fn build(inv: &Invocation, env: &Env) -> Result<Command, Usage> {
         }
     }
     Ok(request(target, Op::Build(args)))
+}
+
+/// `assets`: the manifest file, read and parsed here, rides in the op as
+/// the wire's struct, so a `serve` client sends what the CLI sends.
+pub fn assets(inv: &Invocation, env: &Env) -> Result<Command, Usage> {
+    let manifest = match inv.one("manifest") {
+        Some(file) => Some(manifest(file, env)?),
+        None => None,
+    };
+    let args = AssetsArgs {
+        dir: inv.positionals.first().cloned(),
+        manifest,
+        target: if inv.has("gbc") {
+            BuildTarget::Gbc
+        } else {
+            BuildTarget::Dmg
+        },
+        keep: inv.one("keep").map(str::to_string),
+    };
+    Ok(request(only_json(inv), Op::Assets(args)))
+}
+
+fn manifest(file: &str, env: &Env) -> Result<AssetManifest, Usage> {
+    let text = std::fs::read_to_string(env.cwd.join(file)).map_err(|e| {
+        Usage::new(
+            format!("the manifest {file} can't be read: {e}"),
+            "pass a JSON file naming the images (`gbcli schema`, `manifest`)",
+        )
+    })?;
+    serde_json::from_str(&text).map_err(|e| {
+        Usage::new(
+            format!("the manifest {file} doesn't read: {e}"),
+            "fix it to the shape `gbcli schema` gives for `manifest`",
+        )
+    })
 }
 
 pub fn new(inv: &Invocation) -> Command {

@@ -27,7 +27,8 @@ use crate::project::tool;
 /// One run's context: where, with what, and what it reported.
 pub(crate) struct Rgbgfx<'a> {
     pub path: &'a Path,
-    pub project: &'a Path,
+    /// The working directory, which the data's paths are relative to.
+    pub root: &'a Path,
     pub timeout: Duration,
     pub diagnostics: Vec<Diagnostic>,
     /// Conversions that disagree with gbcli's plan (`agree`).
@@ -41,10 +42,12 @@ pub(crate) struct BgData {
 }
 
 impl Rgbgfx<'_> {
-    /// Converts a background and keeps the plan's unique tiles, each from
-    /// its first cell, and writes them and the plan's map: `out` is the
-    /// data's path without extension, relative to the project. `None` when
-    /// rgbgfx failed (its diagnostics say why) or disagreed.
+    /// Converts a background (or a tileset) and keeps the plan's unique
+    /// tiles, each from its first cell, and writes them: `out` is the
+    /// data's path without extension, relative to `root`. The plan's map
+    /// comes back for the caller to write, since a tileset has none of its
+    /// own. `None` when rgbgfx failed (its diagnostics say why) or
+    /// disagreed.
     pub fn background(
         &mut self,
         image: &str,
@@ -56,7 +59,7 @@ impl Rgbgfx<'_> {
         let args = ["-c", &plan.spec, "-o", &raw_path];
         let ran = self.run(image, &args, source)?;
         let raw = ran.then(|| self.read(&raw_path)).transpose();
-        let _ = fs::remove_file(self.project.join(&raw_path));
+        let _ = fs::remove_file(self.root.join(&raw_path));
         let Some(raw) = raw? else {
             return Ok(None);
         };
@@ -102,7 +105,6 @@ impl Rgbgfx<'_> {
             .collect();
         let map: Vec<u8> = plan.cells.iter().map(|&u| u as u8).collect();
         self.write(&format!("{out}.2bpp"), &tiles)?;
-        self.write(&format!("{out}.tilemap"), &map)?;
         Ok(Some(BgData { tiles, map }))
     }
 
@@ -124,7 +126,7 @@ impl Rgbgfx<'_> {
             return Ok(None);
         }
         let raw = self.read(&all)?;
-        let _ = fs::remove_file(self.project.join(&all));
+        let _ = fs::remove_file(self.root.join(&all));
         let rows = plan.height as usize;
         if raw.len() != plan.width as usize * rows * 16 {
             self.error(
@@ -172,7 +174,7 @@ impl Rgbgfx<'_> {
         let mut all: Vec<String> = vec!["--color".into(), "never".into()];
         all.extend(args.iter().map(|a| a.to_string()));
         all.push(source.display().to_string());
-        let ran = tool::run(self.path, &all, self.project, self.timeout).map_err(|error| {
+        let ran = tool::run(self.path, &all, self.root, self.timeout).map_err(|error| {
             BuildError::Io {
                 path: self.path.to_path_buf(),
                 error,
@@ -209,12 +211,12 @@ impl Rgbgfx<'_> {
     }
 
     fn write(&self, rel: &str, data: &[u8]) -> Result<(), BuildError> {
-        let path = self.project.join(rel);
+        let path = self.root.join(rel);
         fs::write(&path, data).map_err(|error| BuildError::Io { path, error })
     }
 
     pub(super) fn read(&self, rel: &str) -> Result<Vec<u8>, BuildError> {
-        let path = self.project.join(rel);
+        let path = self.root.join(rel);
         fs::read(&path).map_err(|error| BuildError::Io { path, error })
     }
 

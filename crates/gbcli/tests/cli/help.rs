@@ -15,6 +15,7 @@ fn help_works_with_no_preconditions_and_leaves_no_trace() {
         &["help", "time"],
         &["help", "rgbds"],
         &["build", "--help"],
+        &["assets", "--help"],
         &["version", "--help"],
     ] {
         let run = p.gbcli(args);

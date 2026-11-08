@@ -48,7 +48,7 @@ The worktree guard refused plain commands that only *mentioned* a path under `/U
 
 ## 2026-11-07 — the worktree guard reads a file named `SOURCE` as the shell's `source`
 
-In an isolated worktree, `cat crates/engine/data/gb-opcodes/SOURCE` was refused ("runs a string through SOURCE, which can't be verified"), as was a heredoc piped into a command next to `cargo`. Read such files with the Read tool, and keep each Bash call to one plain command (leaf 7qzbqc).
+In an isolated worktree, `cat crates/engine/data/gb-opcodes/SOURCE` was refused ("runs a string through SOURCE, which can't be verified"), as was a heredoc piped into a command next to `cargo`. Read such files with the Read tool, and keep each Bash call to one plain command (leaf 7qzbqc). A Python heredoc whose body held Rust's `source(` was refused the same way ("too complex to verify"); edit with the Edit tool, or run a script file with `python3 -I` (leaf 7gGMeZ).
 
 ## 2026-11-07 — the hook's suite time is noise under low-power mode or parallel agents
 

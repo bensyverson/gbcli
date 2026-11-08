@@ -44,6 +44,15 @@ pub(crate) enum Entry<'a> {
         plan: &'a SheetPlan,
         gbc: Option<Gbc<'a>>,
     },
+    /// A tileset: its unique tiles, and no map.
+    Tiles {
+        source: &'a str,
+        label: &'a str,
+        constant: &'a str,
+        data: &'a str,
+        tiles: u32,
+        gbc: Option<Gbc<'a>>,
+    },
 }
 
 /// Every symbol an image of `kind` may define, from its label and constant
@@ -66,7 +75,16 @@ pub(crate) fn symbols(kind: ImageKind, label: &str, constant: &str) -> Vec<Strin
             "PalettesEnd",
         ],
         ImageKind::Sprites => &["Tiles", "TilesEnd", "Frames", "TilesGbc", "TilesGbcEnd"],
-        ImageKind::Tiles => unreachable!("find yields no tileset: assets/tiles/ isn't read yet"),
+        ImageKind::Tiles => &[
+            "Tiles",
+            "TilesEnd",
+            "TilesGbc",
+            "TilesGbcEnd",
+            "Attrs",
+            "AttrsEnd",
+            "Palettes",
+            "PalettesEnd",
+        ],
     };
     let labels = labels.iter().map(|s| format!("{label}{s}"));
     labels.chain(constants(kind, constant, true)).collect()
@@ -87,7 +105,7 @@ fn constants(kind: ImageKind, constant: &str, gbc: bool) -> Vec<String> {
             &["TILES", "FRAMES", "FRAME_WIDTH", "FRAME_HEIGHT", "OBP"],
             &[],
         ),
-        ImageKind::Tiles => unreachable!("find yields no tileset: assets/tiles/ isn't read yet"),
+        ImageKind::Tiles => (&["TILES"], &["PALETTES"]),
     };
     let more = if gbc { more } else { &[] };
     dmg.iter()
@@ -104,6 +122,9 @@ fn exported(entries: &[Entry], shared: &Shared) -> Vec<String> {
             Entry::Bg { constant, gbc, .. } => constants(ImageKind::Bg, constant, gbc.is_some()),
             Entry::Sheet { constant, gbc, .. } => {
                 constants(ImageKind::Sprites, constant, gbc.is_some())
+            }
+            Entry::Tiles { constant, gbc, .. } => {
+                constants(ImageKind::Tiles, constant, gbc.is_some())
             }
         })
         .collect();
@@ -183,6 +204,20 @@ pub(crate) fn asm(entries: &[Entry], shared: &Shared) -> String {
                     }
                 }
             }
+            Entry::Tiles {
+                source,
+                label,
+                data,
+                ..
+            } => {
+                let _ = write!(
+                    out,
+                    "\nSECTION \"image {label}\", ROMX\n\n\
+                     ; {source}: unique tiles, in order of first use; no map (the program\n\
+                     ; builds its own, from the tile map gbcli reports).\n\
+                     {label}Tiles::\n\tINCBIN \"{data}.2bpp\"\n{label}TilesEnd::\n"
+                );
+            }
         }
         gbc::image(&mut out, e);
     }
@@ -203,11 +238,12 @@ fn object(o: &Object, slot: u8) -> String {
 pub(crate) fn inc(entries: &[Entry], shared: &Shared) -> String {
     let mut out = String::from(HEADER);
     out += "; Labels (in images.asm, exported): <Name>Tiles/<Name>TilesEnd, and\n\
-            ; <Name>Tilemap/<Name>TilemapEnd for a background or <Name>Frames for a sheet;\n\
-            ; Palette<Name>/Palette<Name>End for each palette of assets/palettes.txt. With\n\
-            ; --gbc (GBCLI_GBC): <Name>TilesGbc/End (color art; indexed art uses <Name>Tiles),\n\
-            ; <Name>Attrmap/End and <Name>Palettes/End for a background, and\n\
-            ; ObjPalettesGbc/ObjPalettesGbcEnd for every sheet.\n\
+            ; <Name>Tilemap/<Name>TilemapEnd for a background or <Name>Frames for a sheet\n\
+            ; (a tileset has no map); Palette<Name>/Palette<Name>End for each palette of\n\
+            ; assets/palettes.txt. With --gbc (GBCLI_GBC): <Name>TilesGbc/End (color art;\n\
+            ; indexed art uses <Name>Tiles), <Name>Attrmap/End (a background) or\n\
+            ; <Name>Attrs/End (a tileset: a byte per tile), <Name>Palettes/End for both,\n\
+            ; and ObjPalettesGbc/ObjPalettesGbcEnd for every sheet.\n\
             \nIF !DEF(GBCLI_IMAGES_INC)\nDEF GBCLI_IMAGES_INC EQU 1\n";
     for e in entries {
         match e {
@@ -254,6 +290,18 @@ pub(crate) fn inc(entries: &[Entry], shared: &Shared) -> String {
                     obp & 3,
                 );
             }
+            Entry::Tiles {
+                source,
+                constant: c,
+                tiles,
+                ..
+            } => {
+                let _ = write!(
+                    out,
+                    "\n; {source}: a tileset, no map.\n\
+                     DEF {c}_TILES EQU {tiles} ; unique tiles, 16 bytes each\n"
+                );
+            }
         }
         for c in gbc::image_constants(e) {
             let _ = writeln!(out, "DEF {} EQU {} ; {}", c.name, c.value, c.comment);
@@ -271,85 +319,4 @@ pub(crate) fn inc(entries: &[Entry], shared: &Shared) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use gbcli_protocol::Flip;
-
-    /// The symbols the generated files define: exported labels in the
-    /// assembly, constants in the include.
-    fn defined(asm: &str, inc: &str) -> Vec<String> {
-        let labels = asm.lines().filter_map(|l| l.strip_suffix("::"));
-        let constants = inc
-            .lines()
-            .filter_map(|l| l.strip_prefix("DEF ")?.split_once(" EQU"))
-            .map(|(name, _)| name)
-            .filter(|&name| name != "GBCLI_IMAGES_INC");
-        let mut all: Vec<String> = labels.chain(constants).map(str::to_string).collect();
-        all.sort();
-        all
-    }
-
-    /// With a GBC version, every symbol `symbols` reserves is defined.
-    #[test]
-    fn symbols_lists_what_each_kind_defines_but_frame_labels() {
-        let palettes = [gbcli_protocol::GbcPalette(
-            [gbcli_protocol::Rgb555::WHITE; 4],
-        )];
-        let plan = SheetPlan {
-            spec: String::new(),
-            merges: Vec::new(),
-            obp: 0,
-            width: 1,
-            height: 2,
-            frame: (8, 16),
-            kept: vec![(0, 0)],
-            drawn: vec![vec![0; 128]],
-            uses: vec![2],
-            frames: vec![Vec::new(), Vec::new()],
-            units: vec![Some((0, Flip::None))],
-            warnings: Vec::new(),
-        };
-        let entries = [
-            Entry::Bg {
-                source: "town.png",
-                label: "Town",
-                constant: "TOWN",
-                data: "town",
-                width: 1,
-                height: 1,
-                tiles: 1,
-                gbc: Some(Gbc {
-                    tiles: true,
-                    palettes: &palettes,
-                    slots: Vec::new(),
-                }),
-            },
-            Entry::Sheet {
-                source: "hero.png",
-                label: "Hero",
-                constant: "HERO",
-                data: "hero",
-                plan: &plan,
-                gbc: Some(Gbc {
-                    tiles: true,
-                    palettes: &[],
-                    slots: vec![0],
-                }),
-            },
-        ];
-        let shared = Shared {
-            gbc: None,
-            named: &[],
-        };
-        let mut listed: Vec<String> = symbols(ImageKind::Bg, "Town", "TOWN")
-            .into_iter()
-            .chain(symbols(ImageKind::Sprites, "Hero", "HERO"))
-            .chain(["HeroFrame0".into(), "HeroFrame1".into()])
-            .collect();
-        listed.sort();
-        assert_eq!(
-            defined(&asm(&entries, &shared), &inc(&entries, &shared)),
-            listed
-        );
-    }
-}
+mod tests;

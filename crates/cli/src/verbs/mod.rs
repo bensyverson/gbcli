@@ -66,7 +66,8 @@ impl Class {
             }
             Class::Build => {
                 "runs RGBDS from PATH, checked against the pinned version (`gbcli doctor`); \
-                 a session only to reload the build into; `new` and `song` need neither"
+                 a session only to reload the build into; `new` and `song` need neither, \
+                 and `assets` only rgbgfx"
             }
             Class::Server => "speaks the JSON Lines protocol; a session is optional",
             Class::Help => "no preconditions: works with no session, no ROM and no network",
@@ -103,6 +104,7 @@ pub enum Verb {
     Delete,
     New,
     Build,
+    Assets,
     Song,
     Serve,
     Batch,

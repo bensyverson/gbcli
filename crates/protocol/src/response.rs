@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::assets::AssetsMade;
 use crate::audio::AudioMade;
 use crate::battery::{FlashNoteRow, PowerCycleMade, SavMade};
 use crate::checkpoint::{Location, WatchAccess};
@@ -208,6 +209,9 @@ pub struct ResultBody {
     /// `build`: what it assembled, wrote and reported.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub build: Option<BuildMade>,
+    /// `assets`: the images converted, as a build records them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assets: Option<AssetsMade>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub doctor: Option<DoctorMade>,
     /// `new`: the project it scaffolded.

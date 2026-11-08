@@ -2,6 +2,7 @@
 //! One binary links once and starts once; a test that needs a process of its
 //! own is a file beside this directory instead, saying why.
 
+mod assets;
 mod build;
 mod build_env;
 mod build_safety;
@@ -20,6 +21,7 @@ mod images_png_encodings;
 mod images_shade_edges;
 mod images_shades;
 mod images_sprites;
+mod images_tiles;
 mod music;
 mod music_equiv;
 mod music_regressions;

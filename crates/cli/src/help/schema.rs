@@ -54,13 +54,20 @@ rm      name: NAME  with_checkpoints?: bool
 build   dir?: PATH  src?: [PATH]  include?: [PATH]  out?: PATH
         target?: "dmg"|"gbc"  ("gbc": dual mode, rgbfix -c; default "dmg")
         restore?: CHECKPOINT  (into session, whose ROM must be the build's)
+assets  dir?: PATH | manifest?: MANIFEST  target?: "dmg"|"gbc"  keep?: PATH
+        (images converted as build converts them, with rgbgfx alone; keep
+        keeps the data and previews, else nothing is written; result.assets:
+        {target, images: as result.build.images, diagnostics})
+        MANIFEST = {images: [{image: IMAGE, file: PATH, dmg?: PATH}],
+                    palettes?: NAMED}  (IMAGE as in assets/, each once;
+                    NAMED as below, assigning only listed images)
 doctor  —
 new     dir: PATH
 opcode  query: TEXT  ("$20", "$CB37", "jr nz, .loop", "ld a, [hl+]")
 version —   (result.version: {gbcli: "0.1.0", protocol: N, sameboy: COMMIT,
         patch_set: HASH}; check protocol before relying on the rest)
-        (build, doctor, new, opcode and version need no session; paths are
-        relative to the server's working directory)
+        (build, assets, doctor, new, opcode and version need no session;
+        paths are relative to the server's working directory)
 power_cycle  sav?: PATH  rtc_advance?: "45s"|"30m"|"12h"|"7d"
         (a new head at power-on, keeping the cart's battery RAM and clock;
         rtc_advance at most "1024d" on MBC3, "3584d" on TPP1, "65536d" on HuC3;
@@ -77,7 +84,8 @@ result holds only the fields the op fills: stop, reads, shot, measure, profile,
 frame_budget, raster, equiv, view, symbols,
 checkpoints, keys_unapplied, writes, checkpoint, restored, breakpoint, watch,
 deleted, registers, ppu, sessions, events, gaps, pruned, kept, busy, removed,
-build, doctor, created, song, song_problem, opcodes, version, power_cycle, sav,
+build, assets, doctor, created, song, song_problem, opcodes, version,
+power_cycle, sav,
 flash_notes (run, step: each flash note, also a warning; a failed run's or
 step's are on its error).
 `gbcli VERB --json` prints the whole response line, as serve writes it.
@@ -153,6 +161,7 @@ Examples:
   {"id":"31","op":"power_cycle","args":{"sav":"game.sav","rtc_advance":"8h"}}
   {"id":"32","op":"sav","args":{"path":"game.sav"}}
   {"id":"33","op":"version"}
+  {"id":"34","op":"assets","args":{"manifest":{"images":[{"image":"tiles/font.png","file":"art/font.png"}]},"target":"gbc"}}
 "#;
 
 #[cfg(test)]
@@ -174,7 +183,7 @@ mod tests {
         }
         ops.sort();
         ops.dedup();
-        assert_eq!(ops.len(), 29, "one example per op: {ops:?}");
+        assert_eq!(ops.len(), 30, "one example per op: {ops:?}");
     }
 
     /// A client checks the protocol version before relying on the rest.

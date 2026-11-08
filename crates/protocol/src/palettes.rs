@@ -11,8 +11,8 @@ use serde::{Deserialize, Serialize};
 
 mod rules;
 
-pub(crate) use rules::names_a_palette;
 pub use rules::{FaultAt, PaletteFault};
+pub(crate) use rules::{is_image_path, names_a_palette};
 
 /// A color as the GBC stores it: five bits each of red, green and blue in
 /// one little-endian word, red in bits 0-4, green in 5-9 and blue in 10-14,

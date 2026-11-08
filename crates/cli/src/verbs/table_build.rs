@@ -1,4 +1,4 @@
-//! The RGBDS loop: `new` and `build`, and `doctor` (a help verb).
+//! The RGBDS loop: `new`, `build` and `assets`, and `doctor` (a help verb).
 
 use super::flags::{ALLOW_ROM_CHANGE, CHANGE, JSON, OUTPUT, SESSION_FLAG, repeated, switch, value};
 use super::{Arity, Class, FlagSpec, Verb, VerbSpec};
@@ -93,6 +93,54 @@ pub const BUILD_VERB: VerbSpec = VerbSpec {
         "gbcli build --session game --restore start",
         "rebuilds the project here, then restores checkpoint start of session game into the \
          new ROM",
+    ),
+};
+
+/// `assets`' own flags: what to convert, for which machine, and where to
+/// keep it.
+const ASSETS: &[FlagSpec] = &[
+    value(
+        "manifest",
+        "FILE",
+        "convert the images a JSON file names (`gbcli schema`, manifest) instead of a project's \
+         assets/",
+    ),
+    switch(
+        "gbc",
+        "convert for the GBC in dual mode, as `build --gbc` does: each image's GBC version too",
+    ),
+    value(
+        "keep",
+        "DIR",
+        "keep the data and previews in DIR, laid out as build/images/ (default: nothing is kept)",
+    ),
+];
+
+pub const ASSETS_VERB: VerbSpec = VerbSpec {
+    verb: Verb::Assets,
+    name: "assets",
+    class: Class::Build,
+    summary: "convert a project's or a manifest's images without building: tile maps, palettes",
+    usage: "[DIR] [--manifest FILE] [--gbc] [--keep DIR] [--json]",
+    arity: Arity {
+        min: 0,
+        max: Some(1),
+        name: "DIR",
+    },
+    flags: ASSETS,
+    groups: &[JSON_ONLY],
+    about: "Converts the PNGs under DIR's assets/ (default: here), or the images a manifest \
+            names, exactly as `gbcli build` would, with rgbgfx alone: no rgbasm, no rgblink, \
+            no session. Prints the `image`, `problem` and `images` rows a build prints; --json \
+            gives each image's tile_map (tile, flip and GBC palette per source tile) and \
+            palettes. Nothing is written unless --keep names a directory; images.asm and \
+            images.inc are a build's. A problem fails with build_failed (exit 4), its rows \
+            printed. A manifest names each image as its path under assets/ in a project \
+            (`tiles/font.png`), the file to read, and the palettes palettes.txt would hold.",
+    example: (
+        "gbcli assets --manifest font.json --gbc --json",
+        "converts the images font.json names for the GBC and prints each one's tile map and \
+         palettes, writing nothing",
     ),
 };
 

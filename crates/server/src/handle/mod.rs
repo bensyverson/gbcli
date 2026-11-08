@@ -2,6 +2,7 @@
 //! save the head atomically, log. The handler keeps the machine warm between
 //! requests and reloads it when another writer moved the session's head.
 
+mod assets;
 mod battery;
 mod build;
 mod bundle_ops;
@@ -250,6 +251,7 @@ impl Handler {
             | Op::Build(_)
             | Op::Doctor
             | Op::New(_)
+            | Op::Assets(_)
             | Op::Opcode(_)
             | Op::Version => Err(Failure::new(ErrorBody::new(
                 ErrorCode::BadRequest,

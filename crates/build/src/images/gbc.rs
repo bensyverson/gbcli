@@ -155,7 +155,7 @@ fn convert(
     let ran = rgbgfx.run(image, &args, source)?;
     let read = |rel: &str| {
         let read = ran.then(|| rgbgfx.read(rel)).transpose();
-        let _ = fs::remove_file(rgbgfx.project.join(rel));
+        let _ = fs::remove_file(rgbgfx.root.join(rel));
         read
     };
     let (Some(tiles), Some(attrs)) = (read(&tiles)?, read(&attrs)?) else {

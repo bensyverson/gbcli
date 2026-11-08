@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::assets::AssetsArgs;
 use crate::audio::AudioArgs;
 use crate::battery::{PowerCycleArgs, SavArgs};
 use crate::checkpoint::WatchAccess;
@@ -72,6 +73,9 @@ pub enum Op {
     Build(BuildArgs),
     Doctor,
     New(NewArgs),
+    /// A project's or a manifest's images converted as a build converts
+    /// them, without assembling; needs no session.
+    Assets(AssetsArgs),
     /// An instruction's size, cycles and flags; needs no session.
     Opcode(OpcodeArgs),
     /// Battery saves (design §6): power-on again keeping the battery, and
@@ -112,6 +116,7 @@ impl Op {
             Op::Build(_) => "build",
             Op::Doctor => "doctor",
             Op::New(_) => "new",
+            Op::Assets(_) => "assets",
             Op::Opcode(_) => "opcode",
             Op::PowerCycle(_) => "power_cycle",
             Op::Sav(_) => "sav",
@@ -136,11 +141,11 @@ impl Op {
     }
 
     /// Whether answering it needs the project's bundle: every op but
-    /// `doctor`, `new`, `opcode`, `version` and a `build` that restores
-    /// nothing, which a client with no `.gbcli/` yet can still send.
+    /// `doctor`, `new`, `assets`, `opcode`, `version` and a `build` that
+    /// restores nothing, which a client with no `.gbcli/` yet can still send.
     pub fn needs_bundle(&self) -> bool {
         match self {
-            Op::Doctor | Op::New(_) | Op::Opcode(_) | Op::Version => false,
+            Op::Doctor | Op::New(_) | Op::Assets(_) | Op::Opcode(_) | Op::Version => false,
             Op::Build(args) => args.restore.is_some(),
             _ => true,
         }

@@ -87,6 +87,7 @@ pub fn build(inv: Invocation, env: &Env) -> Result<Command, Usage> {
         Verb::Opcode => return Ok(crate::rgbds::opcode(&inv)),
         Verb::New => return Ok(crate::rgbds::new(&inv)),
         Verb::Build => return crate::rgbds::build(&inv, env),
+        Verb::Assets => return crate::rgbds::assets(&inv, env),
         Verb::Song => return Ok(crate::song::command(&inv, env)),
         Verb::Serve => return Ok(Command::Serve(target(&inv, env, None)?)),
         Verb::Batch => {

@@ -7,7 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use gbcli_protocol::{
-    GbcImage, GbcPalette, ImageArt, ImageAsset, ImageProblem, PaletteSlot, TileEntry,
+    GbcImage, GbcPalette, ImageArt, ImageAsset, ImageKind, ImageProblem, PaletteSlot, TileEntry,
 };
 
 use super::gbc::{self, Joint, Palettes};
@@ -16,7 +16,7 @@ use super::pack::{self, Layer, Packing};
 use super::pixels::Pixels;
 use super::preview::{self, Look};
 use super::run::Rgbgfx;
-use super::{Checked, OUT, Plan, Removed, shared};
+use super::{Checked, Plan, Removed, shared};
 use crate::project::BuildError;
 
 /// Color art's packed palettes: each color background's own, and the OBJ
@@ -92,7 +92,8 @@ pub(super) fn packed(checked: &[Checked], reserved: usize) -> Result<Packed, Vec
 /// What every image's conversion shares.
 pub(super) struct Output<'a> {
     pub rgbgfx: Rgbgfx<'a>,
-    pub project: &'a Path,
+    /// Where the data and previews go, by kind (`pipeline::Place::dir`).
+    pub root: &'a Path,
     pub shown: &'a dyn Fn(&Path) -> String,
     pub indexed: Option<&'a Indexed<'a>>,
     pub packed: &'a Packed,
@@ -110,10 +111,12 @@ impl Output<'_> {
         c: &Checked,
         pixels: &Pixels,
         file: Option<&PathBuf>,
-        under_assets: &str,
     ) -> Result<Option<ImageAsset>, BuildError> {
-        let (s, image, project) = (c.s, c.image.as_str(), self.project);
-        let data = format!("{OUT}/{}/{}", s.kind.dir(), s.stem);
+        let (s, image, root) = (c.s, c.image.as_str(), self.root);
+        let under_assets = s.name.as_str();
+        // Relative to `root`, rgbgfx's working directory; the images it
+        // reads are named whole, wherever they are.
+        let data = format!("{}/{}", s.kind.dir(), s.stem);
         // rgbgfx reads the DMG version's file, or, when colors share a
         // shade or the version was derived, a copy (with them merged),
         // removed once converted.
@@ -123,21 +126,28 @@ impl Output<'_> {
         } else {
             // Guarded before it is written, so a failed write leaves no
             // partial file behind.
-            let removed = Removed(project.join(&merged));
+            let removed = Removed(root.join(&merged));
             shared::write(pixels, c.plan.merges(), &removed.0).map_err(io(&removed.0))?;
             Some(removed)
         };
         let rel = match (&transient, file) {
-            (None, Some(file)) => file.strip_prefix(project).unwrap_or(file),
+            (None, Some(file)) => file.as_path(),
             _ => merged.as_path(),
         };
-        let color_rel = s.path.strip_prefix(project).unwrap_or(&s.path);
-        let preview_path = project.join(format!("{data}.preview.png"));
+        let color_file = s.path.as_path();
+        let preview_path = root.join(format!("{data}.preview.png"));
+        // A tileset is a background's tiles without its map: the program
+        // builds its own maps, from the result's tile map.
+        let has_map = s.kind == ImageKind::Bg;
         let (mut asset, picture, gbc_picture) = match &c.plan {
             Plan::Bg(p) => {
                 let Some(d) = self.rgbgfx.background(image, rel, p, &data)? else {
                     return Ok(None);
                 };
+                if has_map {
+                    let path = root.join(format!("{data}.tilemap"));
+                    fs::write(&path, &d.map).map_err(io(&path))?;
+                }
                 let mut asset = asset(c, p.width, p.height, p.tiles, None, None);
                 let mut slots = vec![None; p.unique.len()];
                 let mut gbc_tiles = None;
@@ -150,7 +160,7 @@ impl Output<'_> {
                     let cells = &packing.cell_palettes[0];
                     let rgbgfx = &mut self.rgbgfx;
                     let made = gbc::background(
-                        rgbgfx, image, color_rel, p, color, &palettes, cells, &data,
+                        rgbgfx, image, color_file, p, color, &palettes, cells, &data,
                     )?;
                     let Some(joint) = made else { return Ok(None) };
                     self.write_gbc(&data, &joint)?;
@@ -177,9 +187,11 @@ impl Output<'_> {
                 let gbc_picture = match &asset.gbc {
                     Some(g) => {
                         // The attribute map: each map entry's slot.
-                        let attr: Vec<u8> = asset.tile_map.iter().map(slot_of).collect();
-                        let path = project.join(format!("{data}.attrmap"));
-                        fs::write(&path, &attr).map_err(io(&path))?;
+                        if has_map {
+                            let attr: Vec<u8> = asset.tile_map.iter().map(slot_of).collect();
+                            let path = root.join(format!("{data}.attrmap"));
+                            fs::write(&path, &attr).map_err(io(&path))?;
+                        }
                         let slots = per_tile(&asset.tile_map, p.unique.len(), |e| e.index);
                         let look = Look::Gbc {
                             palettes: &g.palettes,
@@ -200,7 +212,7 @@ impl Output<'_> {
                     return Ok(None);
                 };
                 if !units.is_empty() {
-                    let path = project.join(format!("{data}.2bpp"));
+                    let path = root.join(format!("{data}.2bpp"));
                     fs::write(&path, &units).map_err(io(&path))?;
                 }
                 let objects = p.frames.iter().map(Vec::len).max().unwrap_or(0) as u32;
@@ -218,7 +230,7 @@ impl Output<'_> {
                     let cells = &packing.cell_palettes[at];
                     let rgbgfx = &mut self.rgbgfx;
                     let made =
-                        gbc::sheet(rgbgfx, image, color_rel, p, color, &palettes, cells, &data)?;
+                        gbc::sheet(rgbgfx, image, color_file, p, color, &palettes, cells, &data)?;
                     let Some(joint) = made else { return Ok(None) };
                     self.write_gbc(&data, &joint)?;
                     slots = joint.slots.into_iter().map(Some).collect();
@@ -246,7 +258,7 @@ impl Output<'_> {
             }
         };
         if let (Some(g), Some(picture)) = (&mut asset.gbc, gbc_picture) {
-            let path = project.join(format!("{data}.gbc.preview.png"));
+            let path = root.join(format!("{data}.gbc.preview.png"));
             write_png(&path, &picture)?;
             g.preview = (self.shown)(&path);
         }
@@ -262,7 +274,7 @@ impl Output<'_> {
         if joint.tiles.is_empty() {
             return Ok(());
         }
-        let path = self.project.join(format!("{data}.gbc.2bpp"));
+        let path = self.root.join(format!("{data}.gbc.2bpp"));
         fs::write(&path, &joint.tiles).map_err(io(&path))
     }
 }

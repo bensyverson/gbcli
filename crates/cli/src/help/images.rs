@@ -7,6 +7,8 @@ Images — PNGs under assets/, converted by `gbcli build` with rgbgfx (RGBDS).
   assets/bg/town.png           a background: unique tiles + a tilemap
   assets/sprites/hero.png      8x16 objects; the whole sheet is one frame
   assets/sprites/hero.16x16.png  frames of 16x16, left to right, then down
+  assets/tiles/font.png        a tileset: a background's unique tiles, no
+                               map (build your own from --json's tile_map)
 Draw each image in up to 4 colors (sprites: 3 + transparent, alpha 0).
 Shades 0-3 (white to black) are chosen once for the whole project, so a
 color is one shade in every image, by the first rule that applies:
@@ -82,17 +84,20 @@ the image's 8x8 grid; --json lists them all), message and remedy.
 What the program gets (build/images/, rewritten by every build):
   INCLUDE \"images.inc\"   constants: TOWN_WIDTH, TOWN_HEIGHT (tiles),
                          TOWN_TILES, TOWN_BGP; HERO_TILES, HERO_FRAMES,
-                         HERO_FRAME_WIDTH/HEIGHT, HERO_OBP
+                         HERO_FRAME_WIDTH/HEIGHT, HERO_OBP; FONT_TILES
   labels                 TownTiles..TownTilesEnd (2bpp), TownTilemap..
                          TownTilemapEnd; HeroTiles..HeroTilesEnd (32 bytes
                          an object), HeroFrames: dw per frame -> count, then
-                         y, x, tile, attributes per object ($20 X, $40 Y flip)
+                         y, x, tile, attributes per object ($20 X, $40 Y flip);
+                         FontTiles..FontTilesEnd
   named palettes         PaletteForest..PaletteForestEnd (RGB555 dw, 8 bytes),
                          PALETTE_FOREST (its place in assets/palettes.txt)
   with --gbc             GBCLI_GBC (the build defines it in every source,
                          images or not: IF DEF(GBCLI_GBC) guards color code);
                          TownTilesGbc (color art only), TownAttrmap,
                          TownPalettes, TOWN_PALETTES; HeroTilesGbc;
+                         FontTilesGbc (color art), FontAttrs (a byte a tile,
+                         its BG palette), FontPalettes, FONT_PALETTES;
                          ObjPalettesGbc, OBJ_PALETTES; attribute bits 0-2 are
                          the GBC palette
   town.preview.png       the converted data as the DMG shows it, then its
@@ -101,4 +106,11 @@ What the program gets (build/images/, rewritten by every build):
                          show them, then its palettes
 
   gbcli build game, then gbcli run build/game.gb --frames 60 --shot out.png
+
+Without a build: gbcli assets game --json converts the same images the
+same way, with rgbgfx alone, and writes nothing (--keep DIR keeps the data
+and previews). --manifest FILE names images without a project: each as
+its path under assets/ (it sets kind, labels and frame size), the file to
+read, and a dmg version, with the palettes palettes.txt would hold
+(`gbcli schema`).
 ";

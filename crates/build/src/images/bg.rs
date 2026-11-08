@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use gbcli_protocol::{ImageLimit, ImageProblem, TileAt};
+use gbcli_protocol::{ImageKind, ImageLimit, ImageProblem, TileAt};
 
 use super::census::{self, Key, error, gbc_word, key};
 use super::pixels::{Pixels, Rgba, hex};
@@ -45,17 +45,20 @@ pub(crate) struct BgPlan {
     pub cells: Vec<usize>,
 }
 
-/// Checks a background; the plan when it fits, else every problem found.
+/// Checks a background, or a tileset (`kind`), which is checked alike but
+/// keeps no map; the plan when it fits, else every problem found.
 /// `shading` is the project's (`shades::choose`). `color` is the color
 /// image whose DMG version `pixels` is, under `--gbc`: tiles are then one
 /// only when they match in both (plan question 1), never by a flip, since
 /// the DMG's tilemap has none.
 pub(crate) fn check(
     image: &str,
+    kind: ImageKind,
     pixels: &Pixels,
     shading: &Shading,
     color: Option<&Pixels>,
 ) -> Result<BgPlan, Vec<ImageProblem>> {
+    let tileset = kind == ImageKind::Tiles;
     if let Some(p) = census::size(image, pixels, 8) {
         return Err(vec![p]);
     }
@@ -143,39 +146,61 @@ pub(crate) fn check(
                  are used once (listed)",
                 once.len()
             ),
-            "redraw the tiles used once to match others, simplify detail, or split the image \
-             into two backgrounds",
+            &format!(
+                "redraw the tiles used once to match others, simplify detail, or split the \
+                 image into two {}",
+                if tileset { "tilesets" } else { "backgrounds" }
+            ),
         );
         return Err(warned(ImageProblem { tiles: once, ..p }));
     }
     let map = (width * height) as usize;
-    if let Some(p) = census::bank(
-        image,
-        unique * 16 + map,
-        &format!("{unique} tiles of 16 bytes and a map of {map}, one byte a tile"),
-        &format!(
-            "split it into backgrounds of at most {} tiles each (a 32x32 screen map is 1024) \
-             and load them as they scroll into view",
-            census::BANK_BYTES - unique * 16
-        ),
-    ) {
-        return Err(warned(p));
-    }
-    // Color art's GBC section (`emit::gbc`): its own tiles, the attribute
-    // map, and up to 8 palettes of 8 bytes, before packing says how many.
-    if color.is_some()
-        && let Some(p) = census::bank(
-            image,
-            unique * 16 + map + 8 * 8,
-            &format!(
+    // A tileset's data is its tiles alone, and under --gbc its section
+    // holds a byte per tile (`<Name>Attrs`) where a background's holds an
+    // attribute map.
+    let (what, gbc_what, rom, gbc_rom) = if tileset {
+        (
+            format!("{unique} tiles of 16 bytes"),
+            format!(
+                "its GBC section: {unique} tiles of 16 bytes, an attribute byte a tile and up \
+                 to 8 palettes of 8 bytes"
+            ),
+            unique * 16,
+            unique * 17 + 8 * 8,
+        )
+    } else {
+        (
+            format!("{unique} tiles of 16 bytes and a map of {map}, one byte a tile"),
+            format!(
                 "its GBC section: {unique} tiles of 16 bytes, an attribute map of {map} and up \
                  to 8 palettes of 8 bytes"
             ),
-            &format!(
-                "split it into backgrounds of at most {} tiles each (a 32x32 screen map is 1024) \
-                 and load them as they scroll into view",
-                census::BANK_BYTES - unique * 16 - 8 * 8
-            ),
+            unique * 16 + map,
+            unique * 16 + map + 8 * 8,
+        )
+    };
+    let remedy = |spare: usize| {
+        if tileset {
+            // Unreachable while `MAP_TILES` holds: 256 tiles fit a bank.
+            "split it into two tilesets".to_string()
+        } else {
+            format!(
+                "split it into backgrounds of at most {spare} tiles each (a 32x32 screen map is \
+                 1024) and load them as they scroll into view"
+            )
+        }
+    };
+    if let Some(p) = census::bank(image, rom, &what, &remedy(census::BANK_BYTES - unique * 16)) {
+        return Err(warned(p));
+    }
+    // Color art's GBC section (`emit::gbc`): its own tiles, the attribute
+    // bytes, and up to 8 palettes of 8 bytes, before packing says how many.
+    if color.is_some()
+        && let Some(p) = census::bank(
+            image,
+            gbc_rom,
+            &gbc_what,
+            &remedy(census::BANK_BYTES - unique * 16 - 8 * 8),
         )
     {
         return Err(warned(p));
@@ -227,9 +252,11 @@ mod tests {
     fn a_color_backgrounds_gbc_section_must_fit_a_bank_too() {
         let pixels = full_bank();
         let shading = gray_shading();
-        let plan = check("town.png", &pixels, &shading, None).expect("fits the DMG bank");
+        let plan =
+            check("town.png", ImageKind::Bg, &pixels, &shading, None).expect("fits the DMG bank");
         assert_eq!(plan.tiles, 256);
-        let problems = check("town.png", &pixels, &shading, Some(&pixels)).unwrap_err();
+        let problems =
+            check("town.png", ImageKind::Bg, &pixels, &shading, Some(&pixels)).unwrap_err();
         let p = &problems[0];
         assert_eq!(p.limit, ImageLimit::RomxBank);
         assert_eq!(p.count, 4096 + 12288 + 64);

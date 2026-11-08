@@ -17,23 +17,30 @@ pub(crate) struct Gbc<'a> {
     /// Whether it has GBC tile data of its own (color art), in the DMG
     /// data's order; indexed art draws its DMG tiles on both machines.
     pub tiles: bool,
-    /// A background's BG palettes, in slot order.
+    /// A background's or tileset's BG palettes, in slot order.
     pub palettes: &'a [GbcPalette],
-    /// A sheet's OBJ slot of each kept unit, for its objects' attributes.
+    /// A sheet's OBJ slot of each kept unit, for its objects' attributes;
+    /// a tileset's BG slot of each tile, for `<Name>Attrs`.
     pub slots: Vec<u8>,
 }
 
 impl<'a> Gbc<'a> {
     /// The GBC version of `asset`, from its result: its own tiles for color
-    /// art, its palettes, and each of a sheet's `units` kept units' OBJ
-    /// slot, from its tile map. `None` without a GBC version.
+    /// art, its palettes, and the slot of each of a sheet's `units` kept
+    /// units or a tileset's `units` tiles, from its tile map. `None`
+    /// without a GBC version.
     pub fn of(asset: &'a ImageAsset, units: usize) -> Option<Gbc<'a>> {
         let g = asset.gbc.as_ref()?;
         let mut slots = vec![0; units];
-        if asset.kind == ImageKind::Sprites {
+        let unit = match asset.kind {
+            ImageKind::Sprites => Some(2),
+            ImageKind::Tiles => Some(1),
+            ImageKind::Bg => None,
+        };
+        if let Some(per) = unit {
             for e in asset.tile_map.iter().flatten() {
                 if let Some(s) = e.palette {
-                    slots[(e.index / 2) as usize] = s.get();
+                    slots[(e.index / per) as usize] = s.get();
                 }
             }
         }
@@ -142,6 +149,46 @@ pub(super) fn image(out: &mut String, e: &Entry) {
             }
             let _ = writeln!(out, "{label}TilesGbcEnd::");
         }
+        Entry::Tiles {
+            source,
+            label,
+            data,
+            gbc: Some(g),
+            ..
+        } => {
+            let _ = write!(
+                out,
+                "\nSECTION \"image {label} GBC\", ROMX\n\n\
+                 ; {source} on the GBC: "
+            );
+            if g.tiles {
+                let _ = write!(
+                    out,
+                    "its tiles (as many, in {label}Tiles' order), then a byte\n\
+                     ; per tile, its BG palette in bits 0-2 (what a map entry using the tile\n\
+                     ; writes with VBK=1), and its BG palettes (RGB555, 8 bytes each, slot 0\n\
+                     ; first).\n\
+                     {label}TilesGbc::\n\tINCBIN \"{data}.gbc.2bpp\"\n{label}TilesGbcEnd::\n"
+                );
+            } else {
+                let _ = write!(
+                    out,
+                    "its tiles are {label}Tiles (indexed art). A byte per tile,\n\
+                     ; its BG palette in bits 0-2 (what a map entry using the tile writes with\n\
+                     ; VBK=1), and its BG palette (RGB555, 8 bytes).\n"
+                );
+            }
+            let _ = writeln!(out, "{label}Attrs::");
+            for chunk in g.slots.chunks(16) {
+                let words: Vec<String> = chunk.iter().map(u8::to_string).collect();
+                let _ = writeln!(out, "\tdb {}", words.join(", "));
+            }
+            let _ = write!(out, "{label}AttrsEnd::\n{label}Palettes::\n");
+            for p in g.palettes {
+                out.push_str(&dw(p));
+            }
+            let _ = writeln!(out, "{label}PalettesEnd::");
+        }
         _ => {}
     }
 }
@@ -178,6 +225,12 @@ pub(super) fn shared(out: &mut String, s: &Shared) {
 pub(super) fn image_constants(e: &Entry) -> Vec<Constant> {
     match e {
         Entry::Bg {
+            label,
+            constant,
+            gbc: Some(g),
+            ..
+        }
+        | Entry::Tiles {
             label,
             constant,
             gbc: Some(g),

@@ -284,7 +284,9 @@ pub struct ImageAsset {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub objects: Option<u32>,
     /// The converted data drawn as the hardware shows it, then its unique
-    /// tiles by use, most used first.
+    /// tiles by use, most used first. Every build writes one; empty, and
+    /// left off the wire, when an `assets` request kept no previews.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub preview: String,
     /// Where each source tile went ([`TileEntry`]: its tile, its flip and
     /// its GBC palette slot), one entry per 8x8 tile of the image (8x16

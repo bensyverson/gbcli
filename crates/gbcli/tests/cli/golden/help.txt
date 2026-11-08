@@ -15,7 +15,7 @@ its machine, saves it and prints rows; --json prints the response line.
              change the session's settings
   project    gaps, sessions, sessions prune, sessions rm
              every session in .gbcli/, and what they share; no session needed
-  build      new, build, song
+  build      new, build, assets, song
              RGBDS from PATH: edit, build, restore, measure; song files
   server     serve, batch
              the JSON Lines protocol, for harnesses
@@ -205,6 +205,10 @@ RGBDS — the loop: edit, build, restore, measure, with RGBDS from PATH.
                                isn't offered. A session runs it on the DMG
                                unless made with --model gbc (a GBC in CGB
                                mode), so check a dual ROM in two sessions
+  gbcli assets game --json     the images alone, converted as build would,
+                               with rgbgfx alone and nothing written: tile
+                               maps and palettes; --manifest FILE instead
+                               of a project (gbcli help images)
   The loop, from inside game/:
     gbcli run build/game.gb --session game --frames 60 --checkpoint start
     (edit src/)
@@ -235,7 +239,7 @@ loads only if nothing it was running moved (rom_changed, exit 3, says what
 did).
 
 CLASS
-  build: runs RGBDS from PATH, checked against the pinned version (`gbcli doctor`); a session only to reload the build into; `new` and `song` need neither.
+  build: runs RGBDS from PATH, checked against the pinned version (`gbcli doctor`); a session only to reload the build into; `new` and `song` need neither, and `assets` only rgbgfx.
 
 FLAGS
   --src DIR…              assemble every .asm under DIR instead of src/ (relative to the project)
@@ -260,6 +264,38 @@ EXAMPLE
   gbcli build --session game --restore start
     rebuilds the project here, then restores checkpoint start of session game
     into the new ROM
+$ gbcli assets --help
+exit 0
+gbcli assets — convert a project's or a manifest's images without building: tile maps, palettes
+
+USAGE
+  gbcli assets [DIR] [--manifest FILE] [--gbc] [--keep DIR] [--json]
+
+Converts the PNGs under DIR's assets/ (default: here), or the images a
+manifest names, exactly as `gbcli build` would, with rgbgfx alone: no rgbasm,
+no rgblink, no session. Prints the `image`, `problem` and `images` rows a
+build prints; --json gives each image's tile_map (tile, flip and GBC palette
+per source tile) and palettes. Nothing is written unless --keep names a
+directory; images.asm and images.inc are a build's. A problem fails with
+build_failed (exit 4), its rows printed. A manifest names each image as its
+path under assets/ in a project (`tiles/font.png`), the file to read, and the
+palettes palettes.txt would hold.
+
+CLASS
+  build: runs RGBDS from PATH, checked against the pinned version (`gbcli doctor`); a session only to reload the build into; `new` and `song` need neither, and `assets` only rgbgfx.
+
+FLAGS
+  --manifest FILE         convert the images a JSON file names (`gbcli schema`, manifest) instead of a project's assets/
+  --gbc                   convert for the GBC in dual mode, as `build --gbc` does: each image's GBC version too
+  --keep DIR              keep the data and previews in DIR, laid out as build/images/ (default: nothing is kept)
+
+MORE FLAGS
+  --json                  print the protocol's result object instead of rows
+
+EXAMPLE
+  gbcli assets --manifest font.json --gbc --json
+    converts the images font.json names for the GBC and prints each one's tile
+    map and palettes, writing nothing
 $ gbcli version --help
 exit 0
 gbcli version — gbcli's, the protocol's and the core's versions

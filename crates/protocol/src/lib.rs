@@ -2,6 +2,7 @@
 //! server and the CLI client. The shapes are in
 //! `project/2026-11-06-design.md` §5, §6 and §10.
 
+mod assets;
 mod audio;
 mod battery;
 mod checkpoint;
@@ -29,6 +30,7 @@ mod version;
 mod video;
 mod views;
 
+pub use assets::{AssetManifest, AssetsArgs, AssetsMade, ManifestImage};
 pub use audio::{ApuWriteLine, AudioArgs, AudioMade, WavArgs, WavChannels, WavMade, WavTake};
 pub use battery::{
     BatteryFrom, FlashFileMade, FlashFrom, FlashNoteKind, FlashNoteRow, PowerCycleArgs,

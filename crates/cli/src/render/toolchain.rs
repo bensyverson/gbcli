@@ -1,7 +1,8 @@
-//! Rows for the RGBDS loop: `build`'s diagnostics, songs and outputs,
-//! `doctor`'s checks and `new`'s files.
+//! Rows for the RGBDS loop: `build`'s diagnostics, images, songs and
+//! outputs, `assets`' diagnostics and images, `doctor`'s checks and
+//! `new`'s files.
 
-use gbcli_protocol::{ResultBody, Severity, SourceLine};
+use gbcli_protocol::{Diagnostic, ResultBody, Severity, SourceLine};
 
 use super::Row;
 
@@ -13,37 +14,56 @@ fn source_line(kind: &str, at: &SourceLine) -> String {
         .line()
 }
 
-pub fn rows(r: &ResultBody) -> String {
+fn diagnostics(all: &[Diagnostic]) -> String {
     let mut out = String::new();
-    if let Some(b) = &r.build {
-        for d in &b.diagnostics {
-            let json = serde_json::to_value(d).expect("serializes");
-            out += &Row::new("diagnostic")
-                .field("severity", json["severity"].as_str().unwrap_or("?"))
-                .field("tool", d.tool.name())
-                .opt("file", d.file.as_deref())
-                .opt("line", d.line)
-                .opt(
-                    "lines",
-                    d.line
-                        .zip(d.last_line)
-                        .map(|(first, last)| format!("{first}-{last}")),
-                )
-                .opt("within", d.within.as_deref())
-                .opt("count", (d.count != 1).then_some(d.count))
-                .field("message", &d.message)
-                .line();
-            // How the line was reached, then each other place the message
-            // names with how that was reached, indented under the message.
-            for at in &d.chain {
-                out += &source_line("  from", at);
-            }
-            for place in &d.also {
-                for (i, at) in place.iter().enumerate() {
-                    out += &source_line(if i == 0 { "  also" } else { "    from" }, at);
-                }
+    for d in all {
+        let json = serde_json::to_value(d).expect("serializes");
+        out += &Row::new("diagnostic")
+            .field("severity", json["severity"].as_str().unwrap_or("?"))
+            .field("tool", d.tool.name())
+            .opt("file", d.file.as_deref())
+            .opt("line", d.line)
+            .opt(
+                "lines",
+                d.line
+                    .zip(d.last_line)
+                    .map(|(first, last)| format!("{first}-{last}")),
+            )
+            .opt("within", d.within.as_deref())
+            .opt("count", (d.count != 1).then_some(d.count))
+            .field("message", &d.message)
+            .line();
+        // How the line was reached, then each other place the message
+        // names with how that was reached, indented under the message.
+        for at in &d.chain {
+            out += &source_line("  from", at);
+        }
+        for place in &d.also {
+            for (i, at) in place.iter().enumerate() {
+                out += &source_line(if i == 0 { "  also" } else { "    from" }, at);
             }
         }
+    }
+    out
+}
+
+fn count(all: &[Diagnostic], s: Severity) -> usize {
+    all.iter().filter(|d| d.severity == s).count()
+}
+
+pub fn rows(r: &ResultBody) -> String {
+    let mut out = String::new();
+    if let Some(a) = &r.assets {
+        out += &diagnostics(&a.diagnostics);
+        out += &super::images::rows(&a.images);
+        out += &Row::new("assets")
+            .field("target", a.target.name())
+            .field("errors", count(&a.diagnostics, Severity::Error))
+            .field("warnings", count(&a.diagnostics, Severity::Warning))
+            .line();
+    }
+    if let Some(b) = &r.build {
+        out += &diagnostics(&b.diagnostics);
         if let Some(o) = &b.overflow {
             for s in &o.sections {
                 out += &Row::new("past_bank_1")
@@ -73,13 +93,12 @@ pub fn rows(r: &ResultBody) -> String {
                 .field("bytes", o.bytes)
                 .line();
         }
-        let count = |s: Severity| b.diagnostics.iter().filter(|d| d.severity == s).count();
         out += &Row::new("build")
             .field("rgbds", &b.rgbds)
             .field("target", b.target.name())
             .field("sources", b.sources.len())
-            .field("errors", count(Severity::Error))
-            .field("warnings", count(Severity::Warning))
+            .field("errors", count(&b.diagnostics, Severity::Error))
+            .field("warnings", count(&b.diagnostics, Severity::Warning))
             .line();
     }
     if let Some(d) = &r.doctor {

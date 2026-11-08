@@ -23,6 +23,7 @@ pub(super) struct Unchecked {
     frames: Option<u32>,
     #[serde(default)]
     objects: Option<u32>,
+    #[serde(default)]
     preview: String,
     #[serde(default)]
     tile_map: Vec<Option<TileEntry>>,

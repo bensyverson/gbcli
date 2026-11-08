@@ -22,7 +22,7 @@ fn sign(x: u32, y: u32) -> [u8; 3] {
     GRAYS[shade as usize]
 }
 
-fn write_png(path: &Path, width: u32, height: u32, pixel: impl Fn(u32, u32) -> [u8; 3]) {
+pub(crate) fn write_png(path: &Path, width: u32, height: u32, pixel: impl Fn(u32, u32) -> [u8; 3]) {
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     let data: Vec<u8> = (0..height)
         .flat_map(|y| (0..width).map(move |x| (x, y)))

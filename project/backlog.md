@@ -76,3 +76,27 @@ What: the objects-per-line check from OAM during a run ("frame 120, line 64: 12 
 **Why parked:** Ben chose one named palette per indexed image for Stage 10 (plan question 4, [2026-11-07-gbc-images-plan.md](2026-11-07-gbc-images-plan.md)). This is an addition to it, with nothing to migrate. LoadHigh assigns palettes per tile kind itself and doesn't need it. A per-tile palette PNG was considered and dropped in favor of this.
 
 **Un-park when:** a project (or the agent eval) needs a multi-palette background with named run-time swaps in plain gbcli, and writing the attribute map by hand is the stumble.
+
+## 2026-11-07 — `equiv --after N`: compare only from frame N
+
+**What:** a flag that runs both sides from their starts but compares only from frame N on, for builds whose RAM layout differs. A checkpoint can't start both sides once a build moves a RAM symbol: `equiv --at` is refused as `rom_changed`, and `--allow-rom-change` would load side A's layout into side B.
+
+**Why parked:** agent eval run 3 hit the case (leaf k22J86). The fix that shipped (b486fc9) names a never-written byte and says to initialize it before the first vblank, and that's the right fix for a program. Comparing later would hide a real difference in the first N frames.
+
+**Un-park when:** a program can't initialize the byte early (a boot-time race, a library that owns the RAM), or an eval agent stumbles on it again after the remedy.
+
+## 2026-11-07 — A spectrogram scaled to its own peak
+
+**What:** color a short clip's spectrogram against its own peak instead of the fixed −90 dBFS floor, so a quiet 20-frame blip doesn't render nearly black.
+
+**Why parked:** eval runs 1-3 (leaf k22J86) found the decoded `--audio-log` and the piano roll more useful than the spectrogram, and `--scale` now reaches it. Normalizing changes what the colors mean across captures, so two spectrograms could no longer be compared by eye.
+
+**Un-park when:** a sound task needs the spectrogram (noise, timbre, a mix where the log's note names don't tell enough) and an agent can't read it.
+
+## 2026-11-07 — Conditions that compare a bare RAM symbol
+
+**What:** `--until wX >= 3` compares wX's address, not its byte, the same trap `read wX` had. `read` and `run --read` now warn about it (b486fc9); conditions don't.
+
+**Why parked:** no eval run hit it, and the expressions topic already says a bare symbol is its address.
+
+**Un-park when:** an agent writes a condition on a bare RAM symbol and the run never stops, or stops at once.

@@ -349,7 +349,7 @@ pub(crate) fn check_images(parsed: &Parsed, images: &[String]) -> Result<(), Bad
                 line,
                 format!(
                     "{image} is no image of this project: an assignment names a PNG by its \
-                     path under assets/, in bg/ or sprites/ ({read})"
+                     path under assets/, in bg/, sprites/ or tiles/ ({read})"
                 ),
             ));
         }

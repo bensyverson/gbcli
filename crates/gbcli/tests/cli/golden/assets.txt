@@ -1,0 +1,10 @@
+$ gbcli assets --manifest font.json --gbc --keep kept
+exit 0
+image kind=tiles source=art/glyphs.png label=Font size=4x1 tiles=3 preview=kept/tiles/font.preview.png
+images converted=1 errors=0 warnings=0 shades=known palette=dmg_grays
+assets target=gbc errors=0 warnings=0
+$ gbcli assets game
+exit 0
+image kind=tiles source=game/assets/tiles/font.png label=Font size=4x1 tiles=3
+images converted=1 errors=0 warnings=0 shades=known palette=dmg_grays
+assets target=dmg errors=0 warnings=0

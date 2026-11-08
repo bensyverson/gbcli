@@ -5,7 +5,7 @@ use super::flags::{
     SHOT_OPTIONS, WATCH,
 };
 use super::table_battery::{POWER_CYCLE_VERB, SAV_VERB};
-use super::table_build::{BUILD_VERB, DOCTOR_VERB, NEW_VERB};
+use super::table_build::{ASSETS_VERB, BUILD_VERB, DOCTOR_VERB, NEW_VERB};
 use super::table_opcode::OPCODE_VERB;
 use super::table_read::{
     CHECKPOINTS_VERB, EQUIV_VERB, MEASURE_VERB, SHOT_VERB, SYM_VERB, VIEW_VERB,
@@ -351,6 +351,7 @@ pub const VERBS: &[VerbSpec] = &[
     },
     NEW_VERB,
     BUILD_VERB,
+    ASSETS_VERB,
     SONG_VERB,
     VerbSpec {
         verb: Verb::Serve,

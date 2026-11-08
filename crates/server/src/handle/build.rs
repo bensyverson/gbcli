@@ -37,8 +37,8 @@ impl Host {
 }
 
 /// Answers the ops that need no project bundle, for a client with no
-/// `.gbcli/` yet: `doctor`, `new`, `opcode`, `version`, and `build` without
-/// `restore`.
+/// `.gbcli/` yet: `doctor`, `new`, `assets`, `opcode`, `version`, and
+/// `build` without `restore`.
 /// Anything else needs a session, and so a [`Handler`].
 pub struct Tooling {
     host: Host,
@@ -72,6 +72,7 @@ impl Answer for Tooling {
             },
             Op::Doctor => doctor(&self.host, id),
             Op::New(args) => new(&self.host, id, args),
+            Op::Assets(args) => super::assets::assets(&self.host, id, args),
             Op::Opcode(args) => super::opcode::opcode(id, args),
             Op::Version => super::version::version(id),
             op => unreachable!("{} needs a bundle", op.name()),
@@ -96,6 +97,7 @@ impl Handler {
             Op::Build(args) => self.build(request, args),
             Op::Doctor => doctor(&self.host, id),
             Op::New(args) => new(&self.host, id, args),
+            Op::Assets(args) => super::assets::assets(&self.host, id, args),
             Op::Opcode(args) => super::opcode::opcode(id, args),
             Op::Version => super::version::version(id),
             _ => return None,

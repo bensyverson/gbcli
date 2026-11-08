@@ -3,6 +3,7 @@
 //! `gbcli serve` over stdio.
 //! Each test drives the built binary in its own temporary project.
 
+mod assets;
 mod audio;
 mod battery;
 mod common;

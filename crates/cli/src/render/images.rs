@@ -31,7 +31,10 @@ pub fn rows(m: &ImagesMade) -> String {
             .field("tiles", i.tiles)
             .opt("frames", i.frames)
             .opt("objects", i.objects)
-            .field("preview", &i.preview)
+            .opt(
+                "preview",
+                (!i.preview.is_empty()).then_some(i.preview.as_str()),
+            )
             .line();
     }
     for p in &m.problems {

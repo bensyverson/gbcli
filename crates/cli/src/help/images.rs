@@ -178,5 +178,6 @@ same way, with rgbgfx alone, and writes nothing (--keep DIR keeps the data
 and previews; --gbc as for build). --manifest FILE names images without a
 project: each as its path under assets/ (it sets kind, labels and frame
 size), the file to read, and a dmg version, with the palettes
-palettes.txt would hold (`gbcli schema`).
+palettes.txt would hold (`gbcli schema`). The CLI reads a relative file or
+dmg path from the manifest's folder.
 ";

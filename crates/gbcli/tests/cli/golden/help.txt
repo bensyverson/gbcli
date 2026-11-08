@@ -398,7 +398,8 @@ same way, with rgbgfx alone, and writes nothing (--keep DIR keeps the data
 and previews; --gbc as for build). --manifest FILE names images without a
 project: each as its path under assets/ (it sets kind, labels and frame
 size), the file to read, and a dmg version, with the palettes
-palettes.txt would hold (`gbcli schema`).
+palettes.txt would hold (`gbcli schema`). The CLI reads a relative file or
+dmg path from the manifest's folder.
 $ gbcli build --help
 exit 0
 gbcli build — assemble, link and fix a project with RGBDS; errors with file and line
@@ -464,7 +465,7 @@ CLASS
   build: runs RGBDS from PATH, checked against the pinned version (`gbcli doctor`); a session only to reload the build into; `new` and `song` need neither, and `assets` only rgbgfx.
 
 FLAGS
-  --manifest FILE         convert the images a JSON file names (`gbcli schema`, manifest) instead of a project's assets/
+  --manifest FILE         convert the images a JSON file names (`gbcli schema`, manifest) instead of a project's assets/; its relative `file` and `dmg` paths are read from the manifest's folder (a `serve` client's, from the server's working directory)
   --gbc                   convert for the GBC in dual mode, as `build --gbc` does: each image's GBC version too
   --keep DIR              keep the data and previews in DIR, laid out as build/images/ (default: nothing is kept)
 

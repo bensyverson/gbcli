@@ -118,3 +118,46 @@ fn a_bad_manifest_and_a_manifest_with_a_project_are_refused() {
     let both = p.gbcli(&["assets", "game", "--manifest", "good.json"]);
     both.fails(2, "bad_request", "--manifest");
 }
+
+fn manifest_naming(file: &str) -> String {
+    format!(
+        r#"{{"images":[{{"image":"tiles/font.png","file":"{}"}}]}}"#,
+        file.replace('\\', "\\\\")
+    )
+}
+
+/// A manifest's relative `file` resolves against the manifest's own
+/// folder, as a manifest file's paths usually do; an absolute one stays.
+#[test]
+fn a_manifests_relative_paths_resolve_against_its_folder() {
+    let p = Project::new("assets-manifest-dir");
+    glyphs(&p, "sets/glyphs.png");
+    fs::create_dir_all(p.path("sets")).unwrap();
+    fs::write(p.path("sets/m.json"), manifest_naming("glyphs.png")).unwrap();
+    let path = only_rgbgfx(&p);
+    let env = [("PATH", path.as_str())];
+    let run = p.gbcli_with(&["assets", "--manifest", "sets/m.json"], &env, None);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+
+    let absolute = p.path("sets/glyphs.png").display().to_string();
+    fs::create_dir_all(p.path("elsewhere")).unwrap();
+    fs::write(p.path("elsewhere/m.json"), manifest_naming(&absolute)).unwrap();
+    let run = p.gbcli_with(&["assets", "--manifest", "elsewhere/m.json"], &env, None);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+}
+
+/// A manifest's missing image names the path as resolved, and the remedy
+/// says how a manifest's paths resolve.
+#[test]
+fn a_manifests_missing_image_names_the_resolved_path() {
+    let p = Project::new("assets-manifest-missing");
+    fs::create_dir_all(p.path("sets")).unwrap();
+    fs::write(p.path("sets/m.json"), manifest_naming("gone.png")).unwrap();
+    let path = only_rgbgfx(&p);
+    let env = [("PATH", path.as_str())];
+    let run = p.gbcli_with(&["assets", "--manifest", "sets/m.json"], &env, None);
+    assert_ne!(run.code, 0);
+    assert!(run.stderr.contains("sets/gone.png"), "{}", run.stderr);
+    assert!(!run.stderr.contains("save it as a PNG"), "{}", run.stderr);
+    assert!(run.stderr.contains("manifest's folder"), "{}", run.stderr);
+}

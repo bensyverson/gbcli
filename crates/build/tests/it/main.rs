@@ -3,6 +3,7 @@
 //! own is a file beside this directory instead, saying why.
 
 mod assets;
+mod assets_manifest;
 mod build;
 mod build_env;
 mod build_safety;

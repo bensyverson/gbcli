@@ -3,6 +3,8 @@
 //! `batch` build exactly as the CLI does. Only what argv alone can say is
 //! checked here.
 
+use std::path::Path;
+
 use gbcli_protocol::{AssetManifest, AssetsArgs, BuildArgs, BuildTarget, NewArgs, Op, OpcodeArgs};
 
 use crate::Env;
@@ -73,12 +75,26 @@ fn manifest(file: &str, env: &Env) -> Result<AssetManifest, Usage> {
             "pass a JSON file naming the images (`gbcli schema`, `manifest`)",
         )
     })?;
-    serde_json::from_str(&text).map_err(|e| {
+    let mut manifest: AssetManifest = serde_json::from_str(&text).map_err(|e| {
         Usage::new(
             format!("the manifest {file} doesn't read: {e}"),
             "fix it to the shape `gbcli schema` gives for `manifest`",
         )
-    })
+    })?;
+    // A manifest's paths are its folder's, as in any manifest file. The
+    // wire stays relative to the server's working directory, so the folder
+    // is joined as typed, not made absolute.
+    let folder = Path::new(file).parent().unwrap_or(Path::new(""));
+    let resolve = |path: &mut String| {
+        if !Path::new(path.as_str()).is_absolute() {
+            *path = folder.join(&*path).to_string_lossy().into_owned();
+        }
+    };
+    for image in &mut manifest.images {
+        resolve(&mut image.file);
+        image.dmg.iter_mut().for_each(resolve);
+    }
+    Ok(manifest)
 }
 
 pub fn new(inv: &Invocation) -> Command {

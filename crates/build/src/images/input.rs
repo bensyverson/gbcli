@@ -11,8 +11,17 @@ use super::find::{self, KINDS, Source};
 use super::palettes;
 use crate::project::BuildError;
 
+/// Where an input's images were named, which decides the remedy for one
+/// that can't be read.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Origin {
+    Project,
+    Manifest,
+}
+
 /// The images to convert and the palettes they are converted with.
 pub(crate) struct Input {
+    pub origin: Origin,
     pub sources: Vec<Source>,
     pub named: NamedPalettes,
     /// Where the palettes came from, as problems name it.
@@ -39,6 +48,7 @@ pub(crate) fn project(
         }
     };
     Ok(Input {
+        origin: Origin::Project,
         sources,
         named,
         palette_shown,
@@ -61,6 +71,12 @@ pub(crate) fn manifest(
                  palettes only to images it lists"
             .into(),
     })?;
+    m.palettes.check().map_err(|fault| BuildError::Layout {
+        message: format!("the manifest's palettes: {fault}"),
+        remedy: "fix the palettes as `gbcli schema` gives them for `manifest`: assign an image \
+                 only to a palette the manifest defines"
+            .into(),
+    })?;
     let mut sources = Vec::with_capacity(m.images.len());
     for i in &m.images {
         let dir = i.image.split_once('/').map_or("", |(d, _)| d);
@@ -75,6 +91,7 @@ pub(crate) fn manifest(
     }
     find::collisions(&sources, shown)?;
     Ok(Input {
+        origin: Origin::Manifest,
         sources,
         named: m.palettes.clone(),
         palette_shown: "the manifest's palettes".into(),

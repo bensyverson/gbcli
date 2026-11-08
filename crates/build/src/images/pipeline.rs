@@ -12,7 +12,7 @@ use gbcli_protocol::{BuildTarget, ImageKind, ImagesMade};
 use super::derive::{self, Version};
 use super::emit::{self, Entry};
 use super::find::{self, KINDS, Source};
-use super::input::Input;
+use super::input::{Input, Origin};
 use super::pixels::Pixels;
 use super::{Checked, Converted, Generated, Plan, bg, census, indexed, output, run, shades};
 use super::{shared, sheet, vram};
@@ -40,6 +40,7 @@ pub(crate) fn convert(
     timeout: Duration,
 ) -> Result<Option<Converted>, BuildError> {
     let Input {
+        origin,
         sources,
         named: named_palettes,
         palette_shown,
@@ -89,7 +90,14 @@ pub(crate) fn convert(
     let read_png = |path: &Path| {
         Pixels::read(path).map_err(|e| BuildError::Layout {
             message: format!("{} isn't a PNG gbcli can read: {e}", shown(path)),
-            remedy: "save it as a PNG (8-bit gray, RGB or RGBA)".into(),
+            remedy: match origin {
+                Origin::Project => "save it as a PNG (8-bit gray, RGB or RGBA)".into(),
+                Origin::Manifest => "check the path in the manifest, and that the file is a PNG \
+                                     (8-bit gray, RGB or RGBA); `gbcli assets --manifest` reads \
+                                     a relative path from the manifest's folder, and the wire \
+                                     from the server's working directory"
+                    .into(),
+            },
         })
     };
     let mut all = Vec::with_capacity(sources.len());
@@ -140,7 +148,8 @@ pub(crate) fn convert(
     // holds them, if any (a derived version is written out first).
     let mut read: Vec<(Pixels, Option<PathBuf>)> = Vec::new();
     for (s, image, pixels, version) in versioned {
-        let dmg_shown = shown(&find::dmg_path(&s.path));
+        // A manifest's `dmg` is any file; name the one given.
+        let dmg_shown = shown(&s.dmg.clone().unwrap_or_else(|| find::dmg_path(&s.path)));
         // The DMG version the checks read, under the name they give it,
         // and color art's color image, whose tiles pair with it.
         let (checked_name, dmg, file, shading, color) = match version {

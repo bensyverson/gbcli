@@ -103,7 +103,8 @@ const ASSETS: &[FlagSpec] = &[
         "manifest",
         "FILE",
         "convert the images a JSON file names (`gbcli schema`, manifest) instead of a project's \
-         assets/",
+         assets/; its relative `file` and `dmg` paths are read from the manifest's folder (a \
+         `serve` client's, from the server's working directory)",
     ),
     switch(
         "gbc",

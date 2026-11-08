@@ -12,13 +12,10 @@ mod raster;
 
 use gbcli_bundle::{SessionStore, Start, validate_checkpoint_name};
 use gbcli_core::Budget;
-use gbcli_engine::{
-    DebugError, EventTap, FrameSink, Machine, Outcome, RunOptions, flash_note_rows, flash_warnings,
-    unapplied_keys,
-};
+use gbcli_engine::{DebugError, EventTap, FrameSink, Machine, Outcome, RunOptions, unapplied_keys};
 use gbcli_protocol::{
-    ErrorBody, ErrorCode, KeyEvent, Location, ResultBody, RunArgs, SessionFile, StepArgs, StepKind,
-    StopReason, StopRecord, WavChannels,
+    ErrorBody, ErrorCode, FlashNoteRow, KeyEvent, Location, ResultBody, RunArgs, SessionFile,
+    StepArgs, StepKind, StopReason, StopRecord, WavChannels,
 };
 
 use super::history::write_checkpoint;
@@ -178,20 +175,17 @@ impl Handler {
         let mut outcome = match outcome {
             Ok(outcome) => outcome,
             Err(error) => {
+                let flash_notes = report_flash_failed(&mut machine, warnings);
                 let parent = args.at.clone();
-                return Err(self.after_run_error(store, meta, machine, &error, actor, parent));
+                let failure = self.after_run_error(store, meta, machine, &error, actor, parent);
+                return Err(failure.with_flash_notes(flash_notes));
             }
         };
         let guarded = self.guarded(&mut outcome);
         outcome.stop.budget.limits = limits;
         outcome.stop.budget.defaulted = defaulted;
         warnings.extend(outcome.warnings.iter().map(warning_text));
-        let notes = machine
-            .core_mut()
-            .take_flash_notes()
-            .map_err(|e| Failure::from_core(&e))?;
-        warnings.extend(flash_warnings(&notes));
-        let flash_notes = (!notes.notes.is_empty()).then(|| flash_note_rows(&notes));
+        let flash_notes = report_flash(&mut machine, warnings)?;
 
         let stop = outcome.stop;
         let change = HeadChange {
@@ -249,10 +243,13 @@ impl Handler {
         self.keep_warm(store, meta, machine);
 
         // The run is saved; anything that failed after it rides with its stop.
-        let with_stop = |f: Failure| f.with_stop(stop.clone());
+        let with_stop = |f: Failure| {
+            f.with_stop(stop.clone())
+                .with_flash_notes(flash_notes.clone())
+        };
         let reads = reads.map_err(with_stop)?;
         let shot = shot.transpose().map_err(with_stop)?;
-        answered?;
+        answered.map_err(|f| f.with_flash_notes(flash_notes.clone()))?;
         let measured = measured.transpose().map_err(with_stop)?;
         let strip = strip.transpose().map_err(with_stop)?;
         let sound = sound.transpose().map_err(with_stop)?;
@@ -369,11 +366,14 @@ impl Handler {
         let mut outcome = match machine.step(args.unit, &opts) {
             Ok(outcome) => outcome,
             Err(error) => {
-                return Err(self.after_run_error(store, meta, machine, &error, actor, None));
+                let flash_notes = report_flash_failed(&mut machine, warnings);
+                let failure = self.after_run_error(store, meta, machine, &error, actor, None);
+                return Err(failure.with_flash_notes(flash_notes));
             }
         };
         let guarded = self.guarded(&mut outcome);
         warnings.extend(outcome.warnings.iter().map(warning_text));
+        let flash_notes = report_flash(&mut machine, warnings)?;
         let stop = outcome.stop;
         let change = HeadChange {
             actor: actor.clone(),
@@ -383,13 +383,40 @@ impl Handler {
         save_head(store, meta, &mut machine, change)?;
         self.keep_warm(store, meta, machine);
         if guarded {
-            return Err(Failure::new(wall_guard_error(self.wall_guard, stop)));
+            let failure = Failure::new(wall_guard_error(self.wall_guard, stop));
+            return Err(failure.with_flash_notes(flash_notes));
         }
         Ok(ResultBody {
             stop: Some(stop),
+            flash_notes,
             ..ResultBody::default()
         })
     }
+}
+
+/// Takes the flash notes the machine took, a mask-ROM cart's hint too
+/// ([`Machine::take_flash_report`]): each a warning, and the rows.
+fn report_flash(
+    machine: &mut Machine,
+    warnings: &mut Vec<String>,
+) -> Result<Option<Vec<FlashNoteRow>>, Failure> {
+    let report = machine
+        .take_flash_report()
+        .map_err(|e| Failure::from_core(&e))?;
+    warnings.extend(report.warnings);
+    Ok(report.rows)
+}
+
+/// [`report_flash`] for a run or step that already failed: its own failure
+/// stays the answer if the notes can't be read, and a warning says so.
+fn report_flash_failed(
+    machine: &mut Machine,
+    warnings: &mut Vec<String>,
+) -> Option<Vec<FlashNoteRow>> {
+    report_flash(machine, warnings).unwrap_or_else(|f| {
+        warnings.push(format!("the flash notes were lost: {}", f.body.message));
+        None
+    })
 }
 
 /// Runs `machine` to `target`.

@@ -62,6 +62,7 @@ fn a_power_cycle_keeps_battery_ram_and_the_clock_and_resets_everything_else() {
             clock: gbcli_core::SavClock::Restored,
             flash_bytes: None,
             flash_sectors_in_image: 0,
+            flash_sectors_dropped: Vec::new(),
         }
     );
     assert_eq!(region(&m, Region::Sram), sram);
@@ -160,6 +161,7 @@ fn a_power_cycle_keeps_a_huc3_carts_battery_ram_and_clock() {
             clock: gbcli_core::SavClock::Restored,
             flash_bytes: None,
             flash_sectors_in_image: 0,
+            flash_sectors_dropped: Vec::new(),
         }
     );
     assert_eq!(region(&m, Region::Sram), sram);

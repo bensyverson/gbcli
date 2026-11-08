@@ -12,6 +12,28 @@ pub fn flash_image_path(sav: &std::path::Path) -> std::path::PathBuf {
     sav.with_extension("flash.gb")
 }
 
+/// The flash notes an op took, as it reports them: each a warning, and the
+/// `--json` rows (`None` when there were none).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FlashReport {
+    pub warnings: Vec<String>,
+    pub rows: Option<Vec<FlashNoteRow>>,
+}
+
+impl crate::Machine {
+    /// Takes the flash notes, and a mask-ROM cart's hint, since the last
+    /// take. Every op that advances the machine calls it once the machine
+    /// stops, whether the op succeeds or fails, so each note is reported by
+    /// the op that took it and by no other.
+    pub fn take_flash_report(&mut self) -> Result<FlashReport, gbcli_core::CoreError> {
+        let notes = self.core_mut().take_flash_notes()?;
+        Ok(FlashReport {
+            warnings: flash_warnings(&notes),
+            rows: (!notes.notes.is_empty()).then(|| flash_note_rows(&notes)),
+        })
+    }
+}
+
 /// One warning per note, and one for any dropped past the chip's cap. A
 /// mask-ROM cart's flash commands name the flag that models the board.
 pub fn flash_warnings(notes: &FlashNotes) -> Vec<String> {

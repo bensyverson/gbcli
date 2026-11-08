@@ -5,6 +5,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+use crate::battery::FlashNoteRow;
 use crate::keys::KeyEvent;
 use crate::response::ResultBody;
 use crate::stop::StopRecord;
@@ -203,6 +204,10 @@ pub struct ErrorBody {
     /// them in `ResultBody::keys_unapplied`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub keys_unapplied: Option<Vec<KeyEvent>>,
+    /// The flash notes a failed run or step took, as a successful one
+    /// returns them in `ResultBody::flash_notes`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub flash_notes: Option<Vec<FlashNoteRow>>,
     /// An assertion's answer when it is no (`measure --max`, `equiv`): the
     /// result it asserted on, as the op returns it on success.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -218,6 +223,7 @@ impl ErrorBody {
             remedy: remedy.into(),
             stop: None,
             keys_unapplied: None,
+            flash_notes: None,
             result: None,
         }
     }

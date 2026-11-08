@@ -148,8 +148,7 @@ pub(super) fn take(machine: &Machine, args: &ShotArgs, since: &Since) -> Result<
 /// Writes through a temporary file beside the target, so a reader never
 /// sees half a PNG.
 pub(super) fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), Failure> {
-    let name = path.file_name().unwrap_or_default().to_string_lossy();
-    let temp = path.with_file_name(format!(".{name}.{}.tmp", std::process::id()));
+    let temp = temp_beside(path);
     let written = fs::write(&temp, bytes).and_then(|()| fs::rename(&temp, path));
     written.map_err(|e| {
         let _ = fs::remove_file(&temp);
@@ -159,6 +158,49 @@ pub(super) fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), Failure>
             ErrorCode::IoFailed.default_remedy(),
         ))
     })
+}
+
+/// Writes every file or none: a directory in a file's place is refused
+/// before anything is written, then each goes to a temporary file beside it,
+/// and only once all of them are written does each replace its file, by a
+/// rename in its own directory. Every failure but one leaves the files as
+/// they were and no temporary file behind; the exception, a rename refused
+/// after another succeeded, needs a change on disk between the two.
+pub(super) fn write_all_atomically(files: &[(&Path, &[u8])]) -> Result<(), Failure> {
+    let io = |path: &Path, e: &dyn std::fmt::Display| {
+        Failure::new(ErrorBody::new(
+            ErrorCode::IoFailed,
+            format!("couldn't write {}: {e}", path.display()),
+            ErrorCode::IoFailed.default_remedy(),
+        ))
+    };
+    if let Some((path, _)) = files.iter().find(|(path, _)| path.is_dir()) {
+        return Err(io(path, &"a directory has its name"));
+    }
+    let temps: Vec<_> = files.iter().map(|(path, _)| temp_beside(path)).collect();
+    let clean = || {
+        for temp in &temps {
+            let _ = fs::remove_file(temp);
+        }
+    };
+    for ((path, bytes), temp) in files.iter().zip(&temps) {
+        if let Err(e) = fs::write(temp, bytes) {
+            clean();
+            return Err(io(path, &e));
+        }
+    }
+    for ((path, _), temp) in files.iter().zip(&temps) {
+        if let Err(e) = fs::rename(temp, path) {
+            clean();
+            return Err(io(path, &e));
+        }
+    }
+    Ok(())
+}
+
+fn temp_beside(path: &Path) -> std::path::PathBuf {
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    path.with_file_name(format!(".{name}.{}.tmp", std::process::id()))
 }
 
 fn bad(message: String, remedy: String) -> Failure {

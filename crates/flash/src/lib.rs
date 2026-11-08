@@ -33,7 +33,7 @@ pub use chip::FlashChip;
 pub use hint::UnlockWatch;
 pub use note::{FlashNote, FlashNotes, NoteKind, Operation};
 pub use profile::{BusyTicks, DataLines, FlashProfile, SectorRun, WritePin};
-pub use state::{CheckedLoad, FlashStateError};
+pub use state::{CheckedLoad, FlashStateError, SplitContents, contents_past};
 
 /// The model's clock: ticks of 2^23 Hz, as `gbcli_core::Ticks` counts them.
 pub const TICKS_PER_SECOND: u64 = 1 << 23;

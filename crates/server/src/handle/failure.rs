@@ -1,7 +1,7 @@
 //! A failed request, and the gap-ledger entry it carries.
 
 use gbcli_engine::DebugError;
-use gbcli_protocol::{ErrorBody, StopRecord};
+use gbcli_protocol::{ErrorBody, FlashNoteRow, StopRecord};
 
 use crate::convert::{self, Gap, debug as debug_body};
 
@@ -24,6 +24,15 @@ impl Failure {
     /// The same failure, carrying the stop record of the run it followed.
     pub(super) fn with_stop(mut self, stop: StopRecord) -> Self {
         self.body = Box::new((*self.body).with_stop(stop));
+        self
+    }
+
+    /// The same failure, carrying the flash notes the failed run or step
+    /// took (none leaves it as it was).
+    pub(super) fn with_flash_notes(mut self, rows: Option<Vec<FlashNoteRow>>) -> Self {
+        if rows.is_some() {
+            self.body.flash_notes = rows;
+        }
         self
     }
 

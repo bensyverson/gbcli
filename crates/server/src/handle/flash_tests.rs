@@ -7,7 +7,7 @@ use std::fs;
 use gbcli_bundle::RomSource;
 use gbcli_protocol::{
     CheckpointArgs, ErrorCode, FlashFrom, FlashNoteKind, Op, PowerCycleArgs, ReadArgs, Request,
-    Response, RestoreArgs, ResultBody, SavArgs,
+    Response, RestoreArgs, ResultBody, RunArgs, SavArgs, StepArgs, StepKind,
 };
 
 use super::Handler;
@@ -146,6 +146,31 @@ fn a_power_cycle_across_a_rebuild_carries_the_flash_save() {
     assert_eq!(image[0x1_C001], 0x77, "and the code is the new build's");
 }
 
+/// A rebuild that grows over the sector the save was in keeps its own code
+/// there and names the sector it dropped (the ruling on the review of
+/// fc85d19).
+#[test]
+fn a_rebuild_grown_into_the_save_keeps_its_code_and_names_the_sector() {
+    let f = Fixture::with_flash("flash-grown", FLASH_SAVE, "generic-wr-aaa-a9");
+    let mut h = handler(&f);
+    ok(run_frames(&mut h, SAVE_FRAMES));
+    let mut grown = FLASH_SAVE.to_vec();
+    grown.resize(0x4_0000, 0xC9); // banks 8-15: the new build's code
+    grown[0x148] = 0x03; // 256 KiB
+    fs::write(f.dir.join("demo.gb"), &grown).unwrap();
+    let (body, warnings) = ok(power_cycle(&mut h, None));
+    assert!(body.power_cycle.unwrap().rom_rebuilt);
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.contains("$30000-$3FFFF (banks 12-15)") && w.contains("dropped")),
+        "{warnings:?}"
+    );
+    ok(sav(&mut h, &f.dir.join("game.sav")));
+    let image = fs::read(f.dir.join("game.flash.gb")).unwrap();
+    assert_eq!(image[SAVED_AT], 0xC9, "the new build's code, not the save");
+}
+
 #[test]
 fn sav_writes_the_chip_image_beside_the_sav_and_power_cycle_imports_it() {
     let f = Fixture::with_flash("flash-sav", FLASH_SAVE, "generic-wr-aaa-a9");
@@ -186,6 +211,116 @@ fn an_image_of_the_wrong_size_is_refused_and_changes_nothing() {
     let path = f.dir.join("bad.sav");
     fs::write(&path, vec![0xFF; 8 * 1024]).unwrap();
     fs::write(f.dir.join("bad.flash.gb"), vec![0xFF; 0x1000]).unwrap();
+    ok(run_frames(&mut h, SAVE_FRAMES));
+    let before = h.handle(&request(Op::Show)).rev;
     let err = power_cycle(&mut h, Some(&path)).outcome.unwrap_err();
     assert!(err.message.contains("0x200000"), "{err:?}");
+    assert_eq!(h.handle(&request(Op::Show)).rev, before, "the head stays");
+    ok(sav(&mut h, &f.dir.join("after.sav")));
+    let chip = fs::read(f.dir.join("after.flash.gb")).unwrap();
+    assert_eq!(chip.len(), CHIP);
+    assert_eq!(chip[SAVED_AT], 0x42, "the chip kept its save");
+}
+
+/// Steps a frame at a time: the warnings of every step that carried flash
+/// notes, and those notes' kinds.
+fn step_frames(h: &mut Handler, frames: u64) -> (Vec<String>, Vec<FlashNoteKind>) {
+    let (mut warned, mut kinds) = (Vec::new(), Vec::new());
+    for _ in 0..frames {
+        let (body, warnings) = ok(h.handle(&request(Op::Step(StepArgs {
+            unit: StepKind::Frame,
+        }))));
+        if let Some(rows) = body.flash_notes {
+            kinds.extend(rows.iter().map(|r| r.kind));
+            warned.extend(warnings);
+        }
+    }
+    (warned, kinds)
+}
+
+#[test]
+fn a_step_reports_the_notes_it_took_and_the_next_run_none() {
+    let f = Fixture::with_flash("flash-step-notes", FLASH_SAVE, "generic-wr-aaa-aa");
+    let mut h = handler(&f);
+    let (warned, kinds) = step_frames(&mut h, SAVE_FRAMES);
+    assert_eq!(kinds.first(), Some(&FlashNoteKind::DataLines), "{kinds:?}");
+    assert!(warned.iter().any(|w| w.contains("D0 and D1")), "{warned:?}");
+    let (after, warnings) = ok(run_frames(&mut h, 1));
+    assert_eq!(
+        after.flash_notes, None,
+        "the steps' notes again: {warnings:?}"
+    );
+}
+
+#[test]
+fn a_step_on_mask_rom_reports_the_hint_and_the_next_run_none() {
+    let f = Fixture::with_rom("flash-step-hint", FLASH_SAVE);
+    let mut h = handler(&f);
+    let (warned, kinds) = step_frames(&mut h, SAVE_FRAMES);
+    assert_eq!(kinds, [FlashNoteKind::NoChip]);
+    assert!(
+        warned
+            .iter()
+            .any(|w| w.contains("--flash generic-wr-aaa-a9")),
+        "{warned:?}"
+    );
+    let (after, warnings) = ok(run_frames(&mut h, 1));
+    assert_eq!(
+        after.flash_notes, None,
+        "the steps' hint again: {warnings:?}"
+    );
+}
+
+/// `.poll` in the WRAM copy of the save routine, after its flash commands.
+const POLL: &str = "$C01A";
+
+#[test]
+fn a_run_that_errors_reports_the_notes_it_took() {
+    let f = Fixture::with_flash("flash-run-error", FLASH_SAVE, "generic-wr-aaa-aa");
+    let mut h = handler(&f);
+    let response = h.handle(&request(Op::Run(RunArgs {
+        frames: Some(SAVE_FRAMES * 10),
+        // wSaved is 0 there: the division fails once the commands are sent.
+        until: Some(format!("pc == {POLL} && 1 / [$C000] == 1")),
+        ..RunArgs::default()
+    })));
+    let warnings = response.warnings.clone();
+    let err = response.outcome.unwrap_err();
+    assert!(err.stop.is_some(), "the run moved: {err:?}");
+    assert!(
+        warnings.iter().any(|w| w.contains("D0 and D1")),
+        "{err:?} {warnings:?}"
+    );
+    let rows = err.flash_notes.expect("rows on the error");
+    assert_eq!(rows[0].kind, FlashNoteKind::DataLines);
+    let (after, warnings) = ok(run_frames(&mut h, 1));
+    assert_eq!(
+        after.flash_notes, None,
+        "the error's notes again: {warnings:?}"
+    );
+}
+
+/// `game.sav` can't be written (a directory has its name), so neither file
+/// is: a lone chip image would pass for a whole save.
+#[test]
+fn sav_writes_both_files_or_neither() {
+    let f = Fixture::with_flash("flash-sav-pair", FLASH_SAVE, "generic-wr-aaa-a9");
+    let mut h = handler(&f);
+    ok(run_frames(&mut h, SAVE_FRAMES));
+    let path = f.dir.join("game.sav");
+    fs::create_dir(&path).unwrap();
+    fs::write(path.join("keep"), b"x").unwrap();
+    let err = sav(&mut h, &path).outcome.unwrap_err();
+    assert_eq!(err.code, ErrorCode::IoFailed, "{err:?}");
+    assert!(
+        !f.dir.join("game.flash.gb").exists(),
+        "the chip image was written alone"
+    );
+    let strays: Vec<String> = fs::read_dir(&f.dir)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.ends_with(".tmp"))
+        .collect();
+    assert!(strays.is_empty(), "{strays:?}");
 }

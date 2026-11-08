@@ -13,7 +13,7 @@ use gbcli_protocol::{
     ResultBody, SavArgs, SavClockState, SavMade, SessionFile,
 };
 
-use super::shot::write_atomically;
+use super::shot::write_all_atomically;
 use super::{Failure, Handler, HeadChange, Need, save_head};
 
 /// The remedy for a cart that keeps nothing with the power off.
@@ -133,6 +133,12 @@ impl Handler {
                 machine.rom_len()
             ));
         }
+        if !cycled.flash_sectors_dropped.is_empty() {
+            warnings.push(dropped_sectors_warning(
+                &cycled.flash_sectors_dropped,
+                machine.rom_len(),
+            ));
+        }
         let from = match (file.is_some(), cycled.battery_bytes) {
             (true, _) => BatteryFrom::Sav,
             (false, Some(_)) => BatteryFrom::Head,
@@ -187,21 +193,22 @@ impl Handler {
             )));
         }
         // A flash session's save may live in the chip (GB Studio's
-        // batteryless saves do), so the chip image goes beside the `.sav`.
-        let flash = match &image {
-            Some(image) => {
-                let path = flash_image_path(Path::new(&args.path));
-                write_atomically(&path, image)?;
-                Some(FlashFileMade {
-                    path: path.display().to_string(),
-                    bytes: image.len() as u64,
-                })
-            }
-            None => None,
-        };
+        // batteryless saves do), so the chip image goes beside the `.sav`;
+        // both are written or neither, as one alone is half a save.
+        let sav_path = Path::new(&args.path);
+        let image_path = flash_image_path(sav_path);
+        let mut files: Vec<(&Path, &[u8])> = Vec::new();
         if let Some(sav) = &sav {
-            write_atomically(Path::new(&args.path), sav)?;
+            files.push((sav_path, sav));
         }
+        if let Some(image) = &image {
+            files.push((&image_path, image));
+        }
+        write_all_atomically(&files)?;
+        let flash = image.as_ref().map(|image| FlashFileMade {
+            path: image_path.display().to_string(),
+            bytes: image.len() as u64,
+        });
         Ok(ResultBody {
             sav: Some(SavMade {
                 path: sav.as_ref().map(|_| args.path.clone()),
@@ -212,6 +219,30 @@ impl Handler {
             ..ResultBody::default()
         })
     }
+}
+
+/// The carried flash sectors a rebuild's image grew into, which kept the
+/// new build's code: each by chip address and 16 KiB bank.
+fn dropped_sectors_warning(sectors: &[std::ops::Range<u32>], rom_len: usize) -> String {
+    let named: Vec<String> = sectors
+        .iter()
+        .map(|s| {
+            let banks = (s.start / 0x4000, (s.end - 1) / 0x4000);
+            format!(
+                "${:05X}-${:05X} (banks {}-{})",
+                s.start,
+                s.end - 1,
+                banks.0,
+                banks.1
+            )
+        })
+        .collect();
+    format!(
+        "the rebuilt ROM's {rom_len} bytes reach into the flash sector(s) the head's save was \
+         in: {}; the new build's code stays there and that part of the save was dropped, as the \
+         save no longer fits beside the code: move it past the image's end",
+        named.join(", ")
+    )
 }
 
 /// The refusal of an advance past `clock`'s bound, in that cart's terms.

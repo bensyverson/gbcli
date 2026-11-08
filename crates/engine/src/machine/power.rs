@@ -1,6 +1,7 @@
 //! The power cycle (design §6, the 2026-11-07 battery-save ruling): the
 //! machine at power-on again, keeping what a cart keeps with the power off.
 
+use gbcli_core::flash::contents_past;
 use gbcli_core::{CoreError, SavClock};
 
 use super::{Machine, core_config};
@@ -27,7 +28,10 @@ pub enum Flash<'a> {
     /// The chip's own: a flash chip keeps its array with the power off.
     Keep,
     /// A [`Core::flash_contents`](gbcli_core::Core::flash_contents) from
-    /// another core on the same board (the head's, across a rebuild).
+    /// another core on the same board (the head's, across a rebuild). The
+    /// sectors that overlap this machine's ROM file are left out: the image
+    /// is this build's, and they are named in
+    /// [`PowerCycled::flash_sectors_dropped`].
     Carried(&'a [u8]),
     /// A whole chip image, as [`Machine::flash_image`] exports it: every
     /// sector where it differs from the image as built becomes the chip's.
@@ -35,7 +39,7 @@ pub enum Flash<'a> {
 }
 
 /// What a power cycle carried across.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PowerCycled {
     /// The size of the battery save carried in, or `None` when the cart has
     /// no battery.
@@ -47,6 +51,10 @@ pub struct PowerCycled {
     /// file's extent: the save is normally past it, and a difference there
     /// may be another build's code.
     pub flash_sectors_in_image: usize,
+    /// The chip-address ranges of the carried sectors ([`Flash::Carried`])
+    /// that overlap the ROM file's extent, which were not carried: the new
+    /// build's code lies there, so the save no longer fits beside it.
+    pub flash_sectors_dropped: Vec<std::ops::Range<u32>>,
 }
 
 impl Machine {
@@ -87,9 +95,19 @@ impl Machine {
             (Battery::Sav(sav), _) => (core.load_battery_sav(sav)?, Some(sav.len())),
         };
         let (mut flash_bytes, mut flash_sectors_in_image) = (None, 0);
+        let mut flash_sectors_dropped = Vec::new();
         match (flash, own.as_deref()) {
-            (Flash::Keep, Some(contents)) | (Flash::Carried(contents), _) => {
-                core.load_flash_contents(contents)?;
+            (Flash::Keep, Some(contents)) => core.load_flash_contents(contents)?,
+            (Flash::Carried(contents), _) => {
+                // Where the image lies is this build's code, however the
+                // other build's program left those sectors.
+                let split = contents_past(contents, self.rom.len() as u32).map_err(|e| {
+                    CoreError::InvalidState {
+                        reason: e.to_string(),
+                    }
+                })?;
+                core.load_flash_contents(&split.kept)?;
+                flash_sectors_dropped = split.dropped;
             }
             (Flash::Image(image), _) => {
                 let changed = core.load_flash_image(image)?;
@@ -110,6 +128,7 @@ impl Machine {
             clock,
             flash_bytes,
             flash_sectors_in_image,
+            flash_sectors_dropped,
         })
     }
 }

@@ -176,68 +176,35 @@ impl FlashChip {
     }
 
     fn decode(&self, bytes: &[u8], want: Kind, rom_len: usize) -> Result<Decoded, FlashStateError> {
-        let bad = |why: &str| FlashStateError(why.to_string());
-        let mut r = Reader(bytes);
-        if r.take(4)? != MAGIC {
-            return Err(bad("not a flash chip state"));
+        let parsed = parse(bytes)?;
+        if parsed.kind != want as u8 {
+            return Err(FlashStateError(
+                match want {
+                    Kind::Checkpoint => "a power-off state where a checkpoint's was expected",
+                    Kind::PowerOff => "a checkpoint's state where a power-off one was expected",
+                }
+                .to_string(),
+            ));
         }
-        if r.u8()? != VERSION {
-            return Err(bad("an unknown version of the flash chip state"));
-        }
-        if r.u8()? != want as u8 {
-            return Err(bad(match want {
-                Kind::Checkpoint => "a power-off state where a checkpoint's was expected",
-                Kind::PowerOff => "a checkpoint's state where a power-off one was expected",
-            }));
-        }
-        let n = r.u32()? as usize;
-        let name = String::from_utf8_lossy(r.take(n)?).into_owned();
-        if name != self.profile.name {
+        if parsed.name != self.profile.name {
             return Err(FlashStateError(format!(
-                "the state is from a {name} board, this cart is {}",
-                self.profile.name
+                "the state is from a {} board, this cart is {}",
+                parsed.name, self.profile.name
             )));
         }
-        let mode = match r.u8()? {
-            0 => Mode::Read,
-            1 => Mode::Unlocked1,
-            2 => Mode::Unlocked2,
-            3 => Mode::Program,
-            4 => Mode::Erase0,
-            5 => Mode::Erase1,
-            6 => Mode::Erase2,
-            7 => Mode::Autoselect,
-            8 => Mode::Busy {
-                op: match r.u8()? {
-                    0 => Operation::Program,
-                    1 => Operation::SectorErase,
-                    2 => Operation::ChipErase,
-                    _ => return Err(bad("an unknown operation")),
-                },
-                until: r.u64()?,
-                data: r.u8()?,
-            },
-            _ => return Err(bad("an unknown command state")),
-        };
-        let toggle = r.u8()? != 0;
-        let count = r.u32()?;
-        let mut sectors = Vec::new();
-        for _ in 0..count {
-            let start = r.u32()?;
-            let len = r.u32()? as usize;
-            let bytes = r.take(len)?.to_vec();
-            if start as usize + len > rom_len {
-                return Err(bad("a sector past the end of this ROM"));
-            }
-            sectors.push((start, bytes));
-        }
-        if !r.0.is_empty() {
-            return Err(bad("trailing bytes"));
+        if parsed
+            .sectors
+            .iter()
+            .any(|(start, bytes)| *start as usize + bytes.len() > rom_len)
+        {
+            return Err(FlashStateError(
+                "a sector past the end of this ROM".to_string(),
+            ));
         }
         Ok(Decoded {
-            mode,
-            toggle,
-            sectors,
+            mode: parsed.mode,
+            toggle: parsed.toggle,
+            sectors: parsed.sectors,
         })
     }
 
@@ -260,6 +227,74 @@ impl FlashChip {
             rom[*start as usize..*start as usize + bytes.len()].copy_from_slice(bytes);
         }
     }
+}
+
+/// A state's parts as written, before any check against a chip.
+struct Parsed {
+    kind: u8,
+    name: String,
+    mode: Mode,
+    toggle: bool,
+    /// The bytes before the sector count: everything but the sectors.
+    head_len: usize,
+    sectors: Vec<(u32, Vec<u8>)>,
+}
+
+/// Reads a state's layout whole: magic, version, fields, sectors, nothing
+/// after them.
+fn parse(bytes: &[u8]) -> Result<Parsed, FlashStateError> {
+    let bad = |why: &str| FlashStateError(why.to_string());
+    let mut r = Reader(bytes);
+    if r.take(4)? != MAGIC {
+        return Err(bad("not a flash chip state"));
+    }
+    if r.u8()? != VERSION {
+        return Err(bad("an unknown version of the flash chip state"));
+    }
+    let kind = r.u8()?;
+    let n = r.u32()? as usize;
+    let name = String::from_utf8_lossy(r.take(n)?).into_owned();
+    let mode = match r.u8()? {
+        0 => Mode::Read,
+        1 => Mode::Unlocked1,
+        2 => Mode::Unlocked2,
+        3 => Mode::Program,
+        4 => Mode::Erase0,
+        5 => Mode::Erase1,
+        6 => Mode::Erase2,
+        7 => Mode::Autoselect,
+        8 => Mode::Busy {
+            op: match r.u8()? {
+                0 => Operation::Program,
+                1 => Operation::SectorErase,
+                2 => Operation::ChipErase,
+                _ => return Err(bad("an unknown operation")),
+            },
+            until: r.u64()?,
+            data: r.u8()?,
+        },
+        _ => return Err(bad("an unknown command state")),
+    };
+    let toggle = r.u8()? != 0;
+    let head_len = bytes.len() - r.0.len();
+    let count = r.u32()?;
+    let mut sectors = Vec::new();
+    for _ in 0..count {
+        let start = r.u32()?;
+        let len = r.u32()? as usize;
+        sectors.push((start, r.take(len)?.to_vec()));
+    }
+    if !r.0.is_empty() {
+        return Err(bad("trailing bytes"));
+    }
+    Ok(Parsed {
+        kind,
+        name,
+        mode,
+        toggle,
+        head_len,
+        sectors,
+    })
 }
 
 fn mode_tag(mode: Mode) -> u8 {
@@ -304,4 +339,44 @@ impl<'a> Reader<'a> {
     fn u64(&mut self) -> Result<u64, FlashStateError> {
         Ok(u64::from_le_bytes(self.take(8)?.try_into().unwrap()))
     }
+}
+
+/// A power-off contents split at the end of a new image
+/// ([`contents_past`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SplitContents {
+    /// The contents without the sectors that overlap the image.
+    pub kept: Vec<u8>,
+    /// Those sectors' chip-address ranges.
+    pub dropped: Vec<std::ops::Range<u32>>,
+}
+
+/// A [`FlashChip::contents`] without every sector that overlaps the chip's
+/// first `end` bytes, and those sectors: across a rebuild, where the new
+/// image lies is the new build's code, not the old build's save.
+pub fn contents_past(contents: &[u8], end: u32) -> Result<SplitContents, FlashStateError> {
+    let parsed = parse(contents)?;
+    if parsed.kind != Kind::PowerOff as u8 {
+        return Err(FlashStateError(
+            "a checkpoint's state where a power-off one was expected".to_string(),
+        ));
+    }
+    let (dropped, kept): (Vec<_>, Vec<_>) = parsed
+        .sectors
+        .into_iter()
+        .partition(|(start, _)| *start < end);
+    let mut out = contents[..parsed.head_len].to_vec();
+    out.extend_from_slice(&(kept.len() as u32).to_le_bytes());
+    for (start, bytes) in &kept {
+        out.extend_from_slice(&start.to_le_bytes());
+        out.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
+        out.extend_from_slice(bytes);
+    }
+    Ok(SplitContents {
+        kept: out,
+        dropped: dropped
+            .iter()
+            .map(|(start, bytes)| *start..*start + bytes.len() as u32)
+            .collect(),
+    })
 }

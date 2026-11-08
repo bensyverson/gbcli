@@ -124,9 +124,62 @@ fn a_power_cycle_carries_another_cores_flash_contents() {
     run(&mut source, BOOT_AND_SAVE);
     let contents = source.core_mut().flash_contents().unwrap().unwrap();
     let mut m = machine(Some("generic-wr-aaa-a9"));
-    m.power_cycle(Battery::Keep, Flash::Carried(&contents), 0)
+    let cycled = m
+        .power_cycle(Battery::Keep, Flash::Carried(&contents), 0)
         .unwrap();
     assert_eq!(chip_byte(&m), 0x42);
+    assert!(
+        cycled.flash_sectors_dropped.is_empty(),
+        "the save lies past the image: {:?}",
+        cycled.flash_sectors_dropped
+    );
+}
+
+/// A rebuild that grows the ROM into the sector the old build saved in: the
+/// new build's code stays there, and the sector is named as dropped (the
+/// 2026-11-07 ruling on the review of fc85d19).
+#[test]
+fn a_rebuild_grown_into_the_carried_save_keeps_its_code_and_names_the_sector() {
+    let mut old = machine(Some("generic-wr-aaa-a9"));
+    run(&mut old, BOOT_AND_SAVE);
+    let contents = old.core_mut().flash_contents().unwrap().unwrap();
+
+    let mut grown = FLASH_SAVE.to_vec();
+    grown.resize(0x4_0000, 0xC9); // banks 8-15: the new build's code, all RET
+    grown[0x148] = 0x03; // 256 KiB
+    let mut config = CoreConfig::new(Model::DmgB, grown.clone());
+    config.flash = Some(FlashProfile::named("generic-wr-aaa-a9").unwrap());
+    let mut new = Machine::new(Backend::sameboy(), config, None).unwrap();
+    let cycled = new
+        .power_cycle(Battery::Keep, Flash::Carried(&contents), 0)
+        .unwrap();
+    let chip = &new.core().region(Region::Rom).unwrap().bytes;
+    let differing = (SAVED_BYTE..grown.len())
+        .filter(|&i| chip[i] != grown[i])
+        .count();
+    assert_eq!(differing, 0, "bytes of the new build's code replaced");
+    let sector = std::ops::Range {
+        start: 0x3_0000,
+        end: 0x4_0000,
+    };
+    assert_eq!(cycled.flash_sectors_dropped, vec![sector]);
+}
+
+#[test]
+fn a_flash_report_holds_each_note_as_a_warning_and_a_row_once() {
+    let mut m = machine(Some("generic-wr-aaa-aa"));
+    run(&mut m, BOOT_AND_SAVE);
+    let report = m.take_flash_report().unwrap();
+    let rows = report.rows.expect("rows");
+    assert_eq!(rows.len(), report.warnings.len());
+    assert!(
+        report.warnings[0].contains("D0 and D1"),
+        "{:?}",
+        report.warnings
+    );
+    assert_eq!(rows[0].text, report.warnings[0]);
+    let again = m.take_flash_report().unwrap();
+    assert_eq!((again.warnings.len(), again.rows), (0, None), "taken once");
 }
 
 #[test]

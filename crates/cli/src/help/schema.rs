@@ -67,13 +67,14 @@ sav     path: PATH   (writes the head's battery save, and on a flash session
 Response, one line per request:
   {"id", "ok": true, "rev"?: "sN", "result": {…}, "warnings": [TEXT]}
   {"id", "ok": false, "rev"?, "error": {"code", "exit", "message", "remedy",
-   "stop"?, "result"?}, "warnings"}
+   "stop"?, "flash_notes"?, "result"?}, "warnings"}
 result holds only the fields the op fills: stop, reads, shot, measure, profile,
 frame_budget, raster, equiv, view, symbols,
 checkpoints, keys_unapplied, writes, checkpoint, restored, breakpoint, watch,
 deleted, registers, ppu, sessions, events, gaps, pruned, kept, busy, removed,
 build, doctor, created, song, song_problem, opcodes, power_cycle, sav,
-flash_notes (run: each flash note, also a warning).
+flash_notes (run, step: each flash note, also a warning; a failed run's or
+step's are on its error).
 `gbcli VERB --json` prints the whole response line, as serve writes it.
 
 GBC images, in result.build.images (gbcli help images). The types are

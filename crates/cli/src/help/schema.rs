@@ -82,8 +82,8 @@ flash_notes (run, step: each flash note, also a warning; a failed run's or
 step's are on its error).
 `gbcli VERB --json` prints the whole response line, as serve writes it.
 
-GBC images, in result.build.images (gbcli help images). A --gbc build fills
-them for indexed art; color art's GBC conversion is not built yet.
+GBC images, in result.build.images (gbcli help images). Every build fills
+tile_map (no slot without --gbc); a --gbc build fills gbc for every image.
   images[]  tile_map?: [ENTRY|null]  (each 8x8 tile, each 8x16 unit of a
             sheet, rows top to bottom; null: a transparent unit, no tile)
             gbc?: {art: "color"|"indexed", palette?: NAME,

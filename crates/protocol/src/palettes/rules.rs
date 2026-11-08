@@ -39,6 +39,9 @@ pub enum PaletteFault {
     /// `dmg`'s color for `shade` is its color for `first`, so the two
     /// can't name two shades (a named palette may repeat a color).
     RepeatedDmgColor { shade: usize, first: usize },
+    /// `image` is assigned a palette a second time ([`NamedPalettes::assign`]):
+    /// read last-wins, the palette first given would silently not be used.
+    AssignedAgain { image: String },
 }
 
 /// Where a fault is: a palette by its index, or an assignment by its image.
@@ -58,7 +61,8 @@ impl PaletteFault {
             | PaletteFault::Duplicate { index, .. } => FaultAt::Palette(*index),
             PaletteFault::AssignedDmg { image }
             | PaletteFault::UnknownPalette { image, .. }
-            | PaletteFault::BadImage { image } => FaultAt::Assignment(image),
+            | PaletteFault::BadImage { image }
+            | PaletteFault::AssignedAgain { image } => FaultAt::Assignment(image),
             PaletteFault::RepeatedDmgColor { .. } => FaultAt::Dmg,
         }
     }
@@ -99,11 +103,21 @@ impl fmt::Display for PaletteFault {
                 "dmg's shade {shade} is the color of its shade {first} in RGB555, so the two \
                  can't name two shades"
             ),
+            PaletteFault::AssignedAgain { image } => {
+                write!(f, "{image} is assigned a palette again")
+            }
         }
     }
 }
 
 impl NamedPalettes {
+    /// Assigns `image` the palette `name`, refusing an image assigned
+    /// before: the one rule for the file's lines and the wire's map keys,
+    /// which a map can't hold twice, so `faults` can't see it.
+    pub fn assign(&mut self, image: String, name: String) -> Result<(), PaletteFault> {
+        assign_once(&mut self.assignments, image, name)
+    }
+
     /// Every fault: `dmg`'s, then the palettes' in order, then the
     /// assignments' by image.
     pub fn faults(&self) -> Vec<PaletteFault> {
@@ -172,9 +186,20 @@ pub(super) struct Unchecked {
     assignments: BTreeMap<String, String>,
 }
 
+fn assign_once(
+    assignments: &mut BTreeMap<String, String>,
+    image: String,
+    name: String,
+) -> Result<(), PaletteFault> {
+    if assignments.contains_key(&image) {
+        return Err(PaletteFault::AssignedAgain { image });
+    }
+    assignments.insert(image, name);
+    Ok(())
+}
+
 /// The assignments as sent, refusing an image named twice (a repeated
-/// JSON key), as the file refuses a second assignment: read last-wins, a
-/// palette the client sent would silently not be the one used.
+/// JSON key), by the rule the file's lines follow too (`assign_once`).
 fn assigned_once<'de, D>(deserializer: D) -> Result<BTreeMap<String, String>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -194,12 +219,7 @@ where
         {
             let mut out = BTreeMap::new();
             while let Some((image, name)) = map.next_entry::<String, String>()? {
-                if out.contains_key(&image) {
-                    return Err(serde::de::Error::custom(format!(
-                        "{image} is assigned a palette again"
-                    )));
-                }
-                out.insert(image, name);
+                assign_once(&mut out, image, name).map_err(serde::de::Error::custom)?;
             }
             Ok(out)
         }

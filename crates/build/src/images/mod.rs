@@ -13,11 +13,9 @@ mod census;
 mod derive;
 mod emit;
 mod find;
+mod gbc;
 mod indexed;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the joint conversion (leaf joint) calls it")
-)]
+mod output;
 mod pack;
 mod palettes;
 mod pixels;
@@ -26,14 +24,13 @@ mod run;
 mod shades;
 mod shared;
 mod sheet;
+mod vram;
 
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use gbcli_protocol::{
-    BuildTarget, Diagnostic, ImageAsset, ImageKind, ImageLimit, ImageProblem, ImagesMade,
-};
+use gbcli_protocol::{BuildTarget, Diagnostic, ImageKind, ImageProblem, ImagesMade};
 
 use crate::project::BuildError;
 use crate::toolchain::Toolchain;
@@ -46,8 +43,6 @@ use sheet::SheetPlan;
 
 /// Where the converted data goes, relative to the project.
 const OUT: &str = "build/images";
-/// VRAM's tiles on the DMG, shared by the background and objects.
-const VRAM_TILES: u32 = 384;
 
 /// What the images became, for the build to assemble.
 pub(crate) struct Converted {
@@ -73,6 +68,16 @@ pub(crate) struct Generated {
 enum Plan {
     Bg(BgPlan),
     Sheet(SheetPlan),
+}
+
+/// An image that passed its checks: its source, as shown, its plan, and
+/// for color art under `--gbc` its color image, whose tiles the plan pairs
+/// with the DMG version's (plan question 1).
+pub(super) struct Checked<'a> {
+    s: &'a Source,
+    image: String,
+    plan: Plan,
+    color: Option<Pixels>,
 }
 
 impl Plan {
@@ -212,27 +217,30 @@ pub(crate) fn convert(
     let across = shared::across(&dmg_named, &dmg_colors, &shading);
     let grays = derive::gray_shading();
 
-    let mut plans: Vec<(&Source, String, Plan)> = Vec::new();
+    let mut plans: Vec<Checked> = Vec::new();
     // Each plan's DMG version, for rgbgfx: its pixels, and the file that
     // holds them, if any (a derived version is written out first).
     let mut read: Vec<(Pixels, Option<PathBuf>)> = Vec::new();
     for (s, image, pixels, version) in versioned {
         let dmg_shown = shown(&find::dmg_path(&s.path));
-        // The DMG version the checks read, under the name they give it.
-        let (checked_name, dmg, file, shading) = match version {
-            Version::Art => (image.clone(), pixels, Some(s.path.clone()), &shading),
+        // The DMG version the checks read, under the name they give it,
+        // and color art's color image, whose tiles pair with it.
+        let (checked_name, dmg, file, shading, color) = match version {
+            Version::Art => (image.clone(), pixels, Some(s.path.clone()), &shading, None),
             Version::Override(o) => {
-                if let Some(p) = derive::override_size(&image, &dmg_shown, &pixels, &o) {
+                let wrong = derive::override_size(&image, &dmg_shown, &pixels, &o)
+                    .or_else(|| derive::override_alpha(&image, &dmg_shown, s.kind, &pixels, &o));
+                if let Some(p) = wrong {
                     made.problems.push(p);
                     continue;
                 }
-                (dmg_shown, o, s.dmg.clone(), &shading)
+                (dmg_shown, o, s.dmg.clone(), &shading, Some(pixels))
             }
             Version::Derived => {
                 match derive::derive(&image, &dmg_shown, s.kind, &pixels, &shading) {
                     Ok(d) => {
                         made.problems.extend(d.warnings);
-                        (image.clone(), d.pixels, None, &grays)
+                        (image.clone(), d.pixels, None, &grays, Some(pixels))
                     }
                     Err(p) => {
                         made.problems.push(p);
@@ -242,10 +250,16 @@ pub(crate) fn convert(
             }
         };
         let checked = match s.kind {
-            ImageKind::Bg => bg::check(&checked_name, &dmg, shading).map(Plan::Bg),
-            ImageKind::Sprites => {
-                sheet::check(&checked_name, &s.stem, &dmg, s.frame, shading).map(Plan::Sheet)
-            }
+            ImageKind::Bg => bg::check(&checked_name, &dmg, shading, color.as_ref()).map(Plan::Bg),
+            ImageKind::Sprites => sheet::check(
+                &checked_name,
+                &s.stem,
+                &dmg,
+                s.frame,
+                shading,
+                color.as_ref(),
+            )
+            .map(Plan::Sheet),
             ImageKind::Tiles => {
                 unreachable!("find yields no tileset: assets/tiles/ isn't read yet")
             }
@@ -253,20 +267,25 @@ pub(crate) fn convert(
         match checked {
             Ok(plan) => {
                 made.problems.extend(plan.warnings().iter().cloned());
-                plans.push((s, image, plan));
+                plans.push(Checked {
+                    s,
+                    image,
+                    plan,
+                    color,
+                });
                 read.push((dmg, file));
             }
             Err(problems) => made.problems.extend(problems),
         }
     }
     made.problems.extend(across);
-    made.problems.extend(vram(&plans));
+    made.problems.extend(vram::vram(&plans));
     // On the GBC, indexed art and the OBJ slots its sheets take.
     let indexed = (target == BuildTarget::Gbc).then(|| {
         let sheets: Vec<(String, u8)> = plans
             .iter()
-            .filter_map(|(s, _, p)| match p {
-                Plan::Sheet(p) => Some((under_assets(s), p.obp)),
+            .filter_map(|c| match &c.plan {
+                Plan::Sheet(p) => Some((under_assets(c.s), p.obp)),
                 Plan::Bg(_) => None,
             })
             .collect();
@@ -278,8 +297,18 @@ pub(crate) fn convert(
     if made.first_error().is_some() {
         return Ok(Some(Converted { made, ..stopped }));
     }
+    // Only now, with every check passed (census::alpha among them), are
+    // color art's palettes packed.
+    let reserved = indexed.as_ref().map_or(0, indexed::Indexed::reserved);
+    let packed = match output::packed(&plans, reserved) {
+        Ok(p) => p,
+        Err(problems) => {
+            made.problems.extend(problems);
+            return Ok(Some(Converted { made, ..stopped }));
+        }
+    };
 
-    let mut rgbgfx = run::Rgbgfx {
+    let rgbgfx = run::Rgbgfx {
         path: tools.rgbgfx().map_err(BuildError::Toolchain)?,
         project,
         timeout,
@@ -291,82 +320,22 @@ pub(crate) fn convert(
         let dir = project.join(OUT).join(kind.dir());
         fs::create_dir_all(&dir).map_err(io(dir.clone()))?;
     }
-    let mut data_paths = Vec::new();
+    let mut out = output::Output {
+        rgbgfx,
+        project,
+        shown,
+        indexed: indexed.as_ref(),
+        packed: &packed,
+    };
     let mut ok = true;
-    for ((s, image, plan), (pixels, file)) in plans.iter().zip(&read) {
-        let data = format!("{OUT}/{}/{}", s.kind.dir(), s.stem);
-        // rgbgfx reads the DMG version's file, or, when colors share a
-        // shade or the version was derived, a copy (with them merged),
-        // removed once converted.
-        let merged = PathBuf::from(format!("{data}.merged.png"));
-        let transient = if plan.merges().is_empty() && file.is_some() {
-            None
-        } else {
-            // Guarded before it is written, so a failed write leaves no
-            // partial file behind.
-            let removed = Removed(project.join(&merged));
-            shared::write(pixels, plan.merges(), &removed.0).map_err(io(removed.0.clone()))?;
-            Some(removed)
-        };
-        let rel = match (&transient, file) {
-            (None, Some(file)) => file.strip_prefix(project).unwrap_or(file),
-            _ => merged.as_path(),
-        };
-        let preview_path = project.join(format!("{data}.preview.png"));
-        let (asset, picture) = match plan {
-            Plan::Bg(p) => {
-                let Some(d) = rgbgfx.background(image, rel, p, &data)? else {
-                    ok = false;
-                    continue;
-                };
-                let mut asset = asset(s, image, p.width, p.height, p.tiles, None, None);
-                if let Some(i) = &indexed {
-                    i.fill_background(&under_assets(s), &d.map, &mut asset);
-                }
-                (
-                    asset,
-                    preview::background(image, &d.tiles, &d.map, p.width, p.height),
-                )
-            }
-            Plan::Sheet(p) => {
-                let Some(units) = rgbgfx.sheet(image, rel, p, &data)? else {
-                    ok = false;
-                    continue;
-                };
-                if !units.is_empty() {
-                    let path = project.join(format!("{data}.2bpp"));
-                    fs::write(&path, &units).map_err(io(path.clone()))?;
-                }
-                let objects = p.frames.iter().map(Vec::len).max().unwrap_or(0) as u32;
-                let frames = Some(p.frames.len() as u32);
-                let mut asset = asset(
-                    s,
-                    image,
-                    p.width,
-                    p.height,
-                    p.tiles(),
-                    frames,
-                    Some(objects),
-                );
-                if let Some(i) = &indexed {
-                    i.fill_sheet(&under_assets(s), p, &mut asset);
-                }
-                (asset, preview::sheet(image, &units, p))
-            }
-        };
-        let png = picture.png().map_err(|e| BuildError::Io {
-            path: preview_path.clone(),
-            error: std::io::Error::other(e.to_string()),
-        })?;
-        fs::write(&preview_path, png).map_err(io(preview_path.clone()))?;
-        made.images.push(ImageAsset {
-            preview: shown(&preview_path),
-            ..asset
-        });
-        data_paths.push(data);
+    for (i, (c, (pixels, file))) in plans.iter().zip(&read).enumerate() {
+        match out.image(i, c, pixels, file.as_ref(), &under_assets(c.s))? {
+            Some(asset) => made.images.push(asset),
+            None => ok = false,
+        }
     }
-    let diagnostics = std::mem::take(&mut rgbgfx.diagnostics);
-    made.problems.append(&mut rgbgfx.problems);
+    let diagnostics = std::mem::take(&mut out.rgbgfx.diagnostics);
+    made.problems.append(&mut out.rgbgfx.problems);
     if !ok {
         made.images.clear();
         return Ok(Some(Converted {
@@ -376,23 +345,27 @@ pub(crate) fn convert(
         }));
     }
 
+    let data_paths: Vec<String> = plans
+        .iter()
+        .map(|c| format!("{OUT}/{}/{}", c.s.kind.dir(), c.s.stem))
+        .collect();
     let entries: Vec<Entry> = plans
         .iter()
         .zip(&data_paths)
-        .map(|((s, image, plan), data)| match plan {
+        .map(|(c, data)| match &c.plan {
             Plan::Bg(p) => Entry::Bg {
-                source: image,
-                label: &s.label,
-                constant: &s.constant,
+                source: &c.image,
+                label: &c.s.label,
+                constant: &c.s.constant,
                 data,
                 width: p.width,
                 height: p.height,
                 tiles: p.tiles,
             },
             Plan::Sheet(p) => Entry::Sheet {
-                source: image,
-                label: &s.label,
-                constant: &s.constant,
+                source: &c.image,
+                label: &c.s.label,
+                constant: &c.s.constant,
                 data,
                 plan: p,
             },
@@ -403,7 +376,11 @@ pub(crate) fn convert(
     fs::write(&asm, emit::asm(&entries)).map_err(io(asm.clone()))?;
     fs::write(&inc, emit::inc(&entries)).map_err(io(inc.clone()))?;
     made.include = Some(shown(&inc));
-    made.gbc = indexed.as_ref().map(indexed::Indexed::made);
+    made.gbc = indexed.as_ref().map(|i| {
+        let mut gbc = i.made();
+        gbc.obj_palettes.extend_from_slice(packed.obj_palettes());
+        gbc
+    });
     Ok(Some(Converted {
         made,
         diagnostics,
@@ -439,88 +416,4 @@ impl Drop for Removed {
     fn drop(&mut self) {
         let _ = fs::remove_file(&self.0);
     }
-}
-
-fn asset(
-    s: &Source,
-    image: &str,
-    width: u32,
-    height: u32,
-    tiles: u32,
-    frames: Option<u32>,
-    objects: Option<u32>,
-) -> ImageAsset {
-    ImageAsset {
-        kind: s.kind,
-        source: image.to_string(),
-        label: s.label.clone(),
-        width,
-        height,
-        tiles,
-        frames,
-        objects,
-        preview: String::new(),
-        tile_map: Vec::new(),
-        gbc: None,
-    }
-}
-
-/// The limits the images break together: each background with every sheet
-/// must fit VRAM's 384 tiles (one background on screen at a time, all
-/// sheets loaded), and the sheets the 256 tiles objects address.
-fn vram(plans: &[(&Source, String, Plan)]) -> Vec<ImageProblem> {
-    let sheets: Vec<(&str, u32)> = plans
-        .iter()
-        .filter(|(_, _, p)| matches!(p, Plan::Sheet(_)))
-        .map(|(_, image, p)| (image.as_str(), p.tiles()))
-        .collect();
-    let sprite_tiles: u32 = sheets.iter().map(|(_, n)| n).sum();
-    let listed = sheets
-        .iter()
-        .map(|(image, n)| format!("{image} {n}"))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let mut problems = Vec::new();
-    let biggest = plans
-        .iter()
-        .filter(|(_, _, p)| matches!(p, Plan::Bg(_)))
-        .max_by_key(|(_, _, p)| p.tiles());
-    if let Some((_, image, bg)) = biggest
-        && bg.tiles() + sprite_tiles > VRAM_TILES
-    {
-        let total = bg.tiles() + sprite_tiles;
-        problems.push(ImageProblem {
-            image: None,
-            ..census::error(
-                image,
-                ImageLimit::VramTiles,
-                total as usize,
-                VRAM_TILES as usize,
-                format!(
-                    "{image} uses {} tiles and the sprite sheets {sprite_tiles} ({listed}): \
-                     {total} of the {VRAM_TILES} tiles VRAM holds for both",
-                    bg.tiles()
-                ),
-                "cut unique tiles from the background or the sheets (flipped copies of an \
-                 8x16 object are free), or load them at different times as separate images",
-            )
-        });
-    }
-    if sheets.len() > 1 && sprite_tiles > sheet::OBJ_TILES as u32 {
-        problems.push(ImageProblem {
-            image: None,
-            ..census::error(
-                "",
-                ImageLimit::ObjTiles,
-                sprite_tiles as usize,
-                sheet::OBJ_TILES,
-                format!(
-                    "the sprite sheets need {sprite_tiles} tiles ({listed}); objects address {}",
-                    sheet::OBJ_TILES
-                ),
-                "reuse units across frames, or split the sheets so fewer load at once",
-            )
-        });
-    }
-    problems
 }

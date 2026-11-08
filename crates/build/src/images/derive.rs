@@ -276,6 +276,66 @@ pub(crate) fn override_size(
     ))
 }
 
+/// The `alpha` error when the color image `image` can't stand beside its
+/// override `dmg`: the DMG checks read the override, so the color image's
+/// own transparency is checked here, before its palettes are packed (which
+/// would count a half-transparent pixel opaque). A background must be
+/// opaque, as on the DMG; a sheet's pixels must be opaque or clear, and
+/// clear exactly where the override's are, since one frame list says which
+/// objects both machines draw.
+pub(crate) fn override_alpha(
+    image: &str,
+    dmg: &str,
+    kind: ImageKind,
+    color: &Pixels,
+    over: &Pixels,
+) -> Option<ImageProblem> {
+    let sheet = kind == ImageKind::Sprites;
+    if let Some(p) = super::census::alpha(image, color, sheet) {
+        return Some(p);
+    }
+    if !sheet {
+        return None;
+    }
+    let clear = |p: &Pixels, i: usize| p.rgba[i][3] == 0;
+    let differ: Vec<usize> = (0..color.rgba.len())
+        .filter(|&i| clear(color, i) != clear(over, i))
+        .collect();
+    let first = *differ.first()?;
+    let at = |i: usize| (i as u32 % color.width, i as u32 / color.width);
+    let mut tiles: Vec<TileAt> = differ
+        .iter()
+        .map(|&i| {
+            let (x, y) = at(i);
+            TileAt { x: x / 8, y: y / 8 }
+        })
+        .collect();
+    tiles.dedup();
+    tiles.sort_by_key(|t| (t.y, t.x));
+    tiles.dedup();
+    let (x, y) = at(first);
+    let (here, there) = if clear(color, first) {
+        ("transparent", "opaque")
+    } else {
+        ("opaque", "transparent")
+    };
+    let message = format!(
+        "{image} and its DMG version {dmg} are transparent in different places: {} pixel(s) in \
+         {} tile(s) (listed), the first ({x}, {y}), {here} in {image} and {there} in {dmg}. One \
+         frame list serves both machines, so an object exists on both or on neither",
+        differ.len(),
+        tiles.len()
+    );
+    let remedy = format!(
+        "make {dmg} transparent exactly where {image} is, pixel for pixel; or remove it to \
+         derive the DMG version"
+    );
+    Some(ImageProblem {
+        tiles,
+        ..error(image, ImageLimit::Alpha, differ.len(), 0, message, &remedy)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

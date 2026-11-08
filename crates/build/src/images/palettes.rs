@@ -66,8 +66,9 @@ pub(crate) struct Parsed {
     pub palette_lines: Vec<u32>,
     /// Each assigned image's line.
     pub lines: BTreeMap<String, u32>,
-    /// The `dmg` line's.
+    /// The `dmg` line's, and its colors as written.
     pub dmg_line: Option<u32>,
+    pub dmg_words: Vec<String>,
 }
 
 /// The project's palettes: none without the file, else what it says or
@@ -171,20 +172,15 @@ pub(crate) fn parse(text: &str) -> Result<Parsed, Bad> {
         if let Some((image, name)) = joined.split_once('=') {
             let (image, name) = (image.trim(), name.trim());
             assignment(image, name, line)?;
-            if let Some(first) = parsed.lines.get(image) {
-                return Err(Bad::at(
-                    line,
-                    format!("{image} is assigned a palette again (first on line {first})"),
-                ));
+            let assigned = parsed.named.assign(image.to_string(), name.to_string());
+            if let Err(fault) = assigned {
+                let first = parsed.lines[image];
+                return Err(Bad::at(line, format!("{fault} (first on line {first})")));
             }
             parsed.lines.insert(image.to_string(), line);
-            parsed
-                .named
-                .assignments
-                .insert(image.to_string(), name.to_string());
         } else if let Some((name, colors)) = joined.split_once(':') {
-            let name = name.trim();
-            let colors = palette(name, colors, line)?;
+            let (name, colors_text) = (name.trim(), colors);
+            let colors = palette(name, colors_text, line)?;
             if name == DMG {
                 if let Some(first) = parsed.dmg_line {
                     return Err(Bad::at(
@@ -194,6 +190,7 @@ pub(crate) fn parse(text: &str) -> Result<Parsed, Bad> {
                 }
                 parsed.dmg_line = Some(line);
                 parsed.named.dmg = Some(colors);
+                parsed.dmg_words = colors_text.split_whitespace().map(String::from).collect();
             } else {
                 parsed.named.palettes.push(NamedPalette {
                     name: name.to_string(),
@@ -214,6 +211,11 @@ pub(crate) fn parse(text: &str) -> Result<Parsed, Bad> {
     }
     let faults = parsed.named.faults();
     match faults.iter().min_by_key(|f| parsed.line_of(f)) {
+        Some(fault @ PaletteFault::RepeatedDmgColor { shade, .. }) => Err(Bad {
+            count: *shade as u32 + 1,
+            max: 4,
+            ..Bad::at(parsed.line_of(fault), parsed.say(fault))
+        }),
         Some(fault) => Err(Bad::at(parsed.line_of(fault), parsed.say(fault))),
         None => Ok(parsed),
     }
@@ -246,6 +248,16 @@ impl Parsed {
                     0 => format!("{fault} (the file defines none)"),
                     _ => format!("{fault} (the file defines {})", known.join(", ")),
                 }
+            }
+            // The colors as written, which the file can name.
+            PaletteFault::RepeatedDmgColor { shade, first } => {
+                let word = |i: usize| self.dmg_words.get(i).map_or("?", String::as_str);
+                format!(
+                    "{} is {} (shade {first}) to rgbgfx, which keeps 5 bits a channel, so the \
+                     two can't name two shades",
+                    word(*shade),
+                    word(*first)
+                )
             }
             _ => fault.to_string(),
         }
@@ -287,22 +299,6 @@ fn palette(name: &str, colors: &str, line: u32) -> Result<GbcPalette, Bad> {
                 )
             });
         };
-        if name == DMG
-            && let Some(at) = read.iter().position(|&d| d == c)
-        {
-            return Err(Bad {
-                count: read.len() as u32 + 1,
-                max: 4,
-                ..Bad::at(
-                    line,
-                    format!(
-                        "{word} is {} (shade {at}) to rgbgfx, which keeps 5 bits a channel, so \
-                         the two can't name two shades",
-                        colors.split_whitespace().nth(at).unwrap_or("?"),
-                    ),
-                )
-            });
-        }
         read.push(c);
     }
     match read[..] {

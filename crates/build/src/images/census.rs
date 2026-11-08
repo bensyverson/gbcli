@@ -167,6 +167,16 @@ pub(crate) fn size(image: &str, pixels: &Pixels, row: u32) -> Option<ImageProble
     None
 }
 
+/// A pixel as the GBC draws it, for deduplicating tiles on both versions:
+/// its RGB555 word, or a value no word has where it is transparent.
+pub(crate) fn gbc_word(p: Rgba) -> u16 {
+    if p[3] == 0 {
+        0x8000
+    } else {
+        gbcli_protocol::Rgb555::from_rgb888(p[0], p[1], p[2]).word()
+    }
+}
+
 /// Pixels neither opaque nor fully transparent, or (where nothing may be
 /// transparent) any pixel not opaque.
 pub(crate) fn alpha(image: &str, pixels: &Pixels, transparent_ok: bool) -> Option<ImageProblem> {

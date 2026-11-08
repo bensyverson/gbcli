@@ -61,6 +61,9 @@ pub(super) fn too_many_colors(
     problems
 }
 
+/// The cells a `gbc_palettes` message names; `tiles` lists every one.
+const NAMED: usize = 8;
+
 /// Why first fit's palettes went past the budget, for the problems.
 pub(super) struct Overflow {
     pub layer: Layer,
@@ -76,7 +79,8 @@ pub(super) struct Overflow {
 impl Overflow {
     /// A `gbc_palettes` error for each source with cells that `fitted`
     /// (first fit's palettes within the budget) doesn't hold. `count` is
-    /// the reserved slots plus the larger of the bound and the placed.
+    /// the reserved slots plus the palettes placed (never fewer than the
+    /// bound, since a palette holds at most `cap` colors).
     pub fn problems(
         &self,
         sources: &[Source],
@@ -90,7 +94,7 @@ impl Overflow {
             bound,
             placed,
         } = *self;
-        let needed = reserved + placed.max(bound);
+        let needed = reserved + placed;
         let assigned = if reserved > 0 {
             format!(" plus {reserved} assigned")
         } else {
@@ -106,13 +110,17 @@ impl Overflow {
                 continue;
             }
             let shown = representatives(s.pixels);
-            let named: Vec<String> = past
+            let mut named: Vec<String> = past
                 .iter()
+                .take(NAMED)
                 .map(|c| {
                     let hexes: Vec<String> = c.colors.iter().map(|k| shown(*k)).collect();
                     format!("({},{}) {}", c.at.x, c.at.y, hexes.join(" "))
                 })
                 .collect();
+            if past.len() > NAMED {
+                named.push(format!("and {} more (listed)", past.len() - NAMED));
+            }
             let whose = match layer {
                 Layer::Bg => format!("{}'s tiles", s.image),
                 Layer::Obj => "the objects of every sheet".to_string(),

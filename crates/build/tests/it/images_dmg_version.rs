@@ -73,7 +73,9 @@ fn a_color_background_derives_each_colors_nearest_shade() {
         made.images
     );
     let images = made.images.unwrap();
-    assert_eq!(images.images[0].tiles, 4);
+    // Six tiles: white and yellow are one DMG tile but two GBC tiles, and
+    // so are blue and black (the joint conversion keeps the pairs).
+    assert_eq!(images.images[0].tiles, 6);
     // White and yellow, blue and black share shades, but in different
     // tiles: no detail is lost in any tile, so nothing to warn of.
     let shared: Vec<_> = images

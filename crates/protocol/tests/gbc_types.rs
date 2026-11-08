@@ -407,7 +407,9 @@ fn indexed_art_names_a_palette_that_can_be_one() {
         let json = asset_json("bg", (1, 1), 1, map, &gbc);
         assert!(serde_json::from_str::<ImageAsset>(&json).is_err(), "{json}");
     }
-    let gbc = r#","gbc":{"art":"indexed","palette":"forest_2"}"#;
+    // With its one palette, as an indexed background has (wire_refusals.rs).
+    let gbc =
+        r#","gbc":{"art":"indexed","palette":"forest_2","palettes":[[32767,9009,6534,2176]]}"#;
     let json = asset_json("bg", (1, 1), 1, map, gbc);
     assert!(serde_json::from_str::<ImageAsset>(&json).is_ok(), "{json}");
 }

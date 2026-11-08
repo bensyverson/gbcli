@@ -44,6 +44,11 @@ impl<'a> Indexed<'a> {
         }
     }
 
+    /// The OBJ slots indexed sheets take (`ObjSlots::reserved`).
+    pub fn reserved(&self) -> usize {
+        self.slots.reserved()
+    }
+
     /// `ObjSlots::problem`.
     pub fn problem(&self, shown: &str) -> Option<ImageProblem> {
         self.slots.problem(shown)
@@ -112,13 +117,6 @@ impl ObjSlots {
     }
 
     /// The slots taken: `pack`'s `reserved` for color sheets.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the joint conversion (leaf joint) passes it to pack"
-        )
-    )]
     pub fn reserved(&self) -> usize {
         self.slots.len()
     }
@@ -205,7 +203,7 @@ pub(crate) fn sheet(
     plan: &SheetPlan,
     slot: PaletteSlot,
 ) -> (GbcImage, Vec<Option<TileEntry>>) {
-    (gbc(palette, Vec::new()), plan.tile_map(Some(slot)))
+    (gbc(palette, Vec::new()), plan.tile_map(|_| Some(slot)))
 }
 
 fn gbc(palette: &NamedPalette, palettes: Vec<GbcPalette>) -> GbcImage {

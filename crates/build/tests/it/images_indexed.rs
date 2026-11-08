@@ -113,7 +113,7 @@ fn an_indexed_background_shares_its_tiles_and_names_one_slot() {
 
     let dmg = images(build(&rgbds(), &options).unwrap());
     let sky_dmg = image(&dmg, "sky.png");
-    assert_eq!((sky_dmg.gbc.as_ref(), sky_dmg.tile_map.len()), (None, 0));
+    assert_eq!((sky_dmg.gbc.as_ref(), sky_dmg.tile_map.len()), (None, 4));
     assert_eq!(dmg.gbc, None);
     let dmg_tiles = read("sky.2bpp");
 
@@ -568,7 +568,8 @@ fn nine_assigned_obj_palettes_overflow_the_eight() {
     assert!(p.message.contains("p8"), "{}", p.message);
 }
 
-/// Without `--gbc`, nothing GBC is reported (the DMG JSON is unchanged).
+/// Without `--gbc`, nothing GBC is reported: no GBC version, and a tile
+/// map without slots (filled on every build, Ben's ruling of 2026-11-07).
 #[test]
 fn a_dmg_build_reports_no_gbc_for_indexed_art() {
     let (temp, options) = starter("indexed-dmg");
@@ -581,11 +582,9 @@ fn a_dmg_build_reports_no_gbc_for_indexed_art() {
     let made = images(build(&rgbds(), &options).unwrap());
     assert_eq!(made.gbc, None);
     for i in &made.images {
-        assert_eq!(
-            (i.gbc.as_ref(), i.tile_map.len()),
-            (None, 0),
-            "{}",
-            i.source
-        );
+        assert_eq!(i.gbc, None, "{}", i.source);
+        assert!(!i.tile_map.is_empty(), "{}", i.source);
+        let slots = i.tile_map.iter().flatten().filter(|e| e.palette.is_some());
+        assert_eq!(slots.count(), 0, "{}", i.source);
     }
 }

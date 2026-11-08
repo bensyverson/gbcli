@@ -13,6 +13,7 @@ use crate::toolchain::Severity;
 
 mod asset;
 mod gbc;
+mod made;
 mod map;
 
 pub use gbc::{GbcImage, GbcImagesMade, ImageArt};
@@ -83,7 +84,9 @@ pub enum ImageLimit {
     /// 16 KiB ROMX bank.
     RomxBank,
     /// A pixel neither opaque nor fully transparent, or a transparent pixel
-    /// in a background, which has none.
+    /// in a background, which has none; or, under `--gbc`, a sheet pixel
+    /// transparent in its color image but not in its `name.dmg.png`, or
+    /// the other way round (one frame list serves both).
     Alpha,
     /// rgbgfx's tile data draws the color indices gbcli planned (and
     /// checked) for every tile. A disagreement is gbcli's bug, not the
@@ -109,11 +112,12 @@ pub enum ImageLimit {
     ShadeStretched,
     /// GBC: 8 palettes. Per background, its packed palettes (or its one
     /// assigned palette); across all sheets, the packed OBJ palettes plus
-    /// one per assigned palette and shade mapping (OBP) of indexed sheets. `count` is the lower bound on the
-    /// palettes needed (⌈colors / 4⌉, ⌈colors / 3⌉ for sheets) or the
-    /// palettes placed, whichever is larger, plus the slots assigned
-    /// palettes take; `tiles` are the tiles that landed in palette 9 or
-    /// later, one problem per image holding any.
+    /// one per assigned palette and shade mapping (OBP) of indexed sheets.
+    /// `count` is the palettes placed plus the slots assigned palettes take
+    /// (the placed are never fewer than the lower bound, ⌈colors / 4⌉ or
+    /// ⌈colors / 3⌉ for sheets, which the message names); `tiles` are the
+    /// tiles that landed in palette 9 or later, one problem per image
+    /// holding any.
     GbcPalettes,
     /// GBC: 4 colors in one background tile, or 3 opaque colors (plus
     /// transparent) in one object; `tiles` names the tiles at fault.
@@ -287,21 +291,25 @@ pub struct ImageAsset {
     /// unit of a sheet), rows top to bottom, left to right in each. None
     /// for a sheet's fully transparent unit, which takes no tile. A
     /// tileset's result is this map; a background's is also its tilemap
-    /// and, on the GBC, its attribute map. A DMG build leaves it empty for
-    /// backgrounds and sheets, whose tilemap and frame lists are in the
-    /// generated files.
+    /// and, on the GBC, its attribute map; a sheet's matches its frame
+    /// lists. Every build fills it, a DMG build included, each entry
+    /// without a slot when the image has no GBC version (Ben's ruling,
+    /// 2026-11-07). Empty only in a document from before that ruling.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tile_map: Vec<Option<TileEntry>>,
-    /// The GBC version, when the build's target is the GBC. Every image has
-    /// a DMG version. A GBC build fills it for indexed art; color art has
-    /// none until its GBC conversion is built (the joint conversion), so
-    /// its absence doesn't mean a DMG build: `BuildMade::target` says.
+    /// The GBC version, when the build's target is the GBC: every image of
+    /// a GBC build has one, color or indexed art. Every image has a DMG
+    /// version; under `--gbc` color art's tiles are deduplicated on both
+    /// versions at once, so `tiles` and `tile_map` serve both machines.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gbc: Option<GbcImage>,
 }
 
-/// The images a build converted, and where the program finds them.
+/// The images a build converted, and where the program finds them. On
+/// read, an image with a GBC version needs `gbc` beside it, and a sheet's
+/// slots must be among its `obj_palettes` (`made::Unchecked`).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "made::Unchecked")]
 pub struct ImagesMade {
     /// The include with every image's constants (`INCLUDE "images.inc"`).
     #[serde(default, skip_serializing_if = "Option::is_none")]

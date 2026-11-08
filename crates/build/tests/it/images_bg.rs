@@ -302,8 +302,9 @@ fn a_background_rgbgfx_draws_otherwise_than_planned_stops_the_build() {
     let p = problem(&made, ImageLimit::RgbgfxAgrees);
     assert_eq!(p.image.as_deref(), Some("demo/assets/bg/plain.png"));
     assert_eq!(p.severity, Severity::Error);
-    // Both cells use the one unique tile rgbgfx misdrew.
-    assert_eq!(p.tiles, [TileAt { x: 0, y: 0 }, TileAt { x: 1, y: 0 }]);
+    // rgbgfx draws every cell (gbcli keeps the unique tiles), so the cell
+    // whose tile it misdrew is the first.
+    assert_eq!(p.tiles, [TileAt { x: 0, y: 0 }]);
     assert!(
         p.message
             .contains("pixel (0, 0), gbcli planned color index 0 and rgbgfx wrote index 1"),
@@ -330,7 +331,7 @@ fn a_background_with_a_shared_shade_rgbgfx_misdraws_stops_the_build() {
         other => panic!("expected the disagreement to stop the build, got {other:?}"),
     };
     let p = problem(&made, ImageLimit::RgbgfxAgrees);
-    assert_eq!(p.tiles, [TileAt { x: 0, y: 0 }, TileAt { x: 1, y: 0 }]);
+    assert_eq!(p.tiles, [TileAt { x: 0, y: 0 }]);
     assert!(
         p.message
             .contains("planned color index 0 and rgbgfx wrote index 1"),

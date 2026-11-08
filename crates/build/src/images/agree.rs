@@ -4,8 +4,13 @@
 //! on its own. So after it runs, its tile data is compared with the plan
 //! pixel by pixel, and any difference stops the build (fail closed) rather
 //! than ship shades nothing checked.
+//!
+//! A GBC version is compared by color, never by palette number: rgbgfx may
+//! draw a tile from another of the given palettes that holds its colors
+//! (research §3), which is as good, so what must agree is the color each
+//! pixel draws.
 
-use gbcli_protocol::{ImageLimit, ImageProblem, TileAt};
+use gbcli_protocol::{ImageLimit, ImageProblem, Rgb555, TileAt};
 
 use super::census::error;
 
@@ -38,6 +43,33 @@ pub(crate) fn indices(data: &[u8]) -> Vec<u8> {
         .collect()
 }
 
+/// Color indices, 8 a row, as 2bpp tile data: `indices`' inverse.
+pub(crate) fn encode(indices: &[u8]) -> Vec<u8> {
+    indices
+        .chunks(8)
+        .flat_map(|row| {
+            let plane = |bit: u8| {
+                row.iter()
+                    .enumerate()
+                    .fold(0u8, |b, (x, &i)| b | (((i >> bit) & 1) << (7 - x)))
+            };
+            [plane(0), plane(1)]
+        })
+        .collect()
+}
+
+/// One pixel of a GBC version where rgbgfx's data draws another color
+/// than the image holds; `None` is transparent.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ColorDisagreement {
+    pub tile: TileAt,
+    /// The pixel within the tile.
+    pub x: u32,
+    pub y: u32,
+    pub planned: Option<Rgb555>,
+    pub wrote: Option<Rgb555>,
+}
+
 /// The first pixel, row by row, where `data` (2bpp, as rgbgfx wrote it)
 /// doesn't draw `planned` (color indices, 8 a row, as many rows).
 pub(crate) fn first_difference(planned: &[u8], data: &[u8]) -> Option<Difference> {
@@ -53,7 +85,6 @@ pub(crate) fn first_difference(planned: &[u8], data: &[u8]) -> Option<Difference
 
 /// The problem for an image whose converted tiles disagree with its plan.
 pub(crate) fn problem(image: &str, disagreements: &[Disagreement]) -> ImageProblem {
-    let n = disagreements.len();
     let first = disagreements.first().map_or(String::new(), |d| {
         let TileAt { x, y } = d.tile;
         match d.pixel {
@@ -65,8 +96,37 @@ pub(crate) fn problem(image: &str, disagreements: &[Disagreement]) -> ImageProbl
             None => format!("; at tile ({x}, {y}), rgbgfx's map names a tile it didn't write"),
         }
     });
+    let tiles = disagreements.iter().map(|d| d.tile).collect();
+    stopped(image, tiles, &first)
+}
+
+/// The problem for a GBC version whose converted tiles draw other colors
+/// than the image: one disagreement per tile, its first pixel.
+pub(crate) fn color_problem(image: &str, disagreements: &[ColorDisagreement]) -> ImageProblem {
+    let color = |c: Option<Rgb555>| match c {
+        Some(c) => format!("RGB555 ${:04x}", c.word()),
+        None => "transparent".into(),
+    };
+    let first = disagreements.first().map_or(String::new(), |d| {
+        format!(
+            "; at tile ({}, {}), pixel ({}, {}), the image holds {} and rgbgfx's GBC data draws {}",
+            d.tile.x,
+            d.tile.y,
+            d.x,
+            d.y,
+            color(d.planned),
+            color(d.wrote)
+        )
+    });
+    let tiles = disagreements.iter().map(|d| d.tile).collect();
+    stopped(image, tiles, &first)
+}
+
+/// `rgbgfx_agrees` for `tiles` of `image`; `first` describes the first.
+fn stopped(image: &str, tiles: Vec<TileAt>, first: &str) -> ImageProblem {
+    let n = tiles.len();
     ImageProblem {
-        tiles: disagreements.iter().map(|d| d.tile).collect(),
+        tiles,
         ..error(
             image,
             ImageLimit::RgbgfxAgrees,
@@ -109,6 +169,33 @@ mod tests {
         assert_eq!(row, [1, 0, 0, 0, 0, 0, 0, 2]);
         let (planned, data) = tile([0, 1, 2, 3, 3, 2, 1, 0]);
         assert_eq!(indices(&data), planned);
+    }
+
+    #[test]
+    fn indices_encode_back_to_the_2bpp_they_read_from() {
+        let (planned, data) = tile([0, 1, 2, 3, 3, 2, 1, 0]);
+        assert_eq!(encode(&planned), data);
+        let mixed: Vec<u8> = (0..64).map(|i| (i * 7 % 4) as u8).collect();
+        assert_eq!(indices(&encode(&mixed)), mixed);
+    }
+
+    #[test]
+    fn a_color_disagreement_names_the_tile_pixel_and_both_colors() {
+        let p = color_problem(
+            "assets/bg/town.png",
+            &[ColorDisagreement {
+                tile: TileAt { x: 2, y: 1 },
+                x: 3,
+                y: 4,
+                planned: Some(Rgb555::WHITE),
+                wrote: None,
+            }],
+        );
+        assert_eq!(p.limit, ImageLimit::RgbgfxAgrees);
+        assert_eq!(p.tiles, [TileAt { x: 2, y: 1 }]);
+        for part in ["tile (2, 1)", "pixel (3, 4)", "$7fff", "transparent"] {
+            assert!(p.message.contains(part), "{part:?} in {}", p.message);
+        }
     }
 
     #[test]

@@ -2,11 +2,13 @@
 //! its tile map to its kind, size and target. The slot rides in each entry,
 //! so a map and its palettes can't differ in length or in where a unit is
 //! transparent; what is left is whether the entries fit the image: one a
-//! cell, each naming a tile it has, as the build makes them.
+//! cell, each naming a tile it has and a slot its palettes hold, as the
+//! build makes them. A sheet's slots index the shared OBJ palettes, which
+//! `ImagesMade` checks (`made`).
 
 use serde::Deserialize;
 
-use super::{GbcImage, ImageAsset, ImageKind, TileEntry};
+use super::{GbcImage, ImageArt, ImageAsset, ImageKind, PaletteSlot, TileEntry};
 
 /// [`ImageAsset`] as sent, before its tile map is checked.
 #[derive(Deserialize)]
@@ -54,6 +56,36 @@ impl TryFrom<Unchecked> for ImageAsset {
 fn check(asset: &ImageAsset) -> Result<(), String> {
     let sheet = asset.kind == ImageKind::Sprites;
     let gbc = asset.gbc.is_some();
+    if sheet && asset.height % 2 == 1 {
+        return Err(format!(
+            "the sheet is {} tiles high, but a sheet is whole 8x16 units, an even number",
+            asset.height
+        ));
+    }
+    // The BG palettes a background's slots index; none for a sheet.
+    let palettes = asset.gbc.as_ref().map_or(0, |g| g.palettes.len());
+    if let Some(g) = &asset.gbc {
+        let indexed = matches!(g.art, ImageArt::Indexed { .. });
+        let wrong = match (sheet, indexed, palettes) {
+            (true, _, 0) => None,
+            (true, _, _) => {
+                Some("a sheet's palettes are the shared OBJ palettes, so it lists none")
+            }
+            (false, true, 1) => None,
+            (false, true, _) => Some("an indexed background has one palette, its named one"),
+            (false, false, 1..=PaletteSlot::COUNT) => None,
+            (false, false, _) => Some("a color background has 1 to 8 BG palettes"),
+        };
+        if let Some(why) = wrong {
+            return Err(format!("gbc lists {palettes} palettes, but {why}"));
+        }
+    }
+    let indexed_sheet = sheet
+        && asset
+            .gbc
+            .as_ref()
+            .is_some_and(|g| matches!(g.art, ImageArt::Indexed { .. }));
+    let mut sheet_slot: Option<PaletteSlot> = None;
     // A cell is an 8x8 tile, or a sheet's 8x16 unit.
     let cells = u64::from(asset.width)
         * u64::from(if sheet {
@@ -118,6 +150,21 @@ fn check(asset: &ImageAsset) -> Result<(), String> {
                 ));
             }
             _ => {}
+        }
+        let Some(slot) = entry.palette else { continue };
+        if !sheet && usize::from(slot.get()) >= palettes {
+            return Err(format!(
+                "tile_map[{i}] names BG palette {}, but the image has {palettes}",
+                slot.get()
+            ));
+        }
+        if indexed_sheet && *sheet_slot.get_or_insert(slot) != slot {
+            return Err(format!(
+                "tile_map[{i}] names OBJ palette {}, but an indexed sheet has one slot, and \
+                 an earlier unit names {}",
+                slot.get(),
+                sheet_slot.map_or(0, PaletteSlot::get)
+            ));
         }
     }
     Ok(())

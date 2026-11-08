@@ -65,8 +65,10 @@ pub struct GbcImage {
     pub palettes: Vec<GbcPalette>,
 }
 
-/// What the GBC version of the images shares across them.
+/// What the GBC version of the images shares across them. On read, at
+/// most 8 OBJ palettes, as the GBC has.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "ObjSent")]
 pub struct GbcImagesMade {
     /// The OBJ palettes every sheet shares, at most 8, in slot order. First
     /// the assigned slots: one per named palette and shade mapping (OBP)
@@ -80,6 +82,29 @@ pub struct GbcImagesMade {
     /// Assigned slots come first so they don't move when color art
     /// changes. Slots the program loads itself aren't listed.
     pub obj_palettes: Vec<GbcPalette>,
+}
+
+/// [`GbcImagesMade`] as sent, before its palettes are counted.
+#[derive(Deserialize)]
+struct ObjSent {
+    obj_palettes: Vec<GbcPalette>,
+}
+
+impl TryFrom<ObjSent> for GbcImagesMade {
+    type Error = String;
+
+    fn try_from(sent: ObjSent) -> Result<GbcImagesMade, String> {
+        let n = sent.obj_palettes.len();
+        if n > crate::PaletteSlot::COUNT {
+            return Err(format!(
+                "obj_palettes lists {n}, but the GBC has {} OBJ palettes",
+                crate::PaletteSlot::COUNT
+            ));
+        }
+        Ok(GbcImagesMade {
+            obj_palettes: sent.obj_palettes,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -169,7 +194,7 @@ mod tests {
             images: vec![ImageAsset {
                 // Two 8x16 units side by side: 2x2 tiles.
                 height: 2,
-                tile_map: vec![at(0, Some(2)), None],
+                tile_map: vec![at(0, Some(0)), None],
                 gbc: Some(GbcImage {
                     art: ImageArt::Indexed {
                         palette: "ember".into(),
@@ -186,7 +211,7 @@ mod tests {
         let json = serde_json::to_string(&made).unwrap();
         assert!(
             json.contains(
-                r#""tile_map":[{"index":0,"palette":2},null],"gbc":{"art":"indexed","palette":"ember"}}"#
+                r#""tile_map":[{"index":0,"palette":0},null],"gbc":{"art":"indexed","palette":"ember"}}"#
             ),
             "{json}"
         );

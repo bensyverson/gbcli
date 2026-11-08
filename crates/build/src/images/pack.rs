@@ -79,9 +79,10 @@ pub(crate) struct Source<'a> {
 /// Palettes that fit, in slot order, and the slot of every cell.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Packing {
-    /// From slot `first_slot`. A BG palette's colors run lightest first,
-    /// the darkest repeated to fill four; an OBJ palette's index 0 is never
-    /// drawn, so it holds white, and its colors follow lightest first.
+    /// From slot `first_slot`, as palette RAM takes them. A BG palette's
+    /// colors run lightest first, the darkest repeated to fill four; an OBJ
+    /// palette's index 0 is never drawn, so it holds white, and its colors
+    /// follow lightest first. rgbgfx takes them in another form (`spec`).
     pub palettes: Vec<GbcPalette>,
     /// The slot of `palettes[0]`: the reserved slots come first (the
     /// assigned slots of indexed sheets, `GbcImagesMade::obj_palettes`).
@@ -286,6 +287,30 @@ fn search(sets: &[Colors], cap: usize, target: usize) -> Option<Vec<Colors>> {
     let mut palettes = Vec::new();
     let mut steps = SEARCH_STEPS;
     place(sets, &mut palettes, cap, target, &mut steps).then_some(palettes)
+}
+
+/// `palettes` as rgbgfx's `-c` takes them, in slot order, so a pixel's
+/// index is its color's first place in its palette. An OBJ palette's slot
+/// 0 is `#none`: rgbgfx 1.0.4 refuses an opaque color there for an image
+/// with transparent pixels (it holds "3 colors plus the implicit
+/// transparent color"). Each color is written as SameBoy draws it, which
+/// truncates back to the same RGB555.
+pub(crate) fn spec(palettes: &[GbcPalette], layer: Layer) -> String {
+    let hex = |c: &Rgb555| {
+        let [r, g, b] = c.to_rgb888();
+        format!("#{r:02x}{g:02x}{b:02x}")
+    };
+    palettes
+        .iter()
+        .map(|GbcPalette(colors)| {
+            let mut slots: Vec<String> = colors.iter().map(hex).collect();
+            if layer == Layer::Obj {
+                slots[0] = "#none".into();
+            }
+            slots.join(",")
+        })
+        .collect::<Vec<_>>()
+        .join(";")
 }
 
 /// A packed palette in slot order: lightest first by rgbgfx's weights, so

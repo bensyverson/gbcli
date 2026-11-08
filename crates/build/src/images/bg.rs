@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use gbcli_protocol::{ImageLimit, ImageProblem, TileAt};
 
-use super::census::{self, Key, error, key};
+use super::census::{self, Key, error, gbc_word, key};
 use super::pixels::{Pixels, Rgba, hex};
 use super::shades::Shading;
 use super::shared;
@@ -14,6 +14,10 @@ use super::shared;
 pub(crate) const MAP_TILES: usize = 256;
 /// Shades in BGP.
 const BG_SHADES: usize = 4;
+
+/// A tile as deduplicated: its DMG color indices, and its GBC colors
+/// (`census::gbc_word`, none without a GBC version).
+type Tile = (Vec<u8>, Vec<u16>);
 
 /// A background that fits, ready for rgbgfx.
 #[derive(Debug)]
@@ -30,9 +34,11 @@ pub(crate) struct BgPlan {
     /// Size in tiles.
     pub width: u32,
     pub height: u32,
-    /// Unique tiles: what rgbgfx `-u` keeps.
+    /// Unique tiles: on the DMG alone, what rgbgfx's dedup would keep;
+    /// with a GBC version, the pairs (DMG tile, GBC tile).
     pub tiles: u32,
-    /// Each unique tile's color indices, 8 a row, in order of first use.
+    /// Each unique tile's DMG color indices, 8 a row, in order of first
+    /// use (a DMG tile may repeat, beside two GBC tiles).
     pub unique: Vec<Vec<u8>>,
     /// Each map cell's unique tile, row by row: what rgbgfx's data must
     /// draw there (`agree`).
@@ -40,11 +46,15 @@ pub(crate) struct BgPlan {
 }
 
 /// Checks a background; the plan when it fits, else every problem found.
-/// `shading` is the project's (`shades::choose`).
+/// `shading` is the project's (`shades::choose`). `color` is the color
+/// image whose DMG version `pixels` is, under `--gbc`: tiles are then one
+/// only when they match in both (plan question 1), never by a flip, since
+/// the DMG's tilemap has none.
 pub(crate) fn check(
     image: &str,
     pixels: &Pixels,
     shading: &Shading,
+    color: Option<&Pixels>,
 ) -> Result<BgPlan, Vec<ImageProblem>> {
     if let Some(p) = census::size(image, pixels, 8) {
         return Err(vec![p]);
@@ -89,16 +99,23 @@ pub(crate) fn check(
         all
     };
     let (width, height) = (pixels.width / 8, pixels.height / 8);
-    // Each unique tile's first place and how often it is used.
-    let mut seen: HashMap<Vec<u8>, (TileAt, u32)> = HashMap::new();
-    let mut order: Vec<Vec<u8>> = Vec::new();
-    let mut number: HashMap<Vec<u8>, usize> = HashMap::new();
+    // Each unique tile (its DMG indices, and its GBC colors when it has a
+    // GBC version): its first place and how often it is used.
+    let mut seen: HashMap<Tile, (TileAt, u32)> = HashMap::new();
+    let mut order: Vec<Tile> = Vec::new();
+    let mut number: HashMap<Tile, usize> = HashMap::new();
     let mut cells = Vec::with_capacity((width * height) as usize);
     for ty in 0..height {
         for tx in 0..width {
-            let tile: Vec<u8> = (0..64)
-                .map(|i| shade[&key(pixels.at(tx * 8 + i % 8, ty * 8 + i / 8))])
+            let at = |i: u32| (tx * 8 + i % 8, ty * 8 + i / 8);
+            let dmg: Vec<u8> = (0..64)
+                .map(at)
+                .map(|(x, y)| shade[&key(pixels.at(x, y))])
                 .collect();
+            let gbc = color.map_or_else(Vec::new, |c| {
+                (0..64).map(at).map(|(x, y)| gbc_word(c.at(x, y))).collect()
+            });
+            let tile = (dmg, gbc);
             let next = number.len();
             cells.push(*number.entry(tile.clone()).or_insert(next));
             let entry = seen.entry(tile.clone()).or_insert_with(|| {
@@ -151,7 +168,7 @@ pub(crate) fn check(
         width,
         height,
         tiles: unique as u32,
-        unique: order,
+        unique: order.into_iter().map(|(dmg, _)| dmg).collect(),
         cells,
     })
 }

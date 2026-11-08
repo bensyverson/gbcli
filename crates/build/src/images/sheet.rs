@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use gbcli_protocol::{Flip, ImageLimit, ImageProblem, PaletteSlot, Severity, TileAt, TileEntry};
 
-use super::census::{self, Key, error, key};
+use super::census::{self, Key, error, gbc_word, key};
 use super::pixels::{Pixels, Rgba, hex};
 use super::shades::Shading;
 use super::shared;
@@ -46,7 +46,8 @@ pub(crate) struct SheetPlan {
     /// The frame size in pixels.
     pub frame: (u32, u32),
     /// The kept units by their top-left in sheet pixels, in order of first
-    /// use, and each one's uses.
+    /// use, and each one's uses: on the DMG alone, units alike in DMG
+    /// data; with a GBC version, alike in both.
     pub kept: Vec<(u32, u32)>,
     /// Each kept unit's color indices, 8 a row, 16 rows: what rgbgfx's
     /// data must draw (`agree`).
@@ -66,15 +67,15 @@ impl SheetPlan {
     }
 
     /// The protocol's tile map: each unit's top tile (`2 * unit`) and flip,
-    /// with `slot` as every opaque unit's palette.
-    pub fn tile_map(&self, slot: Option<PaletteSlot>) -> Vec<Option<TileEntry>> {
+    /// with `slot(unit)` as its palette, of the kept unit it draws.
+    pub fn tile_map(&self, slot: impl Fn(usize) -> Option<PaletteSlot>) -> Vec<Option<TileEntry>> {
         self.units
             .iter()
             .map(|u| {
                 u.map(|(unit, flip)| TileEntry {
                     index: unit as u32 * 2,
                     flip,
-                    palette: slot,
+                    palette: slot(unit),
                 })
             })
             .collect()
@@ -84,13 +85,17 @@ impl SheetPlan {
 /// Checks a sheet whose frames are `frame` pixels (the whole sheet when
 /// `None`; its name, `<name>.WxH.png`, may give another); the plan when it
 /// fits, else every problem found. `shading` is the project's
-/// (`shades::choose`).
+/// (`shades::choose`). `color` is the color image whose DMG version
+/// `pixels` is, under `--gbc`, transparent where it is (`derive`): units
+/// are then one only when they match in both, flipped alike, so one frame
+/// list serves both machines (plan question 1).
 pub(crate) fn check(
     image: &str,
     stem: &str,
     pixels: &Pixels,
     frame: Option<(u32, u32)>,
     shading: &Shading,
+    color: Option<&Pixels>,
 ) -> Result<SheetPlan, Vec<ImageProblem>> {
     if let Some(p) = census::size(image, pixels, 16) {
         return Err(vec![p]);
@@ -172,7 +177,16 @@ pub(crate) fn check(
     let mut kept: Vec<(u32, u32)> = Vec::new();
     let mut drawn: Vec<Vec<u8>> = Vec::new();
     let mut uses: Vec<u32> = Vec::new();
-    let mut known: HashMap<Vec<u8>, (usize, Flip)> = HashMap::new();
+    // Each unit as deduplicated: its DMG indices and, with a GBC version,
+    // its GBC colors (`census::gbc_word`).
+    let gbc = |ux: u32, uy: u32| -> Vec<u16> {
+        color.map_or_else(Vec::new, |c| {
+            (0..128)
+                .map(|i| gbc_word(c.at(ux + i % 8, uy + i / 8)))
+                .collect()
+        })
+    };
+    let mut known: HashMap<(Vec<u8>, Vec<u16>), (usize, Flip)> = HashMap::new();
     let columns = (pixels.width / 8) as usize;
     let mut units: Vec<Option<(usize, Flip)>> = vec![None; columns * (pixels.height / 16) as usize];
     let mut frames = Vec::new();
@@ -190,15 +204,17 @@ pub(crate) fn check(
                     if data.iter().all(|&i| i == 0) {
                         continue;
                     }
-                    let (k, flip) = *known.entry(data.clone()).or_insert_with(|| {
+                    let both = (data.clone(), gbc(ux, uy));
+                    let (k, flip) = *known.entry(both.clone()).or_insert_with(|| {
                         kept.push((ux, uy));
                         drawn.push(data.clone());
                         uses.push(0);
                         (kept.len() - 1, Flip::None)
                     });
                     if flip.is_none() && kept[k] == (ux, uy) {
-                        for (f, variant) in flips(&data) {
-                            known.entry(variant).or_insert((k, f));
+                        let colors = flips(&both.1);
+                        for ((f, variant), (_, colored)) in flips(&both.0).into_iter().zip(colors) {
+                            known.entry((variant, colored)).or_insert((k, f));
                         }
                     }
                     units[(uy / 16) as usize * columns + (ux / 8) as usize] = Some((k, flip));
@@ -407,10 +423,11 @@ fn frame_shape(
     ))
 }
 
-/// A unit's flipped variants, as the hardware flips a whole 8x16 object.
-fn flips(data: &[u8]) -> [(Flip, Vec<u8>); 3] {
-    let at = |flip: Flip| -> Vec<u8> {
-        (0..128)
+/// A unit's flipped variants, as the hardware flips a whole 8x16 object;
+/// none of an empty unit (a DMG-only key's GBC half).
+fn flips<T: Copy>(data: &[T]) -> [(Flip, Vec<T>); 3] {
+    let at = |flip: Flip| -> Vec<T> {
+        (0..data.len())
             .map(|i| {
                 let (x, y) = (i % 8, i / 8);
                 let x = if flip.x() { 7 - x } else { x };

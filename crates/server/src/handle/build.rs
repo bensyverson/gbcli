@@ -42,11 +42,47 @@ impl Host {
 /// Anything else needs a session, and so a [`Handler`].
 pub struct Tooling {
     host: Host,
+    /// Why there is no bundle, when the caller knows more than "none was
+    /// looked for": the store's own message and remedy, for the refusal of
+    /// each op that needs one.
+    why_none: Option<ErrorBody>,
 }
 
 impl Tooling {
     pub fn new(host: Host) -> Tooling {
-        Tooling { host }
+        Tooling {
+            host,
+            why_none: None,
+        }
+    }
+
+    /// A [`Tooling`] whose refusals of bundle ops carry `why`: what the
+    /// search found (a bad `GBCLI_DIR`, nothing above the working directory)
+    /// and what to do about it.
+    pub fn without_bundle(host: Host, why: ErrorBody) -> Tooling {
+        Tooling {
+            host,
+            why_none: Some(why),
+        }
+    }
+
+    fn needs_session(&self, op: &Op) -> ErrorBody {
+        let head = format!(
+            "{} needs a session, and there is no project bundle here",
+            op_name(op)
+        );
+        match &self.why_none {
+            Some(why) => ErrorBody::new(
+                ErrorCode::NoSession,
+                format!("{head}: {}", why.message),
+                why.remedy.clone(),
+            ),
+            None => ErrorBody::new(
+                ErrorCode::NoSession,
+                head,
+                "start one with `gbcli run game.gb --session NAME`",
+            ),
+        }
     }
 }
 
@@ -54,18 +90,7 @@ impl Answer for Tooling {
     fn answer(&mut self, request: &Request) -> Response {
         let id = request.id.clone();
         match &request.op {
-            op if op.needs_bundle() => Response::failed(
-                id,
-                None,
-                ErrorBody::new(
-                    ErrorCode::NoSession,
-                    format!(
-                        "{} needs a session, and there is no project bundle here",
-                        op_name(op)
-                    ),
-                    "start one with `gbcli run game.gb --session NAME`",
-                ),
-            ),
+            op if op.needs_bundle() => Response::failed(id, None, self.needs_session(op)),
             Op::Build(args) => match build(&self.host, request, args) {
                 Ok(built) => built.response(id),
                 Err(response) => *response,

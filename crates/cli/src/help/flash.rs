@@ -16,7 +16,9 @@ $FF (a warning names those: the save no longer fits beside the code); a save in
 a sector the image leaves $FF stays, and a gbcli build is $FF wherever no
 section is (gaps, unused banks, the tail). The chip is the board's size,
 the image at its start and erased past it; the mapper is the header's and
-reaches all of it.
+reaches all of it. Reserve a save area with `ds N, $FF`: rgbasm's `ds N` with
+no fill is $00 even under -p 0xFF, which counts as code, so a rebuild drops the
+save.
 
 Boards (FlashGBX's cart database; AAA/555: the unlock addresses, A9/AA: the
 first unlock byte the CPU writes, A9 when D0 and D1 are swapped):

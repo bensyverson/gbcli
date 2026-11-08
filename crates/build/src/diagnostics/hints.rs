@@ -28,10 +28,15 @@ pub fn remedy(d: &Diagnostic) -> Option<String> {
     let hint = HINTS
         .iter()
         .find(|h| h.tool == d.tool && d.message.contains(h.fragment))?;
-    let place = match (&d.file, d.line) {
-        (Some(file), Some(line)) => format!(" before the first such line ({file}:{line})"),
-        _ => String::new(),
-    };
+    // The ROM section belongs before the line that invoked the macro (the
+    // chain's last entry), not inside its body, where `d.line` points.
+    let place = match (d.chain.last(), &d.file, d.line) {
+        (Some(outer), _, _) => Some((outer.file.as_str(), outer.line)),
+        (None, Some(file), Some(line)) => Some((file.as_str(), line)),
+        _ => None,
+    }
+    .map(|(file, line)| format!(" before the first such line ({file}:{line})"))
+    .unwrap_or_default();
     Some(format!("{}{place}", hint.remedy))
 }
 
@@ -68,5 +73,30 @@ mod tests {
                  ROM0`) before the first such line (src/main.asm:193)"
             )
         );
+    }
+
+    /// Code a macro emits is reported at the macro body's line; the ROM
+    /// section has to start before the line that invoked it, the last (outermost)
+    /// chain entry.
+    #[test]
+    fn code_from_a_macro_names_the_outermost_invocation() {
+        let line = |file: &str, line| gbcli_protocol::SourceLine {
+            file: file.into(),
+            line,
+            within: None,
+        };
+        let d = Diagnostic {
+            file: Some("src/main.asm".into()),
+            line: Some(12),
+            within: Some("Emit".into()),
+            chain: vec![line("src/inner.asm", 40), line("src/main.asm", 77)],
+            ..Diagnostic::new(
+                Tool::Rgbasm,
+                Severity::Error,
+                "Section \"W\" cannot contain code or data (not `ROM0` or `ROMX`)",
+            )
+        };
+        let text = remedy(&d).unwrap();
+        assert!(text.ends_with("(src/main.asm:77)"), "{text}");
     }
 }

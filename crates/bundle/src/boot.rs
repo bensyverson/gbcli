@@ -51,6 +51,26 @@ impl SessionStore {
         Ok((machine, warnings))
     }
 
+    /// Side B's machine for `equiv --at`: `meta` is B's own ROM, and `at` is
+    /// the state saved on side A's, so a changed-ROM warning is worded for
+    /// B, not as a rebuild of the session's file.
+    pub fn start_side_b_at(
+        &self,
+        meta: &SessionFile,
+        at: &str,
+        load: &LoadOptions,
+    ) -> Result<(Machine, Vec<String>), StoreError> {
+        let mut machine = self.machine(meta)?;
+        let cp = self.checkpoint_or_history(meta.rev, at)?;
+        let warnings = machine
+            .restore(&cp, load)
+            .map_err(StoreError::Checkpoint)?
+            .iter()
+            .map(|w| StoreError::side_b_warning_text(w, &meta.rom))
+            .collect();
+        Ok((machine, warnings))
+    }
+
     /// A machine at the head, or at power-on when there is none yet: what a
     /// request that inspects the session sees. Never runs the boot ROM.
     pub fn head_or_power_on(

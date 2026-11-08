@@ -137,7 +137,8 @@ pub struct AudioArgs {
     pub log: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wav: Option<WavArgs>,
-    /// A piano roll of the notes the run's writes played; scale default 1.
+    /// A piano roll of the notes the run's writes played; scale default 2 (its width is capped, so a long
+    /// clip stays bounded).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub piano: Option<ImageOut>,
     /// A spectrogram of the mix; scale default 1.

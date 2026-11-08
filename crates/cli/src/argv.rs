@@ -172,12 +172,14 @@ fn flags(spec: &'static VerbSpec, rest: &[String]) -> Result<Invocation, Usage> 
 }
 
 fn unknown_flag(spec: &VerbSpec, typed: &str, name: &str) -> Usage {
-    if name == "rev" && spec.class == Class::Read {
+    if name == "rev" && matches!(spec.class, Class::Read | Class::Project) {
+        let why = if spec.class == Class::Read {
+            "changes nothing"
+        } else {
+            "works on the whole project, not one session's head"
+        };
         return Usage::new(
-            format!(
-                "`gbcli {}` changes nothing, so --rev has nothing to guard",
-                spec.name
-            ),
+            format!("`gbcli {}` {why}, so --rev has nothing to guard", spec.name),
             "drop --rev; it guards the verbs that change a session (run, step, write, \
              checkpoint, break, watch, delete, …)",
         );

@@ -44,7 +44,7 @@ fn host(env: &Env) -> Host {
 /// directory and makes none) is not looked for again.
 pub enum Responder {
     Bundled(Box<Handler>),
-    Bare(Tooling),
+    Bare(Box<Tooling>),
 }
 
 impl Answer for Responder {
@@ -68,7 +68,7 @@ impl Answer for Responder {
 /// does. Only an invocation that can create a session (a ROM and a session
 /// name) creates `.gbcli/`; any other finds one or, here, falls back to the
 /// bare side: the requests that need a bundle are refused one by one, with
-/// `no_session`. Every other failure (a bad ROM, a missing named session in
+/// `no_session` carrying the store's cause. Every other failure (a bad ROM, a missing named session in
 /// a bundle that exists) still refuses the start. `--dir` beats
 /// `GBCLI_DIR`: the flag is the more explicit. The handler's defaults are
 /// the target's session and actor, for the request lines of `serve` and
@@ -76,8 +76,24 @@ impl Answer for Responder {
 pub fn responder(target: &Target, env: &Env) -> Result<Responder, Box<ErrorBody>> {
     match start_handler(target, env, true) {
         Ok(handler) => Ok(Responder::Bundled(Box::new(handler))),
-        Err(Opening::NoBundle(_)) => Ok(Responder::Bare(Tooling::new(host(env)))),
+        Err(Opening::NoBundle(why)) => Ok(Responder::Bare(Box::new(Tooling::without_bundle(
+            host(env),
+            named_session(*why, target),
+        )))),
         Err(Opening::Refused(body)) => Err(body),
+    }
+}
+
+/// `why` with the session the invocation named, so a refusal says which one
+/// it could not open.
+fn named_session(why: ErrorBody, target: &Target) -> ErrorBody {
+    match &target.session {
+        Some(name) => ErrorBody::new(
+            why.code,
+            format!("{} (for session {name:?})", why.message),
+            why.remedy,
+        ),
+        None => why,
     }
 }
 

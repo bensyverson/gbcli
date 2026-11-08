@@ -43,8 +43,8 @@ impl Handler {
                 "drop one of them: --at names the state both sides start from",
             ));
         }
-        let mut a = self.side(store, meta, args, warnings)?;
-        let mut b = self.side(store, &side_b(store, meta, args), args, warnings)?;
+        let mut a = self.side(store, meta, args, false, warnings)?;
+        let mut b = self.side(store, &side_b(store, meta, args), args, true, warnings)?;
         apply_writes(&mut b, &args.b.writes)?;
         let ram: Vec<RamRange> = args
             .ram
@@ -101,11 +101,13 @@ impl Handler {
         store: &SessionStore,
         meta: &SessionFile,
         args: &EquivArgs,
+        is_b: bool,
         warnings: &mut Vec<String>,
     ) -> Result<Machine, Failure> {
         let from = args.from.unwrap_or(Start::Boot);
         let interrupt = Some(&*self.interrupt);
         let (mut machine, loaded) = match &args.at {
+            Some(at) if is_b && args.b.rom.is_some() => store.start_side_b_at(meta, at, &self.load),
             Some(at) => store.start_machine(meta, Some(at), from, &self.load, interrupt),
             None => store.machine(meta).and_then(|mut m| {
                 let loaded = match from {

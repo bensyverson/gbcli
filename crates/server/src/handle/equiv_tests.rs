@@ -355,3 +355,41 @@ fn a_byte_one_side_never_wrote_names_that_side_and_a_checkpoint_after_init() {
     // in the fifth frame.
     assert_eq!(never_written(error), (5, vec![SideName::B]));
 }
+
+/// `--at` with another ROM_B loads side A's state into B's file; B's file
+/// never changed, so its warning names B and carries no baseline advice.
+#[test]
+fn a_side_b_with_its_own_rom_at_a_checkpoint_is_warned_as_side_b() {
+    let f = Fixture::with_sym("equiv-at-b-warning");
+    let mut h = handler(&f);
+    run_frames(&mut h, 2);
+    h.handle(&request(Op::Checkpoint(gbcli_protocol::CheckpointArgs {
+        name: "two".into(),
+    })))
+    .outcome
+    .expect("saved");
+    let mut rom = crate::fixture::V1.to_vec();
+    rom[0x016B] = 0x00;
+    std::fs::write(f.dir.join("b.gb"), rom).expect("rom b");
+    std::fs::write(f.dir.join("b.sym"), crate::fixture::V1_SYM).expect("sym b");
+    let mut args = frame_counter(20, false);
+    args.b.rom = Some("b.gb".into());
+    args.at = Some("two".into());
+    let response = equiv(&mut h, args);
+    let side_b: Vec<_> = response
+        .warnings
+        .iter()
+        .filter(|w| w.contains("side B runs b.gb"))
+        .collect();
+    assert_eq!(side_b.len(), 1, "{:#?}", response.warnings);
+    assert!(
+        side_b[0].contains("side A's state was loaded into b.gb"),
+        "{}",
+        side_b[0]
+    );
+    assert!(
+        !response.warnings.iter().any(|w| w.contains("baseline")),
+        "{:#?}",
+        response.warnings
+    );
+}

@@ -193,6 +193,9 @@ impl StoreError {
             StoreError::NoSession { known, .. } => {
                 format!("known sessions: {}", known.join(", "))
             }
+            StoreError::NoBundle {
+                gbcli_dir: Some(_), ..
+            } => "point GBCLI_DIR at the project's directory, or unset it".into(),
             StoreError::NoBundle { .. } => {
                 "create a session, which makes .gbcli/ in the working directory: \
                  `gbcli run game.gb --session NAME` (or pass --dir to a project that has one)"
@@ -292,6 +295,24 @@ impl StoreError {
             }
             StoreError::Checkpoint(e) => e.remedy(),
             StoreError::Setup(e) => setup_remedy(e),
+        }
+    }
+
+    /// What loading side A's state into side B's own ROM `rom` (`equiv
+    /// --at` with another ROM_B) warned: B's file never changed, so none of
+    /// the rebuild advice applies to it.
+    pub fn side_b_warning_text(warning: &LoadWarning, rom: &str) -> String {
+        match warning {
+            LoadWarning::RomChanged { moved, forced, .. } if *forced => format!(
+                "side B runs {rom}, not the ROM side A's state was saved on; loaded anyway with \
+                 --allow-rom-change ({} symbols moved)",
+                moved.len()
+            ),
+            LoadWarning::RomChanged { checked, .. } => format!(
+                "side B runs {rom}, not the ROM side A's state was saved on; side A's state was \
+                 loaded into {rom} because no live symbol moved ({checked} checked)"
+            ),
+            other => Self::warning_text(other, rom),
         }
     }
 

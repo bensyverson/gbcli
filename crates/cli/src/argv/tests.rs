@@ -138,3 +138,14 @@ fn a_switch_given_a_value_is_refused() {
     let u = usage(&["show", "--json=yes"]);
     assert!(u.remedy.contains("`gbcli show --help`"), "{}", u.remedy);
 }
+
+/// `--rev` guards one session's head; a verb that works on the whole project
+/// says it has nothing to guard, as a read does.
+#[test]
+fn rev_on_a_project_verb_says_it_has_nothing_to_guard() {
+    for line in [&["gaps", "--rev", "1"][..], &["sessions", "--rev", "1"]] {
+        let u = usage(line);
+        assert!(u.message.contains("--rev has nothing to guard"), "{u:?}");
+        assert!(u.remedy.starts_with("drop --rev"), "{u:?}");
+    }
+}

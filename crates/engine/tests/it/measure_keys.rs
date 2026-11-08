@@ -61,10 +61,13 @@ fn a_key_held_from_frame_0_is_held_for_every_iteration() {
 #[test]
 fn later_events_apply_at_their_frame_offsets() {
     let m = measure(6, &parse_keys("A@2 -A@4").unwrap());
-    let costs = t(&m);
-    assert_eq!(costs.first(), Some(&RELEASED_T), "{costs:?}");
-    assert!(costs.contains(&HELD_T), "{costs:?}");
-    assert_eq!(costs.last(), Some(&RELEASED_T), "{costs:?}");
+    // Pinned exactly: a press or release a frame early or late changes it.
+    assert_eq!(
+        t(&m),
+        vec![
+            RELEASED_T, HELD_T, HELD_T, RELEASED_T, RELEASED_T, RELEASED_T
+        ]
+    );
     assert!(
         m.frames >= 4,
         "the measurement reached frame 4: {}",

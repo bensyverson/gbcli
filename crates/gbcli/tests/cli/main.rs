@@ -24,6 +24,7 @@ mod raster;
 mod recipes;
 mod rgbds;
 mod serve;
+mod serve_bare;
 mod song;
 mod starter_gbc;
 mod traps;

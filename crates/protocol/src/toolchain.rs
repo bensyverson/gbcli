@@ -115,6 +115,11 @@ pub struct Diagnostic {
     pub file: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub line: Option<u32>,
+    /// The last line of a run: the tool said the same thing on each line
+    /// from `line` to here (rgbasm reports code in a RAM section once per
+    /// byte). Only set when it is past `line`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_line: Option<u32>,
     /// The macro or `REPT` iteration `line` is in (`Bad`, `REPT~2`), when
     /// it is in one: `line` is then a line of its body.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -130,6 +135,18 @@ pub struct Diagnostic {
     /// innermost first.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub also: Vec<Vec<SourceLine>>,
+    /// How many times the tool printed this message, back to back, on the
+    /// lines from `line` to `last_line`; left off the wire when once.
+    #[serde(default = "once", skip_serializing_if = "is_once")]
+    pub count: u32,
+}
+
+fn once() -> u32 {
+    1
+}
+
+fn is_once(count: &u32) -> bool {
+    *count == 1
 }
 
 impl Diagnostic {
@@ -140,10 +157,12 @@ impl Diagnostic {
             severity,
             file: None,
             line: None,
+            last_line: None,
             within: None,
             message: message.into(),
             chain: Vec::new(),
             also: Vec::new(),
+            count: 1,
         }
     }
 }
@@ -304,6 +323,38 @@ mod tests {
             r#"{"tool":"rgbasm","severity":"error","file":"src/main.asm","message":"syntax error"}"#
         );
         assert_eq!(serde_json::from_str::<Diagnostic>(&json).unwrap(), d);
+    }
+
+    /// A collapsed run says its last line and how many messages it stands
+    /// for; a single message leaves both off, so older readers and writers
+    /// see the wire unchanged.
+    #[test]
+    fn a_collapsed_diagnostic_carries_its_last_line_and_count_and_a_single_one_neither() {
+        let one = Diagnostic {
+            file: Some("src/main.asm".into()),
+            line: Some(193),
+            ..Diagnostic::new(Tool::Rgbasm, Severity::Error, "boom")
+        };
+        assert_eq!(one.count, 1);
+        assert_eq!(one.last_line, None);
+        let json = serde_json::to_string(&one).unwrap();
+        assert!(
+            !json.contains("count") && !json.contains("last_line"),
+            "{json}"
+        );
+        assert_eq!(serde_json::from_str::<Diagnostic>(&json).unwrap(), one);
+
+        let run = Diagnostic {
+            last_line: Some(195),
+            count: 5,
+            ..one
+        };
+        let json = serde_json::to_string(&run).unwrap();
+        assert_eq!(
+            json,
+            r#"{"tool":"rgbasm","severity":"error","file":"src/main.asm","line":193,"last_line":195,"message":"boom","count":5}"#
+        );
+        assert_eq!(serde_json::from_str::<Diagnostic>(&json).unwrap(), run);
     }
 
     #[test]

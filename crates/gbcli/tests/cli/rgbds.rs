@@ -157,6 +157,54 @@ fn a_syntax_error_comes_back_with_its_file_and_line() {
     assert_eq!(first["severity"], "error");
 }
 
+/// The eval's stumble (leaf k22J86): code after a WRAM section. rgbasm
+/// reports it once per byte; the build shows one row naming the lines and
+/// how many messages it stands for, counts that row once in errors=, and
+/// the remedy says where code goes.
+#[test]
+fn code_in_a_ram_section_is_one_row_with_its_lines_and_a_remedy_naming_a_rom_section() {
+    let p = Project::game("rgbds-code-in-wram");
+    let main = p.path("game/src/main.asm");
+    let mut text = fs::read_to_string(&main).unwrap();
+    // `ld a, 1` is the fourth line added.
+    let first = text.lines().count() + 4;
+    text += "SECTION \"W\", WRAM0\nwX: ds 1\nFoo:\n\tld a, 1\n\tld b, 2\n\tret\n";
+    fs::write(&main, &text).unwrap();
+    let last = first + 2;
+
+    let rows = p.rgbds(&["build", "game"]);
+    rows.fails(
+        4,
+        "build_failed",
+        &format!(
+            "code and data go in a ROM0 or ROMX section: start one (`SECTION \"Code\", ROM0`) \
+             before the first such line (game/src/main.asm:{first}), then `gbcli build game` \
+             again"
+        ),
+    );
+    assert_eq!(
+        rows.stdout,
+        format!(
+            "diagnostic severity=error tool=rgbasm file=game/src/main.asm line={first} \
+             lines={first}-{last} count=5 message=\"Section \\\"W\\\" cannot contain code or \
+             data (not `ROM0` or `ROMX`)\"\n\
+             song path=game/assets/music/theme.song asm=game/build/music/theme.asm \
+             descriptor=song_theme\n\
+             build rgbds=1.0.4 target=dmg sources=5 errors=1 warnings=0\n"
+        ),
+        "{}",
+        rows.stdout
+    );
+
+    let json = p.rgbds(&["build", "game", "--json"]);
+    let line: serde_json::Value = serde_json::from_str(json.stdout.trim()).unwrap();
+    let diagnostics = &line["error"]["result"]["build"]["diagnostics"];
+    assert_eq!(diagnostics.as_array().unwrap().len(), 1, "{diagnostics}");
+    assert_eq!(diagnostics[0]["line"], first);
+    assert_eq!(diagnostics[0]["last_line"], last);
+    assert_eq!(diagnostics[0]["count"], 5);
+}
+
 #[test]
 fn a_macros_call_site_comes_back_in_rows_and_json() {
     let p = Project::game("rgbds-macro");

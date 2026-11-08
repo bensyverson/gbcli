@@ -145,17 +145,30 @@ impl BuildError {
                             (Some(file), None) => format!("{file}: "),
                             _ => String::new(),
                         };
-                        format!("{place}{} ({})", d.message, d.tool.name())
+                        let times = match (d.count, d.line, d.last_line) {
+                            (1, _, _) => String::new(),
+                            (n, Some(line), Some(last)) => {
+                                format!(", {n} times on lines {line}-{last}")
+                            }
+                            (n, _, _) => format!(", {n} times"),
+                        };
+                        format!("{place}{} ({}{times})", d.message, d.tool.name())
                     },
                 );
+                // A collapsed run counts once: the count is of the places to
+                // fix, as the rows show them.
                 let count = match errors.len() {
                     1 => "1 error".to_string(),
                     n => format!("{n} errors, the first"),
                 };
+                let fix = errors
+                    .first()
+                    .and_then(|d| diagnostics::hints::remedy(d))
+                    .unwrap_or_else(|| "fix the first error at its file and line".into());
                 let mut body = ErrorBody::new(
                     ErrorCode::BuildFailed,
                     format!("the build failed with {count}: {first}"),
-                    format!("fix the first error at its file and line, then `{again}` again"),
+                    format!("{fix}, then `{again}` again"),
                 );
                 body.result = Some(Box::new(ResultBody {
                     build: Some((**made).clone()),

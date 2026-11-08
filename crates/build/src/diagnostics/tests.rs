@@ -171,3 +171,144 @@ fn text_with_no_diagnostic_is_none() {
     assert!(parse(Tool::Rgbfix, "").is_empty());
     assert!(parse(Tool::Rgbfix, "Usage: rgbfix [-hjOsVvw]\n").is_empty());
 }
+
+/// Code in a WRAM section: rgbasm says so once per byte it would emit, so
+/// `ld a, 1` (two bytes) is reported twice. Line 6 is blank.
+const CODE_IN_WRAM: &str = "\
+error: Section \"W\" cannot contain code or data (not `ROM0` or `ROMX`)
+    at w.asm(4)
+error: Section \"W\" cannot contain code or data (not `ROM0` or `ROMX`)
+    at w.asm(4)
+error: Section \"W\" cannot contain code or data (not `ROM0` or `ROMX`)
+    at w.asm(5)
+error: Section \"W\" cannot contain code or data (not `ROM0` or `ROMX`)
+    at w.asm(5)
+error: Section \"W\" cannot contain code or data (not `ROM0` or `ROMX`)
+    at w.asm(7)
+error: Section \"W\" cannot contain code or data (not `ROM0` or `ROMX`)
+    at w.asm(8)
+error: Section \"W\" cannot contain code or data (not `ROM0` or `ROMX`)
+    at w.asm(8)
+Assembly aborted with 7 errors
+";
+
+const IN_WRAM: &str = "Section \"W\" cannot contain code or data (not `ROM0` or `ROMX`)";
+
+fn run(first: u32, last: Option<u32>, count: u32) -> Diagnostic {
+    Diagnostic {
+        last_line: last,
+        count,
+        ..diag(
+            Tool::Rgbasm,
+            Severity::Error,
+            Some("w.asm"),
+            Some(first),
+            IN_WRAM,
+        )
+    }
+}
+
+#[test]
+fn a_message_repeated_on_consecutive_lines_is_one_diagnostic_per_run() {
+    assert_eq!(
+        parse(Tool::Rgbasm, CODE_IN_WRAM),
+        [run(4, Some(5), 4), run(7, Some(8), 3)]
+    );
+}
+
+#[test]
+fn a_message_repeated_on_one_line_counts_without_a_last_line() {
+    let text = "\
+error: Section \"W\" cannot contain code or data (not `ROM0` or `ROMX`)
+    at w.asm(4)
+error: Section \"W\" cannot contain code or data (not `ROM0` or `ROMX`)
+    at w.asm(4)
+";
+    assert_eq!(parse(Tool::Rgbasm, text), [run(4, None, 2)]);
+}
+
+#[test]
+fn a_different_message_file_macro_or_chain_breaks_a_run() {
+    let text = "\
+error: Section \"W\" cannot contain code or data (not `ROM0` or `ROMX`)
+    at w.asm(1)
+error: syntax error, unexpected symbol
+    at w.asm(2)
+error: Section \"W\" cannot contain code or data (not `ROM0` or `ROMX`)
+    at w.asm(3)
+error: Section \"W\" cannot contain code or data (not `ROM0` or `ROMX`)
+    at other.asm(4)
+error: Section \"W\" cannot contain code or data (not `ROM0` or `ROMX`)
+    at other.asm::M(5)
+    <- other.asm(9)
+error: Section \"W\" cannot contain code or data (not `ROM0` or `ROMX`)
+    at other.asm::M(6)
+    <- other.asm(10)
+error: Section \"W\" cannot contain code or data (not `ROM0` or `ROMX`)
+    at other.asm::M(6)
+    <- other.asm(10)
+";
+    let found = parse(Tool::Rgbasm, text);
+    let places: Vec<_> = found
+        .iter()
+        .map(|d| (d.file.as_deref().unwrap(), d.line.unwrap(), d.count))
+        .collect();
+    assert_eq!(
+        places,
+        [
+            ("w.asm", 1, 1),
+            ("w.asm", 2, 1),
+            ("w.asm", 3, 1),
+            ("other.asm", 4, 1),
+            ("other.asm", 5, 1),
+            ("other.asm", 6, 2),
+        ]
+    );
+    assert!(found.iter().all(|d| d.last_line.is_none()), "{found:?}");
+}
+
+#[test]
+fn a_line_going_back_or_a_warning_between_breaks_a_run() {
+    let text = "\
+error: boom
+    at w.asm(5)
+error: boom
+    at w.asm(4)
+warning: boom
+    at w.asm(5)
+error: boom
+    at w.asm(6)
+error: boom
+    at w.asm(7)
+";
+    let found = parse(Tool::Rgbasm, text);
+    let runs: Vec<_> = found
+        .iter()
+        .map(|d| (d.severity, d.line.unwrap(), d.last_line, d.count))
+        .collect();
+    assert_eq!(
+        runs,
+        [
+            (Severity::Error, 5, None, 1),
+            (Severity::Error, 4, None, 1),
+            (Severity::Warning, 5, None, 1),
+            (Severity::Error, 6, Some(7), 2),
+        ]
+    );
+}
+
+#[test]
+fn identical_messages_without_a_line_collapse_too() {
+    let text = "error: boom\nerror: boom\nerror: other\n";
+    let found = parse(Tool::Rgblink, text);
+    assert_eq!(
+        found.iter().map(|d| d.count).collect::<Vec<_>>(),
+        [2, 1],
+        "{found:?}"
+    );
+    assert!(
+        found
+            .iter()
+            .all(|d| d.line.is_none() && d.last_line.is_none())
+    );
+}

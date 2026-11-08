@@ -59,7 +59,42 @@ pub fn parse(tool: Tool, text: &str) -> Vec<Diagnostic> {
             _ => {}
         }
     }
-    found
+    collapse(found)
+}
+
+/// One diagnostic for each run of the same message on the same or the next
+/// line, back to back in the tool's output. rgbasm reports some errors once
+/// per byte (code in a RAM section), which would bury the one fix under a
+/// row per byte. A gap of a line, or anything printed between, starts a new
+/// run, so two places that each need fixing stay two.
+fn collapse(found: Vec<Diagnostic>) -> Vec<Diagnostic> {
+    let mut runs: Vec<Diagnostic> = Vec::with_capacity(found.len());
+    for d in found {
+        if let Some(run) = runs.last_mut()
+            && continues(run, &d)
+        {
+            run.count += d.count;
+            if d.line > run.line {
+                run.last_line = d.line;
+            }
+            continue;
+        }
+        runs.push(d);
+    }
+    runs
+}
+
+/// Whether `next` says what `run` says, one line on at most.
+fn continues(run: &Diagnostic, next: &Diagnostic) -> bool {
+    let same = run.tool == next.tool
+        && run.severity == next.severity
+        && run.file == next.file
+        && run.within == next.within
+        && run.message == next.message
+        && run.chain == next.chain
+        && run.also == next.also;
+    let last = run.last_line.or(run.line);
+    same && (next.line == last || matches!((last, next.line), (Some(l), Some(n)) if n == l + 1))
 }
 
 /// Where the location lines that follow belong.
@@ -105,5 +140,6 @@ fn location(text: &str) -> Option<SourceLine> {
     })
 }
 
+pub(crate) mod hints;
 #[cfg(test)]
 mod tests;

@@ -84,7 +84,8 @@ pub const BUILD_VERB: VerbSpec = VerbSpec {
             .asm under src/ with include/ on the include path, rgblink links them into \
             build/<DIR's name>.gb with a .sym and a .map, and rgbfix fixes the header. Each \
             step's outputs must exist and be non-empty. Every diagnostic is a `diagnostic` \
-            row with its file and line; any error fails with build_failed (exit 4) and leaves \
+            row with its file and line (a message repeated on lines in a row is one row, \
+            with lines= and count=); any error fails with build_failed (exit 4) and leaves \
             the last good ROM in place. With --session and --restore, a good build is \
             reloaded: the checkpoint is restored into the rebuilt ROM, which loads only if \
             nothing it was running moved (rom_changed, exit 3, says what did).",

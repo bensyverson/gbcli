@@ -82,6 +82,15 @@ flash_notes (run, step: each flash note, also a warning; a failed run's or
 step's are on its error).
 `gbcli VERB --json` prints the whole response line, as serve writes it.
 
+Build diagnostics, in result.build.diagnostics (on build_failed, in
+error.result.build):
+  {tool: "rgbasm"|"rgblink"|"rgbfix"|"rgbgfx", severity: "error"|"warning",
+   file?, line?, last_line?, within?, message, chain?: [SOURCE],
+   also?: [[SOURCE]], count?: N}
+  last_line, count: a message the tool repeated on lines line to last_line,
+  back to back, count times in all (left off when once). SOURCE = {file,
+  line, within?}: how the line was reached, innermost first.
+
 GBC images, in result.build.images (gbcli help images). Every build fills
 tile_map (no slot without --gbc); a --gbc build fills gbc for every image.
   images[]  tile_map?: [ENTRY|null]  (each 8x8 tile, each 8x16 unit of a

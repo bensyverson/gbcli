@@ -23,7 +23,14 @@ pub fn rows(r: &ResultBody) -> String {
                 .field("tool", d.tool.name())
                 .opt("file", d.file.as_deref())
                 .opt("line", d.line)
+                .opt(
+                    "lines",
+                    d.line
+                        .zip(d.last_line)
+                        .map(|(first, last)| format!("{first}-{last}")),
+                )
                 .opt("within", d.within.as_deref())
+                .opt("count", (d.count != 1).then_some(d.count))
                 .field("message", &d.message)
                 .line();
             // How the line was reached, then each other place the message

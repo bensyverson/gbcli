@@ -211,10 +211,11 @@ RGBDS — the loop: edit, build, restore, measure, with RGBDS from PATH.
     gbcli build --session game --restore start
     gbcli measure VBlank..VBlank.done --session game
 
-Each error is a `diagnostic` row with file= and line=; build_failed exits 4
-and leaves the last good ROM in place. --restore loads the checkpoint into the
-rebuilt ROM only if nothing it was running moved; rom_changed (exit 3) lists
-what did, and --allow-rom-change loads it anyway.
+Each error is a `diagnostic` row with file= and line=; a message repeated on
+lines in a row is one row with lines=FIRST-LAST and count=N. build_failed
+exits 4 and leaves the last good ROM in place. --restore loads the checkpoint
+into the rebuilt ROM only if nothing it was running moved; rom_changed (exit
+3) lists what did, and --allow-rom-change loads it anyway.
 $ gbcli build --help
 exit 0
 gbcli build — assemble, link and fix a project with RGBDS; errors with file and line
@@ -226,11 +227,12 @@ Builds the project in DIR (default: here) by convention: rgbasm assembles
 every .asm under src/ with include/ on the include path, rgblink links them
 into build/<DIR's name>.gb with a .sym and a .map, and rgbfix fixes the
 header. Each step's outputs must exist and be non-empty. Every diagnostic is a
-`diagnostic` row with its file and line; any error fails with build_failed
-(exit 4) and leaves the last good ROM in place. With --session and --restore,
-a good build is reloaded: the checkpoint is restored into the rebuilt ROM,
-which loads only if nothing it was running moved (rom_changed, exit 3, says
-what did).
+`diagnostic` row with its file and line (a message repeated on lines in a row
+is one row, with lines= and count=); any error fails with build_failed (exit
+4) and leaves the last good ROM in place. With --session and --restore, a good
+build is reloaded: the checkpoint is restored into the rebuilt ROM, which
+loads only if nothing it was running moved (rom_changed, exit 3, says what
+did).
 
 CLASS
   build: runs RGBDS from PATH, checked against the pinned version (`gbcli doctor`); a session only to reload the build into; `new` and `song` need neither.

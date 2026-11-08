@@ -238,10 +238,11 @@ RGBDS — the loop: edit, build, restore, measure, with RGBDS from PATH.
     gbcli build --session game --restore start
     gbcli measure VBlank..VBlank.done --session game
 
-Each error is a `diagnostic` row with file= and line=; build_failed exits 4
-and leaves the last good ROM in place. --restore loads the checkpoint into the
-rebuilt ROM only if nothing it was running moved; rom_changed (exit 3) lists
-what did, and --allow-rom-change loads it anyway.
+Each error is a `diagnostic` row with file= and line=; a message repeated on
+lines in a row is one row with lines=FIRST-LAST and count=N. build_failed
+exits 4 and leaves the last good ROM in place. --restore loads the checkpoint
+into the rebuilt ROM only if nothing it was running moved; rom_changed (exit
+3) lists what did, and --allow-rom-change loads it anyway.
 ";
 
 #[cfg(test)]

@@ -185,6 +185,51 @@ fn every_assembler_error_is_reported_before_linking_stops() {
     );
 }
 
+/// Code in a WRAM section is reported once per byte by rgbasm: the build
+/// reports the run once, and the remedy says where code goes.
+#[test]
+fn code_in_a_ram_section_is_one_diagnostic_and_its_remedy_names_a_rom_section() {
+    let (temp, options) = starter("code-in-wram");
+    let main = temp.path("demo/src/main.asm");
+    let mut text = fs::read_to_string(&main).unwrap();
+    // `ld a, 1` is the fourth line added.
+    let first = text.lines().count() as u32 + 4;
+    text += "SECTION \"W\", WRAM0\nwX: ds 1\nFoo:\n\tld a, 1\n\tld b, 2\n\tret\n";
+    fs::write(&main, &text).unwrap();
+    let made = failed(build(&rgbds(), &options));
+    let errors: Vec<_> = made
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == Severity::Error)
+        .collect();
+    assert_eq!(errors.len(), 1, "{errors:?}");
+    assert_eq!(errors[0].line, Some(first));
+    assert_eq!(errors[0].last_line, Some(first + 2));
+    assert_eq!(errors[0].count, 5);
+    let body = BuildError::Failed {
+        made: Box::new(made.clone()),
+        again: "gbcli build demo".into(),
+    }
+    .body();
+    assert_eq!(
+        body.remedy,
+        format!(
+            "code and data go in a ROM0 or ROMX section: start one (`SECTION \"Code\", ROM0`) \
+             before the first such line (demo/src/main.asm:{first}), then `gbcli build demo` \
+             again"
+        )
+    );
+    assert_eq!(
+        body.message,
+        format!(
+            "the build failed with 1 error: demo/src/main.asm:{first}: Section \"W\" cannot \
+             contain code or data (not `ROM0` or `ROMX`) (rgbasm, 5 times on lines \
+             {first}-{})",
+            first + 2
+        )
+    );
+}
+
 #[test]
 fn a_link_error_comes_from_rgblink_with_the_line_that_used_the_symbol() {
     let (temp, options) = starter("link");

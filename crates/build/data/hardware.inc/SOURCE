@@ -11,7 +11,7 @@ hardware.inc is gbdev's Game Boy hardware constant definitions for RGBDS:
 
 It is committed unmodified. `gbcli new` writes it to a new project's
 include/hardware.inc (crates/build/src/scaffold.rs embeds it with
-include_str!), and crates/build/tests/scaffold.rs checks the embedded bytes
+include_str!), and crates/build/tests/it/scaffold.rs checks the embedded bytes
 against the sha256 above. To update: fetch a newer release's file and LICENSE
 the same way, update this file, and check that `gbcli new` still builds
 (the starter uses the v6 names: LCDC_ON, IE_VBLANK, TILEMAP0, OAM_Y_OFS).

@@ -4,7 +4,7 @@
 //! from the same state with the other three muted. Muting changes only the
 //! rendered output, and starting capture restarts the renderer from silence,
 //! so the replays are exact: `a_replay_is_exactly_deterministic` and
-//! `per_channel_wavs_sum_to_the_mixed_wav_exactly` (tests/views.rs) pin it.
+//! `per_channel_wavs_sum_to_the_mixed_wav_exactly` (tests/it/views.rs) pin it.
 
 use gbcli_core::{ApuChannel, AudioCapture, AudioSamples, Core, CoreError, Registers, Ticks};
 

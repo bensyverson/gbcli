@@ -48,7 +48,7 @@ What: a watch or breakpoint on cart RAM smaller than a bank also catching the in
 
 ## 2026-11-07 — The rumble motor's state through the core
 
-What: a `Core` accessor (and a stop-record or `read` field) for whether an MBC5 rumble cart's motor is on, which SameBoy tracks as `rumble_strength`. Leaf OU9rOL tested the rumble bit only as far as the core interface reaches: bit 3 of $4000–$5FFF drives the motor and selects no RAM bank (`crates/sameboy/tests/mappers.rs`). Why parked: a game's motor writes are already visible to a watch on $4000–$5FFF, and no agent task has asked whether the motor is on. Un-park when: a rumble game's behavior needs asserting by state rather than by its writes, or a frontend wants to show it.
+What: a `Core` accessor (and a stop-record or `read` field) for whether an MBC5 rumble cart's motor is on, which SameBoy tracks as `rumble_strength`. Leaf OU9rOL tested the rumble bit only as far as the core interface reaches: bit 3 of $4000–$5FFF drives the motor and selects no RAM bank (`crates/sameboy/tests/it/mappers.rs`). Why parked: a game's motor writes are already visible to a watch on $4000–$5FFF, and no agent task has asked whether the motor is on. Un-park when: a rumble game's behavior needs asserting by state rather than by its writes, or a frontend wants to show it.
 
 ## 2026-11-07 — HuC3 and TPP1 clocks in `.sav` import
 

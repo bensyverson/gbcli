@@ -9,6 +9,17 @@ The warm test suite, timed per test binary (wall and CPU) and then per test insi
 ```sh
 python3 -I scripts/bench/test-times.py                      # per-test breakdown for binaries over 2 s
 python3 -I scripts/bench/test-times.py --per-test-over 1.0
+python3 -I scripts/bench/test-times.py --per-test-over 1000  # the binary table only
+```
+
+With one test binary per crate, most binaries pass 2 s, so the per-test pass runs nearly every warm test alone and takes minutes. Ignored (pre-release) tests are not timed.
+
+## fresh-exec.py
+
+The first exec of a freshly written shell script against later ones. On macOS the OS checks a new executable on its first exec, about 150 ms (2026-11-07, Apple M1, under load), and then 5 ms; tests that write fake RGBDS tools pay it once per tool, as wall time with no CPU.
+
+```sh
+python3 -I scripts/bench/fresh-exec.py
 ```
 
 ## cli-latency

@@ -1,4 +1,4 @@
-//! Parser tests; evaluation is tested against a real core in tests/conditions.rs.
+//! Parser tests; evaluation is tested against a real core in tests/it/conditions.rs.
 
 use super::*;
 use crate::mem::CartSizes;

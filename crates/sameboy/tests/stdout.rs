@@ -3,6 +3,7 @@
 //! This file must stay the only test in its binary: it redirects the process's
 //! file descriptor 1, which would swallow output from tests running beside it.
 
+#[path = "it/common/mod.rs"]
 mod common;
 
 use std::ffi::{c_int, c_void};

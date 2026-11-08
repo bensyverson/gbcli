@@ -2,7 +2,7 @@
 ;
 ; Plays a few notes on every channel, frame-timed by the vblank interrupt, then
 ; turns the APU off and writes a register while it is off. The write log test
-; (crates/audio/tests/log.rs) checks every write this ROM makes, decoded.
+; (crates/audio/tests/it/log.rs) checks every write this ROM makes, decoded.
 ;
 ;   frame 0   square 1 A4 (period 1750, 50% duty, volume 15 fading, step 3)
 ;             square 2 E4 (period 1650, 25% duty, volume 10 steady, length 32)

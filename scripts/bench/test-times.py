@@ -6,7 +6,8 @@ Usage: python3 -I scripts/bench/test-times.py [--per-test-over SECONDS] [-- CARG
 Builds the tests first (`cargo test --no-run`), so the figures exclude compile
 time. Each binary runs as `cargo test` would run it, with the default thread
 count. For every binary slower than --per-test-over (default 2 s), each test
-is then run alone, one at a time, to find the slow ones. Needs the Bash
+is then run alone, one at a time, to find the slow ones; its ignored
+(pre-release) tests are skipped, as the warm suite skips them. Needs the Bash
 sandbox off (cargo's registry cache lives outside it) and the corpus fetched.
 """
 
@@ -21,6 +22,15 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
+def package(package_id):
+    """The package name in a package id: `path+file:///…/crates/build#gbcli-build@0.1.0`,
+    or `path+file:///…/crates/gbcli#0.1.0` when the name is the directory's."""
+    path, _, fragment = package_id.partition("#")
+    if "@" in fragment:
+        return fragment.split("@")[0]
+    return path.rstrip("/").rsplit("/", 1)[-1]
+
+
 def executables(cargo_args):
     out = subprocess.run(
         ["cargo", "test", "--workspace", "--no-run", "--message-format=json", *cargo_args],
@@ -31,9 +41,16 @@ def executables(cargo_args):
         msg = json.loads(line)
         if msg.get("reason") == "compiler-artifact" and msg.get("executable") and msg["profile"]["test"]:
             target = msg["target"]
-            pkg = msg["package_id"].split("#")[-1].split("@")[0].rsplit("/", 1)[-1]
+            pkg = package(msg["package_id"])
             found.append((f"{pkg}::{target['name']}", msg["executable"], msg["manifest_path"]))
     return found
+
+
+def listed(exe, cwd, *extra):
+    """The binary's test names (`--ignored`: only its ignored ones)."""
+    out = subprocess.run([exe, "--list", "--format=terse", *extra], cwd=cwd,
+                         capture_output=True, text=True).stdout
+    return [l.rsplit(": ", 1)[0] for l in out.splitlines() if l.endswith(": test")]
 
 
 def cpu():
@@ -76,14 +93,16 @@ def main():
     for secs, _, name, exe, cwd in rows:
         if secs < args.per_test_over:
             continue
-        listing = subprocess.run([exe, "--list", "--format=terse"], cwd=cwd, capture_output=True, text=True).stdout
-        tests = [l.rsplit(": ", 1)[0] for l in listing.splitlines() if l.endswith(": test")]
+        # The warm suite skips ignored (pre-release) tests, so this does too.
+        ignored = set(listed(exe, cwd, "--ignored"))
+        tests = [t for t in listed(exe, cwd) if t not in ignored]
         per = []
         for t in tests:
-            s, c, _ = timed([exe, "--exact", t, "-q", "--include-ignored"], cwd)
+            s, c, _ = timed([exe, "--exact", t, "-q"], cwd)
             per.append((s, c, t))
         per.sort(reverse=True)
-        print(f"\n{name} ({secs:.1f} s, {len(tests)} tests), each run alone (wall, CPU):")
+        print(f"\n{name} ({secs:.1f} s, {len(tests)} tests, {len(ignored)} ignored not timed),"
+              " each run alone (wall, CPU):")
         for s, c, t in per:
             print(f"{s:8.2f} s {c:7.2f} s  {t}")
 

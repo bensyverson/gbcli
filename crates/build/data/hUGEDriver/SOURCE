@@ -28,7 +28,7 @@ The files are committed unmodified. `gbcli new` writes hUGEDriver.asm to a new
 project's src/ and the two .inc files to its include/ (crates/build/src/scaffold.rs
 embeds them with include_str!); the driver's own `include "include/hardware.inc"`
 finds the project's gbdev hardware.inc, which defines every name it uses.
-crates/build/tests/scaffold.rs checks the embedded bytes against the sha256s
+crates/build/tests/it/scaffold.rs checks the embedded bytes against the sha256s
 above. To update: fetch the files at a newer commit the same way, check that
 hUGETracker's export at the matching tracker commit still writes the descriptor
 the driver reads, update this file and the emitter, and re-run the build tests.

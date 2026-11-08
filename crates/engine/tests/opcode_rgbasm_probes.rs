@@ -4,7 +4,12 @@
 //! `opcode_lookup_spellings.rs`'s table, and its time on long operands.
 //! Each rgbasm probe lists every line where the two disagree. Needs RGBDS
 //! 1.0.4 on `PATH`, as `opcode_lookup_spellings.rs` does.
+//!
+//! Its own test binary, not a module of `it/`: its lookups must finish under a
+//! wall-clock bound, which the engine's emulation tests running beside it in
+//! one process can push it past.
 
+#[path = "it/rgbasm/mod.rs"]
 mod rgbasm;
 
 use gbcli_engine::disasm::{LookupError, lookup};

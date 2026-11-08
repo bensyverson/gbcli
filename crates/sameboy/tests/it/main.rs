@@ -1,0 +1,23 @@
+//! The SameBoy backend's integration tests, one binary (`stdout` keeps its own).
+//! One binary links once and starts once; a test that needs a process of its
+//! own is a file beside this directory instead, saying why.
+
+mod apu;
+mod audio;
+mod battery;
+mod clock_bounds;
+mod common;
+mod cpu_instrs;
+mod display;
+mod filters;
+mod flash;
+mod frames;
+mod inspection;
+mod io_decode;
+mod layers;
+mod mappers;
+mod memory;
+mod run;
+mod save_load_property;
+mod speed_switch;
+mod state;

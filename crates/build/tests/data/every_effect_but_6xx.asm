@@ -1,5 +1,5 @@
 ; hUGETracker's own RGBDS export of every_effect_but_6xx.song (CC0 1.0, like
-; the song), the reference crates/build/tests/music_equiv.rs compares our
+; the song), the reference crates/build/tests/it/music_equiv.rs compares our
 ; emitter with. Made 2026-11-07 by scripts/music/export-reference.sh (uge2source
 ; built from hUGETracker 1.0.11, commit 0623f3f7) from the .uge that
 ; `gbcli song every_effect_but_6xx.song --uge` wrote; descriptor song_theme.

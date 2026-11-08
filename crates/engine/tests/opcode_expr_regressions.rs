@@ -2,6 +2,10 @@
 //! iH2KOO, from review-fpq's probes): hostile input must neither crash nor
 //! hang. The review's lines checked against rgbasm are rows of
 //! `opcode_lookup_spellings.rs`, which rgbasm referees.
+//!
+//! Its own test binary, not a module of `it/`: its lookups must finish under a
+//! wall-clock bound, which the engine's emulation tests running beside it in
+//! one process can push it past.
 
 use gbcli_engine::disasm::{LookupError, Opcode, lookup};
 

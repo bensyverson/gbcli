@@ -2,7 +2,7 @@
 //! instruction as rgbasm 1.0.4 takes it (`jr nz, .loop`, `xor a`,
 //! `ld a, [hl+]`, `ld [wFoo], a`): each form's size, cycles and flags, for
 //! `gbcli opcode`. A line rgbasm refuses is refused, with the spelling it
-//! takes where one is near (`crates/engine/tests/opcode_lookup_spellings.rs`
+//! takes where one is near (`crates/engine/tests/it/opcode_lookup_spellings.rs`
 //! checks the cases against rgbasm itself, and `opcode_rgbasm_differential.rs`
 //! seeded generated lines), except for what needs the
 //! source or the link: a symbol is taken as defined, a value as in range

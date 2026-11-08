@@ -16,7 +16,7 @@
 ; exactly one value. APU is derived (SameBoy's frame-sequencer counter at
 ; 1 mod 8, docboy's div_apu = 18) and checked: docboy's ch1 length-timer tests
 ; pass at every even step and fail at every odd one. See
-; project/2026-11-06-docboy-baseline.md and crates/corpus/tests/docboy_boot.rs.
+; project/2026-11-06-docboy-baseline.md and crates/corpus/tests/it/docboy_boot.rs.
 ; Assembled to docboy_boot.bin (256 bytes, unpadded) by scripts/build-roms.sh.
 
 ; M-cycles from each timed write to the boot ROM's last write (FF50).

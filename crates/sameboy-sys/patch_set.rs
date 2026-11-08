@@ -1,5 +1,5 @@
 //! The hash of gbcli's patch set over vendored SameBoy (`patches/`), folded
-//! into the core identity by `build.rs`. Shared with `tests/patch_set.rs`
+//! into the core identity by `build.rs`. Shared with `tests/it/patch_set.rs`
 //! through `#[path]`, so the build and the test use one implementation.
 //!
 //! FNV-1a (64-bit): this detects change, it doesn't resist forgery, so a

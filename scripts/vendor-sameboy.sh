@@ -27,7 +27,7 @@ cp "$work/SameBoy/LICENSE" "$work/SameBoy/version.mk" "$dest/"
 cp "$work/SameBoy/BootROMs/"*.asm "$work/SameBoy/BootROMs/"*.inc \
    "$work/SameBoy/BootROMs/pb12.c" "$work/SameBoy/BootROMs/SameBoyLogo.png" "$dest/BootROMs/"
 print -r -- "$resolved" > "$dest/COMMIT"
-# Upstream's Core/ before our patches: crates/sameboy-sys/tests/patch_set.rs checks that the
+# Upstream's Core/ before our patches: crates/sameboy-sys/tests/it/patch_set.rs checks that the
 # vendored Core/ with every patch undone still hashes to this, so no edit bypasses patches/.
 "$repo_root/scripts/sameboy-core-hash.sh" "$dest/Core" > "$dest/CORE_SHA256"
 

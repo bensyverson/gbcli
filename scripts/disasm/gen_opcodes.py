@@ -9,7 +9,7 @@ anywhere after updating the JSON:
     python3 -I scripts/disasm/gen_opcodes.py --check  # fail if table.rs is stale
 
 Generating Rust keeps the engine free of a JSON parser at build or run time;
-crates/engine/tests/disasm_table.rs checks the result against the JSON.
+crates/engine/tests/it/disasm_table.rs checks the result against the JSON.
 """
 
 import json

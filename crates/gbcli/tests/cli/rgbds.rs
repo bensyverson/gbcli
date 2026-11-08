@@ -229,6 +229,52 @@ fn doctor_passes_with_the_pinned_rgbds_and_needs_no_session() {
     assert!(!p.path(".gbcli").exists(), "doctor leaves no trace");
 }
 
+/// `git init` in `dir`, whatever repository the test itself runs inside
+/// (a pre-commit hook exports `GIT_DIR` and `GIT_INDEX_FILE`).
+fn git_init(dir: &std::path::Path) {
+    let mut init = std::process::Command::new("git");
+    init.args(["init", "-q", "."]).current_dir(dir);
+    for var in [
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_COMMON_DIR",
+    ] {
+        init.env_remove(var);
+    }
+    assert!(init.status().expect("these tests need git").success());
+}
+
+#[test]
+fn doctor_asks_git_about_the_projects_repository_not_the_environments() {
+    // A doctor run from a git hook inherits GIT_DIR naming the hook's
+    // repository; the gitignore check is about the project's own, here a
+    // directory inside a repository whose root ignores its .gbcli/.
+    let p = Project::new("rgbds-doctor-git-dir");
+    git_init(&p.dir);
+    std::fs::write(p.path(".gitignore"), "/game/.gbcli/\n").unwrap();
+    let game = p.path("game");
+    std::fs::create_dir_all(&game).unwrap();
+    let other = p.path("elsewhere");
+    std::fs::create_dir_all(&other).unwrap();
+    git_init(&other);
+    let path = format!("{}:/usr/bin:/bin", rgbds_dir());
+    let git_dir = other.join(".git");
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_gbcli"))
+        .arg("doctor")
+        .current_dir(&game)
+        .env("PATH", &path)
+        .env("GIT_DIR", &git_dir)
+        .env("GIT_INDEX_FILE", git_dir.join("index"))
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        stdout.contains("check name=gitignore status=ok "),
+        "{stdout}"
+    );
+}
+
 #[test]
 fn build_restore_reloads_a_checkpoint_unless_what_it_ran_moved() {
     let p = Project::game("rgbds-restore");

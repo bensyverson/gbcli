@@ -222,11 +222,19 @@ fn all_checks(project: &std::path::Path) -> DoctorMade {
 #[test]
 fn whether_gbcli_is_ignored_is_asked_of_git_itself() {
     let temp = Temp::new("doctor-git-real");
-    let init = std::process::Command::new("git")
-        .args(["init", "-q", "."])
-        .current_dir(&temp.0)
-        .status()
-        .expect("these tests need git on PATH");
+    // Under a git hook, an inherited GIT_DIR would make this re-initialize
+    // the hook's repository (it once set core.bare there).
+    let mut init = std::process::Command::new("git");
+    init.args(["init", "-q", "."]).current_dir(&temp.0);
+    for var in [
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_COMMON_DIR",
+    ] {
+        init.env_remove(var);
+    }
+    let init = init.status().expect("these tests need git on PATH");
     assert!(init.success());
     for dir in ["target/rv", "game", "other"] {
         fs::create_dir_all(temp.path(dir)).unwrap();

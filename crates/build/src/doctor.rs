@@ -229,13 +229,29 @@ fn gitignore(project: &Path, path_var: Option<&OsStr>, cwd: &Path) -> CheckMade 
     }
 }
 
+/// The variables that point git at a repository other than the one around
+/// its working directory.
+const GIT_REPOSITORY_VARS: [&str; 5] = [
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_COMMON_DIR",
+    "GIT_OBJECT_DIRECTORY",
+];
+
 /// Whether git ignores `.gbcli/` in `project`, or `None` when no git on
 /// `path_var` answers (none there, or one that can't read its config).
 fn git_ignores(project: &Path, path_var: Option<&OsStr>, cwd: &Path) -> Option<bool> {
     let git = find("git", path_var, cwd)?;
     // The trailing slash says it is a directory, which a `.gbcli/` pattern
     // needs to match a path that doesn't exist yet.
-    let status = Command::new(git)
+    let mut command = Command::new(git);
+    // The question is about the project's repository, which git finds from
+    // the directory; a git hook running gbcli exports these, naming its own.
+    for var in GIT_REPOSITORY_VARS {
+        command.env_remove(var);
+    }
+    let status = command
         .args(["check-ignore", "-q", ".gbcli/"])
         .current_dir(project)
         .stdin(Stdio::null())

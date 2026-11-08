@@ -101,3 +101,45 @@ Found by the main thread while checking: `gbcli gaps --help` said "needs a sessi
 | 7 | The spectrogram's axes aren't labeled. | docs | the help names the axes and the scale |
 
 **Gap ledger:** `none` (sessions `base` and `fast`).
+
+## Run 5 (binary at 866ad97): the final run
+
+**Result:** all four parts done in about 30 gbcli calls (17 tool calls, 1.6 min).
+1. **Sprite:** +30/+30 in 30 frames.
+2. **Sound:** `--audio-log` showed the five NR1x writes. The same run without A gave `writes=0`, "the clearest proof".
+3. **Cycles:** `measure … --keys 'RIGHT@0'` fell from 5,344 T to 1,484 T, a cut of 72%. `--max 3700` held. `equiv build/fast.gb --session base --frames 300 --keys-file walk.txt --ram wX` printed `equiv frames=300 screen=1 ram=wX audio=writes`.
+4. **Background:** `help images` "told me how to wire the tile and map offsets" (run 4's fix).
+
+**Stumbles:** no gbcli error, verb or bug stumble.
+
+| # | Stumble | Tag | Fix |
+|---|---|---|---|
+| 1 | An unquoted `u8[wX]` was globbed by zsh; the help quotes it. | my-mistake | none |
+| 2 | Didn't know `hardware.inc` defines `PAD_*`, so the agent's own `PAD_RIGHT` collided. The error named both files and lines. | docs (minor) | the starter's include line says so (thirteenth session's last commit) |
+| 3 | Found the sound-effect advice in `help music` only by grepping for "effect"; the starter's comment says the same. | docs (minor) | none: both places carry it |
+| 4, 5 | The spectrogram is a narrow strip with no axis labels or legend on the image. | docs/verb (mild) | backlog: "A spectrogram scaled to its own peak", extended with labels |
+| 6 | A few `measure`/`equiv` flags were found only in `help optimize`, which "covered everything". | docs (trivial) | none |
+
+**Criterion check:** run 5 completed the task with no stumble that gbcli's errors or verbs caused. The remaining docs items are minor: one was fixed in the same commit, one is already documented in two places, and one is a view feature parked in the backlog with its un-park condition. I judge the criterion met with that caveat, and record it so the bespoke decision (qfXJij) reads it plainly.
+
+## Summary
+
+**Five runs, about 145 gbcli calls.** Every run completed. Calls per run fell from about 40 to about 20-30, and the time to finish from 2.3 to 1.6 minutes. The stumbles that cost real time came in four kinds, each fixed at the source:
+- **The optimize loop overwrote its own baseline** (run 1). `help optimize` now runs as written in a `gbcli new` project, under a test.
+- **Errors without the cause:** a missing .sym (run 1), 126 repeated rgbasm rows (run 2), an equiv divergence on never-written RAM (run 3).
+- **Verbs that couldn't do the job:** `measure` under held keys (run 1), and frame-budget output with no summary and then 60 rows (runs 3 and 4).
+- **Facts that weren't written down:** a bare symbol is its address (run 3); image tile indices count from the image's own first tile (run 4); `--scale` on the audio views (runs 1 and 3).
+
+The independent reviews of those fixes found and fixed four more bugs:
+- equiv side B's warning;
+- a frame-budget summary skewed by a mid-frame start;
+- a bare serve dropping the no-bundle cause;
+- the macro hint's place.
+
+**Gap ledger, for the bespoke-core decision (qfXJij).** `gbcli gaps` printed `none` in every run's project, over 13 sessions. Run 1's first two sessions were deleted before the ledger was read. In about 145 calls of ordinary build, run, measure, profile, equiv, audio and image work, the SameBoy backend answered `unsupported` zero times. No stumble in any run came from a core limit: every one was in gbcli's docs, errors or verbs. **For the decision:** this eval gives no evidence that the SameBoy core limits an agent doing DMG game work. The case for a bespoke core must rest on the other inputs the decision lists: the shootout failures, fidelity issues, and the dot-level timing the plan wanted.
+
+**Did the spectrogram and piano roll help?** Mostly not.
+- In all five runs the decoded `--audio-log` (register writes named as notes, Hz and cents) proved the sound, and a control run without the button proved its absence.
+- The piano roll helped a little once it was readable (scale 2 by default since b486fc9): runs 2 and 5 saw the sweep's direction.
+- The spectrogram never helped: a short clip is a narrow strip, unlabeled and dark at the −90 dBFS floor.
+- For a 20-frame sound effect, text beats pictures. The views may earn their place for music and noise, which this task didn't exercise. The backlog holds the spectrogram's improvements with an un-park condition.

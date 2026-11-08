@@ -111,6 +111,8 @@ What: the objects-per-line check from OAM during a run ("frame 120, line 64: 12 
 
 **Why parked:** eval runs 1-3 (leaf k22J86) found the decoded `--audio-log` and the piano roll more useful than the spectrogram, and `--scale` now reaches it. Normalizing changes what the colors mean across captures, so two spectrograms could no longer be compared by eye.
 
+Eval run 5 asked for axis labels or a legend on the image too; `help music` now names the axes and scale in text, but the PNG carries none.
+
 **Un-park when:** a sound task needs the spectrogram (noise, timbre, a mix where the log's note names don't tell enough) and an agent can't read it.
 
 ## 2026-11-07 — Conditions that compare a bare RAM symbol

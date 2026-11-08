@@ -2,7 +2,7 @@
 ; `gbcli build` assembles every .asm under src/ with include/ on the
 ; include path, and links them into build/<project>.gb with .sym and .map.
 
-include "hardware.inc"
+include "hardware.inc"                ; every register, plus PAD_* (and B_PAD_*) for a joypad byte with the D-pad in bits 4-7
 
 ; ---------------------------------------------------------------------------
 ; Interrupt vector. VBlank is enabled below; music.asm adds the timer when

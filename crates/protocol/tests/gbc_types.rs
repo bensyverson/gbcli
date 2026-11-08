@@ -213,10 +213,13 @@ fn a_sheet_entry_carries_its_flip_and_slot() {
         "{json}"
     );
     assert_eq!(serde_json::from_str::<ImageAsset>(&json).unwrap(), a);
-    let dmg = sheet(vec![entry(2, Flip::Xy, None), None], None);
+    let dmg = ImageAsset {
+        tiles: 4,
+        ..sheet(vec![entry(2, Flip::Xy, None), None, None], None)
+    };
     let json = serde_json::to_string(&dmg).unwrap();
     assert!(
-        json.contains(r#""tile_map":[{"index":2,"flip":"xy"},null]"#),
+        json.contains(r#""tile_map":[{"index":2,"flip":"xy"},null,null]"#),
         "{json}"
     );
     assert_eq!(serde_json::from_str::<ImageAsset>(&json).unwrap(), dmg);
@@ -232,12 +235,16 @@ fn entries_that_disagree_with_the_target_are_refused_on_read() {
         art: ImageArt::Color,
         palettes: vec![forest()],
     };
+    // 2x1 tiles: two entries.
     let bg = |map: Vec<Option<TileEntry>>, gbc: Option<GbcImage>| ImageAsset {
         kind: ImageKind::Bg,
+        width: 2,
+        height: 1,
         frames: None,
         objects: None,
         ..sheet(map, gbc)
     };
+    let tile = |slot| entry(0, Flip::None, slot);
     for (what, a) in [
         (
             "a GBC entry without a slot",
@@ -248,13 +255,19 @@ fn entries_that_disagree_with_the_target_are_refused_on_read() {
         ),
         (
             "a DMG entry with a slot",
-            bg(vec![entry(0, Flip::None, Some(0))], None),
+            bg(vec![tile(Some(0)), tile(None)], None),
         ),
         (
             "a background's flip",
-            bg(vec![entry(0, Flip::X, Some(0))], Some(color())),
+            bg(
+                vec![entry(0, Flip::X, Some(0)), tile(Some(0))],
+                Some(color()),
+            ),
         ),
-        ("a background's missing tile", bg(vec![None], Some(color()))),
+        (
+            "a background's missing tile",
+            bg(vec![None, tile(Some(0))], Some(color())),
+        ),
     ] {
         let json = serde_json::to_string(&a).unwrap();
         assert!(
@@ -265,7 +278,136 @@ fn entries_that_disagree_with_the_target_are_refused_on_read() {
     let slot_past_7 = r#"{"kind":"bg","source":"s","label":"S","width":1,"height":1,"tiles":1,
         "preview":"p","tile_map":[{"index":0,"palette":8}],"gbc":{"art":"color"}}"#;
     assert!(serde_json::from_str::<ImageAsset>(slot_past_7).is_err());
-    let fine = bg(vec![entry(0, Flip::None, Some(0))], Some(color()));
+    let fine = bg(vec![tile(Some(0)), tile(Some(0))], Some(color()));
     let json = serde_json::to_string(&fine).unwrap();
     assert_eq!(serde_json::from_str::<ImageAsset>(&json).unwrap(), fine);
+}
+
+/// The file refuses a `dmg` line with two colors one in RGB555
+/// (`two_dmg_colors_one_in_rgb555_are_an_error_at_the_second`), since they
+/// can't name two shades; so does the wire. A named palette may repeat.
+#[test]
+fn a_dmg_palette_with_a_repeated_color_is_refused_on_the_wire() {
+    let json = r#"{"dmg":[32767,0,10570,0],"palettes":[]}"#;
+    let e = serde_json::from_str::<NamedPalettes>(json).unwrap_err();
+    let fault = PaletteFault::RepeatedDmgColor { shade: 3, first: 1 };
+    assert!(e.to_string().contains(&fault.to_string()), "{e}");
+    let n = NamedPalettes {
+        dmg: Some(GbcPalette([
+            Rgb555::WHITE,
+            Rgb555::BLACK,
+            Rgb555::new(10, 10, 10).unwrap(),
+            Rgb555::BLACK,
+        ])),
+        ..NamedPalettes::default()
+    };
+    assert_eq!(n.check(), Err(fault));
+    let twin = r#"{"palettes":[{"name":"twin","colors":[0,0,32767,32767]}]}"#;
+    assert!(serde_json::from_str::<NamedPalettes>(twin).is_ok());
+}
+
+/// The file refuses an image assigned twice; on the wire that is a
+/// repeated key, refused rather than read last-wins.
+#[test]
+fn an_image_assigned_twice_is_refused_on_the_wire() {
+    let colors = "[32767,9009,6534,2176]";
+    let json = format!(
+        r#"{{"palettes":[{{"name":"a","colors":{colors}}},{{"name":"b","colors":{colors}}}],
+            "assignments":{{"bg/t.png":"a","bg/t.png":"b"}}}}"#
+    );
+    let e = serde_json::from_str::<NamedPalettes>(&json).unwrap_err();
+    assert!(
+        e.to_string()
+            .contains("bg/t.png is assigned a palette again"),
+        "{e}"
+    );
+    let once = json.replace(r#","bg/t.png":"b""#, "");
+    assert!(
+        serde_json::from_str::<NamedPalettes>(&once).is_ok(),
+        "{once}"
+    );
+}
+
+/// An image as JSON: `width`x`height` tiles, `tiles` unique, `map` its
+/// tile map and `gbc` (with its leading comma) its GBC version.
+fn asset_json(kind: &str, (width, height): (u32, u32), tiles: u32, map: &str, gbc: &str) -> String {
+    format!(
+        r#"{{"kind":"{kind}","source":"assets/x.png","label":"X","width":{width},"height":{height},
+            "tiles":{tiles},"preview":"p.png","tile_map":{map}{gbc}}}"#
+    )
+}
+
+/// The entries' numbers must be ones the build makes: a sheet unit's top
+/// tile, even, with its bottom tile among `tiles`; a tile among `tiles`;
+/// one entry per tile (per 8x16 unit of a sheet); and a GBC image has
+/// entries. A DMG image may leave its map empty.
+#[test]
+fn entries_the_build_never_makes_are_refused_on_read() {
+    let gbc = r#","gbc":{"art":"indexed","palette":"forest"}"#;
+    for (what, json) in [
+        (
+            "an odd unit index",
+            asset_json("sprites", (2, 2), 2, r#"[{"index":1},null]"#, ""),
+        ),
+        (
+            "a unit whose bottom tile is past tiles",
+            asset_json("sprites", (2, 2), 3, r#"[{"index":2},null]"#, ""),
+        ),
+        (
+            "an index past tiles",
+            asset_json(
+                "bg",
+                (2, 2),
+                2,
+                r#"[{"index":9},{"index":0},{"index":0},{"index":0}]"#,
+                "",
+            ),
+        ),
+        (
+            "one entry for a 2x2 background",
+            asset_json("bg", (2, 2), 1, r#"[{"index":0}]"#, ""),
+        ),
+        (
+            "a unit per tile of a sheet",
+            asset_json("sprites", (1, 2), 2, r#"[{"index":0},null]"#, ""),
+        ),
+        (
+            "a GBC image with no entries",
+            asset_json("bg", (2, 2), 1, "[]", gbc),
+        ),
+    ] {
+        assert!(
+            serde_json::from_str::<ImageAsset>(&json).is_err(),
+            "{what}: {json}"
+        );
+    }
+    for json in [
+        asset_json(
+            "sprites",
+            (2, 2),
+            2,
+            r#"[{"index":0},{"index":0,"flip":"x"}]"#,
+            "",
+        ),
+        asset_json("sprites", (2, 4), 2, r#"[null,null,null,{"index":0}]"#, ""),
+        asset_json("bg", (2, 1), 2, r#"[{"index":1},{"index":0}]"#, ""),
+        asset_json("bg", (2, 2), 1, "[]", ""),
+    ] {
+        assert!(serde_json::from_str::<ImageAsset>(&json).is_ok(), "{json}");
+    }
+}
+
+/// Indexed art names a palette `NamedPalettes` could hold: never `dmg`,
+/// and a name that can become a label.
+#[test]
+fn indexed_art_names_a_palette_that_can_be_one() {
+    let map = r#"[{"index":0,"palette":0}]"#;
+    for name in ["dmg", "Not A Label", ""] {
+        let gbc = format!(r#","gbc":{{"art":"indexed","palette":"{name}"}}"#);
+        let json = asset_json("bg", (1, 1), 1, map, &gbc);
+        assert!(serde_json::from_str::<ImageAsset>(&json).is_err(), "{json}");
+    }
+    let gbc = r#","gbc":{"art":"indexed","palette":"forest_2"}"#;
+    let json = asset_json("bg", (1, 1), 1, map, gbc);
+    assert!(serde_json::from_str::<ImageAsset>(&json).is_ok(), "{json}");
 }

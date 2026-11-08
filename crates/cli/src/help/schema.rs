@@ -85,14 +85,18 @@ them for indexed art; color art's GBC conversion is not built yet.
             palettes?: [PALETTE]}
             kind: "bg"|"sprites"|"tiles" (tiles: a tileset, no map)
   gbc?: {obj_palettes: [PALETTE]}  (the OBJ palettes every sheet shares,
-            slot order: assigned palettes first, then packed ones)
+            slot order: assigned first, one per palette and OBP of indexed
+            sheets, palettes in file order, OBPs lowest first; each is the
+            palette reordered by the OBP, entry i the color of the shade
+            OBP gives index i, as the GBC has no OBP; then packed ones)
   problems[].limit also: gbc_palettes, gbc_tile_colors, dmg_override_size
 ENTRY = {index: N, flip?: "x"|"y"|"xy", palette?: 0-7}: the tile in the
 image's own data (a sheet unit's top tile, even), how a sheet unit is
 flipped, and its GBC palette slot (on a GBC image, every entry has one).
 Named palettes (assets/palettes.txt reads into this; refused like the file:
 a name that can't be a label, a repeated name, "dmg" as a name or assigned,
-an unknown palette, an IMAGE not spelled bg/, sprites/ or tiles/ NAME.png):
+a dmg color repeated in RGB555, an unknown palette, an IMAGE assigned twice
+or not spelled bg/, sprites/ or tiles/ NAME.png):
   {dmg?: PALETTE, palettes: [{name: NAME, colors: PALETTE}],
    assignments?: {IMAGE: NAME}}   (IMAGE: its path under assets/)
 PALETTE = [RGB555 ×4], index 0 first. RGB555 = 0-32767, the word BCPD and

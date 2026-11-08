@@ -1,7 +1,8 @@
 //! Reading an [`ImageAsset`]: the fields as sent, then the checks that tie
-//! its tile map to its kind and target. The slot rides in each entry, so a
-//! map and its palettes can't differ in length or in where a unit is
-//! transparent; what is left is whether the entries fit the image.
+//! its tile map to its kind, size and target. The slot rides in each entry,
+//! so a map and its palettes can't differ in length or in where a unit is
+//! transparent; what is left is whether the entries fit the image: one a
+//! cell, each naming a tile it has, as the build makes them.
 
 use serde::Deserialize;
 
@@ -53,6 +54,31 @@ impl TryFrom<Unchecked> for ImageAsset {
 fn check(asset: &ImageAsset) -> Result<(), String> {
     let sheet = asset.kind == ImageKind::Sprites;
     let gbc = asset.gbc.is_some();
+    // A cell is an 8x8 tile, or a sheet's 8x16 unit.
+    let cells = u64::from(asset.width)
+        * u64::from(if sheet {
+            asset.height / 2
+        } else {
+            asset.height
+        });
+    let what = if sheet { "8x16 units" } else { "tiles" };
+    match asset.tile_map.len() as u64 {
+        0 if gbc => {
+            return Err(format!(
+                "tile_map is empty, but the image has a GBC version, so each of its {cells} \
+                 {what} has an entry"
+            ));
+        }
+        0 => {}
+        n if n != cells => {
+            return Err(format!(
+                "tile_map lists {n}, but the {}x{} image has {cells} {what}",
+                asset.width, asset.height
+            ));
+        }
+        _ => {}
+    }
+    let tiles = u64::from(asset.tiles);
     for (i, entry) in asset.tile_map.iter().enumerate() {
         let Some(entry) = entry else {
             if sheet {
@@ -62,6 +88,18 @@ fn check(asset: &ImageAsset) -> Result<(), String> {
                 "tile_map[{i}] is null, but only a sheet's transparent unit has no tile"
             ));
         };
+        let index = u64::from(entry.index);
+        if sheet && index % 2 == 1 {
+            return Err(format!(
+                "tile_map[{i}] is tile {index}, but a sheet unit's index is its top tile, even"
+            ));
+        }
+        let last = if sheet { index + 1 } else { index };
+        if last >= tiles {
+            return Err(format!(
+                "tile_map[{i}] needs tile {last}, but the image has {tiles} tiles"
+            ));
+        }
         if !sheet && !entry.flip.is_none() {
             return Err(format!(
                 "tile_map[{i}] flips, but only a sheet's units flip"

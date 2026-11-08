@@ -261,14 +261,16 @@ pub(crate) fn convert(
     }
     made.problems.extend(across);
     made.problems.extend(vram(&plans));
-    // On the GBC, indexed art and the OBJ slots its sheets' palettes take.
+    // On the GBC, indexed art and the OBJ slots its sheets take.
     let indexed = (target == BuildTarget::Gbc).then(|| {
-        let sheets: Vec<String> = plans
+        let sheets: Vec<(String, u8)> = plans
             .iter()
-            .filter(|(_, _, p)| matches!(p, Plan::Sheet(_)))
-            .map(|(s, _, _)| under_assets(s))
+            .filter_map(|(s, _, p)| match p {
+                Plan::Sheet(p) => Some((under_assets(s), p.obp)),
+                Plan::Bg(_) => None,
+            })
             .collect();
-        let sheets: Vec<&str> = sheets.iter().map(String::as_str).collect();
+        let sheets: Vec<(&str, u8)> = sheets.iter().map(|(s, o)| (s.as_str(), *o)).collect();
         indexed::Indexed::new(&named_palettes, &sheets)
     });
     made.problems

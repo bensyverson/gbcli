@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 
 mod rules;
 
+pub(crate) use rules::names_a_palette;
 pub use rules::{FaultAt, PaletteFault};
 
 /// A color as the GBC stores it: five bits each of red, green and blue in
@@ -100,8 +101,11 @@ impl From<Rgb555> for u16 {
 }
 
 /// Four GBC colors, index 0 first: one BG or OBJ palette, 8 bytes in
-/// palette RAM. For indexed art, index 0 is the DMG's lightest shade; for
-/// an object, index 0 is transparent, so its color is never drawn.
+/// palette RAM. A named palette lists shades 0-3, so entry `i` is shade
+/// `i`'s color; an indexed background draws it as listed. An object's
+/// index 0 is transparent and never drawn, and an indexed sheet's indices
+/// 1-3 are the shades it uses, so its OBJ palette is the named one
+/// reordered by its OBP ([`crate::GbcImagesMade::obj_palettes`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct GbcPalette(pub [Rgb555; 4]);

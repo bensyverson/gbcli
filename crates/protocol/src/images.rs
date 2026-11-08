@@ -109,7 +109,7 @@ pub enum ImageLimit {
     ShadeStretched,
     /// GBC: 8 palettes. Per background, its packed palettes (or its one
     /// assigned palette); across all sheets, the packed OBJ palettes plus
-    /// one per distinct assigned palette. `count` is the lower bound on the
+    /// one per assigned palette and shade mapping (OBP) of indexed sheets. `count` is the lower bound on the
     /// palettes needed (⌈colors / 4⌉, ⌈colors / 3⌉ for sheets) or the
     /// palettes placed, whichever is larger, plus the slots assigned
     /// palettes take; `tiles` are the tiles that landed in palette 9 or
@@ -258,8 +258,9 @@ pub struct ShadeChoice {
 }
 
 /// One image, converted. On read, its tile map must agree with it
-/// (`asset::Unchecked`): a slot in every entry exactly when it has a GBC
-/// version, and a flip or a missing tile only in a sheet.
+/// (`asset::Unchecked`): one entry a cell, or none on a DMG image; a tile
+/// it has in each, a sheet unit's even; a slot in every entry exactly when
+/// it has a GBC version; and a flip or a missing tile only in a sheet.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "asset::Unchecked")]
 pub struct ImageAsset {
@@ -286,11 +287,15 @@ pub struct ImageAsset {
     /// unit of a sheet), rows top to bottom, left to right in each. None
     /// for a sheet's fully transparent unit, which takes no tile. A
     /// tileset's result is this map; a background's is also its tilemap
-    /// and, on the GBC, its attribute map.
+    /// and, on the GBC, its attribute map. A DMG build leaves it empty for
+    /// backgrounds and sheets, whose tilemap and frame lists are in the
+    /// generated files.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tile_map: Vec<Option<TileEntry>>,
     /// The GBC version, when the build's target is the GBC. Every image has
-    /// a DMG version, so this is the only per-image sign of the target.
+    /// a DMG version. A GBC build fills it for indexed art; color art has
+    /// none until its GBC conversion is built (the joint conversion), so
+    /// its absence doesn't mean a DMG build: `BuildMade::target` says.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gbc: Option<GbcImage>,
 }

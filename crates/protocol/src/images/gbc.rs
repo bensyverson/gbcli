@@ -4,12 +4,13 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::palettes::GbcPalette;
+use crate::palettes::{GbcPalette, names_a_palette};
 
 /// How an image is colored on the GBC (plan revision 2: two kinds of art).
-/// On the wire, `"art":"color"` or `"art":"indexed","palette":NAME`.
+/// On the wire, `"art":"color"` or `"art":"indexed","palette":NAME`;
+/// NAME is one [`crate::NamedPalettes`] could hold, or it doesn't read.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "art", rename_all = "snake_case")]
+#[serde(tag = "art", rename_all = "snake_case", try_from = "ArtSent")]
 pub enum ImageArt {
     /// Drawn in any colors: gbcli packs its GBC palettes and derives its
     /// DMG version (or reads `name.dmg.png`). Its GBC tile data is its own.
@@ -22,6 +23,31 @@ pub enum ImageArt {
         /// The assigned palette's name in [`crate::NamedPalettes`].
         palette: String,
     },
+}
+
+/// [`ImageArt`] as sent, before its palette's name is checked.
+#[derive(Deserialize)]
+#[serde(tag = "art", rename_all = "snake_case")]
+enum ArtSent {
+    Color,
+    Indexed { palette: String },
+}
+
+impl TryFrom<ArtSent> for ImageArt {
+    type Error = String;
+
+    fn try_from(sent: ArtSent) -> Result<ImageArt, String> {
+        match sent {
+            ArtSent::Color => Ok(ImageArt::Color),
+            ArtSent::Indexed { palette } if names_a_palette(&palette) => {
+                Ok(ImageArt::Indexed { palette })
+            }
+            ArtSent::Indexed { palette } => Err(format!(
+                "{palette:?} can't name an indexed image's palette: a lowercase letter, then \
+                 lowercase letters, digits or _, and never dmg (the DMG's shades)"
+            )),
+        }
+    }
 }
 
 /// An image's GBC version: how it is colored and its palettes. The palette
@@ -42,11 +68,17 @@ pub struct GbcImage {
 /// What the GBC version of the images shares across them.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GbcImagesMade {
-    /// The OBJ palettes every sheet shares, at most 8, in slot order: one
-    /// per distinct palette assigned to an indexed sheet, in the order of
-    /// `NamedPalettes::palettes`, then the packed palettes of color sheets.
-    /// Assigned palettes come first so their slots don't move when color
-    /// art changes. Slots the program loads itself aren't listed.
+    /// The OBJ palettes every sheet shares, at most 8, in slot order. First
+    /// the assigned slots: one per named palette and shade mapping (OBP)
+    /// that indexed sheets are drawn with, palettes in the order of
+    /// `NamedPalettes::palettes`, each palette's OBPs from the lowest
+    /// value; then the packed palettes of color sheets. An assigned slot
+    /// holds the named palette reordered by that OBP: the GBC has no OBP,
+    /// so color index `i` draws entry `i`, which is the color of the
+    /// shade OBP gives index `i` (entry 0, never drawn, is shade 0's).
+    /// Two sheets of one palette drawn in different shades take two slots.
+    /// Assigned slots come first so they don't move when color art
+    /// changes. Slots the program loads itself aren't listed.
     pub obj_palettes: Vec<GbcPalette>,
 }
 
@@ -135,6 +167,8 @@ mod tests {
         ]);
         let made = ImagesMade {
             images: vec![ImageAsset {
+                // Two 8x16 units side by side: 2x2 tiles.
+                height: 2,
                 tile_map: vec![at(0, Some(2)), None],
                 gbc: Some(GbcImage {
                     art: ImageArt::Indexed {

@@ -83,8 +83,8 @@ pub(crate) struct Packing {
     /// the darkest repeated to fill four; an OBJ palette's index 0 is never
     /// drawn, so it holds white, and its colors follow lightest first.
     pub palettes: Vec<GbcPalette>,
-    /// The slot of `palettes[0]`: the reserved slots come first (assigned
-    /// palettes of indexed art, `GbcImagesMade::obj_palettes`).
+    /// The slot of `palettes[0]`: the reserved slots come first (the
+    /// assigned slots of indexed sheets, `GbcImagesMade::obj_palettes`).
     pub first_slot: u8,
     /// Per source, the slot of each cell (tile or 8x16 unit, rows top to
     /// bottom); none for an object with no opaque pixel. The joint
@@ -137,8 +137,8 @@ struct Cell {
 }
 
 /// Packs the colors of `sources` into palettes of `layer`, at most 8 less
-/// `reserved`, the slots already taken (assigned palettes of indexed art,
-/// `indexed::ObjSlots::reserved`): those are slots 0 to `reserved - 1`, so
+/// `reserved`, the slots already taken (the assigned slots of indexed
+/// sheets, one per palette and OBP, `indexed::ObjSlots::reserved`): those are slots 0 to `reserved - 1`, so
 /// the packed palettes take the slots after them.
 /// The problems are `gbc_tile_colors` (a cell over a palette's colors,
 /// which stops the packing) or `gbc_palettes` (one per image with cells

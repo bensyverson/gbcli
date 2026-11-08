@@ -37,8 +37,11 @@ Colors are #rrggbb or #rgb, kept as RGB555. Names are a lowercase letter,
 then lowercase letters, digits or _. '#' then a space or tab (or '#' last
 on a line) starts a comment; any other '#' word is a color, so a fifth
 color is an error. A build uses the dmg line, checks the rest, and builds
-an assigned image as DMG art; GBC color from the other palettes (build
---gbc) isn't built yet.
+an assigned image as DMG art. build --gbc colors it by its palette too:
+a background's tiles draw index i in its entry i; a sheet's OBJ palette is
+its palette reordered by the sheet's OBP (sheets of one palette drawn in
+different shades take one OBJ palette each, of the GBC's 8). Their tile
+data serves both machines.
 
 build --gbc: an image no palette is assigned to is color art, in any
 colors. Its DMG version is derived: each color takes its shade by the

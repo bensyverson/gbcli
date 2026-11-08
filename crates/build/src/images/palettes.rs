@@ -66,6 +66,8 @@ pub(crate) struct Parsed {
     pub palette_lines: Vec<u32>,
     /// Each assigned image's line.
     pub lines: BTreeMap<String, u32>,
+    /// The `dmg` line's.
+    pub dmg_line: Option<u32>,
 }
 
 /// The project's palettes: none without the file, else what it says or
@@ -159,7 +161,6 @@ fn problem(shown: &str, bad: Bad) -> ImageProblem {
 pub(crate) fn parse(text: &str) -> Result<Parsed, Bad> {
     let text = text.strip_prefix('\u{FEFF}').unwrap_or(text);
     let mut parsed = Parsed::default();
-    let mut dmg_line: Option<u32> = None;
     for (i, raw) in text.lines().enumerate() {
         let line = i as u32 + 1;
         let words = uncommented(raw);
@@ -185,13 +186,13 @@ pub(crate) fn parse(text: &str) -> Result<Parsed, Bad> {
             let name = name.trim();
             let colors = palette(name, colors, line)?;
             if name == DMG {
-                if let Some(first) = dmg_line {
+                if let Some(first) = parsed.dmg_line {
                     return Err(Bad::at(
                         line,
                         format!("dmg is defined again (first on line {first})"),
                     ));
                 }
-                dmg_line = Some(line);
+                parsed.dmg_line = Some(line);
                 parsed.named.dmg = Some(colors);
             } else {
                 parsed.named.palettes.push(NamedPalette {
@@ -221,6 +222,7 @@ pub(crate) fn parse(text: &str) -> Result<Parsed, Bad> {
 impl Parsed {
     fn line_of(&self, fault: &PaletteFault) -> u32 {
         match fault.at() {
+            FaultAt::Dmg => self.dmg_line.unwrap_or(1),
             FaultAt::Palette(i) => self.palette_lines[i],
             FaultAt::Assignment(image) => self.lines[image],
         }

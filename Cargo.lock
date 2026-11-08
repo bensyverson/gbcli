@@ -98,6 +98,7 @@ dependencies = [
  "gbcli-protocol",
  "gbcli-view",
  "png",
+ "serde_json",
 ]
 
 [[package]]

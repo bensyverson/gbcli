@@ -20,21 +20,39 @@ The agent reports every stumble with the command, the output, and what would hav
 2. **Sound:** `--audio-log` decoded the five NR1x writes.
 3. **Cycles:** `run --keys … --measure Update..Update.done` fell from 1,988 T to 408 T, a cut of 79%. `equiv v2.gb --frames 200 --keys-file walk.txt --ram 0xC000,4 --ram 0xC106,2` exited 0. A patched negative control diverged at frame 11 and exited 1.
 
-**Stumbles and fixes** (the fixes are agent eval-fix1's, on the leaf):
+**Stumbles and fixes** (all landed in `847d250`):
 
 | # | Stumble | Tag | Fix |
 |---|---|---|---|
 | 1 | Needed a named routine with a `.done` label to `measure`; guessed it from `help optimize`'s `Work..Work.done`. | docs (minor) | none needed; the recipe hinted it |
 | 2 | `run --at start` without `--session`: `no_session`. The remedy was clear. | error (minor) | remedy names `GBCLI_SESSION` |
-| 3 | `measure` takes no `--keys`, so it can't measure the held-input path; worked around with `run --keys … --measure`. | verb | `measure --keys`/`--keys-file`, or point at the workaround |
+| 3 | `measure` takes no `--keys`, so it can't measure the held-input path; worked around with `run --keys … --measure`. | verb | `measure --keys`/`--keys-file`, same grammar as `run` |
 | 4 | Rebuilt over `build/game.gb`; the baseline session then measured the optimized ROM. The agent reported "no warning", but the main thread reproduced the warning: `warning: the ROM changed but no live symbol moved (73 checked)` prints on every op. The real flaw is `help optimize` itself: step 4 rebuilds over the session's ROM, and step 5's `equiv fast.gb` names a ROM nobody built. | docs | the recipe freezes the baseline (`build --out build/fast.gb`); the warning says the session now runs the rebuilt file |
 | 5 | `unknown_symbol "Update"` for a ROM copied without its .sym; the remedy didn't say the session had no symbols. | error | the error says when no .sym was loaded, and how to pass one |
 | 6 | Lost the baseline .sym (a result of 4), hand-wrote one, and guessed an address off by one. | my-mistake | covered by 4 |
 | 7 | `equiv --ram ADDR[,LEN]`: guessed the hex form. | docs | examples with hex and a symbol |
 | 8 | `--audio-log` shows only this run's writes, not the engine's earlier setup. | docs | one line in the help |
 
-Found by the main thread while checking: `gbcli gaps --help` says "needs a session", but `gaps` takes no `--session` and reads the whole project. The fix is to check every verb's CLASS line.
+Found by the main thread while checking: `gbcli gaps --help` said "needs a session", but `gaps` takes no `--session` and reads the whole project. `gaps`, `sessions`, `sessions prune` and `sessions rm` now sit in a new `project` class, and a test refuses any session-class verb that has no `--session`.
 
-**Audio views:** mostly no help. For a 20-frame blip the piano roll came out 120×147 with a tiny mark, and the spectrogram 33×256 and nearly black. The decoded `--audio-log` lines (note, Hz, cents) and the wav's peak were what proved the sound. Action: eval-fix1 checks whether `--scale` reaches the views and makes short clips readable if a small change does it.
+**Audio views:** mostly no help. For a 20-frame blip the piano roll came out 120×147 with a tiny mark, and the spectrogram 33×256 and nearly black. The decoded `--audio-log` lines (note, Hz, cents) and the wav's peak were what proved the sound. `--scale` never reached the views: the CLI sent no scale, and `--scale` without `--shot` was refused. Now `run --scale` scales every image the run writes (shot, filmstrip, piano roll, spectrogram). The spectrogram's darkness is about loudness, not size: its floor is −90 dBFS. Normalizing a short clip to its own peak would be a view redesign and is left open.
 
 **Gap ledger:** `gbcli gaps` in the run's project printed `none`. The agent had already removed its first two sessions, so their counts are lost. Later runs keep every session.
+
+## Run 2 (binary at 847d250)
+
+**Result:** all three parts done in about 20 gbcli calls (16 tool calls, 1.5 min), half of run 1's. The main thread re-ran the key numbers in the agent's project and got the same results.
+1. **Sprite:** with RIGHT and DOWN held for 30 frames, shadow OAM went from (48, 84) to (78, 114). `view oam` agreed, one frame behind, which is the DMA.
+2. **Sound:** `--audio-log` decoded NR10-NR14 (`period 1792 = C5 (512.00 Hz)`). With `--scale 2`, the piano roll "clearly showed the upward pitch sweep". The spectrogram was still narrow and noisy.
+3. **Cycles:** `measure VBlank..MainLoop.wait --session base --at start --iterations 60 --keys 'RIGHT@0'` fell from 3,920 T to 1,292 T on `build/fast.gb`'s own session, a cut of 67%. `equiv build/fast.gb --session base --frames 300 --keys '…' --ram wShadowOAM` exited 0. The agent followed `help optimize` "as an exact script", and the baseline stayed put.
+
+**Stumbles:**
+
+| # | Stumble | Tag | Fix |
+|---|---|---|---|
+| 1 | Code appended after a WRAM `SECTION`: rgbasm's "cannot contain code or data" came back as 126 diagnostic rows, the same message repeated per byte. The main thread reproduced it: 5 rows for 3 lines of code. The remedy was the generic "fix the first error". | error (filed as my-mistake) | identical diagnostics collapse; this message gets a remedy naming `SECTION "Code", ROM0` (agent eval-fix2) |
+| 2 | macOS `sed` refused a multi-line edit. | environment | none |
+| 3 | An unquoted `u16[wFrame]` was globbed by zsh; the recipes show it quoted. | my-mistake | none |
+| 4 | `wFrame` read 88 when the stop said `frame=90`: the stop counts from boot, the program from LCD-on. The help says so. | docs (minor) | none; it's documented |
+
+**Gap ledger:** `gbcli gaps` printed `none` over both sessions, `base` and `fast`.

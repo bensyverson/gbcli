@@ -36,19 +36,67 @@ fn host(env: &Env) -> Host {
     }
 }
 
+/// What `serve` and `batch` answer their lines with: the [`Handler`] when a
+/// bundle was found (or made) at start, else the bundle-less [`Tooling`], so
+/// a client in a fresh project still reaches `version`, `doctor`, `new` and
+/// the rest of what needs no session. The choice is made once, at start: a
+/// bundle that appears later (from `new`, say, which scaffolds another
+/// directory and makes none) is not looked for again.
+pub enum Responder {
+    Bundled(Box<Handler>),
+    Bare(Tooling),
+}
+
+impl Answer for Responder {
+    fn answer(&mut self, request: &Request) -> Response {
+        match self {
+            Responder::Bundled(handler) => handler.answer(request),
+            Responder::Bare(tooling) => tooling.answer(request),
+        }
+    }
+
+    fn after_panic(&mut self) {
+        match self {
+            Responder::Bundled(handler) => handler.after_panic(),
+            Responder::Bare(tooling) => tooling.after_panic(),
+        }
+    }
+}
+
 /// The project's bundle and a handler over it, with the target's session
 /// opened first, and created when a ROM names a new one, as `gbcli serve`
 /// does. Only an invocation that can create a session (a ROM and a session
-/// name) creates `.gbcli/`; any other finds one or fails naming where it
-/// looked. `--dir` beats `GBCLI_DIR`: the flag is the more explicit. The
-/// handler's defaults are the target's session and actor, for the request
-/// lines of `serve` and `batch`.
-pub fn handler(target: &Target, env: &Env) -> Result<Handler, Box<ErrorBody>> {
-    open_handler(target, env, true)
+/// name) creates `.gbcli/`; any other finds one or, here, falls back to the
+/// bare side: the requests that need a bundle are refused one by one, with
+/// `no_session`. Every other failure (a bad ROM, a missing named session in
+/// a bundle that exists) still refuses the start. `--dir` beats
+/// `GBCLI_DIR`: the flag is the more explicit. The handler's defaults are
+/// the target's session and actor, for the request lines of `serve` and
+/// `batch`.
+pub fn responder(target: &Target, env: &Env) -> Result<Responder, Box<ErrorBody>> {
+    match start_handler(target, env, true) {
+        Ok(handler) => Ok(Responder::Bundled(Box::new(handler))),
+        Err(Opening::NoBundle(_)) => Ok(Responder::Bare(Tooling::new(host(env)))),
+        Err(Opening::Refused(body)) => Err(body),
+    }
+}
+
+/// Why a handler didn't start.
+enum Opening {
+    /// No `.gbcli/` was found, and this invocation can't create one; the
+    /// store's refusal, for a caller that has no bare side to fall back on.
+    NoBundle(Box<ErrorBody>),
+    Refused(Box<ErrorBody>),
 }
 
 /// [`handler`], opening the target's session first only when `opens`.
 fn open_handler(target: &Target, env: &Env, opens: bool) -> Result<Handler, Box<ErrorBody>> {
+    start_handler(target, env, opens).map_err(|e| match e {
+        Opening::Refused(body) | Opening::NoBundle(body) => body,
+    })
+}
+
+fn start_handler(target: &Target, env: &Env, opens: bool) -> Result<Handler, Opening> {
     let source = target.create.as_ref().map(|create| RomSource {
         rom: create.rom.clone(),
         sym: create.sym.clone(),
@@ -57,14 +105,14 @@ fn open_handler(target: &Target, env: &Env, opens: bool) -> Result<Handler, Box<
         flash: create.flash.clone(),
     });
     if let (None, Some(source)) = (&target.session, &source) {
-        return Err(Box::new(ErrorBody::new(
+        return Err(Opening::Refused(Box::new(ErrorBody::new(
             ErrorCode::NoSession,
             format!(
                 "{} names a ROM but no session; ephemeral runs without a session aren't built yet",
                 source.rom.display()
             ),
             "add --session NAME (or set GBCLI_SESSION) to create a session from it",
-        )));
+        ))));
     }
     let (start, gbcli_dir) = match &target.dir {
         Some(dir) => (dir.clone(), None),
@@ -76,11 +124,19 @@ fn open_handler(target: &Target, env: &Env, opens: bool) -> Result<Handler, Box<
     } else {
         Bundle::open_in(&start, gbcli_dir)
     }
-    .map_err(|e| Box::new(store(e)))?;
+    .map_err(|e| {
+        let no_bundle = matches!(e, StoreError::NoBundle { .. });
+        let body = Box::new(store(e));
+        if no_bundle {
+            Opening::NoBundle(body)
+        } else {
+            Opening::Refused(body)
+        }
+    })?;
     if let Some(name) = target.session.as_ref().filter(|_| opens) {
         bundle
             .open_session(name, source.as_ref())
-            .map_err(|e| Box::new(store(e)))?;
+            .map_err(|e| Opening::Refused(Box::new(store(e))))?;
     }
     let mut handler = Handler::new(bundle, target.session.clone(), target.actor.clone());
     handler.set_host(host(env));

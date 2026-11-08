@@ -190,3 +190,83 @@ fn a_client_reads_the_protocol_version_over_the_wire() {
     assert_eq!(response.rev, None, "a version names no session");
     let _ = fs::remove_dir_all(&dir);
 }
+
+impl Server {
+    /// `serve` with no session and no `.gbcli/` above `dir`.
+    fn start_bare(dir: &Path) -> Server {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_gbcli"))
+            .args(["serve", "--dir"])
+            .arg(dir)
+            .env_remove("GBCLI_DIR")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn gbcli serve");
+        let stdin = child.stdin.take().unwrap();
+        let stdout = BufReader::new(child.stdout.take().unwrap());
+        Server {
+            child,
+            stdin,
+            stdout,
+        }
+    }
+}
+
+/// LoadHigh's `ldh doctor` drives `serve` in a fresh project: the ops that
+/// need no bundle answer, and one that does is refused for that request alone.
+#[test]
+fn serve_without_a_bundle_answers_the_ops_that_need_none() {
+    let dir = project("bare");
+    let mut server = Server::start_bare(&dir);
+    let version = server.request(r#"{"id":"v","op":"version"}"#);
+    assert!(version.is_ok(), "{version:?}");
+    let doctor = server.request(r#"{"id":"d","op":"doctor"}"#);
+    assert!(doctor.is_ok(), "{doctor:?}");
+    let opcode = server.request(r#"{"id":"o","op":"opcode","args":{"query":"nop"}}"#);
+    assert!(opcode.is_ok(), "{opcode:?}");
+    let run = server.request(r#"{"id":"r","op":"run","args":{"frames":1}}"#);
+    let error = run.error().expect("a run is refused");
+    assert_eq!(error.code, gbcli_protocol::ErrorCode::NoSession);
+    assert!(!error.remedy.is_empty());
+    assert_eq!(run.id, "r");
+    let again = server.request(r#"{"id":"v2","op":"version"}"#);
+    assert!(again.is_ok(), "the server keeps running: {again:?}");
+    assert!(!dir.join(".gbcli").exists(), "no bundle was made");
+    let _ = fs::remove_dir_all(&dir);
+}
+
+/// `batch` shares serve's start, so it answers the same way.
+#[test]
+fn batch_without_a_bundle_answers_the_ops_that_need_none() {
+    let dir = project("bare-batch");
+    let mut child = Command::new(env!("CARGO_BIN_EXE_gbcli"))
+        .args(["batch", "-F", "-", "--json", "--dir"])
+        .arg(&dir)
+        .env_remove("GBCLI_DIR")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn gbcli batch");
+    let lines = "{\"id\":\"v\",\"op\":\"version\"}\n{\"id\":\"r\",\"op\":\"run\",\"args\":{\"frames\":1}}\n";
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(lines.as_bytes())
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    let responses: Vec<Response> = String::from_utf8(out.stdout)
+        .unwrap()
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    assert_eq!(responses.len(), 2);
+    assert!(responses[0].is_ok(), "{:?}", responses[0]);
+    assert_eq!(
+        responses[1].error().map(|e| e.code),
+        Some(gbcli_protocol::ErrorCode::NoSession)
+    );
+    let _ = fs::remove_dir_all(&dir);
+}

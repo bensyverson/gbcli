@@ -16,7 +16,7 @@ pub fn batch(target: &Target, file: &str, env: &Env, io: Io) -> u8 {
         Ok(text) => text,
         Err(body) => return render::error(io.err, &body),
     };
-    let mut handler = match exec::handler(target, env) {
+    let mut handler = match exec::responder(target, env) {
         Ok(handler) => handler,
         Err(body) => return render::error(io.err, &body),
     };

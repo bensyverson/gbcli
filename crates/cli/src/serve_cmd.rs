@@ -4,7 +4,7 @@ use crate::build::Target;
 use crate::{Env, Io, exec, render};
 
 pub fn serve(target: &Target, env: &Env, mut io: Io) -> u8 {
-    let mut handler = match exec::handler(target, env) {
+    let mut handler = match exec::responder(target, env) {
         Ok(handler) => handler,
         Err(body) => return render::error(io.err, &body),
     };

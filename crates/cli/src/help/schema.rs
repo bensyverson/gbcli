@@ -87,7 +87,7 @@ tile_map (no slot without --gbc); a --gbc build fills gbc for every image.
   images[]  tile_map?: [ENTRY|null]  (each 8x8 tile, each 8x16 unit of a
             sheet, rows top to bottom; null: a transparent unit, no tile)
             gbc?: {art: "color"|"indexed", palette?: NAME,
-            palettes?: [PALETTE]}
+            palettes?: [PALETTE], preview?: PATH (the .gbc.preview.png)}
             kind: "bg"|"sprites"|"tiles" (tiles: a tileset, no map)
   gbc?: {obj_palettes: [PALETTE]}  (the OBJ palettes every sheet shares,
             slot order: assigned first, one per palette and OBP of indexed

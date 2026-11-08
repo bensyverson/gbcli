@@ -161,6 +161,25 @@ pub(crate) fn check(
     ) {
         return Err(warned(p));
     }
+    // Color art's GBC section (`emit::gbc`): its own tiles, the attribute
+    // map, and up to 8 palettes of 8 bytes, before packing says how many.
+    if color.is_some()
+        && let Some(p) = census::bank(
+            image,
+            unique * 16 + map + 8 * 8,
+            &format!(
+                "its GBC section: {unique} tiles of 16 bytes, an attribute map of {map} and up \
+                 to 8 palettes of 8 bytes"
+            ),
+            &format!(
+                "split it into backgrounds of at most {} tiles each (a 32x32 screen map is 1024) \
+                 and load them as they scroll into view",
+                census::BANK_BYTES - unique * 16 - 8 * 8
+            ),
+        )
+    {
+        return Err(warned(p));
+    }
     Ok(BgPlan {
         spec: slots.join(","),
         merges: shared.merges,
@@ -171,4 +190,49 @@ pub(crate) fn check(
         unique: order.into_iter().map(|(dmg, _)| dmg).collect(),
         cells,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::images::derive::gray_shading;
+
+    /// 128x96 tiles of 256 distinct two-shade tiles: 4096 bytes of tiles
+    /// and a 12288-byte map, exactly one bank on the DMG.
+    fn full_bank() -> Pixels {
+        let (w, h) = (128 * 8, 96 * 8);
+        let rgba = (0..w * h)
+            .map(|i| {
+                let (x, y) = (i % w, i / w);
+                let n = ((y / 8) * 128 + x / 8) % 256;
+                let bit = (y % 8) * 8 + x % 8;
+                if bit < 8 && (n >> bit) & 1 == 1 {
+                    [0, 0, 0, 0xFF]
+                } else {
+                    [0xFF; 4]
+                }
+            })
+            .collect();
+        Pixels {
+            width: w,
+            height: h,
+            rgba,
+        }
+    }
+
+    /// The GBC section of color art holds its tiles again, its attribute
+    /// map and up to 8 palettes: one bank of its own, so a background that
+    /// just fits on the DMG doesn't on the GBC.
+    #[test]
+    fn a_color_backgrounds_gbc_section_must_fit_a_bank_too() {
+        let pixels = full_bank();
+        let shading = gray_shading();
+        let plan = check("town.png", &pixels, &shading, None).expect("fits the DMG bank");
+        assert_eq!(plan.tiles, 256);
+        let problems = check("town.png", &pixels, &shading, Some(&pixels)).unwrap_err();
+        let p = &problems[0];
+        assert_eq!(p.limit, ImageLimit::RomxBank);
+        assert_eq!(p.count, 4096 + 12288 + 64);
+        assert!(p.message.contains("GBC"), "{}", p.message);
+    }
 }

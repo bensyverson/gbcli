@@ -14,6 +14,7 @@ mod flash_build;
 mod help;
 mod honesty;
 mod images;
+mod images_gbc;
 mod model;
 mod music;
 mod opcode;

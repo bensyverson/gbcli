@@ -10,6 +10,7 @@ mod doctor;
 mod images_bg;
 mod images_dmg_version;
 mod images_edges;
+mod images_include;
 mod images_indexed;
 mod images_joint;
 mod images_named_palettes;

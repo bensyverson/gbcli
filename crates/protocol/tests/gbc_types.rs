@@ -192,6 +192,7 @@ fn entry(index: u32, flip: Flip, slot: Option<u8>) -> Option<TileEntry> {
 #[test]
 fn a_sheet_entry_carries_its_flip_and_slot() {
     let indexed = GbcImage {
+        preview: String::new(),
         art: ImageArt::Indexed {
             palette: "ember".into(),
         },
@@ -232,6 +233,7 @@ fn a_sheet_entry_carries_its_flip_and_slot() {
 #[test]
 fn entries_that_disagree_with_the_target_are_refused_on_read() {
     let color = || GbcImage {
+        preview: String::new(),
         art: ImageArt::Color,
         palettes: vec![forest()],
     };

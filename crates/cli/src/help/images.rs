@@ -87,8 +87,16 @@ What the program gets (build/images/, rewritten by every build):
                          TownTilemapEnd; HeroTiles..HeroTilesEnd (32 bytes
                          an object), HeroFrames: dw per frame -> count, then
                          y, x, tile, attributes per object ($20 X, $40 Y flip)
+  named palettes         PaletteForest..PaletteForestEnd (RGB555 dw, 8 bytes),
+                         PALETTE_FOREST (its place in assets/palettes.txt)
+  with --gbc             GBCLI_GBC; TownTilesGbc (color art only), TownAttrmap,
+                         TownPalettes, TOWN_PALETTES; HeroTilesGbc;
+                         ObjPalettesGbc, OBJ_PALETTES; attribute bits 0-2 are
+                         the GBC palette
   town.preview.png       the converted data as the DMG shows it, then its
                          unique tiles by use, most used first
+  town.gbc.preview.png   with --gbc: the same in GBC colors, as screenshots
+                         show them, then its palettes
 
   gbcli build game, then gbcli run build/game.gb --frames 60 --shot out.png
 ";

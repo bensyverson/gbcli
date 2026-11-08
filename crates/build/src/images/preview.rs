@@ -2,11 +2,74 @@
 //! the source PNG), then its unique tiles (or 8x16 units) by use, most used
 //! first, so the costly one-off tiles sit at the end. Drawn through
 //! `gbcli-view`, so it is a deterministic, labeled PNG like every view.
+//!
+//! The GBC preview draws the GBC data the same way in palette RAM's colors
+//! as SameBoy shows them with no color correction, `(x << 3) | (x >> 2)` a
+//! channel (research §4), so a preview pixel is the screenshot's (plan
+//! question 8); its palettes follow as a strip of swatches, slot 0 first.
 
+use gbcli_protocol::GbcPalette;
 use gbcli_view::colors::{GAP, TRANSPARENT};
 use gbcli_view::{DEFAULT_SCALE, DMG_GRAYS, Image, LabelKey};
 
 use super::sheet::SheetPlan;
+
+/// The colors a preview draws in.
+pub(crate) enum Look<'a> {
+    /// DMG grays: a background's index is its shade (BGP $E4), an
+    /// object's goes through its OBP.
+    Dmg,
+    /// GBC palette RAM: tile (or kept unit) `t` draws from
+    /// `palettes[slots[t]]`, a background's own BG palettes or the shared
+    /// OBJ palettes.
+    Gbc {
+        palettes: &'a [GbcPalette],
+        slots: &'a [u8],
+    },
+}
+
+impl Look<'_> {
+    /// The color index `i` of tile or unit `t` draws; `dmg` is its gray.
+    fn color(&self, t: usize, i: u8, dmg: u32) -> u32 {
+        match self {
+            Look::Dmg => dmg,
+            Look::Gbc { palettes, slots } => rgb(palettes[usize::from(slots[t])].0[usize::from(i)]),
+        }
+    }
+}
+
+/// An RGB555 color as SameBoy draws it with color correction off.
+fn rgb(c: gbcli_protocol::Rgb555) -> u32 {
+    let [r, g, b] = c.to_rgb888();
+    u32::from(r) << 16 | u32::from(g) << 8 | u32::from(b)
+}
+
+/// Swatches: 8x8 a color, 4 a palette, a gap between palettes.
+const SWATCH: u32 = 8;
+
+/// `image` with `palettes` as swatches under it, slot 0 first.
+fn with_swatches(image: Image, palettes: &[GbcPalette]) -> Image {
+    let strip = palettes.len() as u32 * (4 * SWATCH + 4);
+    let width = image.width.max(strip);
+    let top = image.height + 4;
+    let mut out = Image::filled(width, top + SWATCH, GAP);
+    for y in 0..image.height {
+        for x in 0..image.width {
+            put(&mut out, x, y, image.pixels[(y * image.width + x) as usize]);
+        }
+    }
+    for (p, GbcPalette(colors)) in palettes.iter().enumerate() {
+        for (k, &c) in colors.iter().enumerate() {
+            let x0 = p as u32 * (4 * SWATCH + 4) + k as u32 * SWATCH;
+            for y in 0..SWATCH {
+                for x in 0..SWATCH {
+                    put(&mut out, x0 + x, top + y, rgb(c));
+                }
+            }
+        }
+    }
+    out
+}
 
 /// Unique tiles per row of the by-use grid.
 const GRID_COLUMNS: u32 = 16;
@@ -43,22 +106,37 @@ fn put(image: &mut Image, x: u32, y: u32, color: u32) {
     image.pixels[i] = color;
 }
 
-fn finish(image: Image, detail: String) -> Image {
+fn finish(image: Image, detail: String, look: &Look) -> Image {
+    let (image, colors) = match look {
+        Look::Dmg => (
+            image,
+            "DMG grays; each color index is its shade (BGP $E4), objects through their OBP",
+        ),
+        Look::Gbc { palettes, .. } => (
+            with_swatches(image, palettes),
+            "GBC palette RAM as SameBoy draws it, no color correction ((x << 3) | (x >> 2)); \
+             the palettes as swatches below, slot 0 first",
+        ),
+    };
     let scale = (MAX_WIDTH / image.width).clamp(1, DEFAULT_SCALE);
     let mut out = image.scaled(scale).expect("the scale is in range");
     out.labels = vec![
         (LabelKey::View, "image".into()),
-        (
-            LabelKey::Colors,
-            "DMG grays; each color index is its shade (BGP $E4), objects through their OBP".into(),
-        ),
+        (LabelKey::Colors, colors.into()),
         (LabelKey::Detail, detail),
     ];
     out
 }
 
 /// A background from its tiles and map (`width` x `height` tiles).
-pub(crate) fn background(source: &str, tiles: &[u8], map: &[u8], width: u32, height: u32) -> Image {
+pub(crate) fn background(
+    source: &str,
+    tiles: &[u8],
+    map: &[u8],
+    width: u32,
+    height: u32,
+    look: &Look,
+) -> Image {
     let count = (tiles.len() / 16) as u32;
     let (mut image, grid_x) = canvas(width * 8, height * 8, count, 8, 8);
     let tile = |id: u8| &tiles[usize::from(id) * 16..][..16];
@@ -67,13 +145,9 @@ pub(crate) fn background(source: &str, tiles: &[u8], map: &[u8], width: u32, hei
             let id = map[(ty * width + tx) as usize];
             for y in 0..8 {
                 for x in 0..8 {
-                    let shade = index(tile(id), x, y);
-                    put(
-                        &mut image,
-                        tx * 8 + x,
-                        ty * 8 + y,
-                        DMG_GRAYS[usize::from(shade)],
-                    );
+                    let i = index(tile(id), x, y);
+                    let color = look.color(usize::from(id), i, DMG_GRAYS[usize::from(i)]);
+                    put(&mut image, tx * 8 + x, ty * 8 + y, color);
                 }
             }
         }
@@ -86,13 +160,9 @@ pub(crate) fn background(source: &str, tiles: &[u8], map: &[u8], width: u32, hei
         let (cx, cy) = (slot as u32 % GRID_COLUMNS, slot as u32 / GRID_COLUMNS);
         for y in 0..8 {
             for x in 0..8 {
-                let shade = index(tile(id as u8), x, y);
-                put(
-                    &mut image,
-                    grid_x + cx * 9 + x,
-                    cy * 9 + y,
-                    DMG_GRAYS[usize::from(shade)],
-                );
+                let i = index(tile(id as u8), x, y);
+                let color = look.color(id, i, DMG_GRAYS[usize::from(i)]);
+                put(&mut image, grid_x + cx * 9 + x, cy * 9 + y, color);
             }
         }
     }
@@ -103,12 +173,13 @@ pub(crate) fn background(source: &str, tiles: &[u8], map: &[u8], width: u32, hei
             "{source}: {width}x{height} tiles as shown, then its {count} unique tiles by use, \
              most used first ({once} used once)"
         ),
+        look,
     )
 }
 
 /// A sprite sheet rebuilt from its kept units and frames, transparent as
 /// magenta, then its units by use.
-pub(crate) fn sheet(source: &str, units: &[u8], plan: &SheetPlan) -> Image {
+pub(crate) fn sheet(source: &str, units: &[u8], plan: &SheetPlan, look: &Look) -> Image {
     let (w, h) = (plan.width * 8, plan.height * 8);
     let count = plan.kept.len() as u32;
     let (mut image, grid_x) = canvas(w, h, count, 8, 16);
@@ -117,7 +188,8 @@ pub(crate) fn sheet(source: &str, units: &[u8], plan: &SheetPlan) -> Image {
             put(&mut image, x, y, TRANSPARENT);
         }
     }
-    let shade = |i: u8| DMG_GRAYS[usize::from((plan.obp >> (2 * i)) & 3)];
+    let shade =
+        |unit: usize, i: u8| look.color(unit, i, DMG_GRAYS[usize::from((plan.obp >> (2 * i)) & 3)]);
     let unit_pixel = |unit: usize, x: u32, y: u32| -> u8 {
         let data = &units[unit * 32..][..32];
         index(&data[(y / 8) as usize * 16..][..16], x, y % 8)
@@ -133,7 +205,7 @@ pub(crate) fn sheet(source: &str, units: &[u8], plan: &SheetPlan) -> Image {
                     let sy = if o.flip.y() { 15 - y } else { y };
                     let i = unit_pixel(o.unit, sx, sy);
                     if i != 0 {
-                        put(&mut image, fx + o.x + x, fy + o.y + y, shade(i));
+                        put(&mut image, fx + o.x + x, fy + o.y + y, shade(o.unit, i));
                     }
                 }
             }
@@ -144,7 +216,7 @@ pub(crate) fn sheet(source: &str, units: &[u8], plan: &SheetPlan) -> Image {
         for y in 0..16 {
             for x in 0..8 {
                 let i = unit_pixel(unit, x, y);
-                let color = if i == 0 { TRANSPARENT } else { shade(i) };
+                let color = if i == 0 { TRANSPARENT } else { shade(unit, i) };
                 put(&mut image, grid_x + cx * 9 + x, cy * 17 + y, color);
             }
         }
@@ -156,5 +228,6 @@ pub(crate) fn sheet(source: &str, units: &[u8], plan: &SheetPlan) -> Image {
              by use, most used first",
             plan.frames.len()
         ),
+        look,
     )
 }

@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use gbcli_protocol::ImageKind;
+use gbcli_protocol::{ImageKind, NamedPalettes};
 
 use super::emit;
 use crate::paths::quote;
@@ -127,6 +127,42 @@ pub(crate) fn sources(
         }
     }
     Ok(found)
+}
+
+/// The layout error when a palette of `named` (in the file shown as
+/// `file`) would define a symbol an image of `sources` defines: their
+/// labels come from different names, so only together can they collide.
+pub(crate) fn palette_collision(
+    sources: &[Source],
+    named: &NamedPalettes,
+    file: &str,
+    shown: &dyn Fn(&Path) -> String,
+) -> Result<(), BuildError> {
+    let mut by_symbol: BTreeMap<String, &Source> = BTreeMap::new();
+    for s in sources {
+        for symbol in emit::symbols(s.kind, &s.label, &s.constant) {
+            by_symbol.insert(symbol, s);
+        }
+    }
+    for p in &named.palettes {
+        for symbol in emit::palette_symbols(&p.name) {
+            if let Some(s) = by_symbol.get(&symbol) {
+                return Err(BuildError::Layout {
+                    message: format!(
+                        "{} and the palette `{}` in {file} would both define `{symbol}` in \
+                         the program",
+                        shown(&s.path),
+                        p.name
+                    ),
+                    remedy: "rename the image or the palette; a palette `forest` is \
+                             PaletteForest and PALETTE_FOREST, an image `forest.png` is \
+                             ForestTiles and FOREST_TILES"
+                        .into(),
+                });
+            }
+        }
+    }
+    Ok(())
 }
 
 fn source(

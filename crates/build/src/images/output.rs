@@ -14,8 +14,9 @@ use super::gbc::{self, Joint, Palettes};
 use super::indexed::Indexed;
 use super::pack::{self, Layer, Packing};
 use super::pixels::Pixels;
+use super::preview::{self, Look};
 use super::run::Rgbgfx;
-use super::{Checked, OUT, Plan, Removed, preview, shared};
+use super::{Checked, OUT, Plan, Removed, shared};
 use crate::project::BuildError;
 
 /// Color art's packed palettes: each color background's own, and the OBJ
@@ -95,6 +96,8 @@ pub(super) struct Output<'a> {
     pub shown: &'a dyn Fn(&Path) -> String,
     pub indexed: Option<&'a Indexed<'a>>,
     pub packed: &'a Packed,
+    /// Every OBJ palette, assigned then packed: what a sheet's slots index.
+    pub obj_palettes: &'a [GbcPalette],
 }
 
 impl Output<'_> {
@@ -130,13 +133,14 @@ impl Output<'_> {
         };
         let color_rel = s.path.strip_prefix(project).unwrap_or(&s.path);
         let preview_path = project.join(format!("{data}.preview.png"));
-        let (asset, picture) = match &c.plan {
+        let (mut asset, picture, gbc_picture) = match &c.plan {
             Plan::Bg(p) => {
                 let Some(d) = self.rgbgfx.background(image, rel, p, &data)? else {
                     return Ok(None);
                 };
                 let mut asset = asset(c, p.width, p.height, p.tiles, None, None);
                 let mut slots = vec![None; p.unique.len()];
+                let mut gbc_tiles = None;
                 if let (Some(color), Some(packing)) = (&c.color, &self.packed.bg[i]) {
                     let palettes = Palettes {
                         palettes: &packing.palettes,
@@ -151,6 +155,7 @@ impl Output<'_> {
                     let Some(joint) = made else { return Ok(None) };
                     self.write_gbc(&data, &joint)?;
                     slots = joint.slots.into_iter().map(Some).collect();
+                    gbc_tiles = Some(joint.tiles);
                     asset.gbc = Some(packing.gbc_image(Layer::Bg));
                 }
                 asset.tile_map = p
@@ -167,8 +172,28 @@ impl Output<'_> {
                 if let Some(x) = self.indexed {
                     x.fill_background(under_assets, &d.map, &mut asset);
                 }
-                let picture = preview::background(image, &d.tiles, &d.map, p.width, p.height);
-                (asset, picture)
+                let picture =
+                    preview::background(image, &d.tiles, &d.map, p.width, p.height, &Look::Dmg);
+                let gbc_picture = match &asset.gbc {
+                    Some(g) => {
+                        // The attribute map: each map entry's slot.
+                        let attr: Vec<u8> = asset.tile_map.iter().map(slot_of).collect();
+                        let path = project.join(format!("{data}.attrmap"));
+                        fs::write(&path, &attr).map_err(io(&path))?;
+                        let slots = per_tile(&asset.tile_map, p.unique.len(), |e| e.index);
+                        let look = Look::Gbc {
+                            palettes: &g.palettes,
+                            slots: &slots,
+                        };
+                        // Indexed art draws its DMG tiles on both machines.
+                        let tiles = gbc_tiles.as_deref().unwrap_or(&d.tiles);
+                        Some(preview::background(
+                            image, tiles, &d.map, p.width, p.height, &look,
+                        ))
+                    }
+                    None => None,
+                };
+                (asset, picture, gbc_picture)
             }
             Plan::Sheet(p) => {
                 let Some(units) = self.rgbgfx.sheet(image, rel, p, &data)? else {
@@ -182,6 +207,7 @@ impl Output<'_> {
                 let frames = Some(p.frames.len() as u32);
                 let mut asset = asset(c, p.width, p.height, p.tiles(), frames, Some(objects));
                 let mut slots: Vec<Option<PaletteSlot>> = vec![None; p.kept.len()];
+                let mut gbc_units = None;
                 if let (Some(color), Some((packing, sheets))) = (&c.color, &self.packed.obj) {
                     let at = sheets.iter().position(|&k| k == i).expect("a packed sheet");
                     let palettes = Palettes {
@@ -196,7 +222,9 @@ impl Output<'_> {
                     let Some(joint) = made else { return Ok(None) };
                     self.write_gbc(&data, &joint)?;
                     slots = joint.slots.into_iter().map(Some).collect();
+                    gbc_units = Some(joint.tiles);
                     asset.gbc = Some(GbcImage {
+                        preview: String::new(),
                         art: ImageArt::Color,
                         palettes: Vec::new(),
                     });
@@ -205,14 +233,24 @@ impl Output<'_> {
                 if let Some(x) = self.indexed {
                     x.fill_sheet(under_assets, p, &mut asset);
                 }
-                (asset, preview::sheet(image, &units, p))
+                let picture = preview::sheet(image, &units, p, &Look::Dmg);
+                let gbc_picture = asset.gbc.as_ref().map(|_| {
+                    let slots = per_tile(&asset.tile_map, p.kept.len(), |e| e.index / 2);
+                    let look = Look::Gbc {
+                        palettes: self.obj_palettes,
+                        slots: &slots,
+                    };
+                    preview::sheet(image, gbc_units.as_deref().unwrap_or(&units), p, &look)
+                });
+                (asset, picture, gbc_picture)
             }
         };
-        let png = picture.png().map_err(|e| BuildError::Io {
-            path: preview_path.clone(),
-            error: std::io::Error::other(e.to_string()),
-        })?;
-        fs::write(&preview_path, png).map_err(io(&preview_path))?;
+        if let (Some(g), Some(picture)) = (&mut asset.gbc, gbc_picture) {
+            let path = project.join(format!("{data}.gbc.preview.png"));
+            write_png(&path, &picture)?;
+            g.preview = (self.shown)(&path);
+        }
+        write_png(&preview_path, &picture)?;
         Ok(Some(ImageAsset {
             preview: (self.shown)(&preview_path),
             ..asset
@@ -227,6 +265,29 @@ impl Output<'_> {
         let path = self.project.join(format!("{data}.gbc.2bpp"));
         fs::write(&path, &joint.tiles).map_err(io(&path))
     }
+}
+
+fn write_png(path: &Path, picture: &gbcli_view::Image) -> Result<(), BuildError> {
+    let png = picture.png().map_err(|e| BuildError::Io {
+        path: path.to_path_buf(),
+        error: std::io::Error::other(e.to_string()),
+    })?;
+    fs::write(path, png).map_err(io(path))
+}
+
+/// An entry's GBC slot, 0 where it has none (a transparent unit).
+fn slot_of(entry: &Option<TileEntry>) -> u8 {
+    entry.and_then(|e| e.palette).map_or(0, PaletteSlot::get)
+}
+
+/// The slot of each of `n` tiles (or kept units), from the tile map
+/// entries that name it (`which`).
+fn per_tile(map: &[Option<TileEntry>], n: usize, which: impl Fn(&TileEntry) -> u32) -> Vec<u8> {
+    let mut slots = vec![0; n];
+    for e in map.iter().flatten() {
+        slots[which(e) as usize] = e.palette.map_or(0, PaletteSlot::get);
+    }
+    slots
 }
 
 fn io(path: &Path) -> impl FnOnce(std::io::Error) -> BuildError + '_ {

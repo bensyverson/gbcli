@@ -188,6 +188,7 @@ pub(crate) fn convert(
             return Ok(Some(Converted { made, ..stopped }));
         }
     };
+    find::palette_collision(&sources, &named_palettes, &palette_shown, shown)?;
     // Each image's DMG version. In a DMG build every image is DMG art.
     let mut versioned = Vec::with_capacity(all.len());
     for ((s, image, pixels, over), rel) in all.into_iter().zip(&images) {
@@ -320,12 +321,20 @@ pub(crate) fn convert(
         let dir = project.join(OUT).join(kind.dir());
         fs::create_dir_all(&dir).map_err(io(dir.clone()))?;
     }
+    // What the images share on the GBC: the assigned OBJ palettes, then
+    // the packed ones.
+    let gbc_made = indexed.as_ref().map(|i| {
+        let mut gbc = i.made();
+        gbc.obj_palettes.extend_from_slice(packed.obj_palettes());
+        gbc
+    });
     let mut out = output::Output {
         rgbgfx,
         project,
         shown,
         indexed: indexed.as_ref(),
         packed: &packed,
+        obj_palettes: gbc_made.as_ref().map_or(&[], |g| &g.obj_palettes),
     };
     let mut ok = true;
     for (i, (c, (pixels, file))) in plans.iter().zip(&read).enumerate() {
@@ -349,10 +358,13 @@ pub(crate) fn convert(
         .iter()
         .map(|c| format!("{OUT}/{}/{}", c.s.kind.dir(), c.s.stem))
         .collect();
+    // The generated files come from the results (`made.images`, in the
+    // plans' order), so the include and the protocol can't disagree.
     let entries: Vec<Entry> = plans
         .iter()
         .zip(&data_paths)
-        .map(|(c, data)| match &c.plan {
+        .zip(&made.images)
+        .map(|((c, data), asset)| match &c.plan {
             Plan::Bg(p) => Entry::Bg {
                 source: &c.image,
                 label: &c.s.label,
@@ -361,6 +373,7 @@ pub(crate) fn convert(
                 width: p.width,
                 height: p.height,
                 tiles: p.tiles,
+                gbc: emit::Gbc::of(asset, 0),
             },
             Plan::Sheet(p) => Entry::Sheet {
                 source: &c.image,
@@ -368,19 +381,20 @@ pub(crate) fn convert(
                 constant: &c.s.constant,
                 data,
                 plan: p,
+                gbc: emit::Gbc::of(asset, p.kept.len()),
             },
         })
         .collect();
+    let shared = emit::Shared {
+        gbc: gbc_made.as_ref(),
+        named: &named_palettes.palettes,
+    };
     let out = project.join(OUT);
     let (asm, inc) = (out.join("images.asm"), out.join("images.inc"));
-    fs::write(&asm, emit::asm(&entries)).map_err(io(asm.clone()))?;
-    fs::write(&inc, emit::inc(&entries)).map_err(io(inc.clone()))?;
+    fs::write(&asm, emit::asm(&entries, &shared)).map_err(io(asm.clone()))?;
+    fs::write(&inc, emit::inc(&entries, &shared)).map_err(io(inc.clone()))?;
     made.include = Some(shown(&inc));
-    made.gbc = indexed.as_ref().map(|i| {
-        let mut gbc = i.made();
-        gbc.obj_palettes.extend_from_slice(packed.obj_palettes());
-        gbc
-    });
+    made.gbc = gbc_made;
     Ok(Some(Converted {
         made,
         diagnostics,

@@ -101,6 +101,7 @@ impl Packing {
     /// `cell_palettes`.
     pub fn gbc_image(&self, layer: Layer) -> GbcImage {
         GbcImage {
+            preview: String::new(),
             art: ImageArt::Color,
             palettes: match layer {
                 Layer::Bg => self.palettes.clone(),

@@ -63,6 +63,12 @@ pub struct GbcImage {
     /// slots are in the shared [`GbcImagesMade::obj_palettes`].
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub palettes: Vec<GbcPalette>,
+    /// The GBC preview (`<name>.gbc.preview.png`): the converted GBC data
+    /// in palette RAM's colors as SameBoy draws them with no color
+    /// correction, so a pixel is the screenshot's, then its palettes as
+    /// swatches. Empty in a result without one.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub preview: String,
 }
 
 /// What the GBC version of the images shares across them. On read, at
@@ -165,6 +171,7 @@ mod tests {
         let a = ImageAsset {
             tile_map: vec![at(0, Some(0)), at(1, Some(0))],
             gbc: Some(GbcImage {
+                preview: String::new(),
                 art: ImageArt::Color,
                 palettes: vec![grass],
             }),
@@ -196,6 +203,7 @@ mod tests {
                 height: 2,
                 tile_map: vec![at(0, Some(0)), None],
                 gbc: Some(GbcImage {
+                    preview: String::new(),
                     art: ImageArt::Indexed {
                         palette: "ember".into(),
                     },

@@ -4,9 +4,8 @@
 //! look at. Needs the pinned RGBDS on `PATH`.
 
 use std::fs;
-use std::path::Path;
 
-use crate::common::Project;
+use crate::common::{Project, png_golden};
 
 const TEST_SONG: &str = include_str!("../../../build/tests/data/every_effect_but_6xx.song");
 
@@ -81,30 +80,5 @@ fn the_test_songs_piano_roll_and_spectrogram_are_pinned() {
         ("spectrogram.png", "every_effect_but_6xx_spectrogram.png"),
     ] {
         png_golden(&fs::read(p.path(made)).unwrap(), golden);
-    }
-}
-
-fn png_golden(actual: &[u8], name: &str) {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/cli/golden")
-        .join(name);
-    if std::env::var_os("GBCLI_BLESS").is_some() {
-        fs::write(&path, actual).unwrap();
-        return;
-    }
-    let expected = fs::read(&path).unwrap_or_else(|_| {
-        panic!(
-            "no golden {}; write it with GBCLI_BLESS=1 and look at it",
-            path.display()
-        )
-    });
-    if expected != actual {
-        let out = Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
-        fs::write(&out, actual).unwrap();
-        panic!(
-            "{} differs; the actual image is {}",
-            path.display(),
-            out.display()
-        );
     }
 }

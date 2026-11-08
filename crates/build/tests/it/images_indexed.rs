@@ -124,10 +124,16 @@ fn an_indexed_background_shares_its_tiles_and_names_one_slot() {
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
     written.sort();
+    // No GBC tile data of its own: its attribute map and GBC preview only.
     assert_eq!(
         written,
-        ["sky.2bpp", "sky.preview.png", "sky.tilemap"],
-        "no GBC tile data of its own"
+        [
+            "sky.2bpp",
+            "sky.attrmap",
+            "sky.gbc.preview.png",
+            "sky.preview.png",
+            "sky.tilemap"
+        ],
     );
     let sky = image(&made, "sky.png");
     let gbc_sky = sky.gbc.as_ref().expect("a GBC version");
@@ -293,8 +299,13 @@ fn assert_drawn_in_shades(temp: &Temp, made: &ImagesMade, art: &Art) {
             let (ux, uy) = (fx + ox, fy + oy);
             let entry = asset.tile_map[(uy / 16) as usize * columns + (ux / 8) as usize]
                 .expect("an object's unit has an entry");
-            assert_eq!((entry.index, entry.flip.oam_bits()), (tile, attr as u8));
-            let GbcPalette(colors) = obj[usize::from(entry.palette.expect("a slot").get())];
+            // The attributes: the flip, and the GBC palette in bits 0-2.
+            let slot = entry.palette.expect("a slot").get();
+            assert_eq!(
+                (entry.index, entry.flip.oam_bits() | slot),
+                (tile, attr as u8)
+            );
+            let GbcPalette(colors) = obj[usize::from(slot)];
             for py in 0..16 {
                 for px in 0..8 {
                     let (x, y) = (ux + px, uy + py);

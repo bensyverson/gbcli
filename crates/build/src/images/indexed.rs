@@ -208,6 +208,7 @@ pub(crate) fn sheet(
 
 fn gbc(palette: &NamedPalette, palettes: Vec<GbcPalette>) -> GbcImage {
     GbcImage {
+        preview: String::new(),
         art: ImageArt::Indexed {
             palette: palette.name.clone(),
         },

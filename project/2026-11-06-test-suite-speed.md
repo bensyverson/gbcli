@@ -36,7 +36,7 @@ All are CPU-bound, Rust-side loops over emulator state, which opt-level 1 speeds
 
 > **Update, 2026-11-06 (sixth session): the hook's 37.8–41.0 s warnings were host load, not the suite.** On a quiet machine (load 2.6 on 8 CPUs, after commit `7baaaf0`), `python3 -I scripts/bench/test-times.py` measured 48 binaries at a sum of 14.5 s wall and 19.9 s CPU. The slowest: `gbcli-sameboy::save_load_property` 1.5 s, `gbcli-sameboy::state` 1.2 s, `gbcli-server::gbcli_server` 1.2 s (6.5 s CPU), `gbcli-sameboy::stdout` 1.2 s, `gbcli-server::wall_guard_threads` 1.1 s. Nothing needed moving to the pre-release suite.
 
-> **Update, 2026-11-07 (twelfth session, leaf 9RaRvi): 107 test binaries became 31; not yet timed on a quiet machine.** The changes:
+> **Update, 2026-11-07 (twelfth session, leaf 9RaRvi): 107 test binaries became 31; under budget (re-timed below).** The changes:
 >
 > - **One integration-test binary per crate**, `tests/it/main.rs` (the `gbcli` crate's stays `tests/cli/`, which now also holds `serve`). Five files keep their own binary, each saying why at its top: `gbcli-sameboy::stdout` and `sameboy-sys::smoke` redirect fd 1, `gbcli-server::wall_guard_threads` counts the process's threads, and `gbcli-engine::opcode_rgbasm_probes` and `opcode_expr_regressions` hold wall-clock bounds (`probe_long_flat_chains_scale` failed its 0.5 s bound once inside the merged engine binary, at load 70).
 > - **music_equiv:** every comparison now starts at the boot ROM's handover (`player::booted`), so its frames are the song's; whole-song lengths keep the same ~150 song frames past the end (`TAIL`). Three samples stay warm at 600 frames (SVL - Yyna, the most effects; FADE - Strap in and Suit Up, the most subpatterns; Coffee Bat - Wyrmhole, the fastest); the other twelve run only whole, pre-release. No sample uses the timer; the test song does, warm, over its whole length.
@@ -46,6 +46,8 @@ All are CPU-bound, Rust-side loops over emulator state, which opt-level 1 speeds
 > Counts (`--list` of every test binary): 1,550 tests (21 ignored) before at `6df3703`, 1,550 (21 ignored) after on `3b72e81`: twelve warm sample tests removed (their whole songs stay, ignored), twelve added by `3b72e81`.
 >
 > Figures, `python3 -I scripts/bench/test-times.py --per-test-over 1000`, with other agents building throughout (so CPU seconds inflate too, and neither figure compares cleanly): before, 107 binaries, a sum of 78.5 s wall and 93.1 s CPU at load 24.3; after, 31 binaries, 39.7 s wall and 93.0 s CPU at load 95.4. The largest after: `gbcli-build::it` 13.9 s wall (21.8 s CPU), `gbcli-sameboy::it` 5.3 s, `gbcli-build::gbcli_build` 4.0 s wall at 0.1 s CPU (fresh-script execs), `gbcli::cli` 3.7 s. Whether the warm suite is under 30 s on a quiet machine is still to measure.
+>
+> Re-timed by the integrator at `2efed71`, with no agents running (load 20.7 at start from other sessions; not in low-power mode), `python3 -I scripts/bench/test-times.py`: 32 binaries, a sum of **23.5 s wall** and 101.9 s CPU. The largest: `gbcli-build::it` 6.2 s, `gbcli::cli` 3.2 s, `gbcli-server::gbcli_server` 3.0 s, `gbcli-engine::it` 3.0 s, `gbcli-sameboy::it` 2.9 s. Under the 30 s budget by this measure. The hook's own timing of a whole `cargo test --workspace` at the same point said 32-33 s; it includes cargo's startup per binary and doc-test passes, which the script's sum leaves out, so the budget as the hook measures it is met only on an idle machine; re-time there before moving more tests.
 
 ## Why opt-level 1 for the whole dev profile, not just tests
 

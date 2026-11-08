@@ -77,3 +77,7 @@ The tracker's event log lives in git, and `job` rebuilds its cache from it on op
 ## 2026-11-07 — a gbcli run inside a worktree writes to the main checkout's `.gbcli/`
 
 `.gbcli/` is found by walking up from the working directory (or `--dir`), and the main checkout has one, so `gbcli run ROM --session base --dir <worktree>/target/scratch/game` created `base` in `/Users/ben/git/gbcli/.gbcli/`, not beside the game (leaf k22J86; removed by hand). To try gbcli by hand from a worktree, work in a project outside the repo (as the CLI tests' temp projects do), and check `ls /Users/ben/git/gbcli/.gbcli/sessions` afterwards.
+
+## 2026-11-07 — LoadHigh runs this checkout's `target/release/gbcli`
+
+Another project's sessions (`~/git/loadhigh`) drive `/Users/ben/git/gbcli/target/release/gbcli` (`serve`, `batch`) while they work, so `cargo build --release` in the main checkout swaps the binary under their running jobs. In the thirteenth session, five release builds for the agent eval replaced it mid-run, along with the behavior LoadHigh saw. Build an eval or scratch binary with `--target-dir` outside the checkout (or copy one from a worktree), and check `ps -Ao args | grep target/release/gbcli` first. Its processes also load the machine, so a suite time taken while they run is noise.

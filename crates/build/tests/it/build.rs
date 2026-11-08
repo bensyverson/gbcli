@@ -257,6 +257,40 @@ fn code_in_a_ram_section_is_one_diagnostic_and_its_remedy_names_a_rom_section() 
     );
 }
 
+/// Code in a RAM section an INCLUDEd file opens itself: the ROM section
+/// belongs in the included file, before the code. A SECTION before the
+/// INCLUDE line fixes nothing, since the included file reopens its own.
+#[test]
+fn code_in_an_included_files_ram_section_names_the_included_line() {
+    let (temp, options) = starter("include-wram");
+    fs::write(
+        temp.path("demo/src/vars.inc"),
+        "SECTION \"Vars\", WRAM0\nwX: ds 1\nHelper:\n\tld a, 1\n\tret\n",
+    )
+    .unwrap();
+    let main = temp.path("demo/src/main.asm");
+    let mut text = fs::read_to_string(&main).unwrap();
+    text += "INCLUDE \"src/vars.inc\"\n";
+    fs::write(&main, &text).unwrap();
+    let made = failed(build(&rgbds(), &options));
+    let errors: Vec<_> = made
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == Severity::Error)
+        .collect();
+    assert!(!errors.is_empty(), "{:?}", made.diagnostics);
+    let body = BuildError::Failed {
+        made: Box::new(made.clone()),
+        again: "gbcli build demo".into(),
+    }
+    .body();
+    assert!(
+        body.remedy.contains("vars.inc:4)"),
+        "the included file's line, not the INCLUDE line: {}\n{errors:?}",
+        body.remedy
+    );
+}
+
 #[test]
 fn a_link_error_comes_from_rgblink_with_the_line_that_used_the_symbol() {
     let (temp, options) = starter("link");

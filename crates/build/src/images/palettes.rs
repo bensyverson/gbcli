@@ -106,12 +106,28 @@ pub(crate) fn read(
         return Err(whole("isn't UTF-8 text"));
     };
     let parsed = parse(&text).map_err(|bad| problem(shown, bad))?;
-    labels::check(&parsed).map_err(|bad| ImageProblem {
+    // Labels are emitted only for converted images, so with none a collision
+    // is harmless and a warning (the palettes are of no use then, so the
+    // caller dropping them with the problem costs nothing); the file's other
+    // faults, assignments to images that aren't there, still come first.
+    let collision = labels::check(&parsed).err().map(|bad| ImageProblem {
         remedy: labels::REMEDY.into(),
         ..problem(shown, bad)
-    })?;
-    check_images(&parsed, images).map_err(|bad| problem(shown, bad))?;
-    Ok(Some(parsed.named))
+    });
+    match collision {
+        Some(error) if !images.is_empty() => Err(error),
+        Some(collision) => {
+            check_images(&parsed, images).map_err(|bad| problem(shown, bad))?;
+            Err(ImageProblem {
+                severity: Severity::Warning,
+                ..collision
+            })
+        }
+        None => {
+            check_images(&parsed, images).map_err(|bad| problem(shown, bad))?;
+            Ok(Some(parsed.named))
+        }
+    }
 }
 
 /// The file `assets/palettes.txt` replaced (leaf ygc9bb's), no longer read.

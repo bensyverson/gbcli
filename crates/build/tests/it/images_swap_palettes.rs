@@ -11,7 +11,9 @@ use crate::pngs;
 use std::fs;
 
 use gbcli_build::{BuildError, BuildOptions, build};
-use gbcli_protocol::{BuildTarget, GbcPalette, ImageAsset, ImageLimit, ImagesMade, Rgb555};
+use gbcli_protocol::{
+    BuildTarget, GbcPalette, ImageAsset, ImageLimit, ImagesMade, Rgb555, Severity,
+};
 
 use common::{Temp, rgbds, starter};
 use pngs::*;
@@ -205,6 +207,28 @@ fn two_palettes_with_one_label_are_a_palette_file_problem() {
         assert!(p.message.contains(part), "{part:?} in {}", p.message);
     }
     assert!(p.remedy.contains("rename"), "{}", p.remedy);
+}
+
+/// With no image converted no palette's label is emitted, so two names
+/// that make one are harmless: the project built before the check, and
+/// still does, with a warning that says what would collide.
+#[test]
+fn colliding_palette_labels_only_warn_when_no_image_is_converted() {
+    let (temp, options) = starter("swap-labels-no-images");
+    fs::write(
+        temp.path("demo/assets/palettes.txt"),
+        "forest2: #fff #8c4 #363 #021\nforest_2: #fff #8c4 #363 #021\n",
+    )
+    .unwrap();
+    let made = build(&rgbds(), &options).unwrap();
+    let problems = made.images.map(|i| i.problems).unwrap_or_default();
+    let p = problems
+        .iter()
+        .find(|p| p.limit == ImageLimit::PaletteFile)
+        .unwrap_or_else(|| panic!("{problems:?}"));
+    assert_eq!(p.severity, Severity::Warning);
+    assert_eq!(p.line, Some(2));
+    assert!(p.message.contains("PaletteForest2"), "{}", p.message);
 }
 
 /// The layout error a build must stop with, for every part in `parts`.

@@ -93,7 +93,7 @@ SESSION FLAGS (every session verb)
   -s, --session NAME      the session to use (default: GBCLI_SESSION); naming a new one with a ROM creates it
   --rom FILE              the ROM a new session is created from; an existing session refuses another ROM
   --sym FILE              the .sym for a new session (default: the ROM's name with .sym, if it exists); an existing session refuses another
-  --model MODEL           the model for a new session: dmg-b (default), cgb-e, …; an existing session refuses another
+  --model MODEL           the model for a new session: dmg-b (default, also dmg), gbc (cgb-e, a GBC in CGB mode for a $80 or $C0 ROM), cgb0, …; an existing session refuses another
   --seed N                the RAM seed for a new session (default 0); an existing session refuses another
   --flash BOARD           a new session's cart is a flash-save board (`gbcli help flash` lists them; default: mask ROM); an existing session refuses another
   --allow-rom-change      load a stored state even though the ROM was rebuilt and the check refuses it
@@ -155,7 +155,7 @@ SESSION FLAGS (every session verb)
   -s, --session NAME      the session to use (default: GBCLI_SESSION); naming a new one with a ROM creates it
   --rom FILE              the ROM a new session is created from; an existing session refuses another ROM
   --sym FILE              the .sym for a new session (default: the ROM's name with .sym, if it exists); an existing session refuses another
-  --model MODEL           the model for a new session: dmg-b (default), cgb-e, …; an existing session refuses another
+  --model MODEL           the model for a new session: dmg-b (default, also dmg), gbc (cgb-e, a GBC in CGB mode for a $80 or $C0 ROM), cgb0, …; an existing session refuses another
   --seed N                the RAM seed for a new session (default 0); an existing session refuses another
   --flash BOARD           a new session's cart is a flash-save board (`gbcli help flash` lists them; default: mask ROM); an existing session refuses another
   --allow-rom-change      load a stored state even though the ROM was rebuilt and the check refuses it
@@ -200,7 +200,9 @@ RGBDS — the loop: edit, build, restore, measure, with RGBDS from PATH.
                                sets $0143 = $80, so the ROM is GBC-enhanced
                                and still runs on the DMG. (Pan Docs calls
                                the GBC the CGB.) rgbfix -C (GBC only, $C0)
-                               isn't offered
+                               isn't offered. A session runs it on the DMG
+                               unless made with --model gbc (a GBC in CGB
+                               mode), so check a dual ROM in two sessions
   The loop, from inside game/:
     gbcli run build/game.gb --session game --frames 60 --checkpoint start
     (edit src/)

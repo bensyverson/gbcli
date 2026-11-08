@@ -6,7 +6,7 @@
 use std::fs;
 use std::path::Path;
 
-use crate::common::{Project, golden};
+use crate::common::{Project, golden, read_png};
 
 const GRAYS: [[u8; 3]; 4] = [[0xFF; 3], [0xAA; 3], [0x55; 3], [0x00; 3]];
 
@@ -33,27 +33,6 @@ fn write_png(path: &Path, width: u32, height: u32, pixel: impl Fn(u32, u32) -> [
     encoder.set_depth(png::BitDepth::Eight);
     let mut writer = encoder.write_header().unwrap();
     writer.write_image_data(&data).unwrap();
-}
-
-/// A PNG's width and its pixels as RGB.
-fn read_png(path: &Path) -> (u32, Vec<[u8; 3]>) {
-    let mut decoder = png::Decoder::new(fs::File::open(path).unwrap());
-    decoder.set_transformations(png::Transformations::EXPAND);
-    let mut reader = decoder.read_info().unwrap();
-    let mut buf = vec![0; reader.output_buffer_size()];
-    let info = reader.next_frame(&mut buf).unwrap();
-    let channels = info.color_type.samples();
-    let pixels = buf[..info.buffer_size()]
-        .chunks(channels)
-        .map(|p| {
-            if channels < 3 {
-                [p[0]; 3]
-            } else {
-                [p[0], p[1], p[2]]
-            }
-        })
-        .collect();
-    (info.width, pixels)
 }
 
 /// The starter's program, also drawing the sign at map row 2, column 2,

@@ -246,7 +246,9 @@ RGBDS — the loop: edit, build, restore, measure, with RGBDS from PATH.
                                sets $0143 = $80, so the ROM is GBC-enhanced
                                and still runs on the DMG. (Pan Docs calls
                                the GBC the CGB.) rgbfix -C (GBC only, $C0)
-                               isn't offered
+                               isn't offered. A session runs it on the DMG
+                               unless made with --model gbc (a GBC in CGB
+                               mode), so check a dual ROM in two sessions
   The loop, from inside game/:
     gbcli run build/game.gb --session game --frames 60 --checkpoint start
     (edit src/)
@@ -374,6 +376,7 @@ mod tests {
             "$0143 = $80",
             "the GBC the CGB",
             "rgbfix -C (GBC only",
+            "--model gbc",
         ] {
             assert!(text.contains(needle), "{needle} missing");
         }

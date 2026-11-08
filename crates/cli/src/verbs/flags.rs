@@ -74,8 +74,8 @@ pub const SYM: FlagSpec = value(
 pub const MODEL: FlagSpec = value(
     "model",
     "MODEL",
-    "the model for a new session: dmg-b (default), cgb-e, …; an existing session refuses \
-     another",
+    "the model for a new session: dmg-b (default, also dmg), gbc (cgb-e, a GBC in CGB mode \
+     for a $80 or $C0 ROM), cgb0, …; an existing session refuses another",
 );
 pub const SEED: FlagSpec = value(
     "seed",

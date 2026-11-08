@@ -12,6 +12,7 @@ mod flash;
 mod help;
 mod honesty;
 mod images;
+mod model;
 mod music;
 mod opcode;
 mod profile;

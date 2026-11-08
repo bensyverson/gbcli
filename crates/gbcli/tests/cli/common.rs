@@ -28,6 +28,27 @@ pub fn corpus_file(path: &str) -> Vec<u8> {
     })
 }
 
+/// A PNG's width and its pixels as RGB.
+pub fn read_png(path: &Path) -> (u32, Vec<[u8; 3]>) {
+    let mut decoder = png::Decoder::new(fs::File::open(path).unwrap());
+    decoder.set_transformations(png::Transformations::EXPAND);
+    let mut reader = decoder.read_info().unwrap();
+    let mut buf = vec![0; reader.output_buffer_size()];
+    let info = reader.next_frame(&mut buf).unwrap();
+    let channels = info.color_type.samples();
+    let pixels = buf[..info.buffer_size()]
+        .chunks(channels)
+        .map(|p| {
+            if channels < 3 {
+                [p[0]; 3]
+            } else {
+                [p[0], p[1], p[2]]
+            }
+        })
+        .collect();
+    (info.width, pixels)
+}
+
 pub const V2_SYM: &[u8] = include_bytes!("../../../engine/tests/roms/rebuild_v2.sym");
 
 /// A project directory holding `demo.gb` and `demo.sym`, removed on drop.

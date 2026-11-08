@@ -12,6 +12,11 @@ mod bg;
 mod census;
 mod emit;
 mod find;
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "the joint conversion (leaf joint) calls it")
+)]
+mod pack;
 mod palettes;
 mod pixels;
 mod preview;

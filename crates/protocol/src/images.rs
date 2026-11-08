@@ -106,8 +106,9 @@ pub enum ImageLimit {
     /// assigned palette); across all sheets, the packed OBJ palettes plus
     /// one per distinct assigned palette. `count` is the lower bound on the
     /// palettes needed (⌈colors / 4⌉, ⌈colors / 3⌉ for sheets) or the
-    /// palettes placed, whichever is larger; `tiles` are the tiles that
-    /// landed in palette 9 or later.
+    /// palettes placed, whichever is larger, plus the slots assigned
+    /// palettes take; `tiles` are the tiles that landed in palette 9 or
+    /// later, one problem per image holding any.
     GbcPalettes,
     /// GBC: 4 colors in one background tile, or 3 opaque colors (plus
     /// transparent) in one object; `tiles` names the tiles at fault.

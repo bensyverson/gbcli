@@ -211,7 +211,8 @@ pub fn model_name(model: Model) -> &'static str {
     }
 }
 
-/// A model from its wire name; `None` for an unknown name.
+/// A model from its wire name or an alias (`dmg` is DMG-B, `cgb` the first
+/// CGB revision, `gbc` the last); `None` for an unknown name.
 pub fn model_from_name(name: &str) -> Option<Model> {
     Some(match name {
         "dmg-b" | "dmg" => Model::DmgB,
@@ -223,7 +224,7 @@ pub fn model_from_name(name: &str) -> Option<Model> {
         "cgb-b" => Model::CgbB,
         "cgb-c" => Model::CgbC,
         "cgb-d" => Model::CgbD,
-        "cgb-e" => Model::CgbE,
+        "cgb-e" | "gbc" => Model::CgbE,
         "agb" => Model::Agb,
         _ => return None,
     })
@@ -392,6 +393,12 @@ mod tests {
         }
         assert_eq!(model_from_name("dmg"), Some(DmgB));
         assert_eq!(model_from_name("nintendo"), None);
+    }
+
+    #[test]
+    fn gbc_names_the_last_cgb_revision_and_cgb_keeps_the_first() {
+        assert_eq!(model_from_name("gbc"), Some(Model::CgbE));
+        assert_eq!(model_from_name("cgb"), Some(Model::Cgb0));
     }
 
     #[test]

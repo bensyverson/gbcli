@@ -292,7 +292,8 @@ pub(crate) fn target(inv: &Invocation, env: &Env, rom: Option<String>) -> Result
                     model_from_name(name).ok_or_else(|| {
                         Usage::new(
                             format!("unknown model `{name}`"),
-                            "dmg-b, mgb, sgb, sgb2, cgb0, cgb-a … cgb-e or agb",
+                            "dmg-b (or dmg), mgb, sgb, sgb2, cgb0 (or cgb), cgb-a … cgb-e, \
+                             gbc (cgb-e) or agb",
                         )
                     })
                 })

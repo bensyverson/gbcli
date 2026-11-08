@@ -15,3 +15,6 @@ scripts/bench/rust-build/target/
 /tests/corpus/.downloads/
 # Machine-local inputs (e.g. a GB Studio project and its ROM), never committed
 /local/
+
+# gbcli session bundles created by runs in this checkout
+.gbcli/

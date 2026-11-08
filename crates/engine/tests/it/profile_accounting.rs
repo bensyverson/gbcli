@@ -130,6 +130,7 @@ fn spec(from: &str, to: &str) -> MeasureSpec<'static> {
         iterations: 3,
         budget: Budget::instructions(1_000),
         interrupt: None,
+        keys: &[],
     }
 }
 

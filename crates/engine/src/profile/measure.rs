@@ -8,10 +8,10 @@ use gbcli_core::{
     AddrFilter, BankSel, Budget, Core, CoreError, FirstStep, InStop, RunRequest, StopReason, Ticks,
     Usage,
 };
-use gbcli_protocol::Location;
+use gbcli_protocol::{KeyEvent, Location};
 
 use super::{CpuSpeed, Span};
-use crate::debug::CHUNK;
+use crate::debug::{CHUNK, Schedule};
 use crate::machine::Machine;
 use crate::mem;
 
@@ -32,6 +32,9 @@ pub struct MeasureSpec<'a> {
     pub budget: Budget,
     /// Set from elsewhere to stop the measurement: a user break or wall guard.
     pub interrupt: Option<&'a AtomicBool>,
+    /// Presses and releases at frame offsets from the measurement's start,
+    /// applied to the copy as a run applies them.
+    pub keys: &'a [KeyEvent],
 }
 
 /// The cycles of each iteration, in order.
@@ -40,6 +43,9 @@ pub struct Measurement {
     /// The CPU speed every iteration ran at.
     pub speed: CpuSpeed,
     pub samples: Vec<Span>,
+    /// Frames completed while measuring, so the key events past the end
+    /// can be named.
+    pub frames: u64,
 }
 
 /// Minimum, maximum and mean of one unit over the iterations.
@@ -177,18 +183,22 @@ impl Machine {
             return Err(MeasureError::NoIterations);
         }
         let mut copy = self.try_clone()?;
-        measure_on(copy.core_mut(), spec)
+        measure_on(&mut copy, spec)
     }
 }
 
-fn measure_on(core: &mut dyn Core, spec: &MeasureSpec) -> Result<Measurement, MeasureError> {
-    let from = filter(core, &spec.from);
-    let to = filter(core, &spec.to);
+fn measure_on(m: &mut Machine, spec: &MeasureSpec) -> Result<Measurement, MeasureError> {
+    let from = filter(m.core(), &spec.from);
+    let to = filter(m.core(), &spec.to);
     let mut key1 = AddrFilter::new();
     key1.insert(KEY1, BankSel::Any);
-    let speed = CpuSpeed::of(core);
+    let speed = CpuSpeed::of(m.core());
+    // As a run applies them: the events at frame 0 before the first step.
+    let mut keys = Schedule::new(spec.keys);
+    keys.apply_due(m, 0);
     let mut run = Runner {
-        core,
+        m,
+        keys,
         key1: &key1,
         budget: spec.budget,
         used: Usage::default(),
@@ -201,13 +211,17 @@ fn measure_on(core: &mut dyn Core, spec: &MeasureSpec) -> Result<Measurement, Me
         if !run.at(&from) {
             run.until(&from, at(Leg::ToStart))?;
         }
-        let start = run.core.now();
+        let start = run.m.core().now();
         run.until(&to, at(Leg::ToEnd))?;
         samples.push(Span {
-            ticks: run.core.now() - start,
+            ticks: run.m.core().now() - start,
         });
     }
-    Ok(Measurement { speed, samples })
+    Ok(Measurement {
+        speed,
+        samples,
+        frames: run.used.frames,
+    })
 }
 
 /// An exec filter for `at`, armed for the bank it reaches on this machine.
@@ -221,7 +235,9 @@ fn filter(core: &dyn Core, at: &Location) -> AddrFilter {
 }
 
 struct Runner<'a> {
-    core: &'a mut dyn Core,
+    m: &'a mut Machine,
+    /// The events still to come, applied at the vblank that ends their frame.
+    keys: Schedule,
     key1: &'a AddrFilter,
     budget: Budget,
     used: Usage,
@@ -234,8 +250,9 @@ impl Runner<'_> {
     /// instruction there. Halted, PC already points past the HALT but the
     /// next step is a wait or a wake, so it hasn't (design §11 ruling).
     fn at(&self, filter: &AddrFilter) -> bool {
-        let regs = self.core.registers();
-        !regs.halted && filter.matches(regs.pc, mem::bank_at(self.core, regs.pc))
+        let core = self.m.core();
+        let regs = core.registers();
+        !regs.halted && filter.matches(regs.pc, mem::bank_at(core, regs.pc))
     }
 
     /// Runs until PC arrives at `filter`, after at least one instruction: the
@@ -265,14 +282,22 @@ impl Runner<'_> {
             );
             req.first_step = first_step;
             first_step = FirstStep::Check;
-            // No key comes during a measurement, so a STOP nothing can wake
-            // ends it rather than spending the budget.
-            req.in_stop = InStop::End;
+            // With no key still to come, a STOP nothing can wake ends the
+            // measurement rather than spending the budget; while one is
+            // coming, the core stops at each vblank so it lands on time.
+            let pending = self.keys.pending();
+            req.in_stop = if pending {
+                InStop::PassTime
+            } else {
+                InStop::End
+            };
+            req.stop_at_frame = pending;
             req.exec = filter;
             req.write = self.key1;
-            let stop = self.core.run(&mut req)?;
+            let stop = self.m.core_mut().run(&mut req)?;
             self.used += stop.used;
-            if CpuSpeed::of(self.core) != self.speed {
+            self.keys.apply_due(self.m, self.used.frames);
+            if CpuSpeed::of(self.m.core()) != self.speed {
                 return Err(MeasureError::SpeedSwitch {
                     iteration: iteration + 1,
                 });

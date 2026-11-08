@@ -230,3 +230,31 @@ fn the_wall_guard_ends_a_runs_measurement() {
     assert!(error.message.contains("wall guard"), "{}", error.message);
     assert_eq!(error.remedy, WALL_GUARD_REMEDY);
 }
+
+/// Key events the measurement ended before are reported, as a run reports
+/// them: never silently dropped.
+#[test]
+fn measure_reports_the_key_events_it_never_reached() {
+    let f = Fixture::with_sym("measure-keys-late");
+    let mut h = handler(&f);
+    run_frames(&mut h, 2);
+    let mut args = main_loop(1);
+    args.keys = gbcli_protocol::parse_keys("A@0 START@500").unwrap();
+    let response = measure(&mut h, args);
+    assert!(
+        response
+            .warnings
+            .iter()
+            .any(|w| w.contains("before 1 key event(s): START@500")),
+        "{:?}",
+        response.warnings
+    );
+    let result = response.outcome.expect("measured");
+    let late: Vec<String> = result
+        .keys_unapplied
+        .expect("the late event")
+        .iter()
+        .map(|k| k.to_string())
+        .collect();
+    assert_eq!(late, vec!["START@500"]);
+}

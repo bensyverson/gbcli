@@ -295,20 +295,22 @@ impl StoreError {
         }
     }
 
-    /// Warnings a load turned into workable advice.
-    pub fn warning_text(warning: &LoadWarning) -> String {
+    /// Warnings a load into a machine over `rom` turned into workable advice.
+    pub fn warning_text(warning: &LoadWarning, rom: &str) -> String {
         match warning {
             LoadWarning::RomChanged {
                 moved,
                 checked,
                 forced,
             } if *forced => format!(
-                "the ROM changed; loaded anyway with --allow-rom-change ({} symbols moved, {checked} checked)",
+                "the ROM file {rom} changed since this state was saved; loaded anyway with \
+                 --allow-rom-change ({} symbols moved, {checked} checked); {KEEP_A_BASELINE}",
                 moved.len()
             ),
-            LoadWarning::RomChanged { checked, .. } => {
-                format!("the ROM changed but no live symbol moved ({checked} checked)")
-            }
+            LoadWarning::RomChanged { checked, .. } => format!(
+                "the ROM file {rom} changed since this state was saved, and no live symbol \
+                 moved ({checked} checked), so the state was loaded into it; {KEEP_A_BASELINE}"
+            ),
             LoadWarning::OtherCommit { saved, ours } => format!(
                 "the checkpoint came from SameBoy {saved}, this build is {ours}; the core accepted it"
             ),
@@ -319,6 +321,12 @@ impl StoreError {
         }
     }
 }
+
+/// What a rebuild over a session's ROM file means: the session follows the
+/// file, so a baseline needs the new build written elsewhere.
+const KEEP_A_BASELINE: &str = "a session runs the file at its ROM path, so this one now runs \
+     the rebuilt file; to keep the old build as a baseline, write new builds to another file \
+     (`gbcli build --out build/fast.gb`) and compare them with `gbcli equiv build/fast.gb`";
 
 /// The changed flash sectors where a rebuild's image has code, which kept
 /// it: each by chip address and 16 KiB bank. A restore and a power cycle

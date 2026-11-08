@@ -162,7 +162,7 @@ impl Handler {
             let body = ErrorBody::new(
                 ErrorCode::NoSession,
                 "the request names no session",
-                "pass --session <name>, or name it in the request",
+                "pass --session NAME or set GBCLI_SESSION (a request line names it in \"session\")",
             );
             return Response::failed(id, None, body);
         };

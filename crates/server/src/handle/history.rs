@@ -42,7 +42,7 @@ impl Handler {
         let (mut machine, _) = self.machine_for(store, meta, Need::Replace, None)?;
         warnings.extend(
             store
-                .restore(&mut machine, &cp, &load)
+                .restore(meta, &mut machine, &cp, &load)
                 .map_err(|e| Failure::from_store(&e))?,
         );
         let frame = checkpoint_frame(&cp);
@@ -79,7 +79,7 @@ impl Handler {
         let frame = checkpoint_frame(&cp);
         warnings.extend(
             store
-                .restore(&mut machine, &cp, &load)
+                .restore(meta, &mut machine, &cp, &load)
                 .map_err(|e| Failure::from_store(&e))?,
         );
         let change = HeadChange {

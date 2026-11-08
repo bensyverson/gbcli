@@ -82,6 +82,7 @@ fn spec(from: &str, to: &str, iterations: u32) -> MeasureSpec<'static> {
         iterations,
         budget: Budget::instructions(10_000),
         interrupt: None,
+        keys: &[],
     }
 }
 
@@ -339,6 +340,7 @@ fn measure_ends_at_a_stop_nothing_can_wake() {
         iterations: 1,
         budget: Budget::frames(30),
         interrupt: None,
+        keys: &[],
     };
     let err = m.measure(&spec).unwrap_err();
     assert_eq!(
@@ -380,6 +382,7 @@ fn a_halted_cpu_has_not_arrived_so_every_iteration_times_the_same_span() {
         iterations: 3,
         budget: Budget::frames(10),
         interrupt: None,
+        keys: &[],
     };
     let result = halted_before_the_nop().measure(&spec).unwrap();
     let t: Vec<u64> = result.samples.iter().map(|s| s.t(result.speed)).collect();

@@ -56,7 +56,7 @@ Press buttons during a run
 What does my music do?
   gbcli run --frames 120 --audio-log (every sound write, decoded into notes), then
   --wav music.wav to hear it, --channels each for one file per channel, --piano
-  roll.png or --spectrogram spec.png to see it
+  roll.png or --spectrogram spec.png to see it (--scale 4 enlarges a short clip)
 Look at tiles, the background map or sprites
   gbcli view tiles, gbcli view map --map window, gbcli view oam
 Find a symbol's address
@@ -84,7 +84,8 @@ Step through code
   gbcli step, gbcli step over, gbcli step out
 How many cycles does X take?
   gbcli measure Work..Work.done --iterations 60 (T, M and share of a frame;
-  --max T makes it an assertion that exits 1); gbcli help optimize for the loop
+  --max T makes it an assertion that exits 1; --keys 'RIGHT@0' with RIGHT
+  held); gbcli help optimize for the loop
 How many bytes and cycles is an instruction, and which flags does it set?
   gbcli opcode 'ld a, [hl+]', gbcli opcode xor a, gbcli opcode '$CB37'
 A write, a HALT or a DMA does nothing, or the code runs wild
@@ -93,8 +94,10 @@ Where does my frame time go?
   gbcli run --frames 60 --profile --top 10 (cycles per routine), and
   --frame-budget (each frame's busy and HALT time; lag frames never halted)
 Does my optimized build still behave?
-  gbcli equiv fast.gb --frames 600 --keys-file walk.txt --ram wX (exit 1 at the
-  first frame that differs, with both sides saved as equiv-a and equiv-b)
+  gbcli build --out build/fast.gb (not over the session's ROM, which stays the
+  baseline), then gbcli equiv build/fast.gb --frames 600 --keys-file walk.txt
+  --ram wX (exit 1 at the first frame that differs, with both sides saved as
+  equiv-a and equiv-b); gbcli help optimize for the whole loop
 Did my rebuilt ROM break a saved state?
   gbcli run --at before --frames 1 (refused with what moved, or loaded)
 Who changed the session?

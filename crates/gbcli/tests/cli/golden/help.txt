@@ -9,10 +9,12 @@ its machine, saves it and prints rows; --json prints the response line.
              patch
              advance or change the machine; the stop becomes the head
   read       show, read, measure, equiv, shot, view, sym, checkpoints, sav,
-             events, gaps, sessions
+             events
              look without changing the head
-  configure  sessions prune, sessions rm, break, watch, delete
+  configure  break, watch, delete
              change the session's settings
+  project    gaps, sessions, sessions prune, sessions rm
+             every session in .gbcli/, and what they share; no session needed
   build      new, build, song
              RGBDS from PATH: edit, build, restore, measure; song files
   server     serve, batch
@@ -70,7 +72,7 @@ FLAGS
   --shot PATH             save a PNG of the screen at the stop (see the shot flags)
   --filmstrip PATH        save a PNG of the frames the run passed, in a row, each labeled (LCD-off frames kept); at most 16, more are counted and warned about
   --every N               with --filmstrip: keep a frame every N frames of the run (default 1)
-  --audio-log             print every write the run made to the sound registers, decoded into notes and settings, at elapsed 2^23 Hz ticks since --since: the cheap sibling of --wav
+  --audio-log             print every write the run made to the sound registers, decoded into notes and settings, at elapsed 2^23 Hz ticks since --since: the cheap sibling of --wav. Only this run's: writes made before the run (a sound engine's setup) aren't listed
   --wav PATH              save what the run played as a WAV (16-bit stereo, 32,768 Hz)
   --channels mixed|each   with --wav: each also saves every channel alone beside it (PATH's stem with -square1, -square2, -wave, -noise) by replaying the run muted
   --piano PATH            save a piano roll PNG of the notes the run's sound writes played
@@ -84,7 +86,7 @@ FLAGS
   --keys-file FILE        key tokens from a file, after --keys; # starts a comment
 
 SHOT FLAGS (how the PNG is taken)
-  --scale N               pixels per Game Boy pixel in the PNG, 1 to 16 (default 4)
+  --scale N               pixels per Game Boy pixel in the PNG, 1 to 16 (default 4); on run, also pixels per image pixel in --filmstrip, --piano and --spectrogram (default 1)
   --crop X,Y,W,H          only this rectangle of the 160x144 screen, in Game Boy pixels
   --live                  the pixels drawn so far this frame, not the last complete frame
   --any-frame             take the last frame even if it isn't a normal one (LCD off, blank)
@@ -121,7 +123,7 @@ Remove a session and its history. A session with named checkpoints is refused
 unless --with-checkpoints.
 
 CLASS
-  configure: changes the session's settings, not the machine; needs a session.
+  project: lists or removes the sessions in this project's .gbcli/, or reads what they share; takes no session.
 
 FLAGS
   --with-checkpoints      remove the session even though it holds named checkpoints
@@ -231,7 +233,7 @@ which loads only if nothing it was running moved (rom_changed, exit 3, says
 what did).
 
 CLASS
-  build: runs RGBDS from PATH, checked against the pinned version (`gbcli doctor`); a session only to reload the build into; `song` needs neither.
+  build: runs RGBDS from PATH, checked against the pinned version (`gbcli doctor`); a session only to reload the build into; `new` and `song` need neither.
 
 FLAGS
   --src DIR…              assemble every .asm under DIR instead of src/ (relative to the project)

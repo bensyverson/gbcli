@@ -117,7 +117,7 @@ impl Handler {
             Some(head) => {
                 warnings.extend(
                     store
-                        .restore(&mut machine, head, &self.load)
+                        .restore(meta, &mut machine, head, &self.load)
                         .map_err(stored)?,
                 );
             }
@@ -151,7 +151,11 @@ impl Handler {
                 sectors: cycled.flash_sectors_dropped.clone(),
             });
         }
-        warnings.extend(dropped.iter().map(StoreError::warning_text));
+        warnings.extend(
+            dropped
+                .iter()
+                .map(|w| StoreError::warning_text(w, &meta.rom)),
+        );
         let from = match (file.is_some(), cycled.battery_bytes) {
             (true, _) => BatteryFrom::Sav,
             (false, Some(_)) => BatteryFrom::Head,

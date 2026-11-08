@@ -3,6 +3,7 @@
 
 use gbcli_protocol::{MeasureArgs, ProfileArgs, RunMeasure};
 
+use crate::Env;
 use crate::argv::Invocation;
 use crate::usage::Usage;
 use crate::values;
@@ -22,8 +23,8 @@ pub fn span(text: &str) -> Result<RunMeasure, Usage> {
     }
 }
 
-/// The `measure` verb's args.
-pub fn measure(inv: &Invocation, text: &str) -> Result<MeasureArgs, Usage> {
+/// The `measure` verb's args; its key timeline reads as `run`'s.
+pub fn measure(inv: &Invocation, env: &Env, text: &str) -> Result<MeasureArgs, Usage> {
     let RunMeasure { from, to } = span(text)?;
     let number = |flag| inv.one(flag).map(|n| values::count(flag, n)).transpose();
     let iterations = number("iterations")?
@@ -45,6 +46,7 @@ pub fn measure(inv: &Invocation, text: &str) -> Result<MeasureArgs, Usage> {
         frames: number("frames")?,
         instructions: number("instructions")?,
         ticks: number("ticks")?,
+        keys: super::video::keys(inv, env)?,
     })
 }
 

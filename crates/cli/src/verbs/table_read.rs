@@ -98,7 +98,7 @@ pub const MEASURE_VERB: VerbSpec = VerbSpec {
     name: "measure",
     class: Class::Read,
     summary: "count the cycles from one address to another",
-    usage: "FROM..TO [--iterations N] [--max T] [--at NAME|~N] [flags]",
+    usage: "FROM..TO [--iterations N] [--max T] [--at NAME|~N] [--keys TOKENS] [flags]",
     arity: Arity {
         min: 1,
         max: Some(1),
@@ -109,9 +109,10 @@ pub const MEASURE_VERB: VerbSpec = VerbSpec {
     about: "Runs a copy of the head (or --at) and counts the emulated cycles from the first \
             arrival at FROM (the current PC counts) to the next arrival at TO, --iterations \
             times. Prints n, the CPU speed, T- and M-cycles min/max/mean, and the share of a \
-            70,224 T frame. The head never moves and breakpoints are ignored. With --max T \
-            it is an assertion: exit 1 if any iteration took more than T T-cycles. A span \
-            across a CPU speed switch is refused (exit 1).",
+            70,224 T frame. The head never moves and breakpoints are ignored. --keys holds \
+            buttons on the copy as `run --keys` would, to measure the held-input path. With \
+            --max T it is an assertion: exit 1 if any iteration took more than T T-cycles. A \
+            span across a CPU speed switch is refused (exit 1).",
     example: (
         "gbcli measure MainLoop+1..MainLoop --session dx --iterations 60 --max 40000",
         "measures 60 passes of the main loop's work, and exits 1 if any took over 40,000 T",

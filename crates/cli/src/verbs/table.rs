@@ -246,7 +246,7 @@ pub const VERBS: &[VerbSpec] = &[
     VerbSpec {
         verb: Verb::Gaps,
         name: "gaps",
-        class: Class::Read,
+        class: Class::Project,
         summary: "what the core could not do, counted",
         usage: "[flags]",
         arity: NONE,
@@ -259,7 +259,7 @@ pub const VERBS: &[VerbSpec] = &[
     VerbSpec {
         verb: Verb::Sessions,
         name: "sessions",
-        class: Class::Read,
+        class: Class::Project,
         summary: "list this project's sessions",
         usage: "[flags]",
         arity: NONE,
@@ -272,7 +272,7 @@ pub const VERBS: &[VerbSpec] = &[
     VerbSpec {
         verb: Verb::Prune,
         name: "sessions prune",
-        class: Class::Configure,
+        class: Class::Project,
         summary: "remove sessions unused for a while",
         usage: "--unused-for DURATION [flags]",
         arity: NONE,
@@ -289,7 +289,7 @@ pub const VERBS: &[VerbSpec] = &[
     VerbSpec {
         verb: Verb::Rm,
         name: "sessions rm",
-        class: Class::Configure,
+        class: Class::Project,
         summary: "remove one session",
         usage: "NAME [--with-checkpoints] [flags]",
         arity: one("NAME"),

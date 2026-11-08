@@ -223,6 +223,10 @@ pub enum ExprError {
         name: String,
         near: Vec<String>,
     },
+    /// `unknown_symbol` on a machine with no `.sym` at all.
+    NoSymbols {
+        name: String,
+    },
     AmbiguousSymbol {
         name: String,
         candidates: Vec<Symbol>,
@@ -246,6 +250,7 @@ impl ExprError {
                 "check the name against `gbcli sym <pattern>`, or load the ROM's .sym".into()
             }
             ExprError::UnknownSymbol { near, .. } => format!("did you mean {}?", near.join(", ")),
+            ExprError::NoSymbols { .. } => crate::addr::NO_SYMBOLS_REMEDY.into(),
             ExprError::AmbiguousSymbol { candidates, .. } => {
                 let list: Vec<String> = candidates
                     .iter()
@@ -262,6 +267,7 @@ impl fmt::Display for ExprError {
         match self {
             ExprError::Syntax { at, message, .. } => write!(f, "at {at}: {message}"),
             ExprError::UnknownSymbol { name, .. } => write!(f, "unknown symbol {name:?}"),
+            ExprError::NoSymbols { name } => f.write_str(&crate::addr::no_symbols(name)),
             ExprError::AmbiguousSymbol { name, candidates } => {
                 write!(f, "{name:?} names {} symbols", candidates.len())
             }

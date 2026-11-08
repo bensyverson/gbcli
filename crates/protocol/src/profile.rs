@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::keys::KeyEvent;
 use crate::request::is_false;
 
 /// `measure`: cycles from each arrival at `from` to the next arrival at `to`,
@@ -29,6 +30,10 @@ pub struct MeasureArgs {
     pub instructions: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ticks: Option<u64>,
+    /// Key presses and releases at frame offsets from the measurement's
+    /// start, as a run's `keys`: the copy runs under them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keys: Vec<KeyEvent>,
 }
 
 /// `run --measure FROM..TO`: one iteration, measured on a copy of the stop.

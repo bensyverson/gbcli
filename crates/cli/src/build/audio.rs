@@ -22,10 +22,11 @@ pub fn run_audio(inv: &Invocation) -> Result<Option<AudioArgs>, Usage> {
         }
         (None, None) => None,
     };
+    let scale = super::video::scale(inv)?;
     let image = |flag| {
         inv.one(flag).map(|path| ImageOut {
             path: path.to_string(),
-            scale: None,
+            scale,
         })
     };
     let audio = AudioArgs {

@@ -126,7 +126,8 @@ pub const IF: FlagSpec = value("if", "EXPR", "stop only when this condition hold
 pub const SCALE: FlagSpec = value(
     "scale",
     "N",
-    "pixels per Game Boy pixel in the PNG, 1 to 16 (default 4)",
+    "pixels per Game Boy pixel in the PNG, 1 to 16 (default 4); on run, also pixels per \
+     image pixel in --filmstrip, --piano and --spectrogram (default 1)",
 );
 
 /// How a screenshot is taken: by `run --shot` and by `shot`.
@@ -211,7 +212,8 @@ pub const RUN: &[FlagSpec] = &[
     switch(
         "audio-log",
         "print every write the run made to the sound registers, decoded into notes and \
-         settings, at elapsed 2^23 Hz ticks since --since: the cheap sibling of --wav",
+         settings, at elapsed 2^23 Hz ticks since --since: the cheap sibling of --wav. Only \
+         this run's: writes made before the run (a sound engine's setup) aren't listed",
     ),
     value(
         "wav",
@@ -282,7 +284,8 @@ pub const EQUIV: &[FlagSpec] = &[
     value(
         "sym-b",
         "FILE",
-        "side B's .sym (default: ROM_B's sibling .sym, else the session's)",
+        "side B's .sym (default: ROM_B's name with .sym, when that file exists, else none; \
+         with no ROM_B, the session's)",
     ),
     repeated(
         "patch",
@@ -302,7 +305,8 @@ pub const EQUIV: &[FlagSpec] = &[
     repeated(
         "ram",
         "ADDR[,LEN]",
-        "compare these bytes after every frame, each side through its own .sym; repeat",
+        "compare these bytes after every frame, each side through its own .sym; repeat: \
+         --ram '$C0A0,4' (4 bytes from $C0A0), --ram wPlayerX (1 byte), --ram wPos,2",
     ),
     value(
         "audio",
@@ -345,6 +349,17 @@ pub const MEASURE: &[FlagSpec] = &[
     ),
     value("instructions", "N", "instruction budget"),
     value("ticks", "N", "tick budget"),
+    value(
+        "keys",
+        "TOKENS",
+        "press and release buttons on the copy, as run --keys: 'RIGHT@0' holds RIGHT from the \
+         start (frame offsets from the measurement's start)",
+    ),
+    value(
+        "keys-file",
+        "FILE",
+        "key tokens from a file, after --keys; # starts a comment",
+    ),
 ];
 
 pub const VIEW: &[FlagSpec] = &[

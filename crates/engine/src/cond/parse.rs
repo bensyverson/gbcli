@@ -151,10 +151,7 @@ impl Parser<'_> {
 
     fn symbol(&self, name: String) -> Result<Expr, ExprError> {
         let Some(syms) = self.syms else {
-            return Err(ExprError::UnknownSymbol {
-                name,
-                near: Vec::new(),
-            });
+            return Err(ExprError::NoSymbols { name });
         };
         match syms.named(&name).as_slice() {
             [s] => Ok(Expr::Sym {

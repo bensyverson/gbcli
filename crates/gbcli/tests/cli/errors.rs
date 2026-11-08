@@ -322,11 +322,34 @@ fn no_session_says_how_to_make_one() {
     p.gbcli(&["show", "--session", "nosuch"])
         .fails(5, "no_session", "known sessions: demo");
     p.gbcli(&["show"]).fails(5, "no_session", "--session");
+    // The environment's default is the other way to name one.
+    p.gbcli(&["show"])
+        .fails(5, "no_session", "or set GBCLI_SESSION");
     let fresh = Project::new("no-session-fresh");
     fresh
         .gbcli(&["run", "demo.gb", "--frames", "1"])
         .fails(5, "no_session", "add --session NAME");
     assert!(!fresh.path(".gbcli").exists());
+}
+
+/// A session made from a ROM with no .sym beside it has no symbols at all;
+/// the error says so and how to give it one, not "check `gbcli sym`".
+#[test]
+fn a_symbol_in_a_session_with_no_sym_names_the_missing_file() {
+    let p = Project::new("no-sym");
+    fs::write(p.path("v2.gb"), crate::common::V1).unwrap();
+    let run = p.gbcli(&[
+        "run",
+        "v2.gb",
+        "--session",
+        "v2",
+        "--frames",
+        "1",
+        "--measure",
+        "Update..Work",
+    ]);
+    run.fails(2, "unknown_symbol", "--sym FILE");
+    assert!(run.stderr.contains("no .sym file"), "{}", run.stderr);
 }
 
 #[test]

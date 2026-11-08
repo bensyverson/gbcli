@@ -73,3 +73,7 @@ Rust was installed with rustup this session, and `~/.cargo/bin` isn't on agents'
 ## 2026-11-07 — `.jobs/log/*.jsonl` is tracked, so a `git reset --hard` erases every uncommitted `job` write
 
 The tracker's event log lives in git, and `job` rebuilds its cache from it on open. In the twelfth session, undoing a staged squash with `git reset --hard HEAD` reverted `.jobs/log/Z7rGfP.jsonl` too. Every leaf, note, label and close since the last commit was gone with no error, and the leaves had to be recreated under new ids that running agents had to be told. To undo a squash, unstage and restore only the agent's paths (`git restore --staged --worktree -- <paths>`), and check `git status --short .jobs` before any reset or checkout.
+
+## 2026-11-07 — a gbcli run inside a worktree writes to the main checkout's `.gbcli/`
+
+`.gbcli/` is found by walking up from the working directory (or `--dir`), and the main checkout has one, so `gbcli run ROM --session base --dir <worktree>/target/scratch/game` created `base` in `/Users/ben/git/gbcli/.gbcli/`, not beside the game (leaf k22J86; removed by hand). To try gbcli by hand from a worktree, work in a project outside the repo (as the CLI tests' temp projects do), and check `ls /Users/ben/git/gbcli/.gbcli/sessions` afterwards.

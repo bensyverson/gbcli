@@ -30,6 +30,8 @@ pub enum AddrError {
     Syntax { text: String, hint: Option<String> },
     /// `unknown_symbol`, with the closest names.
     UnknownSymbol { name: String, near: Vec<String> },
+    /// `unknown_symbol` on a machine with no `.sym` at all.
+    NoSymbols { name: String },
     /// `ambiguous_symbol`, with every candidate.
     AmbiguousSymbol {
         name: String,
@@ -69,12 +71,24 @@ pub enum AddrError {
     },
 }
 
+/// How to give a session symbols, for a name on a machine that has none.
+/// An existing session refuses another `--sym`, so the fix is a session
+/// made with one.
+pub const NO_SYMBOLS_REMEDY: &str = "this session was made without a .sym (by default it \
+     reads the ROM's name with .sym, when that file exists): make a session with --sym FILE, \
+     or give an address such as $C0A0";
+
+/// The message for a name on a machine with no `.sym`.
+pub fn no_symbols(name: &str) -> String {
+    format!("unknown symbol {name:?}: no .sym file is loaded")
+}
+
 impl AddrError {
     pub fn code(&self) -> gbcli_protocol::ErrorCode {
         use gbcli_protocol::ErrorCode as E;
         match self {
             AddrError::Syntax { .. } => E::BadAddress,
-            AddrError::UnknownSymbol { .. } => E::UnknownSymbol,
+            AddrError::UnknownSymbol { .. } | AddrError::NoSymbols { .. } => E::UnknownSymbol,
             AddrError::AmbiguousSymbol { .. } => E::AmbiguousSymbol,
             AddrError::NoCpuAddress { .. }
             | AddrError::RegionOffset { .. }
@@ -89,6 +103,7 @@ impl AddrError {
             AddrError::UnknownSymbol { near, .. } if !near.is_empty() => {
                 format!("did you mean {}?", near.join(", "))
             }
+            AddrError::NoSymbols { .. } => NO_SYMBOLS_REMEDY.into(),
             AddrError::AmbiguousSymbol { candidates, .. } => {
                 let list: Vec<String> = candidates
                     .iter()
@@ -126,6 +141,7 @@ impl fmt::Display for AddrError {
         match self {
             AddrError::Syntax { text, .. } => write!(f, "not an address: {text:?}"),
             AddrError::UnknownSymbol { name, .. } => write!(f, "unknown symbol {name:?}"),
+            AddrError::NoSymbols { name } => f.write_str(&no_symbols(name)),
             AddrError::AmbiguousSymbol { name, candidates } => {
                 write!(f, "{name:?} names {} symbols", candidates.len())
             }
@@ -242,9 +258,8 @@ pub fn parse_on(
         return Ok(at);
     }
     let (name, delta) = offset::split_offset(text)?;
-    let symbols = symbols.ok_or_else(|| AddrError::UnknownSymbol {
+    let symbols = symbols.ok_or_else(|| AddrError::NoSymbols {
         name: name.to_string(),
-        near: Vec::new(),
     })?;
     match symbols.named(name).as_slice() {
         [] => Err(AddrError::UnknownSymbol {

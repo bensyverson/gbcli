@@ -208,3 +208,18 @@ fn zero_frames_is_refused() {
         .expect_err("refused");
     assert_eq!(error.code, ErrorCode::BadRequest);
 }
+
+/// ROM_B with no sibling .sym has no symbols of its own: the error says
+/// side B has none and how to give it one.
+#[test]
+fn a_side_b_with_no_sym_names_the_flag_that_gives_it_one() {
+    let f = Fixture::with_sym("equiv-b-nosym");
+    std::fs::write(f.dir.join("v2.gb"), crate::fixture::V1).expect("rom b");
+    let mut args = frame_counter(5, false);
+    args.b.rom = Some("v2.gb".into());
+    let error = equiv(&mut handler(&f), args).outcome.expect_err("refused");
+    assert_eq!(error.code, ErrorCode::UnknownSymbol);
+    assert!(error.message.contains("side B"), "{}", error.message);
+    assert!(error.message.contains("no .sym"), "{}", error.message);
+    assert!(error.remedy.contains("--sym-b FILE"), "{}", error.remedy);
+}

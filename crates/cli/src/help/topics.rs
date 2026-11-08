@@ -72,7 +72,7 @@ impl Topic {
             Topic::ExitCodes => EXIT_CODES,
             Topic::Hardware => super::hardware::HARDWARE,
             Topic::Traps => super::traps::TRAPS,
-            Topic::Optimize => OPTIMIZE,
+            Topic::Optimize => super::optimize::OPTIMIZE,
             Topic::Rgbds => RGBDS,
             Topic::Music => super::music::text(),
             Topic::Images => super::images::IMAGES,
@@ -211,23 +211,6 @@ Exit codes — one table for every command; errors print to stderr as
      song_unreadable (a song file is missing or malformed: see the problem row)
   5  environment: unsupported no_session boot_rom_missing toolchain_missing
      io_failed internal
-";
-
-const OPTIMIZE: &str = "\
-Optimize — measure, patch, measure again.
-
-  1. Find where the time goes:
-       gbcli run --session dx --frames 60 --profile --top 10 --frame-budget
-  2. Measure the routine: cycles from each arrival at one address to the next
-     arrival at another (the head doesn't move):
-       gbcli measure Work..Work.done --session dx --iterations 60
-  3. Try a change without rebuilding, measured on a copy of the stop:
-       gbcli run --session dx --patch 00:0165=0 --frames 1 --measure Work..Work.done
-  4. Rebuild with the winner and hold the gain with an assertion that exits 1:
-       gbcli measure Work..Work.done --session dx --iterations 60 --max 90
-  5. Check the rebuild still behaves: gbcli equiv fast.gb --frames 600
-
-A frame is 70,224 T-cycles; `gbcli help budgets` if a run never arrives.
 ";
 
 const RGBDS: &str = "\

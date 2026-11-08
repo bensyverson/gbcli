@@ -128,7 +128,7 @@ impl Probes {
         let (from, to, spec) = self.measure.as_ref()?;
         let mut spec = spec.clone();
         spec.interrupt = Some(interrupt);
-        Some(measure_on(machine, &spec, (from, to), None, guard))
+        Some(measure_on(machine, &spec, (from, to), None, guard).map(|(made, _)| made))
     }
 
     /// What the run's sinks collected.

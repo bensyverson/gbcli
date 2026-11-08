@@ -20,6 +20,8 @@ pub enum Class {
     Read,
     Act,
     Configure,
+    /// The project's `.gbcli/` as a whole: its sessions and gap ledger.
+    Project,
     Build,
     Server,
     Help,
@@ -27,10 +29,11 @@ pub enum Class {
 
 impl Class {
     /// Every class, in the order the primer lists them.
-    pub const ALL: [Class; 6] = [
+    pub const ALL: [Class; 7] = [
         Class::Act,
         Class::Read,
         Class::Configure,
+        Class::Project,
         Class::Build,
         Class::Server,
         Class::Help,
@@ -41,6 +44,7 @@ impl Class {
             Class::Read => "read",
             Class::Act => "act",
             Class::Configure => "configure",
+            Class::Project => "project",
             Class::Build => "build",
             Class::Server => "server",
             Class::Help => "help",
@@ -56,9 +60,13 @@ impl Class {
                  (name one with a ROM to create it)"
             }
             Class::Configure => "changes the session's settings, not the machine; needs a session",
+            Class::Project => {
+                "lists or removes the sessions in this project's .gbcli/, or reads what they \
+                 share; takes no session"
+            }
             Class::Build => {
                 "runs RGBDS from PATH, checked against the pinned version (`gbcli doctor`); \
-                 a session only to reload the build into; `song` needs neither"
+                 a session only to reload the build into; `new` and `song` need neither"
             }
             Class::Server => "speaks the JSON Lines protocol; a session is optional",
             Class::Help => "no preconditions: works with no session, no ROM and no network",

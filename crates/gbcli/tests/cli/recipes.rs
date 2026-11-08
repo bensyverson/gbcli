@@ -37,6 +37,44 @@ fn words(line: &str) -> Vec<String> {
     out
 }
 
+/// `gbcli help optimize`, every command line in order, inside a fresh
+/// `gbcli new game` (with no edit, so the "faster" build is the same code).
+/// The baseline session never sees a rebuilt ROM, the new build's session
+/// finds its .sym by name, and equiv compares the two (leaf k22J86).
+#[test]
+fn the_optimize_loop_runs_as_written_and_keeps_the_baseline() {
+    let outside = Project::new("optimize-loop");
+    let made = outside.rgbds(&["new", "game"]);
+    assert_eq!(made.code, 0, "{}", made.stderr);
+    let inside = Project {
+        dir: outside.dir.join("game"),
+    };
+    let built = inside.rgbds(&["build"]);
+    assert_eq!(built.code, 0, "{}{}", built.stdout, built.stderr);
+    let topic = outside.gbcli(&["help", "optimize"]).stdout;
+    let mut ran = 0;
+    for line in topic.lines().map(str::trim) {
+        let Some(command) = line.strip_prefix("gbcli ") else {
+            continue;
+        };
+        let args = words(command);
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        let run = inside.rgbds(&args);
+        assert_eq!(run.code, 0, "{line}\n{}{}", run.stdout, run.stderr);
+        assert!(
+            !run.stderr.contains("the ROM"),
+            "{line}: the baseline saw a rebuilt ROM:\n{}",
+            run.stderr
+        );
+        ran += 1;
+    }
+    assert!(ran >= 7, "ran {ran} commands from:\n{topic}");
+    assert!(
+        inside.path("build/fast.sym").is_file(),
+        "the new build's .sym"
+    );
+}
+
 #[test]
 fn the_dev_loop_recipe_runs_as_written() {
     let outside = Project::new("recipe-loop");

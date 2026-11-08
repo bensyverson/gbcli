@@ -252,9 +252,11 @@ fn unknown_and_ambiguous_symbols_list_candidates() {
     };
     assert_eq!(candidates.len(), 2);
     assert!(err.remedy().contains("01:4000") && err.remedy().contains("02:4000"));
+    // With no .sym at all, the name is no typo: its own variant says so
+    // (tests/it/no_symbols.rs).
     assert!(matches!(
         Condition::compile("[wFrame]", None),
-        Err(ExprError::UnknownSymbol { .. })
+        Err(ExprError::NoSymbols { .. })
     ));
 }
 

@@ -114,7 +114,7 @@ pub fn build(inv: Invocation, env: &Env) -> Result<Command, Usage> {
             sav: inv.one("sav").map(str::to_string),
             rtc_advance: inv.one("rtc-advance").map(str::to_string),
         }),
-        Verb::Measure => Op::Measure(profile::measure(&inv, &pos(0))?),
+        Verb::Measure => Op::Measure(profile::measure(&inv, env, &pos(0))?),
         Verb::Equiv => Op::Equiv(Box::new(equiv::equiv(&inv, env)?)),
         Verb::Step => Op::Step(StepArgs {
             unit: match inv.positionals.first() {
@@ -346,5 +346,7 @@ mod equiv;
 mod profile;
 mod video;
 
+#[cfg(test)]
+mod flag_tests;
 #[cfg(test)]
 mod tests;

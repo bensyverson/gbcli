@@ -40,13 +40,13 @@ impl SessionStore {
         let mut warnings = Vec::new();
         if let Some(at) = at {
             let cp = self.checkpoint_or_history(meta.rev, at)?;
-            warnings.extend(self.restore(&mut machine, &cp, load)?);
+            warnings.extend(self.restore(meta, &mut machine, &cp, load)?);
         } else if from == Start::PowerOn {
             // Cold: the head and the boot cache are both skipped (design §9).
         } else if let Some(head) = self.read_head(meta.rev)? {
-            warnings.extend(self.restore(&mut machine, &head, load)?);
+            warnings.extend(self.restore(meta, &mut machine, &head, load)?);
         } else {
-            warnings.extend(self.to_handoff(&mut machine, load, interrupt)?);
+            warnings.extend(self.to_handoff(meta, &mut machine, load, interrupt)?);
         }
         Ok((machine, warnings))
     }
@@ -60,27 +60,34 @@ impl SessionStore {
     ) -> Result<(Machine, Vec<String>), StoreError> {
         let mut machine = self.machine(meta)?;
         let warnings = match self.read_head(meta.rev)? {
-            Some(head) => self.restore(&mut machine, &head, load)?,
+            Some(head) => self.restore(meta, &mut machine, &head, load)?,
             None => Vec::new(),
         };
         Ok((machine, warnings))
     }
 
-    /// Restores a checkpoint into a machine, turning load warnings into text.
+    /// Restores a checkpoint into a machine built from `meta`, turning load
+    /// warnings into text that names `meta`'s ROM.
     pub fn restore(
         &self,
+        meta: &SessionFile,
         machine: &mut Machine,
         cp: &Checkpoint,
         opts: &LoadOptions,
     ) -> Result<Vec<String>, StoreError> {
         let warnings = machine.restore(cp, opts).map_err(StoreError::Checkpoint)?;
-        Ok(warnings.iter().map(StoreError::warning_text).collect())
+        Ok(warnings
+            .iter()
+            .map(|w| StoreError::warning_text(w, &meta.rom))
+            .collect())
     }
 
-    /// Runs the boot ROM to the handoff: from the cache when it exists, else
-    /// cold, writing the cache afterwards (design §9).
+    /// Runs the boot ROM to the handoff of a machine built from `meta`: from
+    /// the cache when it exists, else cold, writing the cache afterwards
+    /// (design §9).
     pub fn to_handoff(
         &self,
+        meta: &SessionFile,
         machine: &mut Machine,
         load: &LoadOptions,
         interrupt: Option<&AtomicBool>,
@@ -89,7 +96,7 @@ impl SessionStore {
         let path = self.boot_cache_path(&probe);
         if let Ok(bytes) = fs::read(&path)
             && let Ok(cp) = Checkpoint::decode(&bytes)
-            && let Ok(warnings) = self.restore(machine, &cp, load)
+            && let Ok(warnings) = self.restore(meta, machine, &cp, load)
         {
             return Ok(warnings);
         }
@@ -172,7 +179,7 @@ mod tests {
         let meta = store.read_meta().unwrap();
         let mut machine = store.machine(&meta).unwrap();
         let warnings = store
-            .to_handoff(&mut machine, &LoadOptions::default(), None)
+            .to_handoff(&meta, &mut machine, &LoadOptions::default(), None)
             .unwrap();
         assert!(warnings.is_empty(), "{warnings:?}");
         assert!(machine.boot().is_some());

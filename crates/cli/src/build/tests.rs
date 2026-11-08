@@ -16,7 +16,7 @@ fn env() -> Env {
     }
 }
 
-fn command(line: &[&str]) -> Result<Command, Usage> {
+pub(super) fn command(line: &[&str]) -> Result<Command, Usage> {
     let args = line.iter().map(OsString::from).collect();
     match parse(args)? {
         Parsed::Verb(inv) => build(inv, &env()),
@@ -24,7 +24,7 @@ fn command(line: &[&str]) -> Result<Command, Usage> {
     }
 }
 
-fn request(line: &[&str]) -> (Target, Op) {
+pub(super) fn request(line: &[&str]) -> (Target, Op) {
     match command(line) {
         Ok(Command::Request { target, op }) => (target, *op),
         other => panic!("{line:?}: {other:?}"),
@@ -257,7 +257,10 @@ fn run_takes_a_shot_with_its_options_and_refuses_them_without_one() {
         "the server owns the default"
     );
     let u = command(&["run", "--scale", "2"]).unwrap_err();
-    assert_eq!(u.message, "--scale only applies with --shot");
+    assert_eq!(
+        u.message,
+        "--scale only applies with --shot, --filmstrip, --piano or --spectrogram"
+    );
     let u = command(&["run", "--shot", "a.png", "--crop", "1,2,3"]).unwrap_err();
     assert_eq!(u.message, "--crop takes X,Y,W,H, not `1,2,3`");
 }

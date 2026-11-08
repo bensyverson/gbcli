@@ -23,7 +23,7 @@ pub fn core_code(e: &CoreError) -> ErrorCode {
 pub fn expr_code(e: &ExprError) -> ErrorCode {
     match e {
         ExprError::Syntax { .. } => ErrorCode::BadExpression,
-        ExprError::UnknownSymbol { .. } => ErrorCode::UnknownSymbol,
+        ExprError::UnknownSymbol { .. } | ExprError::NoSymbols { .. } => ErrorCode::UnknownSymbol,
         ExprError::AmbiguousSymbol { .. } => ErrorCode::AmbiguousSymbol,
     }
 }

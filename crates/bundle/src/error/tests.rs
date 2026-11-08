@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use gbcli_core::{CoreError, Feature, Model};
 use gbcli_engine::{
-    CheckpointError, DebugError, Moved, MovedRole, SetupError, SymbolAt, SymbolSide,
+    CheckpointError, DebugError, LoadWarning, Moved, MovedRole, SetupError, SymbolAt, SymbolSide,
 };
 use gbcli_protocol::{CoreId, ErrorCode, Sha256};
 
@@ -296,6 +296,27 @@ fn a_rom_the_core_cant_run_is_unsupported() {
         "the core can't run this ROM (no mapper); `gbcli gaps` lists what it can't do that this \
          project has hit",
     );
+}
+
+/// A rebuild over the session's ROM file changes what the session runs; the
+/// warning says so, by path, and how to keep a baseline instead (an agent
+/// measured its "baseline" session on the optimized build without noticing).
+#[test]
+fn a_rebuilt_rom_warning_says_the_session_now_runs_the_file_and_how_to_keep_a_baseline() {
+    let warning = LoadWarning::RomChanged {
+        moved: Vec::new(),
+        checked: 12,
+        forced: false,
+    };
+    let text = StoreError::warning_text(&warning, "build/game.gb");
+    for needle in [
+        "build/game.gb",
+        "now runs the rebuilt file",
+        "no live symbol moved (12 checked)",
+        "gbcli build --out",
+    ] {
+        assert!(text.contains(needle), "{needle} missing: {text}");
+    }
 }
 
 #[test]

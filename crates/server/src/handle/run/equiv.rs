@@ -6,8 +6,10 @@
 use std::path::Path;
 
 use gbcli_bundle::{SessionStore, Start};
+use gbcli_engine::addr::AddrError;
 use gbcli_engine::equiv::{
-    self, AudioCompare, Difference, Divergence, EquivError, EquivSpec, RamRange, SideState, Verdict,
+    self, AudioCompare, Difference, Divergence, EquivError, EquivSpec, RamRange, Side, SideState,
+    Verdict,
 };
 use gbcli_engine::{Checkpoint, Machine};
 use gbcli_protocol::{
@@ -100,7 +102,7 @@ impl Handler {
             Some(at) => store.start_machine(meta, Some(at), from, &self.load, interrupt),
             None => store.machine(meta).and_then(|mut m| {
                 let loaded = match from {
-                    Start::Boot => store.to_handoff(&mut m, &self.load, interrupt)?,
+                    Start::Boot => store.to_handoff(meta, &mut m, &self.load, interrupt)?,
                     Start::PowerOn => Vec::new(),
                 };
                 Ok((m, loaded))
@@ -142,6 +144,12 @@ pub(in crate::handle) fn equiv_failure(e: &EquivError) -> Failure {
         EquivError::Range { side, at, error } => {
             let mut body = convert::addr(error);
             body.message = format!("--ram {at} on side {side:?}: {}", body.message);
+            // Side B's symbols come from its own flag, not the session's.
+            if *side == Side::B && matches!(error, AddrError::NoSymbols { .. }) {
+                body.remedy = "pass --sym-b FILE (by default side B reads ROM_B's name with \
+                               .sym, when that file exists), or give an address such as $C0A0"
+                    .into();
+            }
             Failure::new(body)
         }
         EquivError::Run { error, .. } => Failure::from_debug(error),

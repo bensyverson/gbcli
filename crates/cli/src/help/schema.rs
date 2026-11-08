@@ -24,7 +24,7 @@ run     at? from?: "boot"|"power-on"  since?: "boot"|"power-on"|CHECKPOINT
         measure?: {from: ADDR, to: ADDR}  profile?: {top?: N}
         frame_budget?: bool  raster?: bool
 measure from: ADDR  to: ADDR  at?  iterations?: N  max_t?: N
-        frames? instructions? ticks?: N
+        frames? instructions? ticks?: N  keys?
 equiv   frames: N  b?: {rom?: PATH, sym?: PATH, writes?: [WRITE]}  at?  from?
         keys?  ram?: [{at: ADDR, len: N}]  audio?: "writes"|"timed"|"off"
 shot    shot: SHOT  since?

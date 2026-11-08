@@ -23,6 +23,8 @@ mod inspect_pure;
 mod inspect_regions;
 mod inspect_video;
 mod lcd_off;
+mod measure_keys;
+mod no_symbols;
 mod oam_attributes;
 mod opcode_lookup;
 mod opcode_lookup_spellings;

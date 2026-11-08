@@ -10,7 +10,10 @@ use crate::usage::Usage;
 use crate::values;
 
 /// The shot options, refused rather than ignored when nothing takes a shot.
-const SHOT_OPTIONS: [&str; 4] = ["scale", "crop", "live", "any-frame"];
+const SHOT_OPTIONS: [&str; 3] = ["crop", "live", "any-frame"];
+
+/// The run's images that `--scale` scales besides the shot.
+const SCALED_IMAGES: [&str; 3] = ["filmstrip", "piano", "spectrogram"];
 
 /// `run --shot PATH` and its options, or `None` when there is no `--shot`.
 pub fn run_shot(inv: &Invocation) -> Result<Option<ShotArgs>, Usage> {
@@ -21,6 +24,12 @@ pub fn run_shot(inv: &Invocation) -> Result<Option<ShotArgs>, Usage> {
                 return Err(Usage::new(
                     format!("--{flag} only applies with --shot"),
                     "add --shot PATH, or drop it",
+                ));
+            }
+            if inv.has("scale") && !SCALED_IMAGES.into_iter().any(|f| inv.has(f)) {
+                return Err(Usage::new(
+                    "--scale only applies with --shot, --filmstrip, --piano or --spectrogram",
+                    "add one of them, or drop it",
                 ));
             }
             Ok(None)
@@ -39,7 +48,7 @@ pub fn run_filmstrip(inv: &Invocation) -> Result<Option<FilmstripArgs>, Usage> {
         (Some(path), every) => Ok(Some(FilmstripArgs {
             path: path.to_string(),
             every: every.unwrap_or(1),
-            scale: None,
+            scale: scale(inv)?,
         })),
         (None, Some(_)) => Err(Usage::new(
             "--every only applies with --filmstrip",
@@ -60,7 +69,8 @@ pub fn shot(inv: &Invocation, path: &str) -> Result<ShotArgs, Usage> {
     })
 }
 
-fn scale(inv: &Invocation) -> Result<Option<u32>, Usage> {
+/// `--scale N`, or `None` for the server's default for that image.
+pub(super) fn scale(inv: &Invocation) -> Result<Option<u32>, Usage> {
     inv.one("scale")
         .map(|n| values::count("scale", n).map(|n| n.min(u64::from(u32::MAX)) as u32))
         .transpose()

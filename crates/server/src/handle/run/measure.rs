@@ -6,10 +6,10 @@ use std::time::Duration;
 
 use gbcli_bundle::{SessionStore, Start};
 use gbcli_core::Budget;
-use gbcli_engine::Machine;
 use gbcli_engine::profile::{CpuSpeed, Leg, MeasureError, MeasureSpec, Measurement};
+use gbcli_engine::{Machine, unapplied_keys};
 use gbcli_protocol::{
-    CpuSpeedName, CycleStats, ErrorBody, ErrorCode, Location, MeasureArgs, MeasureMade,
+    CpuSpeedName, CycleStats, ErrorBody, ErrorCode, KeyEvent, Location, MeasureArgs, MeasureMade,
     PercentStats, Real, ResultBody, SessionFile,
 };
 
@@ -40,6 +40,7 @@ impl Handler {
             .and_then(|(from, to)| {
                 let mut spec = spec(from, to, iterations, budget);
                 spec.interrupt = Some(&interrupt);
+                spec.keys = &args.keys;
                 let names = (args.from.as_str(), args.to.as_str());
                 measure_on(&mut machine, &spec, names, args.max_t, guard)
             });
@@ -47,14 +48,32 @@ impl Handler {
         if args.at.is_none() {
             self.keep_warm(store, meta, machine);
         }
+        let (measure, frames) = measured?;
         Ok(ResultBody {
-            measure: Some(measured?),
+            measure: Some(measure),
+            keys_unapplied: unapplied(&args.keys, frames, warnings),
             ..ResultBody::default()
         })
     }
 }
 
-/// A spec without an interrupt flag: the caller sets the request's.
+/// The key events the measurement ended before, as a warning and for the
+/// result, as a run reports them.
+fn unapplied(keys: &[KeyEvent], frames: u64, warnings: &mut Vec<String>) -> Option<Vec<KeyEvent>> {
+    let late = unapplied_keys(keys, frames);
+    if late.is_empty() {
+        return None;
+    }
+    let tokens: Vec<String> = late.iter().map(KeyEvent::to_string).collect();
+    warnings.push(format!(
+        "the measurement ended after {frames} frames, before {} key event(s): {}",
+        late.len(),
+        tokens.join(" ")
+    ));
+    Some(late)
+}
+
+/// A spec without an interrupt flag or keys: the caller sets the request's.
 pub(super) fn spec(
     from: Location,
     to: Location,
@@ -67,20 +86,21 @@ pub(super) fn spec(
         iterations,
         budget,
         interrupt: None,
+        keys: &[],
     }
 }
 
 /// Measures `spec` on a copy of `machine`, `(from, to)` as the request named
 /// them; with `max_t`, a slowest iteration over it is `predicate_false`
 /// carrying the measurement. `guard` is the wall guard that sets the spec's
-/// interrupt flag.
+/// interrupt flag. With the measurement, the frames it ran.
 pub(super) fn measure_on(
     machine: &mut Machine,
     spec: &MeasureSpec,
     (from, to): (&str, &str),
     max_t: Option<u64>,
     guard: Duration,
-) -> Result<MeasureMade, Failure> {
+) -> Result<(MeasureMade, u64), Failure> {
     let m = machine.measure(spec).map_err(|e| failure(&e, guard))?;
     let made = made(&m, from, to, max_t);
     match max_t {
@@ -99,7 +119,7 @@ pub(super) fn measure_on(
             }));
             Err(Failure::new(body))
         }
-        _ => Ok(made),
+        _ => Ok((made, m.frames)),
     }
 }
 

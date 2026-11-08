@@ -1,0 +1,271 @@
+//! The GBC result types against the review of 81cf3d2 (leaf jJjaK9): each
+//! test began as a reviewer's probe that passed on the bug and now asserts
+//! the fix.
+
+use std::collections::BTreeMap;
+
+use gbcli_protocol::{
+    BuildMade, BuildTarget, Flip, GbcImage, GbcPalette, ImageArt, ImageAsset, ImageKind,
+    NamedPalette, NamedPalettes, PaletteFault, PaletteSlot, Rgb555, TileEntry,
+};
+
+/// A BuildMade recorded before `target` existed reads as a DMG build.
+#[test]
+fn an_older_build_made_without_target_reads_as_dmg() {
+    let old = r#"{"rgbds":"1.0.4","sources":[],"outputs":[],"diagnostics":[]}"#;
+    let made: BuildMade = serde_json::from_str(old).unwrap();
+    assert_eq!(made.target, BuildTarget::Dmg);
+}
+
+fn forest() -> GbcPalette {
+    GbcPalette([
+        Rgb555::WHITE,
+        Rgb555::from_rgb888(0x88, 0xCC, 0x44),
+        Rgb555::from_rgb888(0x33, 0x66, 0x33),
+        Rgb555::BLACK,
+    ])
+}
+
+fn named(palettes: &[&str], assignments: &[(&str, &str)]) -> NamedPalettes {
+    NamedPalettes {
+        dmg: None,
+        palettes: palettes
+            .iter()
+            .map(|n| NamedPalette {
+                name: n.to_string(),
+                colors: forest(),
+            })
+            .collect(),
+        assignments: assignments
+            .iter()
+            .map(|(i, n)| (i.to_string(), n.to_string()))
+            .collect::<BTreeMap<_, _>>(),
+    }
+}
+
+/// The wire refuses what `assets/palettes.txt` refuses: `dmg` as a GBC
+/// palette, a duplicate or non-label name, an assignment to `dmg` or to a
+/// palette that isn't defined, and an image path that escapes `assets/` or
+/// isn't spelled as `find` spells it.
+#[test]
+fn named_palettes_on_the_wire_pass_the_file_s_rules() {
+    let refused: Vec<(NamedPalettes, PaletteFault)> = vec![
+        (
+            named(&["dmg"], &[]),
+            PaletteFault::ReservedName { index: 0 },
+        ),
+        (
+            named(&["forest", "Forest Two"], &[]),
+            PaletteFault::BadName {
+                index: 1,
+                name: "Forest Two".into(),
+            },
+        ),
+        (
+            named(&["forest", "ember", "forest"], &[]),
+            PaletteFault::Duplicate {
+                index: 2,
+                first: 0,
+                name: "forest".into(),
+            },
+        ),
+        (
+            named(&["forest"], &[("bg/a.png", "dmg")]),
+            PaletteFault::AssignedDmg {
+                image: "bg/a.png".into(),
+            },
+        ),
+        (
+            named(&["forest"], &[("bg/b.png", "nowhere")]),
+            PaletteFault::UnknownPalette {
+                image: "bg/b.png".into(),
+                name: "nowhere".into(),
+            },
+        ),
+    ];
+    for (n, fault) in refused {
+        assert_eq!(n.check(), Err(fault.clone()), "{n:?}");
+        let json = serde_json::to_string(&n).unwrap();
+        let e = serde_json::from_str::<NamedPalettes>(&json).unwrap_err();
+        assert!(e.to_string().contains(&fault.to_string()), "{e}");
+    }
+    for path in [
+        "../../etc",
+        "../bg/a.png",
+        "./bg/a.png",
+        "bg/./a.png",
+        "bg//a.png",
+        "bg\\a.png",
+        "assets/bg/a.png",
+        "/bg/a.png",
+        "bg/a.txt",
+        "bg/.png",
+        "bg/sub/a.png",
+        "music/a.png",
+        "bg",
+        "",
+    ] {
+        let n = named(&["forest"], &[(path, "forest")]);
+        assert_eq!(
+            n.check(),
+            Err(PaletteFault::BadImage { image: path.into() }),
+            "{path:?}"
+        );
+        let json = serde_json::to_string(&n).unwrap();
+        assert!(
+            serde_json::from_str::<NamedPalettes>(&json).is_err(),
+            "{path:?}"
+        );
+    }
+    for path in ["bg/a.png", "sprites/hero.16x16.png", "tiles/walls.PNG"] {
+        let n = named(&["forest"], &[(path, "forest")]);
+        assert_eq!(n.check(), Ok(()), "{path:?}");
+        let json = serde_json::to_string(&n).unwrap();
+        assert_eq!(serde_json::from_str::<NamedPalettes>(&json).unwrap(), n);
+    }
+}
+
+/// Every fault is listed, palettes first, so the file parser can name the
+/// earliest line.
+#[test]
+fn every_fault_is_listed_in_order() {
+    let n = named(&["Bad", "ok"], &[("bg/a.png", "dmg"), ("bg/b.png", "ok")]);
+    assert_eq!(
+        n.faults(),
+        vec![
+            PaletteFault::BadName {
+                index: 0,
+                name: "Bad".into()
+            },
+            PaletteFault::AssignedDmg {
+                image: "bg/a.png".into()
+            },
+        ]
+    );
+}
+
+#[test]
+fn a_palette_slot_is_0_to_7() {
+    assert_eq!(PaletteSlot::new(7).map(PaletteSlot::get), Some(7));
+    assert_eq!(PaletteSlot::new(8), None);
+    assert_eq!(serde_json::to_string(&PaletteSlot::new(3)).unwrap(), "3");
+    assert!(serde_json::from_str::<PaletteSlot>("8").is_err());
+    assert!(serde_json::from_str::<PaletteSlot>("200").is_err());
+}
+
+/// A flip is the OAM attribute bits the frame lists write.
+#[test]
+fn a_flip_is_its_oam_bits() {
+    assert_eq!(Flip::None.oam_bits(), 0);
+    assert_eq!(Flip::X.oam_bits(), 0x20);
+    assert_eq!(Flip::Y.oam_bits(), 0x40);
+    assert_eq!(Flip::Xy.oam_bits(), 0x60);
+    assert_eq!(serde_json::to_string(&Flip::Xy).unwrap(), r#""xy""#);
+}
+
+fn sheet(map: Vec<Option<TileEntry>>, gbc: Option<GbcImage>) -> ImageAsset {
+    ImageAsset {
+        kind: ImageKind::Sprites,
+        source: "assets/sprites/hero.png".into(),
+        label: "Hero".into(),
+        width: 3,
+        height: 2,
+        tiles: 2,
+        frames: Some(3),
+        objects: Some(1),
+        preview: "p".into(),
+        tile_map: map,
+        gbc,
+    }
+}
+
+fn entry(index: u32, flip: Flip, slot: Option<u8>) -> Option<TileEntry> {
+    Some(TileEntry {
+        index,
+        flip,
+        palette: slot.map(|s| PaletteSlot::new(s).unwrap()),
+    })
+}
+
+/// A sheet's entry carries the unit's flip, and its index is the unit's
+/// top tile (even, from the image's own first tile).
+#[test]
+fn a_sheet_entry_carries_its_flip_and_slot() {
+    let indexed = GbcImage {
+        art: ImageArt::Indexed {
+            palette: "ember".into(),
+        },
+        palettes: Vec::new(),
+    };
+    let a = sheet(
+        vec![
+            entry(0, Flip::None, Some(2)),
+            entry(0, Flip::X, Some(2)),
+            None,
+        ],
+        Some(indexed),
+    );
+    let json = serde_json::to_string(&a).unwrap();
+    assert!(
+        json.contains(
+            r#""tile_map":[{"index":0,"palette":2},{"index":0,"flip":"x","palette":2},null]"#
+        ),
+        "{json}"
+    );
+    assert_eq!(serde_json::from_str::<ImageAsset>(&json).unwrap(), a);
+    let dmg = sheet(vec![entry(2, Flip::Xy, None), None], None);
+    let json = serde_json::to_string(&dmg).unwrap();
+    assert!(
+        json.contains(r#""tile_map":[{"index":2,"flip":"xy"},null]"#),
+        "{json}"
+    );
+    assert_eq!(serde_json::from_str::<ImageAsset>(&json).unwrap(), dmg);
+}
+
+/// The slot rides in the entry, so the two can't disagree in length or
+/// in where a unit is transparent; what is left to check on read is that
+/// a GBC image's entries all have a slot and a DMG image's none, and that
+/// only a sheet flips.
+#[test]
+fn entries_that_disagree_with_the_target_are_refused_on_read() {
+    let color = || GbcImage {
+        art: ImageArt::Color,
+        palettes: vec![forest()],
+    };
+    let bg = |map: Vec<Option<TileEntry>>, gbc: Option<GbcImage>| ImageAsset {
+        kind: ImageKind::Bg,
+        frames: None,
+        objects: None,
+        ..sheet(map, gbc)
+    };
+    for (what, a) in [
+        (
+            "a GBC entry without a slot",
+            bg(
+                vec![entry(0, Flip::None, Some(0)), entry(1, Flip::None, None)],
+                Some(color()),
+            ),
+        ),
+        (
+            "a DMG entry with a slot",
+            bg(vec![entry(0, Flip::None, Some(0))], None),
+        ),
+        (
+            "a background's flip",
+            bg(vec![entry(0, Flip::X, Some(0))], Some(color())),
+        ),
+        ("a background's missing tile", bg(vec![None], Some(color()))),
+    ] {
+        let json = serde_json::to_string(&a).unwrap();
+        assert!(
+            serde_json::from_str::<ImageAsset>(&json).is_err(),
+            "{what}: {json}"
+        );
+    }
+    let slot_past_7 = r#"{"kind":"bg","source":"s","label":"S","width":1,"height":1,"tiles":1,
+        "preview":"p","tile_map":[{"index":0,"palette":8}],"gbc":{"art":"color"}}"#;
+    assert!(serde_json::from_str::<ImageAsset>(slot_past_7).is_err());
+    let fine = bg(vec![entry(0, Flip::None, Some(0))], Some(color()));
+    let json = serde_json::to_string(&fine).unwrap();
+    assert_eq!(serde_json::from_str::<ImageAsset>(&json).unwrap(), fine);
+}

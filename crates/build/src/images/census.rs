@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use gbcli_protocol::{ImageLimit, ImageProblem, Severity, TileAt};
+use gbcli_protocol::{ImageLimit, ImageProblem, Rgb555, Severity, TileAt};
 
 use super::pixels::{Pixels, Rgba, hex};
 
@@ -12,8 +12,10 @@ use super::pixels::{Pixels, Rgba, hex};
 /// every check counts and shades them as one.
 pub(crate) type Key = [u8; 3];
 
+/// The protocol's one truncation (`Rgb555::from_rgb888`), so a color the
+/// checks count and one the palettes hold can't differ.
 pub(crate) fn key(c: Rgba) -> Key {
-    [c[0] >> 3, c[1] >> 3, c[2] >> 3]
+    Rgb555::from_rgb888(c[0], c[1], c[2]).channels()
 }
 
 /// An image's colors (fully transparent pixels excluded) as rgbgfx counts

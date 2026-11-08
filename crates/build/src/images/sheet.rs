@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use gbcli_protocol::{ImageLimit, ImageProblem, Severity, TileAt};
+use gbcli_protocol::{Flip, ImageLimit, ImageProblem, PaletteSlot, Severity, TileAt, TileEntry};
 
 use super::census::{self, Key, error, key};
 use super::pixels::{Pixels, Rgba, hex};
@@ -19,9 +19,6 @@ pub(crate) const TOTAL: usize = 40;
 pub(crate) const OBJ_TILES: usize = 256;
 /// Opaque shades in an object palette.
 const OBJ_SHADES: usize = 3;
-/// OAM attribute bits.
-pub(crate) const X_FLIP: u8 = 0x20;
-pub(crate) const Y_FLIP: u8 = 0x40;
 
 /// One object of a frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -31,7 +28,7 @@ pub(crate) struct Object {
     pub x: u32,
     /// Which kept unit; its tiles are 2 * unit and 2 * unit + 1.
     pub unit: usize,
-    pub flip: u8,
+    pub flip: Flip,
 }
 
 /// A sheet that fits, ready for rgbgfx and the dedup.
@@ -56,6 +53,9 @@ pub(crate) struct SheetPlan {
     pub drawn: Vec<Vec<u8>>,
     pub uses: Vec<u32>,
     pub frames: Vec<Vec<Object>>,
+    /// Each 8x16 unit of the sheet, rows top to bottom: the kept unit it
+    /// draws and how flipped, or none when it is transparent.
+    pub units: Vec<Option<(usize, Flip)>>,
     /// Problems that don't stop the build.
     pub warnings: Vec<ImageProblem>,
 }
@@ -63,6 +63,21 @@ pub(crate) struct SheetPlan {
 impl SheetPlan {
     pub fn tiles(&self) -> u32 {
         self.kept.len() as u32 * 2
+    }
+
+    /// The protocol's tile map: each unit's top tile (`2 * unit`) and flip,
+    /// with `slot` as every opaque unit's palette.
+    pub fn tile_map(&self, slot: Option<PaletteSlot>) -> Vec<Option<TileEntry>> {
+        self.units
+            .iter()
+            .map(|u| {
+                u.map(|(unit, flip)| TileEntry {
+                    index: unit as u32 * 2,
+                    flip,
+                    palette: slot,
+                })
+            })
+            .collect()
     }
 }
 
@@ -157,7 +172,9 @@ pub(crate) fn check(
     let mut kept: Vec<(u32, u32)> = Vec::new();
     let mut drawn: Vec<Vec<u8>> = Vec::new();
     let mut uses: Vec<u32> = Vec::new();
-    let mut known: HashMap<Vec<u8>, (usize, u8)> = HashMap::new();
+    let mut known: HashMap<Vec<u8>, (usize, Flip)> = HashMap::new();
+    let columns = (pixels.width / 8) as usize;
+    let mut units: Vec<Option<(usize, Flip)>> = vec![None; columns * (pixels.height / 16) as usize];
     let mut frames = Vec::new();
     let mut problems = Vec::new();
     let (mut worst_line, mut worst_total): (Vec<TileAt>, Vec<TileAt>) = (Vec::new(), Vec::new());
@@ -177,13 +194,14 @@ pub(crate) fn check(
                         kept.push((ux, uy));
                         drawn.push(data.clone());
                         uses.push(0);
-                        (kept.len() - 1, 0)
+                        (kept.len() - 1, Flip::None)
                     });
-                    if flip == 0 && kept[k] == (ux, uy) {
+                    if flip.is_none() && kept[k] == (ux, uy) {
                         for (f, variant) in flips(&data) {
                             known.entry(variant).or_insert((k, f));
                         }
                     }
+                    units[(uy / 16) as usize * columns + (ux / 8) as usize] = Some((k, flip));
                     uses[k] += 1;
                     objects.push(Object {
                         y: oy,
@@ -286,6 +304,7 @@ pub(crate) fn check(
         drawn,
         uses,
         frames,
+        units,
         warnings,
     })
 }
@@ -389,20 +408,16 @@ fn frame_shape(
 }
 
 /// A unit's flipped variants, as the hardware flips a whole 8x16 object.
-fn flips(data: &[u8]) -> [(u8, Vec<u8>); 3] {
-    let at = |flip: u8| -> Vec<u8> {
+fn flips(data: &[u8]) -> [(Flip, Vec<u8>); 3] {
+    let at = |flip: Flip| -> Vec<u8> {
         (0..128)
             .map(|i| {
                 let (x, y) = (i % 8, i / 8);
-                let x = if flip & X_FLIP != 0 { 7 - x } else { x };
-                let y = if flip & Y_FLIP != 0 { 15 - y } else { y };
+                let x = if flip.x() { 7 - x } else { x };
+                let y = if flip.y() { 15 - y } else { y };
                 data[y * 8 + x]
             })
             .collect()
     };
-    [
-        (X_FLIP, at(X_FLIP)),
-        (Y_FLIP, at(Y_FLIP)),
-        (X_FLIP | Y_FLIP, at(X_FLIP | Y_FLIP)),
-    ]
+    [Flip::X, Flip::Y, Flip::Xy].map(|f| (f, at(f)))
 }

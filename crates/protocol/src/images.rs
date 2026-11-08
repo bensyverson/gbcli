@@ -11,9 +11,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::toolchain::Severity;
 
+mod asset;
 mod gbc;
+mod map;
 
 pub use gbc::{GbcImage, GbcImagesMade, ImageArt};
+pub use map::{Flip, NotPaletteSlot, PaletteSlot, TileEntry};
 
 /// Which convention an image follows, from its directory.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -26,7 +29,7 @@ pub enum ImageKind {
     Sprites,
     /// `assets/tiles/*.png`: a tileset, as unique 8x8 background tiles and
     /// no map; the program (or a client such as LoadHigh) builds its own
-    /// maps from [`ImageAsset::tile_indices`].
+    /// maps from [`ImageAsset::tile_map`].
     Tiles,
 }
 
@@ -94,9 +97,11 @@ pub enum ImageLimit {
     SharedShade,
     /// `assets/palettes.txt` doesn't read: a line that is neither a
     /// palette nor an assignment, a palette without four colors, a
-    /// duplicate name or assignment, an unknown palette, an image the
-    /// project doesn't have, or `dmg` assigned to an image. `line` names
-    /// the line when one is at fault.
+    /// duplicate name or assignment, an unknown palette, an image path not
+    /// spelled as gbcli finds it, an image the project doesn't have, or
+    /// `dmg` assigned to an image (the `NamedPalettes` rules, and the
+    /// file's). `line` names the line when one is at fault. A warning when
+    /// the project still has the old `assets/palette.txt`, which isn't read.
     PaletteFile,
     /// The stretched shade rule put a color two or more shades from its
     /// plain nearest shade. A warning: a `dmg` line in `assets/palettes.txt` picks
@@ -252,8 +257,11 @@ pub struct ShadeChoice {
     pub palette: Option<KnownPalette>,
 }
 
-/// One image, converted.
+/// One image, converted. On read, its tile map must agree with it
+/// (`asset::Unchecked`): a slot in every entry exactly when it has a GBC
+/// version, and a flip or a missing tile only in a sheet.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "asset::Unchecked")]
 pub struct ImageAsset {
     pub kind: ImageKind,
     pub source: String,
@@ -273,14 +281,14 @@ pub struct ImageAsset {
     /// The converted data drawn as the hardware shows it, then its unique
     /// tiles by use, most used first.
     pub preview: String,
-    /// Where each source tile went: its index in the tile data, one entry
-    /// per 8x8 tile of the image (8x16 unit of a sheet), rows top to bottom,
-    /// left to right in each. None for a sheet's fully transparent unit,
-    /// which takes no tile. The same on both machines: tiles are
-    /// deduplicated on the (DMG tile, GBC tile) pair. A tileset's result is
-    /// this map; a background's is also its tilemap.
+    /// Where each source tile went ([`TileEntry`]: its tile, its flip and
+    /// its GBC palette slot), one entry per 8x8 tile of the image (8x16
+    /// unit of a sheet), rows top to bottom, left to right in each. None
+    /// for a sheet's fully transparent unit, which takes no tile. A
+    /// tileset's result is this map; a background's is also its tilemap
+    /// and, on the GBC, its attribute map.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub tile_indices: Vec<Option<u32>>,
+    pub tile_map: Vec<Option<TileEntry>>,
     /// The GBC version, when the build's target is the GBC. Every image has
     /// a DMG version, so this is the only per-image sign of the target.
     #[serde(default, skip_serializing_if = "Option::is_none")]

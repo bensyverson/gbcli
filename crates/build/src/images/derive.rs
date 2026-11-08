@@ -10,12 +10,16 @@
 //! that fall to one shade. A sheet whose derived version needs all four
 //! shades can't be one object palette (3 plus transparent): `dmg_palette`.
 
-use gbcli_protocol::{ImageKind, ImageLimit, ImageProblem, Severity, TileAt};
+use std::path::Path;
+
+use gbcli_protocol::{BuildTarget, ImageKind, ImageLimit, ImageProblem, Severity, TileAt};
 
 use super::census::{Key, error, key, tiles_where};
+use super::find::Source;
 use super::pixels::{Pixels, Rgba, hex};
 use super::shades::{self, Shading, name};
 use super::shared::{self, and};
+use crate::project::BuildError;
 
 /// Each shade's gray in a derived version, shade 0 first: the DMG grays,
 /// a known palette, so the version's shading maps them exactly.
@@ -39,6 +43,49 @@ pub(crate) struct Derived {
 /// its own shade.
 pub(crate) fn gray_shading() -> Shading {
     shades::choose(None, &GRAYS)
+}
+
+/// Where an image's DMG version comes from.
+pub(crate) enum Version {
+    /// The image is DMG art: a DMG build's every image, and indexed art.
+    Art,
+    /// Color art under `--gbc`: derived from its colors (`derive`).
+    Derived,
+    /// Color art under `--gbc` with `name.dmg.png` beside it: that image.
+    Override(Pixels),
+}
+
+/// The DMG version of `s` (shown as `image`) for `target`: `assigned` is
+/// the palette `assets/palettes.txt` assigns it, `over` its override's
+/// pixels. An override beside indexed art is a layout error.
+pub(crate) fn version(
+    target: BuildTarget,
+    assigned: Option<&String>,
+    over: Option<Pixels>,
+    s: &Source,
+    image: &str,
+    shown: &dyn Fn(&Path) -> String,
+) -> Result<Version, BuildError> {
+    Ok(match (target, assigned, over) {
+        (BuildTarget::Dmg, _, _) | (BuildTarget::Gbc, Some(_), None) => Version::Art,
+        (BuildTarget::Gbc, Some(palette), Some(_)) => {
+            let dmg = s.dmg.as_deref().expect("an override has a path");
+            return Err(BuildError::Layout {
+                message: format!(
+                    "{} is a DMG version, but {image} is indexed art (assets/palettes.txt \
+                     assigns it `{palette}`): its shades already are its DMG version",
+                    shown(dmg)
+                ),
+                remedy: format!(
+                    "remove {} and draw {image} in its 4 shades; or drop the assignment \
+                     to make {image} color art, which the DMG version then overrides",
+                    shown(dmg)
+                ),
+            });
+        }
+        (BuildTarget::Gbc, None, None) => Version::Derived,
+        (BuildTarget::Gbc, None, Some(o)) => Version::Override(o),
+    })
 }
 
 /// The DMG version of the color image `image` (a `kind`), its colors

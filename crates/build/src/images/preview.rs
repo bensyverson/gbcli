@@ -6,7 +6,7 @@
 use gbcli_view::colors::{GAP, TRANSPARENT};
 use gbcli_view::{DEFAULT_SCALE, DMG_GRAYS, Image, LabelKey};
 
-use super::sheet::{SheetPlan, X_FLIP, Y_FLIP};
+use super::sheet::SheetPlan;
 
 /// Unique tiles per row of the by-use grid.
 const GRID_COLUMNS: u32 = 16;
@@ -129,8 +129,8 @@ pub(crate) fn sheet(source: &str, units: &[u8], plan: &SheetPlan) -> Image {
         for o in objects {
             for y in 0..16 {
                 for x in 0..8 {
-                    let sx = if o.flip & X_FLIP != 0 { 7 - x } else { x };
-                    let sy = if o.flip & Y_FLIP != 0 { 15 - y } else { y };
+                    let sx = if o.flip.x() { 7 - x } else { x };
+                    let sy = if o.flip.y() { 15 - y } else { y };
                     let i = unit_pixel(o.unit, sx, sy);
                     if i != 0 {
                         put(&mut image, fx + o.x + x, fy + o.y + y, shade(i));

@@ -67,6 +67,8 @@ sprites/hero.png = ember
 
 **Flips.** No BG flips in dual mode: the DMG's tilemap has no flip bits, so tiles that differ only by a flip are kept twice. Objects can flip on both machines, but sheets aren't deduplicated by flips today, and this stage doesn't add it.
 
+> **Correction (2026-11-07, leaf jJjaK9): "sheets aren't deduplicated by flips today" was wrong.** Sheets were already deduplicated with X, Y and XY flips of whole 8x16 units (`crates/build/src/images/sheet.rs`, since the DMG sprites leaf; the frame lists write $20/$40), as LoadHigh's spike S11 measured (a 4-frame hero sheet is 8 tiles, 16 without flips). That stays: the joint conversion's "no flips" is about backgrounds only. So each sheet unit's entry in the protocol's tile map carries its flip (`TileEntry { index, flip, palette }`), and its `index` is the unit's top tile in the image's own tile data.
+
 **The seam: protocol types and an `assets` op.**
 - The GBC conversion results are protocol types in `crates/protocol/src/images.rs`, beside `ImagesMade`: per image, the tile count, the source tile → tile index map, the palettes (RGB555), the palette of each tile or object, and the problems. `images.inc` and `images.asm` are generated from them, so the include file and the op can't disagree.
 - A new `assets` op (and CLI verb) converts a project's images, or a manifest of files and options plus a `NamedPalettes`, without building a ROM, and returns those types.

@@ -24,38 +24,36 @@ pub enum ImageArt {
     },
 }
 
-/// An image's GBC version: how it is colored, its palettes, and the
-/// palette of each tile or object.
+/// An image's GBC version: how it is colored and its palettes. The palette
+/// slot of each tile or object rides in its entry of
+/// [`crate::ImageAsset::tile_map`] (`TileEntry::palette`).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GbcImage {
     #[serde(flatten)]
     pub art: ImageArt,
     /// A background's or tileset's BG palettes, in slot order (slot 0 is
     /// palette 0 of attribute bits 0-2): packed for color art, the assigned
-    /// palette alone for indexed art. Empty for a sheet, whose slots are
-    /// in the shared [`GbcImagesMade::obj_palettes`].
+    /// palette alone (slot 0) for indexed art. Empty for a sheet, whose
+    /// slots are in the shared [`GbcImagesMade::obj_palettes`].
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub palettes: Vec<GbcPalette>,
-    /// The palette slot (0-7) of each source tile, parallel to
-    /// [`crate::ImageAsset::tile_indices`]: a background's attribute map, palette
-    /// bits only; for a sheet, the OBJ palette of each unit. None where
-    /// `tile_indices` is none.
-    pub tile_palettes: Vec<Option<u8>>,
 }
 
 /// What the GBC version of the images shares across them.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GbcImagesMade {
-    /// The 8 OBJ palettes every sheet shares, in slot order: the packed
-    /// palettes of color sheets, then one per distinct palette assigned to
-    /// an indexed sheet. Slots the program loads itself aren't listed.
+    /// The OBJ palettes every sheet shares, at most 8, in slot order: one
+    /// per distinct palette assigned to an indexed sheet, in the order of
+    /// `NamedPalettes::palettes`, then the packed palettes of color sheets.
+    /// Assigned palettes come first so their slots don't move when color
+    /// art changes. Slots the program loads itself aren't listed.
     pub obj_palettes: Vec<GbcPalette>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::images::{ImageAsset, ImageKind, ImagesMade};
+    use crate::images::{Flip, ImageAsset, ImageKind, ImagesMade, PaletteSlot, TileEntry};
     use crate::palettes::Rgb555;
 
     fn asset(kind: ImageKind) -> ImageAsset {
@@ -69,15 +67,23 @@ mod tests {
             frames: None,
             objects: None,
             preview: "build/images/bg/town.preview.png".into(),
-            tile_indices: Vec::new(),
+            tile_map: Vec::new(),
             gbc: None,
         }
+    }
+
+    fn at(index: u32, slot: Option<u8>) -> Option<TileEntry> {
+        Some(TileEntry {
+            index,
+            flip: Flip::None,
+            palette: slot.and_then(PaletteSlot::new),
+        })
     }
 
     /// A DMG build fills neither new field, so its JSON is as before the
     /// GBC types (the CLI golden `images.json.txt` pins a whole build).
     #[test]
-    fn a_dmg_image_has_no_tile_indices_or_gbc_on_the_wire() {
+    fn a_dmg_image_has_no_tile_map_or_gbc_on_the_wire() {
         let a = asset(ImageKind::Bg);
         let json = serde_json::to_string(&a).unwrap();
         assert_eq!(
@@ -100,18 +106,17 @@ mod tests {
             Rgb555::BLACK,
         ]);
         let a = ImageAsset {
-            tile_indices: vec![Some(0), Some(1)],
+            tile_map: vec![at(0, Some(0)), at(1, Some(0))],
             gbc: Some(GbcImage {
                 art: ImageArt::Color,
                 palettes: vec![grass],
-                tile_palettes: vec![Some(0), Some(0)],
             }),
             ..asset(ImageKind::Bg)
         };
         let json = serde_json::to_string(&a).unwrap();
         assert!(
             json.ends_with(
-                r#""tile_indices":[0,1],"gbc":{"art":"color","palettes":[[32767,992,480,0]],"tile_palettes":[0,0]}}"#
+                r#""tile_map":[{"index":0,"palette":0},{"index":1,"palette":0}],"gbc":{"art":"color","palettes":[[32767,992,480,0]]}}"#
             ),
             "{json}"
         );
@@ -130,13 +135,12 @@ mod tests {
         ]);
         let made = ImagesMade {
             images: vec![ImageAsset {
-                tile_indices: vec![Some(0), None],
+                tile_map: vec![at(0, Some(2)), None],
                 gbc: Some(GbcImage {
                     art: ImageArt::Indexed {
                         palette: "ember".into(),
                     },
                     palettes: Vec::new(),
-                    tile_palettes: vec![Some(2), None],
                 }),
                 ..asset(ImageKind::Sprites)
             }],
@@ -148,7 +152,7 @@ mod tests {
         let json = serde_json::to_string(&made).unwrap();
         assert!(
             json.contains(
-                r#""tile_indices":[0,null],"gbc":{"art":"indexed","palette":"ember","tile_palettes":[2,null]}}"#
+                r#""tile_map":[{"index":0,"palette":2},null],"gbc":{"art":"indexed","palette":"ember"}}"#
             ),
             "{json}"
         );
@@ -157,7 +161,7 @@ mod tests {
             "{json}"
         );
         assert_eq!(serde_json::from_str::<ImagesMade>(&json).unwrap(), made);
-        let bad = r#"{"art":"tinted","tile_palettes":[]}"#;
+        let bad = r#"{"art":"tinted"}"#;
         assert!(serde_json::from_str::<GbcImage>(bad).is_err());
     }
 
@@ -166,13 +170,16 @@ mod tests {
     fn a_tileset_is_its_tile_map() {
         let a = ImageAsset {
             source: "assets/tiles/walls.png".into(),
-            tile_indices: vec![Some(0), Some(0)],
+            tile_map: vec![at(0, None), at(0, None)],
             tiles: 1,
             ..asset(ImageKind::Tiles)
         };
         let json = serde_json::to_string(&a).unwrap();
         assert!(json.starts_with(r#"{"kind":"tiles","source":"assets/tiles/walls.png""#));
-        assert!(json.ends_with(r#""tile_indices":[0,0]}"#), "{json}");
+        assert!(
+            json.ends_with(r#""tile_map":[{"index":0},{"index":0}]}"#),
+            "{json}"
+        );
         assert_eq!(serde_json::from_str::<ImageAsset>(&json).unwrap(), a);
     }
 }

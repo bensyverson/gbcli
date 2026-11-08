@@ -77,22 +77,29 @@ flash_notes (run, step: each flash note, also a warning; a failed run's or
 step's are on its error).
 `gbcli VERB --json` prints the whole response line, as serve writes it.
 
-GBC images, in result.build.images (gbcli help images). The types are
-defined; the GBC conversion that fills them is not built yet.
-  images[]  tile_indices?: [N|null]  (each 8x8 tile, each 8x16 unit of a
+GBC images, in result.build.images (gbcli help images). A --gbc build fills
+them for indexed art; color art's GBC conversion is not built yet.
+  images[]  tile_map?: [ENTRY|null]  (each 8x8 tile, each 8x16 unit of a
             sheet, rows top to bottom; null: a transparent unit, no tile)
             gbc?: {art: "color"|"indexed", palette?: NAME,
-            palettes?: [PALETTE], tile_palettes: [0-7|null]}
+            palettes?: [PALETTE]}
             kind: "bg"|"sprites"|"tiles" (tiles: a tileset, no map)
-  gbc?: {obj_palettes: [PALETTE]}  (the 8 OBJ palettes every sheet shares)
+  gbc?: {obj_palettes: [PALETTE]}  (the OBJ palettes every sheet shares,
+            slot order: assigned palettes first, then packed ones)
   problems[].limit also: gbc_palettes, gbc_tile_colors, dmg_override_size
-Named palettes (assets/palettes.txt reads into this):
+ENTRY = {index: N, flip?: "x"|"y"|"xy", palette?: 0-7}: the tile in the
+image's own data (a sheet unit's top tile, even), how a sheet unit is
+flipped, and its GBC palette slot (on a GBC image, every entry has one).
+Named palettes (assets/palettes.txt reads into this; refused like the file:
+a name that can't be a label, a repeated name, "dmg" as a name or assigned,
+an unknown palette, an IMAGE not spelled bg/, sprites/ or tiles/ NAME.png):
   {dmg?: PALETTE, palettes: [{name: NAME, colors: PALETTE}],
    assignments?: {IMAGE: NAME}}   (IMAGE: its path under assets/)
 PALETTE = [RGB555 ×4], index 0 first. RGB555 = 0-32767, the word BCPD and
 OCPD take: red in bits 0-4, green 5-9, blue 10-14.
-  gbc   {"art":"indexed","palette":"forest","tile_palettes":[0,0,null]}
-  named {"dmg":[32767,21140,10570,0],"palettes":[{"name":"forest","colors":[32767,9009,6534,2176]}],"assignments":{"bg/town.png":"forest"}}
+  gbc   {"art":"indexed","palette":"forest"}
+  entry {"index":2,"flip":"x","palette":1}
+  named {"dmg":[32767,22197,10570,0],"palettes":[{"name":"forest","colors":[32767,9009,6534,2176]}],"assignments":{"bg/town.png":"forest"}}
 
 Examples:
   {"id":"1","session":"dx","op":"run","args":{"frames":120}}
@@ -155,7 +162,9 @@ mod tests {
     /// protocol's own types, and every wire name they add is listed.
     #[test]
     fn the_gbc_image_types_are_listed_and_their_examples_parse() {
-        use gbcli_protocol::{GbcImage, ImageArt, ImageKind, ImageLimit, NamedPalettes};
+        use gbcli_protocol::{
+            Flip, GbcImage, ImageArt, ImageKind, ImageLimit, NamedPalettes, Rgb555, TileEntry,
+        };
         let example = |tag: &str| {
             SCHEMA
                 .lines()
@@ -170,9 +179,14 @@ mod tests {
                 palette: "forest".into()
             }
         );
+        let entry: TileEntry = serde_json::from_str(example("entry ")).unwrap();
+        assert_eq!((entry.index, entry.flip), (2, Flip::X));
         let named: NamedPalettes = serde_json::from_str(example("named ")).unwrap();
         assert_eq!(named.assignments["bg/town.png"], "forest");
-        assert!(named.dmg.is_some() && named.get("forest").is_some());
+        assert!(named.get("forest").is_some());
+        // The dmg entry is the grays #ffffff #aaaaaa #555555 #000000.
+        let grays = [0xFF, 0xAA, 0x55, 0x00].map(|v| Rgb555::from_rgb888(v, v, v));
+        assert_eq!(named.dmg.map(|d| d.0), Some(grays));
         for limit in [
             ImageLimit::GbcPalettes,
             ImageLimit::GbcTileColors,
@@ -181,8 +195,8 @@ mod tests {
             assert!(SCHEMA.contains(limit.name()), "{}", limit.name());
         }
         for word in [
-            "tile_indices",
-            "tile_palettes",
+            "tile_map",
+            "\"xy\"",
             "obj_palettes",
             "\"indexed\"",
             "assignments",

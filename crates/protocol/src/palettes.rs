@@ -9,6 +9,10 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+mod rules;
+
+pub use rules::{FaultAt, PaletteFault};
+
 /// A color as the GBC stores it: five bits each of red, green and blue in
 /// one little-endian word, red in bits 0-4, green in 5-9 and blue in 10-14,
 /// bit 15 clear. It is exactly what a program writes to BCPD or OCPD, and
@@ -120,8 +124,12 @@ pub struct NamedPalette {
 /// Every palette is data for the program to load, whether or not an image
 /// uses it. An image with an assignment is **indexed art**: four-shade art
 /// whose tiles serve both machines, colored on the GBC by its palette.
+///
+/// One rule set ([`NamedPalettes::check`]) holds for the file and the
+/// wire: a struct that breaks it doesn't deserialize, and the file's
+/// parser reports the same faults at their lines.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(try_from = "rules::Unchecked")]
 pub struct NamedPalettes {
     /// The reserved `dmg` line: the colors that mean DMG shades 0-3 in the
     /// art, the first rule of the shade cascade (`ShadeRule::Declared`).
@@ -132,8 +140,9 @@ pub struct NamedPalettes {
     /// (`PALETTE_FOREST`). Names are unique.
     #[serde(default)]
     pub palettes: Vec<NamedPalette>,
-    /// Image → palette name. The image is its path under `assets/`
-    /// (`bg/town.png`); the name is one of `palettes`.
+    /// Image → palette name. The image is its path under `assets/`, spelled
+    /// as gbcli finds it (`bg/town.png`: `bg/`, `sprites/` or `tiles/`,
+    /// then the file); the name is one of `palettes`.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub assignments: BTreeMap<String, String>,
 }

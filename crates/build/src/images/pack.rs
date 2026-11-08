@@ -12,7 +12,7 @@ mod problems;
 
 use std::collections::BTreeSet;
 
-use gbcli_protocol::{GbcImage, GbcPalette, ImageArt, ImageProblem, Rgb555, TileAt};
+use gbcli_protocol::{GbcImage, GbcPalette, ImageArt, ImageProblem, PaletteSlot, Rgb555, TileAt};
 
 use super::pixels::Pixels;
 use problems::{Overflow, too_many_colors};
@@ -79,28 +79,32 @@ pub(crate) struct Source<'a> {
 /// Palettes that fit, in slot order, and the slot of every cell.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Packing {
-    /// Slot 0 first. A BG palette's colors run lightest first, the darkest
-    /// repeated to fill four; an OBJ palette's index 0 is never drawn, so it
-    /// holds white, and its colors follow lightest first.
+    /// From slot `first_slot`. A BG palette's colors run lightest first,
+    /// the darkest repeated to fill four; an OBJ palette's index 0 is never
+    /// drawn, so it holds white, and its colors follow lightest first.
     pub palettes: Vec<GbcPalette>,
+    /// The slot of `palettes[0]`: the reserved slots come first (assigned
+    /// palettes of indexed art, `GbcImagesMade::obj_palettes`).
+    pub first_slot: u8,
     /// Per source, the slot of each cell (tile or 8x16 unit, rows top to
-    /// bottom); none for an object with no opaque pixel.
-    pub cell_palettes: Vec<Vec<Option<u8>>>,
+    /// bottom); none for an object with no opaque pixel. The joint
+    /// conversion puts each in its `TileEntry`.
+    pub cell_palettes: Vec<Vec<Option<PaletteSlot>>>,
 }
 
 impl Packing {
     /// Source `source`'s GBC version as color art. A background lists its
     /// palettes; a sheet's are the shared OBJ palettes
-    /// (`GbcImagesMade::obj_palettes`, this packing's `palettes`), so it
-    /// lists only each unit's slot.
-    pub fn gbc_image(&self, source: usize, layer: Layer) -> GbcImage {
+    /// (`GbcImagesMade::obj_palettes`, this packing's `palettes` after the
+    /// reserved ones), so it lists none. Each cell's slot is in
+    /// `cell_palettes`.
+    pub fn gbc_image(&self, layer: Layer) -> GbcImage {
         GbcImage {
             art: ImageArt::Color,
             palettes: match layer {
                 Layer::Bg => self.palettes.clone(),
                 Layer::Obj => Vec::new(),
             },
-            tile_palettes: self.cell_palettes[source].clone(),
         }
     }
 }
@@ -133,7 +137,9 @@ struct Cell {
 }
 
 /// Packs the colors of `sources` into palettes of `layer`, at most 8 less
-/// `reserved`, the slots already taken (assigned palettes of indexed art).
+/// `reserved`, the slots already taken (assigned palettes of indexed art,
+/// `indexed::ObjSlots::reserved`): those are slots 0 to `reserved - 1`, so
+/// the packed palettes take the slots after them.
 /// The problems are `gbc_tile_colors` (a cell over a palette's colors,
 /// which stops the packing) or `gbc_palettes` (one per image with cells
 /// that landed past the budget).
@@ -190,11 +196,13 @@ pub(crate) fn pack(
         return Err(over.problems(sources, &cells, &first[..budget]));
     };
 
+    // The budget keeps reserved + placed within 8, so every slot is one.
+    let first_slot = reserved.min(PALETTES) as u8;
     let slot = |set: &Colors| {
         palettes
             .iter()
             .position(|p| set.is_subset(p))
-            .map(|i| i as u8)
+            .and_then(|i| PaletteSlot::new(first_slot + i as u8))
     };
     let cell_palettes = per_source
         .iter()
@@ -202,6 +210,7 @@ pub(crate) fn pack(
         .collect();
     Ok(Packing {
         palettes: palettes.iter().map(|p| palette(p, layer)).collect(),
+        first_slot,
         cell_palettes,
     })
 }

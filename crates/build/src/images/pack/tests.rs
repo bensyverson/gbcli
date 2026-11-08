@@ -2,7 +2,9 @@
 
 use std::collections::BTreeSet;
 
-use gbcli_protocol::{GbcPalette, ImageArt, ImageLimit, ImageProblem, Rgb555, Severity, TileAt};
+use gbcli_protocol::{
+    GbcPalette, ImageArt, ImageLimit, ImageProblem, PaletteSlot, Rgb555, Severity, TileAt,
+};
 
 use super::{Layer, Packing, Source, census, pack};
 use crate::images::pixels::{Pixels, Rgba};
@@ -79,7 +81,7 @@ fn assert_covers(packing: &Packing, pixels: &Pixels, layer: Layer) {
             assert_eq!(cell.is_none(), slot.is_none(), "cell {i}");
             continue;
         };
-        let GbcPalette(palette) = packing.palettes[*slot as usize];
+        let GbcPalette(palette) = packing.palettes[(slot.get() - packing.first_slot) as usize];
         assert!(colors.iter().all(|c| palette.contains(c)), "cell {i}");
     }
 }
@@ -177,7 +179,8 @@ fn the_same_input_always_gives_the_same_palettes() {
                 Rgb555::BLACK,
                 Rgb555::BLACK
             ])],
-            cell_palettes: vec![vec![Some(0); 3]],
+            first_slot: 0,
+            cell_palettes: vec![vec![slot(0); 3]],
         }
     );
     for _ in 0..10 {
@@ -249,7 +252,7 @@ fn sheets_share_the_obj_palettes() {
     );
     assert_eq!(
         packing.cell_palettes,
-        vec![vec![Some(0)], vec![Some(0), None]]
+        vec![vec![slot(0)], vec![slot(0), None]]
     );
 }
 
@@ -286,10 +289,10 @@ fn nine_three_color_objects_across_sheets_overflow_with_the_sprite_bound() {
 fn a_packing_fills_the_protocols_gbc_image() {
     let pixels = bg(&[vec![0, 1], vec![2]]);
     let packing = pack_bg(&pixels, 0).unwrap();
-    let town = packing.gbc_image(0, Layer::Bg);
+    let town = packing.gbc_image(Layer::Bg);
     assert_eq!(town.art, ImageArt::Color);
     assert_eq!(town.palettes, packing.palettes);
-    assert_eq!(town.tile_palettes, [Some(0), Some(0)]);
+    assert_eq!(packing.cell_palettes[0], [slot(0), slot(0)]);
 
     let hero = strip(&[vec![Some(c(1)), None], vec![None]], 16);
     let sources = [Source {
@@ -297,9 +300,27 @@ fn a_packing_fills_the_protocols_gbc_image() {
         pixels: &hero,
     }];
     let packing = pack(&sources, Layer::Obj, 0).unwrap();
-    let image = packing.gbc_image(0, Layer::Obj);
+    let image = packing.gbc_image(Layer::Obj);
     assert!(image.palettes.is_empty());
-    assert_eq!(image.tile_palettes, [Some(0), None]);
+    assert_eq!(packing.cell_palettes[0], [slot(0), None]);
+}
+
+fn slot(n: u8) -> Option<PaletteSlot> {
+    PaletteSlot::new(n)
+}
+
+/// Assigned palettes take the first slots (`GbcImagesMade::obj_palettes`),
+/// so a packed palette's slot counts from `reserved`.
+#[test]
+fn packed_slots_follow_the_reserved_ones() {
+    let hero = strip(&[vec![Some(c(1)), None], vec![None]], 16);
+    let sources = [Source {
+        image: "assets/sprites/hero.png",
+        pixels: &hero,
+    }];
+    let packing = pack(&sources, Layer::Obj, 2).unwrap();
+    assert_eq!(packing.palettes.len(), 1);
+    assert_eq!(packing.cell_palettes[0], [slot(2), None]);
 }
 
 /// Colors are counted as rgbgfx reads them: two that agree in each

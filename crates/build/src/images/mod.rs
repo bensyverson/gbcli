@@ -13,6 +13,7 @@ mod census;
 mod derive;
 mod emit;
 mod find;
+mod indexed;
 #[cfg_attr(
     not(test),
     expect(dead_code, reason = "the joint conversion (leaf joint) calls it")
@@ -37,6 +38,7 @@ use gbcli_protocol::{
 use crate::project::BuildError;
 use crate::toolchain::Toolchain;
 use bg::BgPlan;
+use derive::Version;
 use emit::Entry;
 use find::Source;
 use pixels::Pixels;
@@ -53,8 +55,12 @@ pub(crate) struct Converted {
     /// rgbgfx's diagnostics.
     pub diagnostics: Vec<Diagnostic>,
     /// The generated source and include directory, when every image
-    /// converted; none when a problem or rgbgfx stopped the build.
+    /// converted; none when a problem or rgbgfx stopped the build, or when
+    /// there are no images, only something to say about them.
     pub generated: Option<Generated>,
+    /// Whether the images stopped the build: a problem, or rgbgfx. Without
+    /// images there is nothing to stop, only warnings to carry.
+    pub stopped: bool,
 }
 
 pub(crate) struct Generated {
@@ -92,16 +98,6 @@ impl Plan {
     }
 }
 
-/// Where an image's DMG version comes from.
-enum Version {
-    /// The image is DMG art: a DMG build's every image, and indexed art.
-    Art,
-    /// Color art under `--gbc`: derived from its colors (`derive`).
-    Derived,
-    /// Color art under `--gbc` with `name.dmg.png` beside it: that image.
-    Override(Pixels),
-}
-
 /// Converts the project's images for `target`; `None` when it has none.
 pub(crate) fn convert(
     tools: &Toolchain,
@@ -134,25 +130,30 @@ pub(crate) fn convert(
         made: ImagesMade::default(),
         diagnostics: Vec::new(),
         generated: None,
+        stopped: true,
     };
     let palette_shown = shown(&project.join(palettes::PATH));
+    made.problems.extend(palettes::old_file(project, shown));
     let assets = project.join("assets");
     // Each image by its path under assets/, as an assignment names it.
-    let images: Vec<String> = sources
-        .iter()
-        .map(|s| {
-            let rel = s.path.strip_prefix(&assets).unwrap_or(&s.path);
-            rel.components()
-                .map(|c| c.as_os_str().to_string_lossy())
-                .collect::<Vec<_>>()
-                .join("/")
-        })
-        .collect();
+    let under_assets = |s: &Source| {
+        let rel = s.path.strip_prefix(&assets).unwrap_or(&s.path);
+        rel.components()
+            .map(|c| c.as_os_str().to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/")
+    };
+    let images: Vec<String> = sources.iter().map(under_assets).collect();
     if sources.is_empty() {
         // No images to shade, but a malformed palette file is still the
         // project's mistake to hear about.
         return match palettes::read(project, &palette_shown, &images) {
-            Ok(_) => Ok(None),
+            Ok(_) if made.problems.is_empty() => Ok(None),
+            Ok(_) => Ok(Some(Converted {
+                made,
+                stopped: false,
+                ..stopped
+            })),
             Err(p) => {
                 made.problems.push(p);
                 Ok(Some(Converted { made, ..stopped }))
@@ -175,7 +176,7 @@ pub(crate) fn convert(
     // whole project's colors before any image is planned.
     // With or without --gbc (plan question 10): `dmg` drives the cascade, the
     // named palettes are checked, and an assigned image builds as DMG art.
-    let named = match palettes::read(project, &palette_shown, &images) {
+    let named_palettes = match palettes::read(project, &palette_shown, &images) {
         Ok(named) => named.unwrap_or_default(),
         Err(p) => {
             made.problems.push(p);
@@ -185,27 +186,8 @@ pub(crate) fn convert(
     // Each image's DMG version. In a DMG build every image is DMG art.
     let mut versioned = Vec::with_capacity(all.len());
     for ((s, image, pixels, over), rel) in all.into_iter().zip(&images) {
-        let assigned = named.assignments.get(rel);
-        let version = match (target, assigned, over) {
-            (BuildTarget::Dmg, _, _) | (BuildTarget::Gbc, Some(_), None) => Version::Art,
-            (BuildTarget::Gbc, Some(palette), Some(_)) => {
-                let dmg = s.dmg.as_deref().expect("an override has a path");
-                return Err(BuildError::Layout {
-                    message: format!(
-                        "{} is a DMG version, but {image} is indexed art (assets/palettes.txt \
-                         assigns it `{palette}`): its shades already are its DMG version",
-                        shown(dmg)
-                    ),
-                    remedy: format!(
-                        "remove {} and draw {image} in its 4 shades; or drop the assignment \
-                         to make {image} color art, which the DMG version then overrides",
-                        shown(dmg)
-                    ),
-                });
-            }
-            (BuildTarget::Gbc, None, None) => Version::Derived,
-            (BuildTarget::Gbc, None, Some(o)) => Version::Override(o),
-        };
+        let assigned = named_palettes.assignments.get(rel);
+        let version = derive::version(target, assigned, over, s, &image, shown)?;
         versioned.push((s, image, pixels, version));
     }
     // One color, one shade, in every image, overrides included.
@@ -213,7 +195,7 @@ pub(crate) fn convert(
         Version::Override(o) => vec![p, o],
         _ => vec![p],
     }));
-    let shading = shades::choose(named.dmg.as_ref(), &colors);
+    let shading = shades::choose(named_palettes.dmg.as_ref(), &colors);
     made.shades = Some(shading.choice);
     // Colors shared across images are named only among DMG art: a derived
     // version's shares are scoped to its tiles and objects (plan question 2).
@@ -279,6 +261,18 @@ pub(crate) fn convert(
     }
     made.problems.extend(across);
     made.problems.extend(vram(&plans));
+    // On the GBC, indexed art and the OBJ slots its sheets' palettes take.
+    let indexed = (target == BuildTarget::Gbc).then(|| {
+        let sheets: Vec<String> = plans
+            .iter()
+            .filter(|(_, _, p)| matches!(p, Plan::Sheet(_)))
+            .map(|(s, _, _)| under_assets(s))
+            .collect();
+        let sheets: Vec<&str> = sheets.iter().map(String::as_str).collect();
+        indexed::Indexed::new(&named_palettes, &sheets)
+    });
+    made.problems
+        .extend(indexed.as_ref().and_then(|i| i.problem(&palette_shown)));
     if made.first_error().is_some() {
         return Ok(Some(Converted { made, ..stopped }));
     }
@@ -323,7 +317,10 @@ pub(crate) fn convert(
                     ok = false;
                     continue;
                 };
-                let asset = asset(s, image, p.width, p.height, p.tiles, None, None);
+                let mut asset = asset(s, image, p.width, p.height, p.tiles, None, None);
+                if let Some(i) = &indexed {
+                    i.fill_background(&under_assets(s), &d.map, &mut asset);
+                }
                 (
                     asset,
                     preview::background(image, &d.tiles, &d.map, p.width, p.height),
@@ -340,7 +337,7 @@ pub(crate) fn convert(
                 }
                 let objects = p.frames.iter().map(Vec::len).max().unwrap_or(0) as u32;
                 let frames = Some(p.frames.len() as u32);
-                let asset = asset(
+                let mut asset = asset(
                     s,
                     image,
                     p.width,
@@ -349,6 +346,9 @@ pub(crate) fn convert(
                     frames,
                     Some(objects),
                 );
+                if let Some(i) = &indexed {
+                    i.fill_sheet(&under_assets(s), p, &mut asset);
+                }
                 (asset, preview::sheet(image, &units, p))
             }
         };
@@ -401,6 +401,7 @@ pub(crate) fn convert(
     fs::write(&asm, emit::asm(&entries)).map_err(io(asm.clone()))?;
     fs::write(&inc, emit::inc(&entries)).map_err(io(inc.clone()))?;
     made.include = Some(shown(&inc));
+    made.gbc = indexed.as_ref().map(indexed::Indexed::made);
     Ok(Some(Converted {
         made,
         diagnostics,
@@ -408,6 +409,7 @@ pub(crate) fn convert(
             source: asm,
             include_dir: PathBuf::from(OUT),
         }),
+        stopped: false,
     }))
 }
 
@@ -456,7 +458,7 @@ fn asset(
         frames,
         objects,
         preview: String::new(),
-        tile_indices: Vec::new(),
+        tile_map: Vec::new(),
         gbc: None,
     }
 }

@@ -44,13 +44,16 @@ pub use equiv::{
 };
 pub use error::{ErrorBody, ErrorCode};
 pub use images::{
-    GbcImage, GbcImagesMade, ImageArt, ImageAsset, ImageKind, ImageLimit, ImageProblem, ImagesMade,
-    KnownPalette, ShadeChoice, ShadeRule, TileAt,
+    Flip, GbcImage, GbcImagesMade, ImageArt, ImageAsset, ImageKind, ImageLimit, ImageProblem,
+    ImagesMade, KnownPalette, NotPaletteSlot, PaletteSlot, ShadeChoice, ShadeRule, TileAt,
+    TileEntry,
 };
 pub use keys::{Button, KEY_GRAMMAR, KeyAction, KeyError, KeyEvent, parse_keys};
 pub use listing::{CheckpointRow, SymArgs, SymbolArea, SymbolRow};
 pub use opcode::{OpcodeArgs, OpcodeRow};
-pub use palettes::{GbcPalette, NamedPalette, NamedPalettes, NotRgb555, Rgb555};
+pub use palettes::{
+    FaultAt, GbcPalette, NamedPalette, NamedPalettes, NotRgb555, PaletteFault, Rgb555,
+};
 pub use parse::{RequestError, parse_request};
 pub use profile::{
     CpuSpeedName, CycleStats, FrameBudgetMade, FrameBudgetRow, MeasureArgs, MeasureMade,

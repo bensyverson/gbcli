@@ -180,7 +180,9 @@ pub struct OutputMade {
 pub struct BuildMade {
     /// rgbasm's version, as it printed it.
     pub rgbds: String,
-    /// The machine the ROM was built for: `--gbc` makes it `gbc`.
+    /// The machine the ROM was built for: `--gbc` makes it `gbc`. Always
+    /// written; a result from before the field reads as `dmg`.
+    #[serde(default)]
     pub target: BuildTarget,
     /// The sources assembled, in order.
     pub sources: Vec<String>,

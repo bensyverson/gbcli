@@ -119,7 +119,7 @@ pub(crate) fn asm(entries: &[Entry]) -> String {
 }
 
 fn object(o: &Object) -> String {
-    let flip = match o.flip {
+    let flip = match o.flip.oam_bits() {
         0 => "0".to_string(),
         f => format!("${f:02X}"),
     };
@@ -186,6 +186,7 @@ pub(crate) fn inc(entries: &[Entry]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gbcli_protocol::Flip;
 
     /// The symbols the generated files define: exported labels in the
     /// assembly, constants in the include.
@@ -214,6 +215,7 @@ mod tests {
             drawn: vec![vec![0; 128]],
             uses: vec![2],
             frames: vec![Vec::new(), Vec::new()],
+            units: vec![Some((0, Flip::None))],
             warnings: Vec::new(),
         };
         let entries = [

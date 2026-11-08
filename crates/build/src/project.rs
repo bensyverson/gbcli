@@ -215,7 +215,7 @@ pub fn build(tools: &Toolchain, options: &BuildOptions) -> Result<BuildMade, Bui
     if let Some(images) = images {
         run.made.diagnostics.extend(images.diagnostics);
         run.made.images = Some(images.made);
-        if images.generated.is_none() {
+        if images.stopped {
             return Err(run.failed());
         }
     }

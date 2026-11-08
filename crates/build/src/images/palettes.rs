@@ -16,7 +16,10 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
-use gbcli_protocol::{GbcPalette, ImageLimit, ImageProblem, NamedPalette, NamedPalettes, Rgb555};
+use gbcli_protocol::{
+    FaultAt, GbcPalette, ImageLimit, ImageProblem, NamedPalette, NamedPalettes, PaletteFault,
+    Rgb555, Severity,
+};
 
 use super::census::error;
 
@@ -54,11 +57,13 @@ impl Bad {
     }
 }
 
-/// A file's palettes, with the line of each assignment, for the checks
-/// that need the project's images.
+/// A file's palettes, with the line of each palette and assignment, for
+/// the shared rules' faults and the checks that need the project's images.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct Parsed {
     pub named: NamedPalettes,
+    /// Each palette's line, parallel to `named.palettes`.
+    pub palette_lines: Vec<u32>,
     /// Each assigned image's line.
     pub lines: BTreeMap<String, u32>,
 }
@@ -100,6 +105,36 @@ pub(crate) fn read(
     Ok(Some(parsed.named))
 }
 
+/// The file `assets/palettes.txt` replaced (leaf ygc9bb's), no longer read.
+const OLD_PATH: &str = "assets/palette.txt";
+
+/// A warning when the project still has the old `assets/palette.txt`, so
+/// its shades aren't silently dropped.
+pub(crate) fn old_file(project: &Path, shown: &dyn Fn(&Path) -> String) -> Option<ImageProblem> {
+    let old = project.join(OLD_PATH);
+    if !old.is_file() {
+        return None;
+    }
+    let (old, new) = (shown(&old), shown(&project.join(PATH)));
+    Some(ImageProblem {
+        severity: Severity::Warning,
+        ..error(
+            &old,
+            ImageLimit::PaletteFile,
+            0,
+            0,
+            format!(
+                "{old} is no longer read: the project's palettes, the DMG shades among them, \
+                 live in {new}"
+            ),
+            &format!(
+                "move its four colors to a `dmg: c0 c1 c2 c3` line in {new} (shade 0 first), \
+                 then delete {old} (gbcli help images)"
+            ),
+        )
+    })
+}
+
 fn problem(shown: &str, bad: Bad) -> ImageProblem {
     let at = bad.line.map_or(String::new(), |l| format!(", line {l}"));
     ImageProblem {
@@ -116,14 +151,15 @@ fn problem(shown: &str, bad: Bad) -> ImageProblem {
 }
 
 /// The palettes and assignments of a palette file's text, checked against
-/// each other (names, duplicates, `dmg`), not against the project.
+/// each other by the protocol's rules (`NamedPalettes::faults`: names,
+/// duplicates, `dmg`, image paths), not against the project. The file's
+/// own errors (a line of neither form, a color, a second `dmg` or
+/// assignment) stop at their line; of the rules' faults, the earliest
+/// line's is reported.
 pub(crate) fn parse(text: &str) -> Result<Parsed, Bad> {
     let text = text.strip_prefix('\u{FEFF}').unwrap_or(text);
     let mut parsed = Parsed::default();
-    // Each palette's line, `dmg`'s included, for duplicates and messages.
-    let mut defined: BTreeMap<String, u32> = BTreeMap::new();
-    // Each assignment's palette name, checked once every palette is read.
-    let mut wanted: Vec<(String, u32)> = Vec::new();
+    let mut dmg_line: Option<u32> = None;
     for (i, raw) in text.lines().enumerate() {
         let line = i as u32 + 1;
         let words = uncommented(raw);
@@ -145,25 +181,24 @@ pub(crate) fn parse(text: &str) -> Result<Parsed, Bad> {
                 .named
                 .assignments
                 .insert(image.to_string(), name.to_string());
-            wanted.push((name.to_string(), line));
         } else if let Some((name, colors)) = joined.split_once(':') {
             let name = name.trim();
-            check_name(name, line)?;
-            if let Some(first) = defined.get(name) {
-                return Err(Bad::at(
-                    line,
-                    format!("{name} is defined again (first on line {first})"),
-                ));
-            }
-            defined.insert(name.to_string(), line);
             let colors = palette(name, colors, line)?;
             if name == DMG {
+                if let Some(first) = dmg_line {
+                    return Err(Bad::at(
+                        line,
+                        format!("dmg is defined again (first on line {first})"),
+                    ));
+                }
+                dmg_line = Some(line);
                 parsed.named.dmg = Some(colors);
             } else {
                 parsed.named.palettes.push(NamedPalette {
                     name: name.to_string(),
                     colors,
                 });
+                parsed.palette_lines.push(line);
             }
         } else {
             return Err(Bad::at(
@@ -176,33 +211,43 @@ pub(crate) fn parse(text: &str) -> Result<Parsed, Bad> {
             ));
         }
     }
-    for (name, line) in wanted {
-        if name == DMG {
-            return Err(Bad::at(
-                line,
-                "dmg is the DMG's shades, not a GBC palette, so no image can be assigned it; \
-                 name a palette of its own"
-                    .into(),
-            ));
-        }
-        if !defined.contains_key(&name) {
-            let known: Vec<&str> = parsed
-                .named
-                .palettes
-                .iter()
-                .map(|p| p.name.as_str())
-                .collect();
-            let known = match known.len() {
-                0 => "the file defines none".to_string(),
-                _ => format!("the file defines {}", known.join(", ")),
-            };
-            return Err(Bad::at(
-                line,
-                format!("{name} is no palette in this file ({known})"),
-            ));
+    let faults = parsed.named.faults();
+    match faults.iter().min_by_key(|f| parsed.line_of(f)) {
+        Some(fault) => Err(Bad::at(parsed.line_of(fault), parsed.say(fault))),
+        None => Ok(parsed),
+    }
+}
+
+impl Parsed {
+    fn line_of(&self, fault: &PaletteFault) -> u32 {
+        match fault.at() {
+            FaultAt::Palette(i) => self.palette_lines[i],
+            FaultAt::Assignment(image) => self.lines[image],
         }
     }
-    Ok(parsed)
+
+    /// The rules' message, with what only the file can add: the line a
+    /// name was first defined on, or the names the file defines.
+    fn say(&self, fault: &PaletteFault) -> String {
+        match fault {
+            PaletteFault::Duplicate { first, .. } => {
+                format!("{fault} (first on line {})", self.palette_lines[*first])
+            }
+            PaletteFault::UnknownPalette { .. } => {
+                let known: Vec<&str> = self
+                    .named
+                    .palettes
+                    .iter()
+                    .map(|p| p.name.as_str())
+                    .collect();
+                match known.len() {
+                    0 => format!("{fault} (the file defines none)"),
+                    _ => format!("{fault} (the file defines {})", known.join(", ")),
+                }
+            }
+            _ => fault.to_string(),
+        }
+    }
 }
 
 /// The words of a line before its comment: `#` alone as a word (it was
@@ -211,26 +256,8 @@ fn uncommented(raw: &str) -> Vec<&str> {
     raw.split_whitespace().take_while(|w| *w != "#").collect()
 }
 
-/// A palette's name: a lowercase letter, then lowercase letters, digits
-/// and `_`, so it can become a label (`PaletteForest`, `PALETTE_FOREST`).
-fn check_name(name: &str, line: u32) -> Result<(), Bad> {
-    let mut chars = name.chars();
-    let ok = chars.next().is_some_and(|c| c.is_ascii_lowercase())
-        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_');
-    if ok {
-        Ok(())
-    } else {
-        Err(Bad::at(
-            line,
-            format!(
-                "{name:?} can't name a palette: a lowercase letter, then lowercase letters, \
-                 digits or _"
-            ),
-        ))
-    }
-}
-
-/// An assignment's two sides, as written.
+/// An assignment's two sides, as written: one word each. What they name is
+/// the shared rules' to check.
 fn assignment(image: &str, name: &str, line: u32) -> Result<(), Bad> {
     if image.is_empty() || name.is_empty() || name.contains(char::is_whitespace) {
         return Err(Bad::at(
@@ -241,7 +268,7 @@ fn assignment(image: &str, name: &str, line: u32) -> Result<(), Bad> {
             ),
         ));
     }
-    check_name(name, line)
+    Ok(())
 }
 
 /// The four colors after `name:`.
@@ -308,9 +335,12 @@ pub(crate) fn color(word: &str) -> Option<Rgb555> {
     Some(Rgb555::from_rgb888(r, g, b))
 }
 
-/// Every assignment names one of the project's images.
+/// Every assignment names one of the project's images; the first that
+/// doesn't, in file order, is named.
 pub(crate) fn check_images(parsed: &Parsed, images: &[String]) -> Result<(), Bad> {
-    for (image, &line) in &parsed.lines {
+    let mut by_line: Vec<(&String, u32)> = parsed.lines.iter().map(|(i, &l)| (i, l)).collect();
+    by_line.sort_by_key(|&(_, line)| line);
+    for (image, line) in by_line {
         if !images.iter().any(|i| i == image) {
             let read = if images.is_empty() {
                 "the project has no images".to_string()
@@ -429,9 +459,20 @@ mod tests {
             (
                 "a: #fff #8c4 #363 #021\n\nbg/t.png = b\n",
                 3,
-                "b is no palette in this file (the file defines a)",
+                "assigned b, which is no palette defined here (the file defines a)",
             ),
             ("bg/t.png = b\n", 1, "the file defines none"),
+            (
+                "a: #fff #8c4 #363 #021\n../t.png = a\n",
+                2,
+                "isn't an image's path under assets/",
+            ),
+            (
+                "a: #fff #8c4 #363 #021\nbg\\t.png = a\n",
+                2,
+                "isn't an image's path under assets/",
+            ),
+            ("a: #fff #8c4 #363 #021\nbg/t.png = A\n", 2, "assigned A"),
             (
                 &format!("{GRAYS}bg/t.png = dmg\n"),
                 2,
@@ -512,5 +553,24 @@ mod tests {
         assert!(bad.message.contains("bg/sky.png"), "{}", bad.message);
         let bad = check_images(&parsed, &[]).unwrap_err();
         assert!(bad.message.contains("has no images"), "{}", bad.message);
+    }
+
+    /// Two missing images: the earlier line, not the earlier name.
+    #[test]
+    fn missing_images_are_named_in_file_order() {
+        let parsed = parse("a: #fff #8c4 #363 #021\nbg/z.png = a\nbg/b.png = a\n").unwrap();
+        let bad = check_images(&parsed, &["bg/sky.png".into()]).unwrap_err();
+        assert_eq!(bad.line, Some(2), "{}", bad.message);
+    }
+
+    /// Several faults the shared rules find: the earliest line is named,
+    /// as the file's own errors are, and what parses passes the rules.
+    #[test]
+    fn the_shared_rules_name_the_earliest_line() {
+        let text = "a: #fff #8c4 #363 #021\nbg/z.png = dmg\nB: #fff #8c4 #363 #021\n";
+        let bad = parse(text).unwrap_err();
+        assert_eq!(bad.line, Some(2), "{}", bad.message);
+        let parsed = parse(&format!("{GRAYS}a: #fff #8c4 #363 #021\nbg/z.png = a\n")).unwrap();
+        assert_eq!(parsed.named.check(), Ok(()));
     }
 }

@@ -15,6 +15,7 @@ fn help_works_with_no_preconditions_and_leaves_no_trace() {
         &["help", "time"],
         &["help", "rgbds"],
         &["build", "--help"],
+        &["version", "--help"],
     ] {
         let run = p.gbcli(args);
         assert_eq!(run.code, 0, "{args:?}: {}", run.stderr);
@@ -63,4 +64,28 @@ fn version_names_the_core() {
     assert!(run.stdout.contains("(SameBoy "), "{}", run.stdout);
     let flag = Project::new("version-flag").gbcli(&["--version"]);
     assert_eq!(flag.stdout, run.stdout);
+}
+
+/// `version` is the `version` op: `--json` is the response line `serve`
+/// writes, and the text line is drawn from the same answer, unchanged for
+/// the scripts that parse `gbcli --version`.
+#[test]
+fn version_json_is_the_ops_answer_and_the_text_is_drawn_from_it() {
+    let p = Project::new("version-json");
+    let json = p.gbcli(&["version", "--json"]);
+    assert_eq!(json.code, 0, "{}", json.stderr);
+    let response: gbcli_protocol::Response = serde_json::from_str(&json.stdout).unwrap();
+    let v = response.result().unwrap().version.clone().expect("version");
+    assert_eq!(v.protocol, gbcli_protocol::PROTOCOL_VERSION);
+    let text = p.gbcli(&["--version"]);
+    assert_eq!(
+        text.stdout,
+        format!(
+            "gbcli {} (SameBoy {}+patches.{})\n",
+            v.gbcli,
+            &v.sameboy[..7],
+            &v.patch_set[..8]
+        )
+    );
+    assert!(!p.path(".gbcli").exists(), "version made a bundle");
 }

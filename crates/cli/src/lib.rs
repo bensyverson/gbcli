@@ -78,7 +78,6 @@ pub fn run(args: Vec<OsString>, env: &Env, io: Io) -> u8 {
         Command::Topic(topic) => io.out.write_all(topic.text().as_bytes()),
         Command::Recipes => io.out.write_all(help::RECIPES.as_bytes()),
         Command::Schema => io.out.write_all(help::SCHEMA.as_bytes()),
-        Command::Version => writeln!(io.out, "{}", version()),
         Command::Serve(target) => return serve_cmd::serve(&target, env, io),
         Command::Batch { target, file } => return batch::batch(&target, &file, env, io),
         Command::Request { target, op } => return exec::request(&target, *op, env, io),
@@ -89,14 +88,4 @@ pub fn run(args: Vec<OsString>, env: &Env, io: Io) -> u8 {
         // A closed pipe or full disk on stdout: nothing more to say there.
         Err(_) => 5,
     }
-}
-
-/// gbcli's version and the core it was built with.
-pub fn version() -> String {
-    format!(
-        "gbcli {} (SameBoy {}+patches.{})",
-        env!("CARGO_PKG_VERSION"),
-        &sameboy_sys::SAMEBOY_COMMIT[..7],
-        &sameboy_sys::PATCH_SET[..8],
-    )
 }

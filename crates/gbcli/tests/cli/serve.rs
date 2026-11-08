@@ -172,3 +172,21 @@ fn two_processes_alternate_on_one_head_and_a_stale_rev_is_refused() {
 
     let _ = fs::remove_dir_all(&dir);
 }
+
+/// A client that drives `serve` (LoadHigh's `ldh doctor`) checks the
+/// protocol it speaks from the wire, not from `gbcli --version`'s text.
+#[test]
+fn a_client_reads_the_protocol_version_over_the_wire() {
+    let dir = project("version");
+    create_session(&dir);
+    let mut server = Server::start(&dir);
+    let response = server.request(r#"{"id":"v","op":"version"}"#);
+    let version = response
+        .result()
+        .and_then(|r| r.version.as_ref())
+        .unwrap_or_else(|| panic!("no version: {response:?}"));
+    assert_eq!(version.protocol, gbcli_protocol::PROTOCOL_VERSION);
+    assert_eq!(version.gbcli, env!("CARGO_PKG_VERSION"));
+    assert_eq!(response.rev, None, "a version names no session");
+    let _ = fs::remove_dir_all(&dir);
+}

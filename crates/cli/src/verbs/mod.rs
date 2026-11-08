@@ -9,6 +9,7 @@ mod table_build;
 mod table_opcode;
 mod table_read;
 mod table_song;
+mod table_version;
 
 pub use flags::{CHANGE, OUTPUT, SESSION, SHOT_OPTIONS};
 pub use table::VERBS;

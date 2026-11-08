@@ -11,6 +11,7 @@ use super::table_read::{
     CHECKPOINTS_VERB, EQUIV_VERB, MEASURE_VERB, SHOT_VERB, SYM_VERB, VIEW_VERB,
 };
 use super::table_song::SONG_VERB;
+use super::table_version::VERSION_VERB;
 use super::{Arity, Class, Verb, VerbSpec};
 
 const NONE: Arity = Arity {
@@ -428,16 +429,5 @@ pub const VERBS: &[VerbSpec] = &[
     },
     DOCTOR_VERB,
     OPCODE_VERB,
-    VerbSpec {
-        verb: Verb::Version,
-        name: "version",
-        class: Class::Help,
-        summary: "gbcli's and the core's versions",
-        usage: "",
-        arity: NONE,
-        flags: &[],
-        groups: &[],
-        about: "Prints gbcli's version and the SameBoy commit and patch set it was built with.",
-        example: ("gbcli version", "prints the versions"),
-    },
+    VERSION_VERB,
 ];

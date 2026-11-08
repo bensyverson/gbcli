@@ -11,6 +11,9 @@ id is yours and is echoed back. session and as default to serve's --session
 and --as. A mutation that passes rev is refused (rev_mismatch) if the session
 moved on. Unknown and repeated fields are refused, naming the nearest field.
 Fields marked ? may be left out; an op with no required field may omit args.
+This schema's protocol version is 1, which the version op reports. It goes up
+on a breaking change to these shapes (a new value of a response's enum among
+them), not for a new op or a new optional request field.
 
 OP      ARGS
 run     at? from?: "boot"|"power-on"  since?: "boot"|"power-on"|CHECKPOINT
@@ -54,8 +57,10 @@ build   dir?: PATH  src?: [PATH]  include?: [PATH]  out?: PATH
 doctor  —
 new     dir: PATH
 opcode  query: TEXT  ("$20", "$CB37", "jr nz, .loop", "ld a, [hl+]")
-        (build, doctor, new and opcode need no session; paths are relative
-        to the server's working directory)
+version —   (result.version: {gbcli: "0.1.0", protocol: N, sameboy: COMMIT,
+        patch_set: HASH}; check protocol before relying on the rest)
+        (build, doctor, new, opcode and version need no session; paths are
+        relative to the server's working directory)
 power_cycle  sav?: PATH  rtc_advance?: "45s"|"30m"|"12h"|"7d"
         (a new head at power-on, keeping the cart's battery RAM and clock;
         rtc_advance at most "1024d" on MBC3, "3584d" on TPP1, "65536d" on HuC3;
@@ -72,7 +77,7 @@ result holds only the fields the op fills: stop, reads, shot, measure, profile,
 frame_budget, raster, equiv, view, symbols,
 checkpoints, keys_unapplied, writes, checkpoint, restored, breakpoint, watch,
 deleted, registers, ppu, sessions, events, gaps, pruned, kept, busy, removed,
-build, doctor, created, song, song_problem, opcodes, power_cycle, sav,
+build, doctor, created, song, song_problem, opcodes, version, power_cycle, sav,
 flash_notes (run, step: each flash note, also a warning; a failed run's or
 step's are on its error).
 `gbcli VERB --json` prints the whole response line, as serve writes it.
@@ -138,6 +143,7 @@ Examples:
   {"id":"30","op":"opcode","args":{"query":"jr nz, .loop"}}
   {"id":"31","op":"power_cycle","args":{"sav":"game.sav","rtc_advance":"8h"}}
   {"id":"32","op":"sav","args":{"path":"game.sav"}}
+  {"id":"33","op":"version"}
 "#;
 
 #[cfg(test)]
@@ -159,7 +165,25 @@ mod tests {
         }
         ops.sort();
         ops.dedup();
-        assert_eq!(ops.len(), 28, "one example per op: {ops:?}");
+        assert_eq!(ops.len(), 29, "one example per op: {ops:?}");
+    }
+
+    /// A client checks the protocol version before relying on the rest.
+    #[test]
+    fn the_version_op_and_its_result_are_listed_with_the_protocol_version() {
+        let line = SCHEMA
+            .lines()
+            .find(|l| l.starts_with("version "))
+            .expect("a version row");
+        assert!(line.contains("protocol"), "{line}");
+        assert!(SCHEMA.contains("opcodes, version,"), "the result field");
+        assert!(
+            SCHEMA.contains(&format!(
+                "protocol version is {}",
+                gbcli_protocol::PROTOCOL_VERSION
+            )),
+            "the version this schema describes"
+        );
     }
 
     /// The GBC image types (leaf ZA5Z7c): their examples parse into the

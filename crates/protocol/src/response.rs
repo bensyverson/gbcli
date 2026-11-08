@@ -20,6 +20,7 @@ use crate::shot::{FilmstripMade, ShotMade};
 use crate::song::{SongMade, SongProblem};
 use crate::stop::StopRecord;
 use crate::toolchain::{BuildMade, DoctorMade, NewMade};
+use crate::version::VersionMade;
 use crate::video::ViewMade;
 use crate::views::{PpuView, RegistersView};
 
@@ -232,6 +233,9 @@ pub struct ResultBody {
     /// a warning.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub flash_notes: Option<Vec<FlashNoteRow>>,
+    /// `version`: gbcli's version and the protocol's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<VersionMade>,
 }
 
 /// One `--read` result: an expression's `value`, or for a whole OAM entry

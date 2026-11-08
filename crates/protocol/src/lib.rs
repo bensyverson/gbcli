@@ -25,6 +25,7 @@ mod song;
 mod stop;
 mod strict;
 mod toolchain;
+mod version;
 mod video;
 mod views;
 
@@ -84,6 +85,7 @@ pub use toolchain::{
     DoctorMade, NewArgs, NewMade, OutputKind, OutputMade, PlacedSection, Severity, SongBuilt,
     SourceLine, Tool,
 };
+pub use version::{PROTOCOL_VERSION, VersionMade};
 pub use video::{
     AddressingView, ImageMade, ImageOut, MapAreaView, MapSel, OamView, TileView, VideoData,
     ViewArgs, ViewKind, ViewMade,

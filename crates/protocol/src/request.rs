@@ -78,6 +78,9 @@ pub enum Op {
     /// the battery written out as a `.sav`.
     PowerCycle(PowerCycleArgs),
     Sav(SavArgs),
+    /// gbcli's version and the protocol's ([`crate::PROTOCOL_VERSION`]);
+    /// needs no session.
+    Version,
 }
 
 impl Op {
@@ -112,6 +115,7 @@ impl Op {
             Op::Opcode(_) => "opcode",
             Op::PowerCycle(_) => "power_cycle",
             Op::Sav(_) => "sav",
+            Op::Version => "version",
         }
     }
 
@@ -132,11 +136,11 @@ impl Op {
     }
 
     /// Whether answering it needs the project's bundle: every op but
-    /// `doctor`, `new`, `opcode` and a `build` that restores nothing,
-    /// which a client with no `.gbcli/` yet can still send.
+    /// `doctor`, `new`, `opcode`, `version` and a `build` that restores
+    /// nothing, which a client with no `.gbcli/` yet can still send.
     pub fn needs_bundle(&self) -> bool {
         match self {
-            Op::Doctor | Op::New(_) | Op::Opcode(_) => false,
+            Op::Doctor | Op::New(_) | Op::Opcode(_) | Op::Version => false,
             Op::Build(args) => args.restore.is_some(),
             _ => true,
         }

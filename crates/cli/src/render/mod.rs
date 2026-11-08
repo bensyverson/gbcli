@@ -11,6 +11,7 @@ mod row;
 mod song;
 mod stop;
 mod toolchain;
+mod version;
 mod video;
 
 use std::io::Write;
@@ -164,6 +165,7 @@ pub fn rows(r: &ResultBody) -> String {
     out += &toolchain::rows(r);
     out += &song::rows(r);
     out += &opcode::rows(r);
+    out += &version::rows(r);
     out += &battery::rows(r);
     if let Some(cp) = &r.checkpoint {
         out += &Row::new("checkpoint")

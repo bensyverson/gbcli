@@ -26,7 +26,6 @@ pub enum Command {
     Topic(Topic),
     Recipes,
     Schema,
-    Version,
     Serve(Target),
     Batch { target: Target, file: String },
     // Boxed: an Op is several hundred bytes and the other commands are small.
@@ -83,7 +82,7 @@ pub fn build(inv: Invocation, env: &Env) -> Result<Command, Usage> {
         Verb::Help => return help(inv.positionals.first().map(String::as_str)),
         Verb::Recipes => return Ok(Command::Recipes),
         Verb::Schema => return Ok(Command::Schema),
-        Verb::Version => return Ok(Command::Version),
+        Verb::Version => return Ok(crate::rgbds::version(&inv)),
         Verb::Doctor => return Ok(crate::rgbds::doctor(&inv)),
         Verb::Opcode => return Ok(crate::rgbds::opcode(&inv)),
         Verb::New => return Ok(crate::rgbds::new(&inv)),

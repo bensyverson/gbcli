@@ -1,5 +1,5 @@
-//! `doctor`, `new`, `build` and `opcode`: argv to the protocol's ops,
-//! which the server answers (design §12), so `serve` and `batch` build
+//! `doctor`, `new`, `build`, `opcode` and `version`: argv to the protocol's
+//! ops, which the server answers (design §12), so `serve` and `batch` build
 //! exactly as the CLI does. Only what argv alone can say is checked here.
 
 use gbcli_protocol::{BuildArgs, BuildTarget, NewArgs, Op, OpcodeArgs};
@@ -59,6 +59,12 @@ pub fn doctor(inv: &Invocation) -> Command {
 pub fn opcode(inv: &Invocation) -> Command {
     let query = inv.positionals.join(" ");
     request(only_json(inv), Op::Opcode(OpcodeArgs { query }))
+}
+
+/// `version` (and `--version`): the op, so the text line and a `serve`
+/// client's answer come from one place.
+pub fn version(inv: &Invocation) -> Command {
+    request(only_json(inv), Op::Version)
 }
 
 /// A verb with `--json` as its only flag sends no session or actor.

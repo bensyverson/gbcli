@@ -15,6 +15,7 @@ mod opcode;
 mod reads;
 mod run;
 mod shot;
+mod version;
 mod view;
 mod writes;
 
@@ -249,7 +250,8 @@ impl Handler {
             | Op::Build(_)
             | Op::Doctor
             | Op::New(_)
-            | Op::Opcode(_) => Err(Failure::new(ErrorBody::new(
+            | Op::Opcode(_)
+            | Op::Version => Err(Failure::new(ErrorBody::new(
                 ErrorCode::BadRequest,
                 "that op doesn't name a session",
                 ErrorCode::BadRequest.default_remedy(),

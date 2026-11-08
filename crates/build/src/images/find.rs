@@ -145,40 +145,87 @@ pub(crate) fn collisions(
     Ok(())
 }
 
+/// What defines a symbol, for `palette_collision`'s message.
+enum Owner<'a> {
+    Image(&'a Source),
+    Palette(&'a str),
+    /// A sheet's copy of a named palette (`emit::swap_symbols`).
+    Swap(&'a Source, &'a str),
+}
+
 /// The layout error when a palette of `named` (in the file shown as
-/// `file`) would define a symbol an image of `sources` defines: their
-/// labels come from different names, so only together can they collide.
+/// `file`), or a sheet's copy of one, would define a symbol an image of
+/// `sources`, another palette or another copy defines: their labels come
+/// from different names, so only together can they collide. A sheet's
+/// `<Label>Frame<n>` counts too, for any `n`, since frames can be added.
 pub(crate) fn palette_collision(
     sources: &[Source],
     named: &NamedPalettes,
     file: &str,
     shown: &dyn Fn(&Path) -> String,
 ) -> Result<(), BuildError> {
-    let mut by_symbol: BTreeMap<String, &Source> = BTreeMap::new();
+    let say = |owner: &Owner| match owner {
+        Owner::Image(s) => shown(&s.path),
+        Owner::Palette(name) => format!("the palette `{name}` in {file}"),
+        Owner::Swap(s, name) => format!(
+            "{}'s copy of the palette `{name}` in {file}",
+            shown(&s.path)
+        ),
+    };
+    let mut by_symbol: BTreeMap<String, Owner> = BTreeMap::new();
     for s in sources {
         for symbol in emit::symbols(s.kind, &s.label, &s.constant) {
-            by_symbol.insert(symbol, s);
+            by_symbol.insert(symbol, Owner::Image(s));
         }
     }
-    for p in &named.palettes {
-        for symbol in emit::palette_symbols(&p.name) {
-            if let Some(s) = by_symbol.get(&symbol) {
-                return Err(BuildError::Layout {
-                    message: format!(
-                        "{} and the palette `{}` in {file} would both define `{symbol}` in \
-                         the program",
-                        shown(&s.path),
-                        p.name
-                    ),
-                    remedy: "rename the image or the palette; a palette `forest` is \
-                             PaletteForest and PALETTE_FOREST, an image `forest.png` is \
-                             ForestTiles and FOREST_TILES"
-                        .into(),
-                });
-            }
+    let sheets: Vec<&Source> = sources
+        .iter()
+        .filter(|s| s.kind == ImageKind::Sprites)
+        .collect();
+    let palettes = named.palettes.iter().flat_map(|p| {
+        emit::palette_symbols(&p.name)
+            .into_iter()
+            .map(|symbol| (symbol, Owner::Palette(&p.name)))
+    });
+    let swaps = sheets.iter().flat_map(|&s| {
+        named.palettes.iter().flat_map(move |p| {
+            emit::swap_symbols(&s.label, &p.name)
+                .into_iter()
+                .map(move |symbol| (symbol, Owner::Swap(s, &p.name)))
+        })
+    });
+    for (symbol, owner) in palettes.chain(swaps) {
+        let other = match by_symbol.get(&symbol) {
+            Some(other) => Some(say(other)),
+            None => frame_of(&symbol, &sheets).map(|s| format!("{}'s frames", shown(&s.path))),
+        };
+        if let Some(other) = other {
+            return Err(BuildError::Layout {
+                message: format!(
+                    "{other} and {} would both define `{symbol}` in the program",
+                    say(&owner)
+                ),
+                remedy: "rename the image or the palette; a palette `forest` is PaletteForest \
+                         and PALETTE_FOREST, a sheet `hero.png`'s copy of it \
+                         HeroPaletteForest, an image `forest.png` ForestTiles and FOREST_TILES"
+                    .into(),
+            });
         }
+        by_symbol.insert(symbol, owner);
     }
     Ok(())
+}
+
+/// The sheet of `sheets` whose frame label `symbol` would be:
+/// `<Label>Frame<n>`, `n` as the frame lists write it.
+fn frame_of<'a>(symbol: &str, sheets: &[&'a Source]) -> Option<&'a Source> {
+    sheets.iter().copied().find(|s| {
+        symbol
+            .strip_prefix(s.label.as_str())
+            .and_then(|rest| rest.strip_prefix("Frame"))
+            .and_then(|n| n.parse::<usize>().ok().map(|v| v.to_string() == n))
+            .unwrap_or(false)
+    })
 }
 
 /// The image at `path`, of `kind`, named after its file.

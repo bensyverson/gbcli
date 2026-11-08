@@ -13,6 +13,15 @@ pub(crate) struct Pixels {
     pub rgba: Vec<Rgba>,
 }
 
+/// Under `--gbc`, the color image beside the DMG version a check reads:
+/// its name in messages, since a limit counted on joint tiles is the
+/// color image's to meet, and its pixels.
+#[derive(Clone, Copy)]
+pub(crate) struct Color<'a> {
+    pub image: &'a str,
+    pub pixels: &'a Pixels,
+}
+
 impl Pixels {
     pub fn at(&self, x: u32, y: u32) -> Rgba {
         self.rgba[(y * self.width + x) as usize]

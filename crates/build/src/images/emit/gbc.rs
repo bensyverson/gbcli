@@ -8,8 +8,9 @@
 
 use std::fmt::Write;
 
-use gbcli_protocol::{GbcPalette, ImageArt, ImageAsset, ImageKind};
+use gbcli_protocol::{GbcPalette, ImageArt, ImageAsset, ImageKind, NamedPalette};
 
+use super::super::indexed::by_obp;
 use super::{Entry, Shared};
 
 /// An image's GBC version, as the generated files name it.
@@ -86,8 +87,40 @@ pub(super) fn palette_names(name: &str) -> (String, String) {
     )
 }
 
-/// The image's GBC section, if it has a GBC version.
-pub(super) fn image(out: &mut String, e: &Entry) {
+/// The label of the named palette `name` reordered for the sheet labeled
+/// `sheet`: `hero` and `ice` are `HeroPaletteIce`.
+pub(super) fn swap_label(sheet: &str, name: &str) -> String {
+    format!("{sheet}{}", palette_names(name).0)
+}
+
+/// An indexed sheet's GBC section: each of the `named` palettes reordered
+/// by its OBP, since the GBC has no OBP and its tiles hold OBP's indices,
+/// not shades (`indexed::by_obp`, as its own slot is).
+fn swaps(
+    out: &mut String,
+    source: &str,
+    label: &str,
+    constant: &str,
+    obp: u8,
+    named: &[NamedPalette],
+) {
+    let _ = write!(
+        out,
+        "\nSECTION \"image {label} GBC\", ROMX\n\n\
+         ; {source} on the GBC: its tiles are {label}Tiles (indexed art), and its OBJ\n\
+         ; palette, in ObjPalettesGbc, is its assigned palette reordered by {constant}_OBP.\n\
+         ; Each palette of assets/palettes.txt, reordered alike, to load into that slot\n\
+         ; instead (RGB555, 8 bytes each).\n"
+    );
+    for p in named {
+        let swap = swap_label(label, &p.name);
+        let _ = write!(out, "{swap}::\n{}{swap}End::\n", dw(&by_obp(p.colors, obp)));
+    }
+}
+
+/// The image's GBC section, if it has a GBC version; an indexed sheet's
+/// holds its swap palettes, from `named`.
+pub(super) fn image(out: &mut String, e: &Entry, named: &[NamedPalette]) {
     match e {
         Entry::Bg {
             source,
@@ -149,6 +182,14 @@ pub(super) fn image(out: &mut String, e: &Entry) {
             }
             let _ = writeln!(out, "{label}TilesGbcEnd::");
         }
+        Entry::Sheet {
+            source,
+            label,
+            constant,
+            plan,
+            gbc: Some(_),
+            ..
+        } => swaps(out, source, label, constant, plan.obp, named),
         Entry::Tiles {
             source,
             label,

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use gbcli_protocol::{ImageKind, ImageLimit, ImageProblem, TileAt};
 
 use super::census::{self, Key, error, gbc_word, key};
-use super::pixels::{Pixels, Rgba, hex};
+use super::pixels::{Color, Pixels, Rgba, hex};
 use super::shades::Shading;
 use super::shared;
 
@@ -50,13 +50,13 @@ pub(crate) struct BgPlan {
 /// `shading` is the project's (`shades::choose`). `color` is the color
 /// image whose DMG version `pixels` is, under `--gbc`: tiles are then one
 /// only when they match in both (plan question 1), never by a flip, since
-/// the DMG's tilemap has none.
+/// the DMG's tilemap has none; the limits on those joint tiles name it.
 pub(crate) fn check(
     image: &str,
     kind: ImageKind,
     pixels: &Pixels,
     shading: &Shading,
-    color: Option<&Pixels>,
+    color: Option<Color>,
 ) -> Result<BgPlan, Vec<ImageProblem>> {
     let tileset = kind == ImageKind::Tiles;
     if let Some(p) = census::size(image, pixels, 8) {
@@ -116,7 +116,10 @@ pub(crate) fn check(
                 .map(|(x, y)| shade[&key(pixels.at(x, y))])
                 .collect();
             let gbc = color.map_or_else(Vec::new, |c| {
-                (0..64).map(at).map(|(x, y)| gbc_word(c.at(x, y))).collect()
+                (0..64)
+                    .map(at)
+                    .map(|(x, y)| gbc_word(c.pixels.at(x, y)))
+                    .collect()
             });
             let tile = (dmg, gbc);
             let next = number.len();
@@ -136,19 +139,28 @@ pub(crate) fn check(
             .filter(|&(_, n)| n == 1)
             .map(|(at, _)| at)
             .collect();
+        // Joint tiles are the color image's: its DMG version may need one.
+        let (named, joint, alike) = match color {
+            Some(c) => (
+                c.image,
+                ", counting tiles alike on the DMG but distinct in color as two",
+                " in color too",
+            ),
+            None => (image, "", ""),
+        };
         let p = error(
-            image,
+            named,
             ImageLimit::BgTilesMap,
             unique,
             MAP_TILES,
             format!(
-                "{image} needs {unique} unique tiles; one map addresses {MAP_TILES}. {} of them \
-                 are used once (listed)",
+                "{named} needs {unique} unique tiles{joint}; one map addresses {MAP_TILES}. {} \
+                 of them are used once (listed)",
                 once.len()
             ),
             &format!(
-                "redraw the tiles used once to match others, simplify detail, or split the \
-                 image into two {}",
+                "redraw the tiles used once to match others{alike}, simplify detail, or split \
+                 the image into two {}",
                 if tileset { "tilesets" } else { "backgrounds" }
             ),
         );
@@ -195,9 +207,9 @@ pub(crate) fn check(
     }
     // Color art's GBC section (`emit::gbc`): its own tiles, the attribute
     // bytes, and up to 8 palettes of 8 bytes, before packing says how many.
-    if color.is_some()
+    if let Some(c) = color
         && let Some(p) = census::bank(
-            image,
+            c.image,
             gbc_rom,
             &gbc_what,
             &remedy(census::BANK_BYTES - unique * 16 - 8 * 8),
@@ -255,8 +267,12 @@ mod tests {
         let plan =
             check("town.png", ImageKind::Bg, &pixels, &shading, None).expect("fits the DMG bank");
         assert_eq!(plan.tiles, 256);
+        let color = Color {
+            image: "town.png",
+            pixels: &pixels,
+        };
         let problems =
-            check("town.png", ImageKind::Bg, &pixels, &shading, Some(&pixels)).unwrap_err();
+            check("town.png", ImageKind::Bg, &pixels, &shading, Some(color)).unwrap_err();
         let p = &problems[0];
         assert_eq!(p.limit, ImageLimit::RomxBank);
         assert_eq!(p.count, 4096 + 12288 + 64);

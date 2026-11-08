@@ -381,6 +381,10 @@ mod tests {
             // A palette swap: the named palette into palette RAM.
             "rBCPS",
             "PaletteEmber",
+            // An indexed sheet's swap: its own copy, reordered by its OBP.
+            "HeroPaletteIce",
+            "reordered by HERO_OBP",
+            "color art only",
             // One ROM, two sessions (restore refuses a model change).
             "--model dmg",
             "--model gbc",

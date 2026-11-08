@@ -91,3 +91,67 @@ fn symbols_lists_what_each_kind_defines_but_frame_labels() {
         listed
     );
 }
+
+/// An indexed sheet defines a copy of each named palette, reordered by its
+/// OBP, under the labels `swap_symbols` reserves; nothing it defines is
+/// unreserved.
+#[test]
+fn an_indexed_sheet_defines_its_swap_symbols() {
+    use gbcli_protocol::{GbcPalette, NamedPalette, Rgb555};
+    let colors = [
+        Rgb555::WHITE,
+        Rgb555::new(1, 2, 3).unwrap(),
+        Rgb555::new(4, 5, 6).unwrap(),
+        Rgb555::BLACK,
+    ];
+    let named = [NamedPalette {
+        name: "ice_2".into(),
+        colors: GbcPalette(colors),
+    }];
+    let plan = SheetPlan {
+        spec: String::new(),
+        merges: Vec::new(),
+        obp: 0b11_10_00_00,
+        width: 1,
+        height: 2,
+        frame: (8, 16),
+        kept: vec![(0, 0)],
+        drawn: vec![vec![0; 128]],
+        uses: vec![1],
+        frames: vec![Vec::new()],
+        units: vec![Some((0, Flip::None))],
+        warnings: Vec::new(),
+    };
+    let entries = [Entry::Sheet {
+        source: "hero.png",
+        label: "Hero",
+        constant: "HERO",
+        data: "hero",
+        plan: &plan,
+        gbc: Some(Gbc {
+            tiles: false,
+            palettes: &[],
+            slots: vec![0],
+        }),
+    }];
+    let shared = Shared {
+        gbc: None,
+        named: &named,
+    };
+    let asm = asm(&entries, &shared);
+    let swaps = swap_symbols("Hero", "ice_2");
+    let reserved: Vec<String> = symbols(ImageKind::Sprites, "Hero", "HERO")
+        .into_iter()
+        .chain(palette_symbols("ice_2"))
+        .chain(swaps.iter().cloned())
+        .chain(["HeroFrame0".into()])
+        .collect();
+    for symbol in defined(&asm, &inc(&entries, &shared)) {
+        assert!(reserved.contains(&symbol), "{symbol} is unreserved");
+    }
+    assert_eq!(swaps, ["HeroPaletteIce2", "HeroPaletteIce2End"]);
+    // Index 1 is shade 0, 2 shade 2, 3 shade 3.
+    let want = gbc::dw(&GbcPalette([colors[0], colors[0], colors[2], colors[3]]));
+    let block = format!("HeroPaletteIce2::\n{want}HeroPaletteIce2End::\n");
+    assert!(asm.contains(&block), "{asm}");
+}

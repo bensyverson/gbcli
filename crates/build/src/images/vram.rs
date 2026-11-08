@@ -23,6 +23,12 @@ pub(super) fn vram(plans: &[Checked]) -> Vec<ImageProblem> {
         .map(|(image, n)| format!("{image} {n}"))
         .collect::<Vec<_>>()
         .join(", ");
+    // Color art counts joint tiles, so a total can pass the DMG versions'.
+    let joint = if plans.iter().any(|c| c.color.is_some()) {
+        ", counting tiles alike on the DMG but distinct in color as two"
+    } else {
+        ""
+    };
     let mut problems = Vec::new();
     let biggest = plans
         .iter()
@@ -43,7 +49,7 @@ pub(super) fn vram(plans: &[Checked]) -> Vec<ImageProblem> {
                 VRAM_TILES as usize,
                 format!(
                     "{image} uses {} tiles and the sprite sheets {sprite_tiles} ({listed}): \
-                     {total} of the {VRAM_TILES} tiles VRAM holds for both",
+                     {total} of the {VRAM_TILES} tiles VRAM holds for both{joint}",
                     bg.tiles()
                 ),
                 "cut unique tiles from the background or the sheets (flipped copies of an \
@@ -60,7 +66,8 @@ pub(super) fn vram(plans: &[Checked]) -> Vec<ImageProblem> {
                 sprite_tiles as usize,
                 sheet::OBJ_TILES,
                 format!(
-                    "the sprite sheets need {sprite_tiles} tiles ({listed}); objects address {}",
+                    "the sprite sheets need {sprite_tiles} tiles ({listed}{joint}); objects \
+                     address {}",
                     sheet::OBJ_TILES
                 ),
                 "reuse units across frames, or split the sheets so fewer load at once",

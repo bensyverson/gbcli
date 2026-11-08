@@ -284,8 +284,9 @@ the image's 8x8 grid; --json lists them all), message and remedy.
   shared_shade        a warning: colors drawn in one shade (names them), in
                       one image or across images
   palette_file        assets/palettes.txt doesn't read: a bad line, a name
-                      defined or an image assigned twice, an unknown name
-                      or image, or dmg assigned (line=N)
+                      defined or an image assigned twice, two names with
+                      one label (forest2, forest_2), an unknown name or
+                      image, or dmg assigned (line=N)
   shade_stretched     a warning: the stretch put a color 2+ shades from its
                       nearest (e.g. #101010 beside only black, drawn white)
   alpha               a pixel half transparent, or any in a background
@@ -353,6 +354,7 @@ What a --gbc build adds:
                          boot, and the header's $80)
   TownTilesGbc..End      color art's GBC tiles, same count and order as
                          TownTiles (indexed art uses TownTiles); HeroTilesGbc
+                         likewise, color art only
   TownAttrmap..End       a byte per map entry, its BG palette in bits 0-2;
                          write it with VBK=1 where the tilemap goes
   TownPalettes..End      RGB555 dw, 8 bytes a palette, BG palette 0 first;
@@ -362,6 +364,9 @@ What a --gbc build adds:
                          FONT_PALETTES
   ObjPalettesGbc..End    every sheet's OBJ palettes, OBJ_PALETTES of them;
                          HeroFrames' attribute bits 0-2 pick one
+  HeroPaletteIce..End    an indexed sheet's copy of each named palette,
+                         reordered by HERO_OBP: what a swap loads into its
+                         slot (RGB555 dw, 8 bytes)
   town.gbc.preview.png   the data in GBC colors, as screenshots show them,
                          then its palettes
 On a GBC, with the LCD off: palettes through rBCPS/rBCPD (BG) and
@@ -381,9 +386,11 @@ there recolors it, its tiles and map untouched (palette n: | n * 8):
     ldh [rBCPD], a
     dec b
     jr nz, .swap
-A sheet's is the same through OBPI_AUTOINC, rOCPS and rOCPD, but its
-palette is reordered by its OBP: PaletteEmber loads as it is only for a
-sheet in shades 1-3 (HERO_OBP %11_10_01_00).
+A sheet's is the same through OBPI_AUTOINC, rOCPS and rOCPD, from the
+sheet's own copy: an indexed sheet's tiles hold OBP's indices, not
+shades, so its slot holds its palette reordered by HERO_OBP, and so does
+HeroPaletteIce (ice for hero), which loads where PaletteIce would draw
+the wrong shades. Its slot is in HeroFrames' attribute bits 0-2.
 https://gbdev.io/pandocs/Palettes.html#lcd-color-palettes-cgb-only
 https://gbdev.io/pandocs/Tile_Maps.html#bg-map-attributes-cgb-mode-only
 

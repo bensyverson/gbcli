@@ -23,6 +23,8 @@ use gbcli_protocol::{
 
 use super::census::error;
 
+mod labels;
+
 /// Where the named palettes live, relative to the project.
 pub(crate) const PATH: &str = "assets/palettes.txt";
 
@@ -104,6 +106,10 @@ pub(crate) fn read(
         return Err(whole("isn't UTF-8 text"));
     };
     let parsed = parse(&text).map_err(|bad| problem(shown, bad))?;
+    labels::check(&parsed).map_err(|bad| ImageProblem {
+        remedy: labels::REMEDY.into(),
+        ..problem(shown, bad)
+    })?;
     check_images(&parsed, images).map_err(|bad| problem(shown, bad))?;
     Ok(Some(parsed.named))
 }

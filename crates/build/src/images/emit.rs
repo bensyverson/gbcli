@@ -94,7 +94,19 @@ pub(crate) fn symbols(kind: ImageKind, label: &str, constant: &str) -> Vec<Strin
 /// `Palette<Name>`, `Palette<Name>End` and `PALETTE_<NAME>`.
 pub(crate) fn palette_symbols(name: &str) -> Vec<String> {
     let (label, constant) = gbc::palette_names(name);
-    vec![format!("{label}End"), label, constant]
+    let end = format!("{label}End");
+    vec![label, end, constant]
+}
+
+/// Every symbol a sheet labeled `label` defines for the named palette
+/// `name`: `<Label>Palette<Name>` and its `End`. Reserved for every sheet
+/// on either target, as `symbols` reserves the GBC ones, though only an
+/// indexed sheet under `--gbc` defines them: an assignment can't bring a
+/// collision in either.
+pub(crate) fn swap_symbols(label: &str, name: &str) -> Vec<String> {
+    let swap = gbc::swap_label(label, name);
+    let end = format!("{swap}End");
+    vec![swap, end]
 }
 
 /// The constants an image of `kind` defines, its GBC ones when `gbc`.
@@ -219,7 +231,7 @@ pub(crate) fn asm(entries: &[Entry], shared: &Shared) -> String {
                 );
             }
         }
-        gbc::image(&mut out, e);
+        gbc::image(&mut out, e, shared.named);
     }
     gbc::shared(&mut out, shared);
     out
@@ -240,10 +252,14 @@ pub(crate) fn inc(entries: &[Entry], shared: &Shared) -> String {
     out += "; Labels (in images.asm, exported): <Name>Tiles/<Name>TilesEnd, and\n\
             ; <Name>Tilemap/<Name>TilemapEnd for a background or <Name>Frames for a sheet\n\
             ; (a tileset has no map); Palette<Name>/Palette<Name>End for each palette of\n\
-            ; assets/palettes.txt. With --gbc (GBCLI_GBC): <Name>TilesGbc/End (color art;\n\
-            ; indexed art uses <Name>Tiles), <Name>Attrmap/End (a background) or\n\
-            ; <Name>Attrs/End (a tileset: a byte per tile), <Name>Palettes/End for both,\n\
-            ; and ObjPalettesGbc/ObjPalettesGbcEnd for every sheet.\n\
+            ; assets/palettes.txt. With --gbc: <Name>TilesGbc/End (color art; indexed\n\
+            ; art uses <Name>Tiles), <Name>Attrmap/End (a background) or <Name>Attrs/End\n\
+            ; (a tileset: a byte per tile), <Name>Palettes/End for both,\n\
+            ; ObjPalettesGbc/ObjPalettesGbcEnd for every sheet, and for an indexed sheet\n\
+            ; <Name>Palette<Palette>/End: each palette reordered by its OBP, to load into\n\
+            ; its slot. GBCLI_GBC is not defined here: gbcli's --gbc build defines it for\n\
+            ; every source (rgbasm -D GBCLI_GBC=1), so anything else assembling these\n\
+            ; files defines it itself.\n\
             \nIF !DEF(GBCLI_IMAGES_INC)\nDEF GBCLI_IMAGES_INC EQU 1\n";
     for e in entries {
         match e {

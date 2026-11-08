@@ -13,7 +13,7 @@ use super::derive::{self, Version};
 use super::emit::{self, Entry};
 use super::find::{self, KINDS, Source};
 use super::input::{Input, Origin};
-use super::pixels::Pixels;
+use super::pixels::{Color, Pixels};
 use super::{Checked, Converted, Generated, Plan, bg, census, indexed, output, run, shades};
 use super::{shared, sheet, vram};
 use crate::project::BuildError;
@@ -176,19 +176,17 @@ pub(crate) fn convert(
                 }
             }
         };
+        let joint = color.as_ref().map(|pixels| Color {
+            image: &image,
+            pixels,
+        });
         let checked = match s.kind {
             ImageKind::Bg | ImageKind::Tiles => {
-                bg::check(&checked_name, s.kind, &dmg, shading, color.as_ref()).map(Plan::Bg)
+                bg::check(&checked_name, s.kind, &dmg, shading, joint).map(Plan::Bg)
             }
-            ImageKind::Sprites => sheet::check(
-                &checked_name,
-                &s.stem,
-                &dmg,
-                s.frame,
-                shading,
-                color.as_ref(),
-            )
-            .map(Plan::Sheet),
+            ImageKind::Sprites => {
+                sheet::check(&checked_name, &s.stem, &dmg, s.frame, shading, joint).map(Plan::Sheet)
+            }
         };
         match checked {
             Ok(plan) => {

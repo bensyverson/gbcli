@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use gbcli_protocol::{Flip, ImageLimit, ImageProblem, PaletteSlot, Severity, TileAt, TileEntry};
 
 use super::census::{self, Key, error, gbc_word, key};
-use super::pixels::{Pixels, Rgba, hex};
+use super::pixels::{Color, Pixels, Rgba, hex};
 use super::shades::Shading;
 use super::shared;
 
@@ -95,7 +95,7 @@ pub(crate) fn check(
     pixels: &Pixels,
     frame: Option<(u32, u32)>,
     shading: &Shading,
-    color: Option<&Pixels>,
+    color: Option<Color>,
 ) -> Result<SheetPlan, Vec<ImageProblem>> {
     if let Some(p) = census::size(image, pixels, 16) {
         return Err(vec![p]);
@@ -109,7 +109,7 @@ pub(crate) fn check(
     }
     // The colors as drawn: the color image's under `--gbc`, whose DMG
     // version is grays.
-    let key_green = census::key_green_hint(color.unwrap_or(pixels)).unwrap_or("");
+    let key_green = census::key_green_hint(color.map_or(pixels, |c| c.pixels)).unwrap_or("");
     let colors = census::colors(pixels);
     if colors.len() > OBJ_SHADES {
         return Err(vec![census::too_many_colors(
@@ -190,7 +190,7 @@ pub(crate) fn check(
     let gbc = |ux: u32, uy: u32| -> Vec<u16> {
         color.map_or_else(Vec::new, |c| {
             (0..128)
-                .map(|i| gbc_word(c.at(ux + i % 8, uy + i / 8)))
+                .map(|i| gbc_word(c.pixels.at(ux + i % 8, uy + i / 8)))
                 .collect()
         })
     };
@@ -287,17 +287,29 @@ pub(crate) fn check(
         });
     }
     if kept.len() * 2 > OBJ_TILES {
+        // Joint units are the color image's: its DMG version may need one.
+        let (named, joint, alike) = match color {
+            Some(c) => (
+                c.image,
+                ", counting objects alike on the DMG but distinct in color as two",
+                " (alike in color too)",
+            ),
+            None => (image, "", ""),
+        };
         problems.push(error(
-            image,
+            named,
             ImageLimit::ObjTiles,
             kept.len() * 2,
             OBJ_TILES,
             format!(
-                "{image} needs {} tiles ({} unique 8x16 objects); objects address {OBJ_TILES}",
+                "{named} needs {} tiles ({} unique 8x16 objects{joint}); objects address \
+                 {OBJ_TILES}",
                 kept.len() * 2,
                 kept.len()
             ),
-            "reuse units across frames (flipped copies are free), or split the sheet",
+            &format!(
+                "reuse units across frames{alike} (flipped copies are free), or split the sheet"
+            ),
         ));
     }
     // images.asm: the units, a pointer per frame, then each frame's count

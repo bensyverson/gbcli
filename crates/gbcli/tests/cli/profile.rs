@@ -32,8 +32,13 @@ fn measure_and_the_run_probes_print_their_rows() {
             "--frame-budget",
         ],
         &["run", "--frames", "1", "--top", "2"],
-        // Stops mid-frame: the last row is the frame it stopped in.
+        // Stops mid-frame: the header counts the frame it stopped in, and
+        // only the lag frames get rows.
         &["run", "--instructions", "30000", "--frame-budget"],
+        // --json has every frame, the partial ones too: this run starts
+        // where the last stopped, mid-frame, so its first row is partial
+        // and out of the summary.
+        &["run", "--instructions", "10000", "--frame-budget", "--json"],
     ] {
         let mut args = args.to_vec();
         args.extend(["--session", "demo"]);

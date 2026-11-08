@@ -1,8 +1,10 @@
-//! Rows for the equivalence check: the verdict, each difference in the
-//! divergent frame, and where each side stopped and was saved.
+//! Rows for the equivalence check: the verdict and what it compared, each
+//! difference in the divergent frame, and where each side stopped and was
+//! saved.
 
 use gbcli_protocol::{
-    ApuWriteMade, DifferenceMade, EquivMade, Location, SideMade, SideName, StopReason,
+    ApuWriteMade, AudioCompareName, DifferenceMade, EquivMade, Location, RamRangeArg, SideMade,
+    SideName, StopReason,
 };
 
 use super::row::{Row, addr, byte};
@@ -19,6 +21,9 @@ pub fn rows(e: &EquivMade) -> String {
         )
         .opt("diverged_at", e.divergence.as_ref().map(|d| d.frame))
         .opt("ticks", e.divergence.as_ref().map(|d| d.ticks))
+        .flag("screen", e.compared.screen)
+        .opt("ram", ranges(&e.compared.ram))
+        .field("audio", audio(e.compared.audio))
         .line();
     let Some(d) = &e.divergence else {
         return out;
@@ -67,6 +72,27 @@ pub fn rows(e: &EquivMade) -> String {
     out += &side("a", &d.a);
     out += &side("b", &d.b);
     out
+}
+
+/// The ranges in `--ram`'s own spelling (`wFrame,2`, or `wX` for one byte),
+/// space-separated, so each can be passed back as given; `None` for none.
+fn ranges(of: &[RamRangeArg]) -> Option<String> {
+    let spelled: Vec<String> = of
+        .iter()
+        .map(|r| match r.len {
+            1 => r.at.clone(),
+            len => format!("{},{len}", r.at),
+        })
+        .collect();
+    (!spelled.is_empty()).then(|| spelled.join(" "))
+}
+
+fn audio(mode: AudioCompareName) -> String {
+    serde_json::to_value(mode)
+        .expect("serializes")
+        .as_str()
+        .unwrap_or("?")
+        .to_string()
 }
 
 /// `a`, `b` or `a,b`; `None` for no side.

@@ -140,17 +140,20 @@ pub struct FrameBudgetRow {
     /// CPU T-cycles in HALT or STOP.
     pub idle_t: u64,
     /// The CPU never halted in this frame: its wait for vblank came too late.
-    /// Null for a partial frame, which never reached its vblank.
+    /// Null for a partial frame, which the run saw only part of.
     pub lag: Option<bool>,
-    /// The frame the run stopped in, from its last vblank to the stop.
+    /// A frame the run saw only part of: the one it started in, when it
+    /// started mid-frame (from the start to the vblank), or the one it
+    /// stopped in (from its last vblank to the stop).
     #[serde(default, skip_serializing_if = "is_false")]
     pub partial: bool,
 }
 
-/// What `run --frame-budget` found, one row per frame the run completed (the
-/// first counts from where the run started), then the frame it stopped in,
-/// if it stopped mid-frame, marked partial: the rows add up to the run's
-/// cycles.
+/// What `run --frame-budget` found, one row per frame the run completed,
+/// then the frame it stopped in, if it stopped mid-frame: the rows add up to
+/// the run's cycles. The first counts from where the run started, and is
+/// partial unless that was a frame's start (a vblank stop, the boot
+/// handoff, power-on); the last, mid-frame one is always partial.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FrameBudgetMade {
     pub frames: Vec<FrameBudgetRow>,

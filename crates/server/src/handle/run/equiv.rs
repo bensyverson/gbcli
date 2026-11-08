@@ -13,8 +13,8 @@ use gbcli_engine::equiv::{
 };
 use gbcli_engine::{Checkpoint, Machine};
 use gbcli_protocol::{
-    ApuWriteMade, AudioCompareName, CheckpointMade, DifferenceMade, DivergenceMade, EquivArgs,
-    EquivMade, ErrorBody, ErrorCode, ResultBody, SessionFile, SideMade, SideName,
+    ApuWriteMade, AudioCompareName, CheckpointMade, ComparedMade, DifferenceMade, DivergenceMade,
+    EquivArgs, EquivMade, ErrorBody, ErrorCode, ResultBody, SessionFile, SideMade, SideName,
 };
 
 use super::super::history::checkpoint_frame;
@@ -74,16 +74,23 @@ impl Handler {
             )),
             other => equiv_failure(&other),
         })?;
+        // `equiv::compare` checks every frame's pixels, unconditionally.
+        let compared = ComparedMade {
+            screen: true,
+            ram: args.ram.clone(),
+            audio: args.audio.unwrap_or_default(),
+        };
         match verdict {
             Verdict::Same { frames, ended } => Ok(ResultBody {
                 equiv: Some(EquivMade {
                     frames,
+                    compared,
                     ended,
                     divergence: None,
                 }),
                 ..ResultBody::default()
             }),
-            Verdict::Diverged(d) => Err(diverged(store, meta, *d, args.b.rom.as_deref())),
+            Verdict::Diverged(d) => Err(diverged(store, meta, *d, compared, args.b.rom.as_deref())),
         }
     }
 
@@ -167,6 +174,7 @@ fn diverged(
     store: &SessionStore,
     meta: &SessionFile,
     d: Divergence,
+    compared: ComparedMade,
     b_rom: Option<&str>,
 ) -> Failure {
     let save = |name: &str, side: SideState| -> Result<SideMade, Failure> {
@@ -189,6 +197,7 @@ fn diverged(
         .unwrap_or_else(|| "something".into());
     let made = EquivMade {
         frames: d.frame - 1,
+        compared,
         ended: None,
         divergence: Some(Box::new(DivergenceMade {
             frame: d.frame,

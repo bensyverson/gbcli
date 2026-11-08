@@ -6,8 +6,8 @@ use std::time::Duration;
 
 use gbcli_engine::equiv::{EquivError, StartField, StartMismatch};
 use gbcli_protocol::{
-    DifferenceMade, EquivArgs, EquivSide, ErrorCode, Op, RamRangeArg, ReadArgs, Response,
-    RestoreArgs, SideName, WriteArg, WriteKind,
+    AudioCompareName, ComparedMade, DifferenceMade, EquivArgs, EquivSide, ErrorCode, Op,
+    RamRangeArg, ReadArgs, Response, RestoreArgs, SideName, WriteArg, WriteKind,
 };
 
 use super::Handler;
@@ -67,6 +67,48 @@ fn the_same_build_is_the_same_for_every_frame() {
         .expect("a verdict");
     assert_eq!(made.frames, 20);
     assert_eq!(made.divergence, None);
+}
+
+/// A verdict says what it covers: the screen always, the `--ram` ranges as
+/// given, and the audio mode, `writes` when none was asked for (leaf k22J86).
+#[test]
+fn a_verdict_names_what_it_compared() {
+    let f = Fixture::with_sym("equiv-compared");
+    let mut h = handler(&f);
+    let expected = ComparedMade {
+        screen: true,
+        ram: frame_counter(1, false).ram,
+        audio: AudioCompareName::Writes,
+    };
+    let same = equiv(&mut h, frame_counter(3, false))
+        .outcome
+        .expect("the same")
+        .equiv
+        .expect("a verdict");
+    assert_eq!(same.compared, expected);
+    let diverged = equiv(&mut h, frame_counter(3, true))
+        .outcome
+        .expect_err("diverged")
+        .result
+        .and_then(|r| r.equiv)
+        .expect("the verdict");
+    assert_eq!(diverged.compared, expected);
+    let mut quiet = frame_counter(1, false);
+    quiet.ram.clear();
+    quiet.audio = Some(AudioCompareName::Off);
+    let off = equiv(&mut h, quiet)
+        .outcome
+        .expect("the same")
+        .equiv
+        .expect("a verdict");
+    assert_eq!(
+        off.compared,
+        ComparedMade {
+            screen: true,
+            ram: Vec::new(),
+            audio: AudioCompareName::Off,
+        }
+    );
 }
 
 #[test]

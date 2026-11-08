@@ -8,8 +8,10 @@ Optimize — measure, change, measure again, against a baseline that stays put.
 A session runs the file at its ROM path, so building over build/game.gb
 changes what its session runs. Keep the baseline's build where it is and
 build each try to another file, measured in a session of its own. The lines
-run as written inside a `gbcli new game` project (VBlank..MainLoop.wait is
-one pass of its frame: the handler, the music tick, the loop back to HALT).
+run as written inside a `gbcli new game` project. There, the span
+VBlank..MainLoop.wait runs from the VBlank handler's entry to the next time
+the main loop waits at its HALT: the handler (OAM DMA, the frame count, the
+music tick), then the frame's game logic, empty in the starter.
 
   1. A baseline session and a start state to measure from; its symbols are
      build/game.sym, the ROM's name with .sym (--sym FILE names another):

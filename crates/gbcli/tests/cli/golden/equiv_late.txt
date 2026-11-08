@@ -1,6 +1,6 @@
 $ gbcli equiv late_b.gb --frames 20 --ram wX --rom late_a.gb --session late
 exit 1
-equiv frames=0 diverged_at=1 ticks=140096
+equiv frames=0 diverged_at=1 ticks=140096 screen=1 ram=wX audio=writes
 difference kind=ram range=wX offset=0 a=$BF b=$9E a_addr=$C010 b_addr=$C020 count=1 never_written=a,b
 side a checkpoint=equiv-a path=.gbcli/sessions/late/checkpoints/equiv-a.gbck frame=1
 stop step_done unit=frame pc=$015F bank=0 symbol=Main.wait+$4 frame=1 t=70048 since=boot ticks=11902312 ly=144 shown=1 vblank=normal
@@ -13,7 +13,7 @@ gbcli: predicate_false: the sides diverge at frame 1: wX+0, never written on bot
 remedy: wX was never written on both sides (power-on RAM is random, so the two bytes differ by chance): initialize it before the first vblank, e.g. clear WRAM at startup (--at can't skip the init here: a checkpoint carries side A's RAM layout, and this build moved it)
 $ gbcli equiv --frames 20 --ram wX --patch $0164=0,0,0 --session late
 exit 1
-equiv frames=4 diverged_at=5 ticks=701888
+equiv frames=4 diverged_at=5 ticks=701888 screen=1 ram=wX audio=writes
 difference kind=ram range=wX offset=0 a=$00 b=$BF a_addr=$C010 b_addr=$C010 count=1 never_written=b
 side a checkpoint=equiv-a path=.gbcli/sessions/late/checkpoints/equiv-a.gbck frame=5
 stop step_done unit=frame pc=$016B bank=0 symbol=Main.count+$4 frame=5 t=350944 since=boot ticks=12464104 ly=144 shown=5 vblank=normal
@@ -32,5 +32,5 @@ checkpoint name=inited path=.gbcli/sessions/late/checkpoints/inited.gbck frame=6
 rev s1
 $ gbcli equiv --at inited --frames 20 --ram wX --patch $0164=0,0,0 --session late
 exit 0
-equiv frames=20
+equiv frames=20 screen=1 ram=wX audio=writes
 rev s1

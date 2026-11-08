@@ -15,8 +15,18 @@ In a project, `gbcli build` converts every .song or .uge in assets/music to
 hUGEDriver data (build/music/NAME.asm, label song_NAME); `gbcli new` makes
 assets/music/theme.song (the example below) and src/music.asm, which plays
 it. Then `gbcli run --frames 600 --audio-log --piano roll.png` to hear it;
-for a short clip, `--spectrogram spec.png --scale 4` to see its spectrum
-(the spectrogram is 64 columns a second at its default scale of 1).
+for a short clip, `--spectrogram spec.png --scale 4` to see its spectrum.
+The spectrogram runs time left to right, 64 columns a second at its default
+scale of 1; frequency bottom to top, linear, 0 to 8160 Hz in 32 Hz rows; and
+loudness as color in 64 steps from black (-90 dBFS or quieter) through
+blue, purple, red and yellow to white (full scale).
+
+The starter's song plays on all four channels, so a sound effect has none
+to itself. Make room by dropping the music calls (MusicInit, MusicVBlank),
+or by muting the effect's channel after MusicInit (hUGE_init unmutes all
+four): ld b, CH (0-3 for CH1-CH4), ld c, 1 (0 unmutes), call
+hUGE_mute_channel. The driver then leaves that channel alone until it is
+unmuted.
 
 The data's labels are the song's: song_NAME.P0 for a pattern, and for
 routine N song_NAME__hUGE_Routine_N and song_NAME__end_hUGE_Routine_N, not

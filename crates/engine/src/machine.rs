@@ -228,6 +228,22 @@ impl Machine {
         self.boot
     }
 
+    /// Whether a frame begins here, so a run from here counts its first frame
+    /// whole: at power-on, at the boot handoff (where the game's first frame
+    /// begins, though the boot ROM ran part of the PPU's), or at the end of
+    /// the step a published vblank fell in, as a frame stop is. A CGB frame
+    /// SameBoy repeats publishes nothing, so a stop at its vblank reads as
+    /// mid-frame.
+    pub fn at_frame_start(&self) -> bool {
+        let now = self.core.now().0;
+        now == 0
+            || self.boot.is_some_and(|b| b.ticks == now)
+            || self
+                .core
+                .last_complete_frame()
+                .is_some_and(|f| f.tag.at.0 == now)
+    }
+
     /// The moment `frame` and `t` in expressions and stop records count from
     /// (design §9). `Boot` before the handoff falls back to power-on.
     pub fn time_base(&self, since: &crate::debug::Since) -> TimeMark {

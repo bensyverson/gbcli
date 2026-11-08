@@ -136,7 +136,8 @@ pub const EQUIV_VERB: VerbSpec = VerbSpec {
     about: "Runs the session's ROM (side A) and ROM_B, or the session's ROM with --patch \
             (side B), from equivalent starts (each side's boot handoff, or --at one \
             checkpoint) under one key timeline, and compares the screen, the --ram bytes \
-            and the sound writes at the end of every frame. Exit 0 when every frame \
+            and the sound writes at the end of every frame; the verdict row names them \
+            (screen=1 ram=… audio=…). Exit 0 when every frame \
             matches; exit 1 (predicate_false) at the first frame that differs, with every \
             difference, and both sides saved as checkpoints equiv-a and equiv-b (equiv-b \
             restores only when side B ran the session's ROM, as with --patch). The head \

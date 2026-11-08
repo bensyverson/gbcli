@@ -256,7 +256,8 @@ pub const RUN: &[FlagSpec] = &[
         "frame-budget",
         "each frame's active and idle (HALT) T-cycles over the run, and the lag frames: \
          frames in which the CPU never halted; the first row sums up the whole frames' \
-         active T-cycles (min, max, mean) and the busiest one",
+         active T-cycles (min, max, mean) and the busiest one, then a row per lag frame \
+         (--json has every frame)",
     ),
     switch(
         "raster",

@@ -175,6 +175,79 @@ fn a_run_ending_at_a_vblank_has_no_partial_row() {
     assert!(made.frames.iter().all(|r| !r.partial && r.lag.is_some()));
 }
 
+/// `--frame-budget` on a run that starts after `first` (none: a fresh
+/// session, at the boot handoff), for `frames` frames.
+fn budget_after(name: &str, first: Option<RunArgs>, frames: u64) -> FrameBudgetMade {
+    let f = Fixture::with_sym(name);
+    let mut h = handler(&f);
+    if let Some(first) = first {
+        run(&mut h, first).outcome.expect("the first run");
+    }
+    run(
+        &mut h,
+        RunArgs {
+            frames: Some(frames),
+            frame_budget: true,
+            ..RunArgs::default()
+        },
+    )
+    .outcome
+    .expect("ran")
+    .frame_budget
+    .expect("a frame budget")
+}
+
+/// A run that starts mid-frame (after --instructions, a breakpoint or
+/// --until) only sees the end of its first frame: that row is partial and
+/// stays out of the summary and the lag count, as the last one does (leaf
+/// Fjy1RU, from review probe re13: its 7,840 T was the summary's min).
+#[test]
+fn a_run_started_mid_frame_begins_with_a_partial_row_left_out_of_the_summary() {
+    let mid = RunArgs {
+        instructions: Some(5_000),
+        ..RunArgs::default()
+    };
+    let made = budget_after("frame-budget-starts-mid", Some(mid), 3);
+    assert_eq!(made.frames.len(), 3, "{:?}", made.frames);
+    let (first, whole) = made.frames.split_first().expect("rows");
+    assert!(first.partial && first.lag.is_none(), "{first:?}");
+    assert!(whole.iter().all(|r| !r.partial && r.lag == Some(true)));
+    assert_eq!(made.lag, 2);
+    let stats = made.active_t.expect("a summary");
+    // V1 never halts, so every whole frame is about 70,224 T active.
+    assert!(
+        stats.min.abs_diff(70_224) < 32,
+        "{stats:?} {:?}",
+        made.frames
+    );
+    assert_ne!(made.busiest, Some(0), "the busiest is a whole frame");
+}
+
+/// A run that starts at a vblank stop, or at the boot handoff, where the
+/// game's first frame begins, counts its first frame whole.
+#[test]
+fn a_run_started_at_a_vblank_or_the_handoff_counts_its_first_frame_whole() {
+    let at_vblank = RunArgs {
+        frames: Some(2),
+        ..RunArgs::default()
+    };
+    for (name, first) in [
+        ("frame-budget-starts-vblank", Some(at_vblank)),
+        ("frame-budget-starts-handoff", None),
+    ] {
+        let made = budget_after(name, first, 3);
+        assert_eq!(made.frames.len(), 3, "{name}: {:?}", made.frames);
+        assert!(
+            made.frames
+                .iter()
+                .all(|r| !r.partial && r.lag == Some(true)),
+            "{name}: {:?}",
+            made.frames
+        );
+        assert_eq!(made.lag, 3, "{name}");
+    }
+}
+
 #[test]
 fn profile_top_zero_is_refused() {
     let f = Fixture::with_sym("profile-zero");

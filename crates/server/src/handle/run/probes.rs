@@ -27,6 +27,8 @@ use super::raster::raster_made;
 pub(super) struct Sinks {
     routines: Option<Routines>,
     split: Option<FrameSplit>,
+    /// The run started mid-frame, so its first frame is only a tail.
+    started_mid_frame: bool,
     frames: Vec<FrameBudget>,
     raster: Option<Raster>,
 }
@@ -99,6 +101,7 @@ impl Probes {
             RefCell::new(Sinks {
                 routines: args.profile.as_ref().map(|_| Routines::new()),
                 split: args.frame_budget.then(FrameSplit::default),
+                started_mid_frame: !machine.at_frame_start(),
                 frames: Vec::new(),
                 raster: args.raster.then(|| Raster::new(machine.core())),
             })
@@ -143,7 +146,7 @@ impl Probes {
         let frames = &sinks.frames;
         let frame_budget = sinks
             .split
-            .map(|mut split| frame_budget_made(frames, split.cut()));
+            .map(|mut split| frame_budget_made(frames, split.cut(), sinks.started_mid_frame));
         let timeline = sinks.raster.map(Raster::finish);
         let gaps = timeline.as_ref().map_or(Vec::new(), |t| t.gaps.clone());
         Collected {
@@ -193,38 +196,46 @@ fn profile_made(p: Profile, top: Option<u32>) -> ProfileMade {
     }
 }
 
-/// The whole frames, then `rest`, the frame the run stopped in, as a partial
-/// row if it has any cycles: a run that stops at a vblank has none.
-fn frame_budget_made(frames: &[FrameBudget], rest: FrameBudget) -> FrameBudgetMade {
-    let whole = frames.iter().map(|f| FrameBudgetRow {
+/// The frames the run ended at a vblank, then `rest`, the frame the run
+/// stopped in, as a partial row if it has any cycles: a run that stops at a
+/// vblank has none. When the run `started_mid_frame`, its first ended frame
+/// is only that frame's tail, so it is partial too. Only the whole frames
+/// make the summary, the lag count and the busiest; `busiest` is a row index.
+fn frame_budget_made(
+    frames: &[FrameBudget],
+    rest: FrameBudget,
+    started_mid_frame: bool,
+) -> FrameBudgetMade {
+    let row = |f: &FrameBudget, partial: bool| FrameBudgetRow {
         active_t: f.active_t,
         idle_t: f.idle_t,
-        lag: Some(f.lag),
-        partial: false,
-    });
-    let partial = (rest.active_t + rest.idle_t > 0).then_some(FrameBudgetRow {
-        active_t: rest.active_t,
-        idle_t: rest.idle_t,
-        lag: None,
-        partial: true,
-    });
-    let active = || frames.iter().map(|f| f.active_t);
+        lag: (!partial).then_some(f.lag),
+        partial,
+    };
+    let first_whole = usize::from(started_mid_frame && !frames.is_empty());
+    let rows = frames
+        .iter()
+        .enumerate()
+        .map(|(i, f)| row(f, i < first_whole))
+        .chain((rest.active_t + rest.idle_t > 0).then(|| row(&rest, true)));
+    let whole = &frames[first_whole..];
+    let active = || whole.iter().map(|f| f.active_t);
     let busiest = active()
         .enumerate()
         .rev()
         .max_by_key(|&(_, t)| t)
-        .map(|(i, _)| i as u64);
+        .map(|(i, _)| (first_whole + i) as u64);
     let active_t = active()
         .min()
         .zip(active().max())
         .map(|(min, max)| CycleStats {
             min,
             max,
-            mean: Real(active().sum::<u64>() as f64 / frames.len() as f64),
+            mean: Real(active().sum::<u64>() as f64 / whole.len() as f64),
         });
     FrameBudgetMade {
-        frames: whole.chain(partial).collect(),
-        lag: frames.iter().filter(|f| f.lag).count() as u64,
+        frames: rows.collect(),
+        lag: whole.iter().filter(|f| f.lag).count() as u64,
         active_t,
         busiest,
     }
@@ -288,7 +299,7 @@ mod tests {
             idle_t: 0,
             lag: false,
         };
-        let made = frame_budget_made(&frames, rest);
+        let made = frame_budget_made(&frames, rest, false);
         // The partial frame (9,000 T) is in the rows, not the summary.
         assert_eq!(
             made.active_t,
@@ -303,13 +314,25 @@ mod tests {
     }
 
     #[test]
+    fn a_run_started_mid_frame_leaves_its_first_frame_out_and_indexes_rows() {
+        let frames = [frame(70_000, true), frame(100, false), frame(400, true)];
+        let rest = FrameBudget::default();
+        let made = frame_budget_made(&frames, rest, true);
+        assert!(made.frames[0].partial && made.frames[0].lag.is_none());
+        assert_eq!(made.frames.len(), 3, "no trailing row at a vblank stop");
+        assert_eq!(made.active_t.map(|s| (s.min, s.max)), Some((100, 400)));
+        assert_eq!(made.busiest, Some(2), "a row index, past the partial row");
+        assert_eq!(made.lag, 1);
+    }
+
+    #[test]
     fn a_budget_with_no_whole_frame_has_no_summary() {
         let rest = FrameBudget {
             active_t: 9_000,
             idle_t: 0,
             lag: false,
         };
-        let made = frame_budget_made(&[], rest);
+        let made = frame_budget_made(&[], rest, false);
         assert_eq!((made.active_t, made.busiest), (None, None));
     }
 }

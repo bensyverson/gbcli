@@ -75,12 +75,25 @@ pub enum AudioCompareName {
 pub struct EquivMade {
     /// Frames compared without a difference.
     pub frames: u64,
+    /// What was compared after every frame, so a verdict says what it covers.
+    pub compared: ComparedMade,
     /// Both sides stopped the same way before the last frame.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ended: Option<StopReason>,
     /// The first frame that differed; absent when the sides are the same.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub divergence: Option<Box<DivergenceMade>>,
+}
+
+/// What `equiv` compared at the end of every frame.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ComparedMade {
+    /// The frame's pixels.
+    pub screen: bool,
+    /// The `--ram` ranges, as given.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ram: Vec<RamRangeArg>,
+    pub audio: AudioCompareName,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

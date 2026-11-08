@@ -42,8 +42,8 @@ pub use checkpoint::{
     model_name,
 };
 pub use equiv::{
-    ApuWriteMade, AudioCompareName, DifferenceMade, DivergenceMade, EquivArgs, EquivMade,
-    EquivSide, RamRangeArg, SideMade, SideName,
+    ApuWriteMade, AudioCompareName, ComparedMade, DifferenceMade, DivergenceMade, EquivArgs,
+    EquivMade, EquivSide, RamRangeArg, SideMade, SideName,
 };
 pub use error::{ErrorBody, ErrorCode};
 pub use images::{

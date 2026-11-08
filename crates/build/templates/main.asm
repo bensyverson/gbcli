@@ -132,6 +132,8 @@ ENDC
 	xor a
 	ldh [rIF], a
 	call MusicInit              ; music.asm: start the song (and the timer, if it wants it)
+	; The song uses all four channels: for a sound effect, drop the music
+	; calls, or mute its channel here (`gbcli help music`: hUGE_mute_channel).
 	ei
 
 MainLoop:

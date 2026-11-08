@@ -60,10 +60,13 @@ pub fn profile(p: &ProfileMade) -> String {
     out
 }
 
-/// `frame_budget frames= [partial=1] lag= active_min= active_max=
-/// active_mean= busiest=`: the whole frames, whether a last row holds the
-/// frame the run stopped in, and the whole frames' summary; then one
-/// `frame_cost` row each, the partial one with no `lag=`.
+/// `frame_budget frames= [partial=N] lag= active_min= active_max=
+/// active_mean= busiest=`: the whole frames, how many partial ones the run
+/// saw the end or start of (the frame it started in, the one it stopped in),
+/// and the whole frames' summary; then a `frame_cost` row for each lag
+/// frame. The frames that made their budget differ only by a few cycles, so
+/// their rows would bury the ones that didn't; `--json` carries every frame,
+/// the partial ones too.
 pub fn frame_budget(b: &FrameBudgetMade) -> String {
     let partial = b.frames.iter().filter(|f| f.partial).count();
     let mut out = Row::new("frame_budget")
@@ -79,12 +82,14 @@ pub fn frame_budget(b: &FrameBudgetMade) -> String {
         .opt("busiest", b.busiest)
         .line();
     for (i, f) in b.frames.iter().enumerate() {
+        if f.lag != Some(true) {
+            continue;
+        }
         out += &Row::new("frame_cost")
             .field("index", i)
             .field("active_t", f.active_t)
             .field("idle_t", f.idle_t)
-            .opt("lag", f.lag.map(u8::from))
-            .opt("partial", f.partial.then_some(1))
+            .field("lag", 1)
             .line();
     }
     out
@@ -121,4 +126,48 @@ pub fn raster(t: &RasterMade) -> String {
             .line();
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use gbcli_protocol::{CycleStats, FrameBudgetMade, FrameBudgetRow, Real};
+
+    use super::frame_budget;
+
+    fn frame(active_t: u64, lag: Option<bool>, partial: bool) -> FrameBudgetRow {
+        FrameBudgetRow {
+            active_t,
+            idle_t: 70224 - active_t,
+            lag,
+            partial,
+        }
+    }
+
+    /// Only the lag frames get a row: sixty near-identical rows for sixty
+    /// healthy frames were the flood two agent evals complained of, and the
+    /// header already sums them up (leaf k22J86).
+    #[test]
+    fn rows_list_only_the_lag_frames_under_the_summary() {
+        let made = FrameBudgetMade {
+            frames: vec![
+                frame(30000, Some(false), false),
+                frame(70224, Some(true), false),
+                frame(31000, Some(false), false),
+                frame(1000, None, true),
+            ],
+            lag: 1,
+            active_t: Some(CycleStats {
+                min: 30000,
+                max: 70224,
+                mean: Real(43741.3),
+            }),
+            busiest: Some(1),
+        };
+        assert_eq!(
+            frame_budget(&made),
+            "frame_budget frames=3 partial=1 lag=1 active_min=30000 active_max=70224 \
+             active_mean=43741.3 busiest=1\n\
+             frame_cost index=1 active_t=70224 idle_t=0 lag=1\n"
+        );
+    }
 }

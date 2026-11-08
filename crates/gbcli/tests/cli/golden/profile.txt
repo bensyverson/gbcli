@@ -58,5 +58,7 @@ frame_cost index=1 active_t=70224 idle_t=0 lag=1
 frame_cost index=2 active_t=70232 idle_t=0 lag=1
 frame_cost index=3 active_t=70220 idle_t=0 lag=1
 frame_cost index=4 active_t=70220 idle_t=0 lag=1
-frame_cost index=5 active_t=22104 idle_t=0 partial=1
 rev s3
+$ gbcli run --instructions 10000 --frame-budget --json --session demo
+exit 0
+{"id":"cli","ok":true,"rev":"s4","result":{"stop":{"reason":"budget_exhausted","kind":"instructions","pc":364,"bank":0,"symbol":"Work+$9","time":{"ticks":13459368,"t":848576,"since":{"kind":"boot"},"frame":12,"ly":3,"dot":null},"frame_shown":{"n":12,"vblank":"normal"},"budget":{"ticks":248816,"instructions":10000,"frames":2,"limits":{"instructions":10000},"defaulted":false}},"reads":[],"frame_budget":{"frames":[{"active_t":48128,"idle_t":0,"lag":null,"partial":true},{"active_t":70220,"idle_t":0,"lag":true},{"active_t":6060,"idle_t":0,"lag":null,"partial":true}],"lag":1,"active_t":{"min":70220,"max":70220,"mean":70220.0},"busiest":1}},"warnings":[]}

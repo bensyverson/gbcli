@@ -5,6 +5,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use gbcli_core::flash::FlashProfile;
 use gbcli_core::{BootRom, CoreConfig, Model};
 use gbcli_engine::{Backend, Machine, SetupError};
 use gbcli_protocol::{RenderConfig, Rev, SessionFile, model_name};
@@ -27,6 +28,9 @@ pub struct RomSource {
     pub model: Option<Model>,
     /// `None`: 0 for a new session, and whatever an existing one has.
     pub seed: Option<u64>,
+    /// The cart's flash board, by profile name (`--flash`). `None`: mask ROM
+    /// for a new session, and whatever an existing one has.
+    pub flash: Option<String>,
 }
 
 /// The model a session is created with when none is given.
@@ -109,6 +113,17 @@ fn check_settings(
             return Err(differs(Setting::Sym, session, given.display().to_string()));
         }
     }
+    if let Some(board) = source
+        .flash
+        .as_ref()
+        .filter(|b| meta.flash.as_ref() != Some(*b))
+    {
+        let session = meta
+            .flash
+            .clone()
+            .unwrap_or_else(|| "none (mask ROM)".into());
+        return Err(differs(Setting::Flash, session, board.clone()));
+    }
     Ok(())
 }
 
@@ -148,6 +163,7 @@ impl SessionStore {
             sym: sym_path.as_deref().map(|p| self.stored(p)),
             model: source.model.unwrap_or(DEFAULT_MODEL),
             seed: source.seed.unwrap_or(0),
+            flash: source.flash.clone(),
             rev: Rev(0),
             config,
             debugger: Default::default(),
@@ -214,7 +230,7 @@ fn build(
         rendering: meta.config.rendering,
         joypad_bounce: meta.config.joypad_bounce,
         write_tracking: meta.config.write_tracking,
-        flash: None,
+        flash: meta.flash.as_deref().map(flash_board).transpose()?,
     };
     Machine::new(Backend::sameboy(), core, sym).map_err(|e| match e {
         SetupError::Symbols(_) => StoreError::SymbolsUnreadable {
@@ -222,6 +238,14 @@ fn build(
             reason: e.to_string(),
         },
         SetupError::Core(_) => StoreError::Setup(e),
+    })
+}
+
+/// The named flash board, or a refusal listing the names there are.
+fn flash_board(name: &str) -> Result<FlashProfile, StoreError> {
+    FlashProfile::named(name).ok_or_else(|| StoreError::UnknownFlashBoard {
+        name: name.to_string(),
+        known: FlashProfile::names().map(str::to_string).collect(),
     })
 }
 
@@ -269,6 +293,67 @@ mod tests {
     }
 
     #[test]
+    fn a_flash_session_records_its_board_and_its_machine_is_on_it() {
+        let f = Fixture::new("flash-create");
+        let store = f.bundle.session("flashy").unwrap();
+        let mut source = f.source();
+        source.flash = Some("generic-wr-aaa-a9".into());
+        let machine = store.create(&source).unwrap();
+        assert_eq!(machine.flash_board(), Some("generic-wr-aaa-a9"));
+        let meta = store.read_meta().unwrap();
+        assert_eq!(meta.flash.as_deref(), Some("generic-wr-aaa-a9"));
+        assert_eq!(
+            store.machine(&meta).unwrap().flash_board(),
+            Some("generic-wr-aaa-a9")
+        );
+        let mask = f.demo();
+        let meta = mask.read_meta().unwrap();
+        assert_eq!(mask.machine(&meta).unwrap().flash_board(), None);
+    }
+
+    #[test]
+    fn an_unknown_flash_board_is_refused_naming_the_boards() {
+        let f = Fixture::new("flash-unknown");
+        let store = f.bundle.session("flashy").unwrap();
+        let mut source = f.source();
+        source.flash = Some("generic-wr-aaa-a8".into());
+        let Err(err) = store.create(&source) else {
+            panic!("an unknown board was accepted");
+        };
+        assert!(
+            matches!(err, StoreError::UnknownFlashBoard { .. }),
+            "{err:?}"
+        );
+        assert_eq!(err.code(), gbcli_protocol::ErrorCode::BadRequest);
+        assert!(
+            err.remedy().contains("generic-wr-aaa-a9"),
+            "{}",
+            err.remedy()
+        );
+        assert!(!store.dir().exists());
+    }
+
+    #[test]
+    fn reopening_with_another_flash_board_is_refused() {
+        let f = Fixture::new("flash-differs");
+        f.demo();
+        let mut source = f.source();
+        source.flash = Some("generic-wr-aaa-a9".into());
+        let err = f.bundle.open_session("demo", Some(&source)).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                StoreError::SettingDiffers {
+                    setting: Setting::Flash,
+                    ..
+                }
+            ),
+            "{err:?}"
+        );
+        assert!(err.to_string().contains("--flash"), "{err}");
+    }
+
+    #[test]
     fn a_missing_rom_is_refused_before_anything_is_written() {
         let f = Fixture::new("missing-rom");
         let store = f.bundle.session("gone").unwrap();
@@ -298,6 +383,7 @@ mod tests {
                 sym: Some(PathBuf::from("build/labels.sym")),
                 model: Some(Model::DmgB),
                 seed: Some(0),
+                flash: None,
             })
             .unwrap();
         let meta = store.read_meta().unwrap();

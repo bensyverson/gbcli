@@ -6,7 +6,7 @@ mod common;
 
 use common::{BUSY, RAM_8K, machine, steps, with_cart};
 use gbcli_core::{Budget, Keys, Region};
-use gbcli_engine::{Battery, Machine, PowerCycled, RunOptions};
+use gbcli_engine::{Battery, Flash, Machine, PowerCycled, RunOptions};
 
 const MBC3_TIMER_RAM_BATTERY: u8 = 0x10;
 const MBC5_RAM: u8 = 0x1A;
@@ -54,12 +54,14 @@ fn a_power_cycle_keeps_battery_ram_and_the_clock_and_resets_everything_else() {
     let before = clock(&mut m);
     assert_eq!(before[0], 2, "two emulated seconds: {before:?}");
 
-    let cycled = m.power_cycle(Battery::Keep, 0).unwrap();
+    let cycled = m.power_cycle(Battery::Keep, Flash::Keep, 0).unwrap();
     assert_eq!(
         cycled,
         PowerCycled {
             battery_bytes: Some(8 * 1024 + 48),
             clock: gbcli_core::SavClock::Restored,
+            flash_bytes: None,
+            flash_sectors_in_image: 0,
         }
     );
     assert_eq!(region(&m, Region::Sram), sram);
@@ -91,7 +93,7 @@ fn a_power_cycle_keeps_battery_ram_and_the_clock_and_resets_everything_else() {
 fn a_cart_without_a_battery_loses_its_ram() {
     let mut m = used(MBC5_RAM);
     assert_eq!(region(&m, Region::Sram)[0x100], 0xDE);
-    let cycled = m.power_cycle(Battery::Keep, 0).unwrap();
+    let cycled = m.power_cycle(Battery::Keep, Flash::Keep, 0).unwrap();
     assert_eq!(cycled.battery_bytes, None);
     assert!(region(&m, Region::Sram).iter().all(|&b| b == 0xFF));
 }
@@ -103,7 +105,8 @@ fn a_power_cycle_can_import_a_sav_and_advance_the_clock() {
     let before = clock(&mut a);
 
     let mut b = machine(&cart(MBC3_TIMER_RAM_BATTERY), None);
-    b.power_cycle(Battery::Sav(&sav), 3 * 3600).unwrap();
+    b.power_cycle(Battery::Sav(&sav), Flash::Keep, 3 * 3600)
+        .unwrap();
     assert_eq!(region(&b, Region::Sram), region(&a, Region::Sram));
     let after = clock(&mut b);
     assert_eq!(
@@ -121,7 +124,7 @@ fn power_cycling_twice_from_one_sav_gives_identical_machines() {
         .unwrap();
     let mut blobs = (0..2).map(|_| {
         let mut m = machine(&cart(MBC3_TIMER_RAM_BATTERY), None);
-        m.power_cycle(Battery::Sav(&sav), 0).unwrap();
+        m.power_cycle(Battery::Sav(&sav), Flash::Keep, 0).unwrap();
         steps(&mut m, 100);
         m.core_mut().save()
     });
@@ -132,7 +135,10 @@ fn power_cycling_twice_from_one_sav_gives_identical_machines() {
 fn a_refused_import_leaves_the_machine_as_it_was() {
     let mut m = used(MBC3_TIMER_RAM_BATTERY);
     let ticks = m.core().now();
-    assert!(m.power_cycle(Battery::Sav(&[0; 10]), 0).is_err());
+    assert!(
+        m.power_cycle(Battery::Sav(&[0; 10]), Flash::Keep, 0)
+            .is_err()
+    );
     assert_eq!(m.core().now(), ticks);
     assert_eq!(region(&m, Region::Sram)[0x100], 0xDE);
 }
@@ -146,12 +152,14 @@ fn a_power_cycle_keeps_a_huc3_carts_battery_ram_and_clock() {
     m.core_mut().advance_rtc(2 * 86_400).unwrap();
     let sram = region(&m, Region::Sram);
     let sav = m.core_mut().battery_sav().unwrap().unwrap();
-    let cycled = m.power_cycle(Battery::Keep, 0).unwrap();
+    let cycled = m.power_cycle(Battery::Keep, Flash::Keep, 0).unwrap();
     assert_eq!(
         cycled,
         PowerCycled {
             battery_bytes: Some(sav.len()),
             clock: gbcli_core::SavClock::Restored,
+            flash_bytes: None,
+            flash_sectors_in_image: 0,
         }
     );
     assert_eq!(region(&m, Region::Sram), sram);
@@ -164,7 +172,8 @@ fn a_power_cycle_can_take_a_battery_state_carried_from_another_machine() {
     let mut a = used(HUC3);
     let state = a.core_mut().battery_state().unwrap().unwrap();
     let mut b = machine(&cart(HUC3), None);
-    b.power_cycle(Battery::Carried(&state), 0).unwrap();
+    b.power_cycle(Battery::Carried(&state), Flash::Keep, 0)
+        .unwrap();
     assert_eq!(region(&b, Region::Sram), region(&a, Region::Sram));
 }
 
@@ -172,7 +181,7 @@ fn a_power_cycle_can_take_a_battery_state_carried_from_another_machine() {
 fn a_power_cycle_keeps_the_rom_patches() {
     let mut m = used(MBC5_RAM);
     m.patch(0x200, &[0x12, 0x34]).unwrap();
-    m.power_cycle(Battery::Keep, 0).unwrap();
+    m.power_cycle(Battery::Keep, Flash::Keep, 0).unwrap();
     assert_eq!(&region(&m, Region::Rom)[0x200..0x202], &[0x12, 0x34]);
     assert_eq!(m.patches().len(), 1);
 }
@@ -187,9 +196,10 @@ fn kept_and_carried_power_cycles_agree_and_stay_agreed() {
         a.set_keys(Keys::NONE);
         a.core_mut().advance_rtc(3 * 86_400 + 77).unwrap();
         let state = a.core_mut().battery_state().unwrap().unwrap();
-        a.power_cycle(Battery::Keep, 0).unwrap();
+        a.power_cycle(Battery::Keep, Flash::Keep, 0).unwrap();
         let mut b = machine(&cart(kind), None);
-        b.power_cycle(Battery::Carried(&state), 0).unwrap();
+        b.power_cycle(Battery::Carried(&state), Flash::Keep, 0)
+            .unwrap();
         assert_eq!(a.core_mut().save(), b.core_mut().save(), "kind {kind:#x}");
         for m in [&mut a, &mut b] {
             m.run(&RunOptions::new(Budget::frames(200))).unwrap();
@@ -215,7 +225,7 @@ fn kept_and_carried_power_cycles_agree_and_stay_agreed() {
 #[test]
 fn carried_cart_ram_counts_as_written() {
     let mut m = used(MBC3_TIMER_RAM_BATTERY);
-    m.power_cycle(Battery::Keep, 0).unwrap();
+    m.power_cycle(Battery::Keep, Flash::Keep, 0).unwrap();
     let written = m.core().written(Region::Sram).unwrap();
     for offset in [0, 0x100, 0x1FFF] {
         assert!(!written.never_written(offset), "{offset:#x}");

@@ -28,7 +28,10 @@ mod video;
 mod views;
 
 pub use audio::{ApuWriteLine, AudioArgs, AudioMade, WavArgs, WavChannels, WavMade, WavTake};
-pub use battery::{BatteryFrom, PowerCycleArgs, PowerCycleMade, SavArgs, SavClockState, SavMade};
+pub use battery::{
+    BatteryFrom, FlashFileMade, FlashFrom, FlashNoteKind, FlashNoteRow, PowerCycleArgs,
+    PowerCycleMade, SavArgs, SavClockState, SavMade,
+};
 pub use checkpoint::{
     BreakpointSpec, CheckpointHeader, CoreId, DebuggerConfig, LiveSymbol, Location, Patch,
     RenderConfig, Sha256, SymbolRole, TimeMark, WatchAccess, WatchSpec, model_from_name,

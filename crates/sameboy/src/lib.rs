@@ -66,26 +66,18 @@ impl SameBoy {
                 ),
             });
         }
-        // A flash board's chip holds the image from address 0 and reads
-        // erased past it, and the mapper reaches all of it.
-        let image: std::borrow::Cow<'_, [u8]> = match &config.flash {
-            None => config.rom.as_slice().into(),
-            Some(profile) => {
-                let size = profile.size as usize;
-                if config.rom.len() > size {
-                    return Err(CoreError::InvalidState {
-                        reason: format!(
-                            "the ROM is {:#x} bytes, and the {} board's flash chip holds {size:#x}",
-                            config.rom.len(),
-                            profile.name
-                        ),
-                    });
-                }
-                let mut chip = config.rom.clone();
-                chip.resize(size, 0xFF);
-                chip.into()
+        if let Some(profile) = &config.flash {
+            let size = profile.size as usize;
+            if config.rom.len() > size {
+                return Err(CoreError::InvalidState {
+                    reason: format!(
+                        "the ROM is {:#x} bytes, and the {} board's flash chip holds {size:#x}",
+                        config.rom.len(),
+                        profile.name
+                    ),
+                });
             }
-        };
+        }
         let boot_rom: &[u8] = match &config.boot_rom {
             BootRom::BuiltIn => builtin_boot_rom(config.model),
             BootRom::Custom(bytes) => bytes,
@@ -127,7 +119,7 @@ impl SameBoy {
             sb::GB_set_lcd_status_callback(raw, Some(raster::on_lcd_status));
             sb::GB_set_rendering_disabled(raw, !rendering);
             sb::GB_load_boot_rom_from_buffer(raw, boot_rom.as_ptr(), boot_rom.len());
-            sb::GB_load_rom_from_buffer(raw, image.as_ptr(), image.len());
+            sb::GB_load_rom_from_buffer(raw, config.rom.as_ptr(), config.rom.len());
         }
         let mut core = SameBoy {
             gb,
@@ -148,8 +140,9 @@ impl SameBoy {
             // SAFETY: installs our callback; it reaches `hooks` through user data.
             unsafe { sb::GB_set_write_memory_callback(raw, Some(watch::on_write)) };
         }
-        if let Some(profile) = config.flash {
-            core.attach_flash(gbcli_core::flash::FlashChip::new(profile));
+        match config.flash {
+            Some(profile) => core.attach_flash(profile)?,
+            None => core.watch_unlocks(),
         }
         Ok(core)
     }
@@ -502,6 +495,10 @@ impl Core for SameBoy {
         self.import_flash(contents)
     }
 
+    fn load_flash_image(&mut self, image: &[u8]) -> Result<Vec<std::ops::Range<u32>>, CoreError> {
+        self.import_flash_image(image)
+    }
+
     fn take_flash_notes(&mut self) -> Result<gbcli_core::flash::FlashNotes, CoreError> {
         Ok(self.flash_notes())
     }
@@ -642,20 +639,19 @@ impl Core for SameBoy {
                 ),
             });
         }
-        // The flash chip checks its section whole before changing anything;
-        // if SameBoy then refuses its own, the chip goes back as it was.
-        let flash_before = self.flash_save();
-        self.flash_load(blob.flash.as_deref())?;
+        // The flash chip checks its section whole without changing anything,
+        // and takes it over only once SameBoy has accepted its own: a refused
+        // load leaves the chip (its pending notes included) as it was.
+        let flash = self.check_flash_load(blob.flash.as_deref())?;
         // SAFETY: SameBoy validates the buffer and leaves the instance unchanged on failure.
         let status =
             unsafe { sb::GB_load_state_from_buffer(gb, blob.sameboy.as_ptr(), blob.sameboy.len()) };
         if status != 0 {
-            self.flash_load(flash_before.as_deref())
-                .expect("the chip's own state loads back");
             return Err(CoreError::InvalidState {
                 reason: format!("SameBoy refused the state (error {status})"),
             });
         }
+        self.finish_flash_load(flash);
         self.ticks = blob.ticks;
         self.vblanks = blob.vblanks;
         let fresh = self.frame_untouched();

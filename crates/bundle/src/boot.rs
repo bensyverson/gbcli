@@ -117,7 +117,7 @@ impl SessionStore {
         Ok(Vec::new())
     }
 
-    /// Keyed on the ROM, model, boot ROM, seed and core identity: an entry
+    /// Keyed on the ROM, model, boot ROM, seed, flash board and core identity: an entry
     /// another build of the core wrote is never reused, as its state may have
     /// another layout. Symbols aren't in the key; the entry carries none.
     fn boot_cache_path(&self, cp: &Checkpoint) -> PathBuf {
@@ -131,7 +131,11 @@ impl SessionStore {
             h.seed,
             &core.to_string()[..16]
         );
-        self.bundle().cache_dir().join(format!("boot-{key}.gbck"))
+        // A flash board's name ends the key; mask ROM's keys are unchanged.
+        let board = h.flash.as_ref().map_or(String::new(), |b| format!("-{b}"));
+        self.bundle()
+            .cache_dir()
+            .join(format!("boot-{key}{board}.gbck"))
     }
 
     /// Writes a boot cache entry. Sessions over one ROM share it whatever
@@ -213,6 +217,17 @@ mod tests {
         let mut other_model = cp.clone();
         other_model.header.model = Model::CgbE;
         assert_ne!(store.boot_cache_path(&other_model), path);
+        let mut flash = cp.clone();
+        flash.header.flash = Some("generic-wr-aaa-a9".into());
+        let flash_path = store.boot_cache_path(&flash);
+        assert_ne!(flash_path, path, "a flash cart's handoff is another entry");
+        assert!(
+            flash_path
+                .to_str()
+                .unwrap()
+                .ends_with("-generic-wr-aaa-a9.gbck"),
+            "{flash_path:?}"
+        );
     }
 
     #[test]

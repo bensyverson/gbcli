@@ -128,6 +128,9 @@ pub(crate) struct Hooks {
     /// The cart's flash chip, on a flash-save cart; it keeps both memory
     /// callbacks installed for the core's life.
     pub flash: Option<gbcli_core::flash::FlashChip>,
+    /// On a mask-ROM cart, the watch for a program's flash commands; it
+    /// keeps the write callback installed for the core's life.
+    pub unlocks: Option<gbcli_core::flash::UnlockWatch>,
 }
 
 /// The LCD's on/off toggles during one CPU step. One program write to LCDC
@@ -186,12 +189,16 @@ impl Hooks {
             lcd_off_log: None,
             lcd_toggles: None,
             flash: None,
+            unlocks: None,
         }
     }
 
     /// Whether something outside a run needs SameBoy's write callback.
     pub fn write_hook_wanted(&self) -> bool {
-        self.tracking.is_some() || self.apu_log.is_some() || self.flash.is_some()
+        self.tracking.is_some()
+            || self.apu_log.is_some()
+            || self.flash.is_some()
+            || self.unlocks.is_some()
     }
 
     /// Whether something outside a run needs SameBoy's read callback.

@@ -9,6 +9,7 @@ use super::quick_boot;
 
 pub const ROM_ONLY: u8 = 0x00;
 pub const MBC1: u8 = 0x01;
+pub const MMM01: u8 = 0x0B;
 pub const MBC3: u8 = 0x11;
 pub const MBC3_RAM: u8 = 0x12;
 pub const MBC3_TIMER_RAM_BATTERY: u8 = 0x10;

@@ -1,0 +1,39 @@
+$ gbcli run save.gb --frames 20 --read [$C000] --session fl --flash generic-wr-aaa-a9
+exit 0
+stop budget_exhausted kind=frames pc=$016D bank=0 frame=20 t=1404308 since=boot ticks=14570832 ly=144 shown=20 vblank=normal
+budget frames=20/20 instructions=117090 ticks=2808616
+read expr=[$C000] value=1 hex=$01
+rev s1
+$ gbcli sav game.sav --session fl
+exit 0
+sav path=game.sav bytes=8192 ram_bytes=8192 flash_path=game.flash.gb flash_bytes=2097152
+rev s1
+$ gbcli power-cycle --session copy --rom save.gb --flash generic-wr-aaa-a9 --sav game.sav
+exit 0
+power_cycle battery=sav bytes=8192 clock=not_clocked rtc_advanced_s=0 rom_rebuilt=0 flash=image flash_bytes=2097152
+rev s1
+$ gbcli run save.gb --frames 20 --session straight --flash generic-wr-aaa-aa --json
+exit 0
+{"id":"cli","ok":true,"rev":"s1","result":{"stop":{"reason":"budget_exhausted","kind":"frames","pc":49178,"bank":0,"symbol":null,"time":{"ticks":14570832,"t":1404308,"since":{"kind":"boot"},"frame":20,"ly":144,"dot":null},"frame_shown":{"n":20,"vblank":"normal"},"budget":{"ticks":2808616,"instructions":117090,"frames":20,"limits":{"frames":20},"defaulted":false}},"reads":[],"flash_notes":[{"ticks":11765560,"addr":2730,"value":169,"kind":"data_lines","text":"$0AAA<-$A9 is not an unlock cycle on this board: the chip reads $A9 and expects $AA. $A9 is what a board with D0 and D1 swapped needs, so the program was written for that wiring; its flash commands do nothing here"}]},"warnings":["$0AAA<-$A9 is not an unlock cycle on this board: the chip reads $A9 and expects $AA. $A9 is what a board with D0 and D1 swapped needs, so the program was written for that wiring; its flash commands do nothing here"]}
+$ gbcli run save.gb --frames 20 --session mask
+exit 0
+stop budget_exhausted kind=frames pc=$C01A bank=0 frame=20 t=1404308 since=boot ticks=14570832 ly=144 shown=20 vblank=normal
+budget frames=20/20 instructions=117090 ticks=2808616
+rev s1
+--- stderr
+warning: $0AAA<-$A9 is a flash chip's unlock cycle, as the generic-wr-aaa-a9 board decodes it, and this cart is mask ROM: the program sends flash commands, which do nothing here; to model the flash-save cart it was written for, create the session with --flash generic-wr-aaa-a9 (`gbcli help flash` lists the boards)
+$ gbcli show --session mask --rom save.gb --flash generic-wr-aaa-a9
+exit 2
+--- stderr
+gbcli: bad_request: session "mask" has --flash none (mask ROM), not generic-wr-aaa-a9
+remedy: drop --flash (the session keeps none (mask ROM)), or name a new session with --session NAME
+$ gbcli run save.gb --session typo --flash generic-wr-aaa-a8
+exit 2
+--- stderr
+gbcli: bad_request: no flash board is named "generic-wr-aaa-a8"
+remedy: name one of the boards: generic-wr-aaa-a9, generic-wr-aaa-aa, generic-wr-555-a9, generic-wr-555-aa, generic-audio-aaa-a9, generic-audio-aaa-aa, 29dl163bd-90, am29lv160db, mx29lv320et, sst39sf040-audio (`gbcli help flash` says what each is)
+$ gbcli show --session fl --flash generic-wr-aaa-a9
+exit 2
+--- stderr
+gbcli: bad_request: --flash only applies when a ROM creates a session
+remedy: add --rom FILE (or the ROM argument to run), or drop it

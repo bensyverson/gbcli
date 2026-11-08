@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::audio::AudioMade;
-use crate::battery::{PowerCycleMade, SavMade};
+use crate::battery::{FlashNoteRow, PowerCycleMade, SavMade};
 use crate::checkpoint::{Location, WatchAccess};
 use crate::equiv::EquivMade;
 use crate::error::ErrorBody;
@@ -227,6 +227,11 @@ pub struct ResultBody {
     /// `sav`: the battery save written.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sav: Option<SavMade>,
+    /// `run`: what the flash model noted during the run (commands that
+    /// missed the board, or a mask-ROM cart's flash commands); each is also
+    /// a warning.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub flash_notes: Option<Vec<FlashNoteRow>>,
 }
 
 /// One `--read` result: an expression's `value`, or for a whole OAM entry

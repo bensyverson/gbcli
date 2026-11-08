@@ -34,7 +34,13 @@ impl fmt::Display for FlashStateError {
 
 impl std::error::Error for FlashStateError {}
 
+/// A checkpoint state [`FlashChip::check_load`] found whole, ready for
+/// [`FlashChip::finish_load`].
+#[derive(Debug)]
+pub struct CheckedLoad(Decoded);
+
 /// A decoded state.
+#[derive(Debug)]
 struct Decoded {
     mode: Mode,
     toggle: bool,
@@ -53,12 +59,27 @@ impl FlashChip {
     /// original bytes back. Notes are dropped: they belong to the timeline
     /// the load replaced.
     pub fn load(&mut self, state: &[u8], rom: &mut [u8]) -> Result<(), FlashStateError> {
-        let decoded = self.decode(state, Kind::Checkpoint, rom.len())?;
+        let checked = self.check_load(state, rom.len())?;
+        self.finish_load(checked, rom);
+        Ok(())
+    }
+
+    /// The first half of [`load`](FlashChip::load): checks a state whole,
+    /// changing nothing, for a caller that has more of its own state to
+    /// check before it commits (a core whose emulator may still refuse).
+    pub fn check_load(&self, state: &[u8], rom_len: usize) -> Result<CheckedLoad, FlashStateError> {
+        self.decode(state, Kind::Checkpoint, rom_len)
+            .map(CheckedLoad)
+    }
+
+    /// The second half of [`load`](FlashChip::load): takes over a checked
+    /// state. `rom` is the array the check was made against.
+    pub fn finish_load(&mut self, checked: CheckedLoad, rom: &mut [u8]) {
+        let decoded = checked.0;
         self.adopt(&decoded.sectors, rom);
         self.mode = decoded.mode;
         self.toggle = decoded.toggle;
         self.take_notes();
-        Ok(())
     }
 
     /// What survives the power going off at `now`: the changed sectors'
@@ -84,6 +105,46 @@ impl FlashChip {
             self.note(0, 0, 0, NoteKind::CutOff { op });
         }
         Ok(())
+    }
+
+    /// A chip at power-on taking over a whole image of a chip on this board
+    /// (`rom`'s size, as a flasher's ROM backup holds it): every sector where
+    /// `image` differs from the array as built becomes the image's, and the
+    /// rest reads as built. Returns those sectors. A wrong size is refused
+    /// and changes nothing.
+    pub fn power_on_image(
+        &mut self,
+        image: &[u8],
+        rom: &mut [u8],
+    ) -> Result<Vec<std::ops::Range<u32>>, FlashStateError> {
+        if image.len() != rom.len() {
+            return Err(FlashStateError(format!(
+                "the flash image is {:#x} bytes, and the {} board's chip holds {:#x}",
+                image.len(),
+                self.profile.name,
+                rom.len()
+            )));
+        }
+        let size = rom.len() as u32;
+        let (mut ranges, mut sectors) = (Vec::new(), Vec::new());
+        let mut start = 0;
+        while start < size {
+            let sector = self.profile.sector_of(start, size);
+            let span = sector.start as usize..sector.end as usize;
+            let built = match self.pristine.get(&sector.start) {
+                Some(original) => original.as_slice(),
+                None => &rom[span.clone()],
+            };
+            if image[span.clone()] != *built {
+                sectors.push((sector.start, image[span].to_vec()));
+                ranges.push(sector.clone());
+            }
+            start = sector.end;
+        }
+        self.adopt(&sectors, rom);
+        self.mode = Mode::Read;
+        self.toggle = false;
+        Ok(ranges)
     }
 
     fn encode(&self, kind: Kind, mode: Mode, rom: &[u8]) -> Vec<u8> {

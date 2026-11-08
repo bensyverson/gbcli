@@ -88,7 +88,9 @@ pub struct FlashProfile {
     pub unlock: [u16; 2],
     /// Which chip-address bits the command decoder compares. A command cycle
     /// matches when `chip_addr & mask == unlock & mask`, where the chip
-    /// address is the bank's base plus the offset, so $4AAA means bank 1.
+    /// address is the bank's base plus the offset. AMD-style chips ignore
+    /// A11 and up in command cycles, so a mask of $FFF (byte mode) makes
+    /// $4AAA the same cycle as $0AAA on every bank.
     pub command_mask: u32,
     pub data_lines: DataLines,
     pub write_pin: WritePin,
@@ -131,6 +133,12 @@ impl FlashProfile {
 
     /// Whether a write's chip address is the given unlock cycle's.
     pub(crate) fn is_cycle(&self, chip_addr: u32, cycle: usize) -> bool {
-        chip_addr & self.command_mask == u32::from(self.unlock[cycle]) & self.command_mask
+        is_cycle(self.unlock[cycle], self.command_mask, chip_addr)
     }
+}
+
+/// Whether a write's chip address matches an unlock address under a decode
+/// mask: the one test every command cycle, and the mask-ROM hint, use.
+pub(crate) fn is_cycle(unlock: u16, mask: u32, chip_addr: u32) -> bool {
+    chip_addr & mask == u32::from(unlock) & mask
 }

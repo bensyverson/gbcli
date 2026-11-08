@@ -54,6 +54,11 @@ pub struct SessionFile {
     /// (design §10); any other head change ends it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub undo: Option<UndoWalk>,
+    /// The cart's flash board, by profile name (`--flash`), fixed when the
+    /// session is created. Absent on mask ROM and in sessions made before
+    /// flash sessions existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub flash: Option<String>,
 }
 
 /// Where consecutive undos have got to (design §10).
@@ -167,12 +172,31 @@ mod tests {
                 restored: Rev(2),
                 origin: Rev(3),
             }),
+            flash: Some("generic-wr-aaa-a9".into()),
         };
         let json = serde_json::to_value(&file).unwrap();
+        assert_eq!(json["flash"], "generic-wr-aaa-a9");
         assert_eq!(json["model"], "dmg-b");
         assert_eq!(json["rev"], "s3");
         assert_eq!(json["seed"], 0);
         assert_eq!(serde_json::from_value::<SessionFile>(json).unwrap(), file);
+    }
+
+    #[test]
+    fn a_session_file_from_before_flash_sessions_reads_as_mask_rom() {
+        let json = serde_json::json!({
+            "name": "demo", "rom": "demo.gb", "model": "dmg-b", "seed": 0, "rev": "s1",
+            "config": serde_json::to_value(RenderConfig {
+                rtc: gbcli_core::RtcMode::Accurate,
+                rendering: gbcli_core::Rendering::On,
+                joypad_bounce: gbcli_core::JoypadBounce::Off,
+                write_tracking: gbcli_core::WriteTracking::On,
+            }).unwrap(),
+            "debugger": serde_json::to_value(DebuggerConfig::default()).unwrap(),
+        });
+        let file: SessionFile = serde_json::from_value(json).unwrap();
+        assert_eq!(file.flash, None);
+        assert!(serde_json::to_value(&file).unwrap().get("flash").is_none());
     }
 
     #[test]

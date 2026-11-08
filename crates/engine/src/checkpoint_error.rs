@@ -81,6 +81,12 @@ pub enum CheckpointError {
     },
     /// Step 3: the caller asked for another model.
     ModelConflict { saved: Model, requested: Model },
+    /// Step 3: the state is from another cart: another flash board, or
+    /// flash where this one is mask ROM (`None`), or the reverse.
+    FlashConflict {
+        saved: Option<String>,
+        ours: Option<String>,
+    },
     /// Step 4: no boot ROM we have matches.
     BootRomMissing { sha256: Sha256 },
     /// Step 5: the ROM changed and there are no symbols to check it by.
@@ -107,9 +113,9 @@ impl CheckpointError {
             CheckpointError::OtherBackend { .. }
             | CheckpointError::CoreRejected { .. }
             | CheckpointError::PatchRefused { .. } => ErrorCode::CheckpointMismatch,
-            CheckpointError::ModelConflict { .. } | CheckpointError::Unknown { .. } => {
-                ErrorCode::BadRequest
-            }
+            CheckpointError::ModelConflict { .. }
+            | CheckpointError::FlashConflict { .. }
+            | CheckpointError::Unknown { .. } => ErrorCode::BadRequest,
             CheckpointError::BootRomMissing { .. } => ErrorCode::BootRomMissing,
             CheckpointError::SymbolsMissing { .. }
             | CheckpointError::RomChanged { .. }
@@ -137,6 +143,14 @@ impl CheckpointError {
             CheckpointError::ModelConflict { saved, .. } => format!(
                 "a checkpoint keeps its model: drop --model, or pass --model {}",
                 model_name(*saved)
+            ),
+            CheckpointError::FlashConflict { saved, .. } => format!(
+                "a session's cart is fixed when it is created: restore this state into a session \
+                 created with {}",
+                match saved {
+                    Some(board) => format!("--flash {board}"),
+                    None => "no --flash (mask ROM)".into(),
+                }
             ),
             CheckpointError::BootRomMissing { sha256 } => {
                 format!(
@@ -193,6 +207,18 @@ impl fmt::Display for CheckpointError {
                 model_name(*saved),
                 model_name(*requested)
             ),
+            CheckpointError::FlashConflict { saved, ours } => {
+                let cart = |board: &Option<String>| match board {
+                    Some(board) => format!("the {board} flash board"),
+                    None => "mask ROM".into(),
+                };
+                write!(
+                    f,
+                    "the state is from a cart on {}, and this session's is on {}",
+                    cart(saved),
+                    cart(ours)
+                )
+            }
             CheckpointError::BootRomMissing { sha256 } => {
                 write!(f, "no boot ROM with SHA-256 {sha256}")
             }
@@ -299,6 +325,20 @@ mod tests {
             saved: Model::DmgB,
             requested: Model::Mgb,
         };
+        assert_code(e, ErrorCode::BadRequest, 2);
+    }
+
+    #[test]
+    fn a_state_from_another_cart_is_a_bad_request() {
+        let e = CheckpointError::FlashConflict {
+            saved: Some("generic-wr-aaa-a9".into()),
+            ours: None,
+        };
+        assert!(
+            e.remedy().contains("--flash generic-wr-aaa-a9"),
+            "{}",
+            e.remedy()
+        );
         assert_code(e, ErrorCode::BadRequest, 2);
     }
 

@@ -31,6 +31,7 @@ fn create_session(dir: &Path) {
             sym: None,
             model: Some(Model::DmgB),
             seed: Some(0),
+            flash: None,
         })
         .unwrap();
 }

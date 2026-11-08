@@ -6,6 +6,7 @@
 // effect: no PPU sync, no open-bus update, no OAM bug, no callbacks. Where a
 // value can't be known without one, they return -1.
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "Core/gb.h"
@@ -42,6 +43,24 @@ bool gbcli_speed_switch_halt_ends_into_pc(GB_gameboy_t *gb)
     return !(gb->ime && queued);
 }
 bool gbcli_is_mmm01(GB_gameboy_t *gb) { return gb->cartridge_type->mbc_type == GB_MMM01; }
+
+// Sets the ROM buffer's length to `size` (a power of two, at least the
+// current length), the new bytes $FF, without reconfiguring the cart: a flash
+// board's chip is larger than the image, but GB_configure_cart chooses the
+// mapper (MBC30, ROM-only's MBC3 fallback) from the buffer's length, which
+// must stay the image's. Every read masks by rom_size, so the mapper then
+// reaches the whole chip. Returns false, changing nothing, on a bad size or
+// a failed allocation.
+bool gbcli_set_rom_size(GB_gameboy_t *gb, size_t size)
+{
+    if (size < gb->rom_size || (size & (size - 1)) != 0) return false;
+    uint8_t *rom = realloc(gb->rom, size);
+    if (!rom) return false;
+    memset(rom + gb->rom_size, 0xFF, size - gb->rom_size);
+    gb->rom = rom;
+    gb->rom_size = (uint32_t)size;
+    return true;
+}
 
 // The per-pixel layer tags the display patch writes while capture is on;
 // NULL detaches the buffer. SameBoy keeps the pointer, so the caller owns it.

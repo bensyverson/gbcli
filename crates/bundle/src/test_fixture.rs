@@ -37,6 +37,7 @@ impl Fixture {
             sym: None,
             model: Some(Model::DmgB),
             seed: Some(0),
+            flash: None,
         }
     }
 

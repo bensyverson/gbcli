@@ -46,6 +46,7 @@ fn a_thousand_steps_leave_no_threads_behind() {
             sym: None,
             model: Some(Model::DmgB),
             seed: Some(0),
+            flash: None,
         })
         .unwrap();
     let mut handler = Handler::new(bundle, Some("demo".into()), None);

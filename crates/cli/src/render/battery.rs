@@ -14,13 +14,17 @@ pub fn rows(r: &ResultBody) -> String {
             .field("clock", json["clock"].as_str().unwrap_or("?"))
             .field("rtc_advanced_s", p.rtc_advanced_s)
             .flag("rom_rebuilt", p.rom_rebuilt)
+            .opt("flash", json["flash"].as_str())
+            .opt("flash_bytes", p.flash_bytes)
             .line();
     }
     if let Some(s) = &r.sav {
         out += &Row::new("sav")
-            .field("path", &s.path)
+            .opt("path", s.path.as_ref())
             .field("bytes", s.bytes)
             .field("ram_bytes", s.ram_bytes)
+            .opt("flash_path", s.flash.as_ref().map(|f| &f.path))
+            .opt("flash_bytes", s.flash.as_ref().map(|f| f.bytes))
             .line();
     }
     out

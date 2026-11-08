@@ -44,6 +44,12 @@ pub struct CheckpointHeader {
     /// whose file name is their revision.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rev: Option<Rev>,
+    /// The cart's flash board, by its profile name
+    /// (`gbcli_flash::FlashProfile::named`), on a flash-save cart. Absent on
+    /// mask ROM, and from every file written before flash sessions existed,
+    /// which were all mask ROM.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub flash: Option<String>,
 }
 
 /// Which backend, at which commit, wrote a blob.
@@ -312,6 +318,7 @@ mod tests {
             created_by: Some("claude".into()),
             parent: None,
             rev: Some(Rev(4)),
+            flash: None,
         }
     }
 
@@ -328,6 +335,28 @@ mod tests {
         json.as_object_mut().unwrap().remove("rev");
         let back: CheckpointHeader = serde_json::from_value(json).unwrap();
         assert_eq!(back.rev, None);
+    }
+
+    #[test]
+    fn a_flash_boards_name_rides_in_the_header_and_mask_rom_leaves_it_out() {
+        let mut flash = header();
+        flash.flash = Some("generic-wr-aaa-a9".into());
+        let json = serde_json::to_value(&flash).unwrap();
+        assert_eq!(json["flash"], "generic-wr-aaa-a9");
+        assert_eq!(
+            serde_json::from_value::<CheckpointHeader>(json).unwrap(),
+            flash
+        );
+        let mask = serde_json::to_value(header()).unwrap();
+        assert!(mask.get("flash").is_none(), "{mask}");
+    }
+
+    #[test]
+    fn a_header_written_before_flash_boards_parses_as_mask_rom() {
+        let mut json = serde_json::to_value(header()).unwrap();
+        json.as_object_mut().unwrap().remove("flash");
+        let back: CheckpointHeader = serde_json::from_value(json).unwrap();
+        assert_eq!(back.flash, None);
     }
 
     #[test]

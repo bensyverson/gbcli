@@ -17,10 +17,11 @@ pub enum Topic {
     Rgbds,
     Music,
     Images,
+    Flash,
 }
 
 impl Topic {
-    pub const ALL: [Topic; 13] = [
+    pub const ALL: [Topic; 14] = [
         Topic::Addresses,
         Topic::Expressions,
         Topic::Time,
@@ -34,6 +35,7 @@ impl Topic {
         Topic::Rgbds,
         Topic::Music,
         Topic::Images,
+        Topic::Flash,
     ];
 
     pub fn name(self) -> &'static str {
@@ -51,6 +53,7 @@ impl Topic {
             Topic::Rgbds => "rgbds",
             Topic::Music => "music",
             Topic::Images => "images",
+            Topic::Flash => "flash",
         }
     }
 
@@ -73,6 +76,7 @@ impl Topic {
             Topic::Rgbds => RGBDS,
             Topic::Music => super::music::text(),
             Topic::Images => super::images::IMAGES,
+            Topic::Flash => super::flash::FLASH,
         }
     }
 }
@@ -341,6 +345,18 @@ mod tests {
             "HeroFrames",
             ".preview.png",
         ] {
+            assert!(text.contains(needle), "{needle} missing");
+        }
+        assert!(text.lines().all(|l| l.chars().count() <= 80), "{text}");
+    }
+
+    #[test]
+    fn the_flash_topic_lists_every_board_and_says_how_to_use_one() {
+        let text = Topic::from_name("flash").expect("a flash topic").text();
+        for name in gbcli_core::flash::FlashProfile::names() {
+            assert!(text.contains(&format!("  {name} ")), "{name} missing");
+        }
+        for needle in ["--flash", "power-cycle --sav", ".flash.gb", "warning:"] {
             assert!(text.contains(needle), "{needle} missing");
         }
         assert!(text.lines().all(|l| l.chars().count() <= 80), "{text}");

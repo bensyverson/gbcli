@@ -66,6 +66,16 @@ fn a_rom_larger_than_the_chip_is_refused() {
 }
 
 #[test]
+fn a_chip_size_that_isnt_a_power_of_two_is_refused() {
+    let mut profile = board("generic-wr-aaa-a9", BusyTicks::INSTANT);
+    profile.size = 0x30_0000;
+    let mut config = CoreConfig::new(Model::DmgB, cart(MBC5_RAM_BATTERY, 8, RAM_32K));
+    config.flash = Some(profile);
+    let err = SameBoy::new(config).err().expect("refused");
+    assert!(err.to_string().contains("power of two"), "{err}");
+}
+
+#[test]
 fn gbstudios_program_lands_in_the_save_bank_past_the_image() {
     let mut core = flash_core(board("generic-wr-aaa-a9", BusyTicks::INSTANT));
     select_save_bank(&mut core);
@@ -180,4 +190,105 @@ fn a_straight_board_notes_gbstudios_swapped_commands() {
         ),
         "{notes:?}"
     );
+}
+
+/// Padding the image to the chip must not change SameBoy's mapper choice,
+/// which reads the buffer's size: over 2 MiB, an MBC3 would become an MBC30
+/// with an 8-bit bank register.
+#[test]
+fn an_mbc3_image_on_a_4mib_board_stays_an_mbc3() {
+    let rom = cart(MBC3, 8, NO_RAM);
+    let mut flash = on_board(rom, board("mx29lv320et", BusyTicks::INSTANT));
+    poke_bus(&mut flash, 0x2000, 0x81);
+    assert_eq!(
+        flash.region(Region::Rom).unwrap().bank,
+        1,
+        "an MBC3 masks the bank to 7 bits"
+    );
+    poke_bus(&mut flash, 0x2000, 0x40);
+    assert_eq!(
+        flash.bus_read(0x4000).unwrap(),
+        0xFF,
+        "bank $40 is erased flash past the image, not the image's bank 0"
+    );
+}
+
+/// Over 32 KiB, SameBoy takes a ROM-only header for an MBC3; the image is
+/// 32 KiB, so the cart must stay without a mapper (and reach only 32 KiB).
+#[test]
+fn a_rom_only_image_on_a_board_gains_no_mapper() {
+    let mut flash = on_board(
+        cart(ROM_ONLY, 2, NO_RAM),
+        board("generic-wr-aaa-a9", BusyTicks::INSTANT),
+    );
+    poke_bus(&mut flash, 0x2000, 0x03);
+    assert_eq!(tag_at(&mut flash, 0x4000), 1, "no bank register");
+}
+
+/// SameBoy finds an MMM01's header bank at the end of the buffer, which the
+/// chip's erased tail would hide; a multicart mapper with a flash save is
+/// not a board the model knows.
+#[test]
+fn an_mmm01_image_on_a_board_is_refused() {
+    let mut config = CoreConfig::new(Model::DmgB, cart(MMM01, 8, NO_RAM));
+    config.flash = Some(board("generic-wr-aaa-a9", BusyTicks::INSTANT));
+    let err = SameBoy::new(config).err().expect("refused");
+    assert!(err.to_string().contains("MMM01"), "{err}");
+}
+
+/// The chip ignores A11 and up in command cycles, so unlock cycles at
+/// $4AAA/$4555 work whichever bank is mapped, not only on even ones.
+#[test]
+fn unlock_cycles_in_the_4000_window_dont_depend_on_the_bank() {
+    for bank in 1u8..=4 {
+        let mut c = on_board(
+            cart(MBC5, 8, NO_RAM),
+            board("generic-wr-aaa-aa", BusyTicks::INSTANT),
+        );
+        poke_bus(&mut c, 0x2000, bank);
+        for (a, v) in [(0x4AAA, 0xAA), (0x4555, 0x55), (0x4AAA, 0xA0)] {
+            poke_bus(&mut c, a, v);
+        }
+        poke_bus(&mut c, 0x4100, 0x00); // over the bank's nonzero tag
+        assert_eq!(c.bus_read(0x4100).unwrap(), 0, "bank {bank}");
+        let notes = c.take_flash_notes().unwrap().notes;
+        assert!(notes.is_empty(), "bank {bank}: {notes:?}");
+    }
+}
+
+/// A load SameBoy refuses leaves the core as it was, the chip's pending
+/// notes included.
+#[test]
+fn a_refused_load_keeps_the_pending_notes() {
+    let mut core = flash_core(board("generic-wr-aaa-aa", BusyTicks::INSTANT));
+    let blob = core.save();
+    poke_bus(&mut core, 0x0AAA, 0xA9); // a data-lines note on a straight board
+    let err = core.load(&corrupt_sameboy_section(&blob)).unwrap_err();
+    assert!(err.to_string().contains("SameBoy refused"), "{err}");
+    let notes = core.take_flash_notes().unwrap().notes;
+    assert_eq!(notes.len(), 1, "{notes:?}");
+}
+
+fn on_board(rom: Vec<u8>, profile: FlashProfile) -> SameBoy {
+    let mut config = CoreConfig::new(Model::DmgB, rom);
+    config.flash = Some(profile);
+    quick_boot(config)
+}
+
+/// The blob with SameBoy's own section overwritten. The blob ends
+/// `u64 len | sameboy | u8 1 | u64 n | "GBFL"...`.
+fn corrupt_sameboy_section(blob: &[u8]) -> Vec<u8> {
+    let gbfl = blob.windows(4).rposition(|w| w == b"GBFL").expect("flash");
+    let flag = gbfl - 9;
+    assert_eq!(blob[flag], 1, "the flash flag");
+    let start = (0..flag - 8)
+        .rev()
+        .find(|&p| {
+            let n = u64::from_le_bytes(blob[p..p + 8].try_into().unwrap());
+            n.checked_add(p as u64 + 8) == Some(flag as u64)
+        })
+        .expect("SameBoy's section length");
+    let mut bad = blob.to_vec();
+    bad[start + 8..flag].fill(0xEE);
+    bad
 }

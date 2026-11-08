@@ -49,7 +49,7 @@ pub struct Target {
     pub create: Option<Create>,
 }
 
-/// A new session's ROM and settings (`--rom`, `--sym`, `--model`, `--seed`).
+/// A new session's ROM and settings (`--rom`, `--sym`, `--model`, `--seed`, `--flash`).
 /// A setting not given takes the default for a new session and is not
 /// checked against an existing one.
 #[derive(Debug)]
@@ -58,6 +58,8 @@ pub struct Create {
     pub sym: Option<PathBuf>,
     pub model: Option<Model>,
     pub seed: Option<u64>,
+    /// The flash board, by profile name; the bundle checks the name.
+    pub flash: Option<String>,
 }
 
 impl Target {
@@ -299,9 +301,13 @@ pub(crate) fn target(inv: &Invocation, env: &Env, rom: Option<String>) -> Result
                 .one("seed")
                 .map(|n| values::count("seed", n))
                 .transpose()?,
+            flash: inv.one("flash").map(str::to_string),
         }),
         None => {
-            if let Some(flag) = ["sym", "model", "seed"].into_iter().find(|f| inv.has(f)) {
+            if let Some(flag) = ["sym", "model", "seed", "flash"]
+                .into_iter()
+                .find(|f| inv.has(f))
+            {
                 return Err(Usage::new(
                     format!("--{flag} only applies when a ROM creates a session"),
                     "add --rom FILE (or the ROM argument to run), or drop it",

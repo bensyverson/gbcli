@@ -20,6 +20,20 @@ pub enum Battery<'a> {
     Carried(&'a [u8]),
 }
 
+/// Where a power cycle's flash chip contents come from, on a flash-save
+/// cart; ignored on mask ROM.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Flash<'a> {
+    /// The chip's own: a flash chip keeps its array with the power off.
+    Keep,
+    /// A [`Core::flash_contents`](gbcli_core::Core::flash_contents) from
+    /// another core on the same board (the head's, across a rebuild).
+    Carried(&'a [u8]),
+    /// A whole chip image, as [`Machine::flash_image`] exports it: every
+    /// sector where it differs from the image as built becomes the chip's.
+    Image(&'a [u8]),
+}
+
 /// What a power cycle carried across.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PowerCycled {
@@ -27,6 +41,12 @@ pub struct PowerCycled {
     /// no battery.
     pub battery_bytes: Option<usize>,
     pub clock: SavClock,
+    /// The size of the flash image imported ([`Flash::Image`]).
+    pub flash_bytes: Option<usize>,
+    /// How many of the imported image's differing sectors overlap the ROM
+    /// file's extent: the save is normally past it, and a difference there
+    /// may be another build's code.
+    pub flash_sectors_in_image: usize,
 }
 
 impl Machine {
@@ -35,12 +55,13 @@ impl Machine {
     /// with the battery's RAM and clock carried in, the clock then moved on
     /// by `rtc_advance` seconds. Held keys stay held. The clock's count
     /// within its current second restarts, as neither a `.sav` nor a battery
-    /// state holds it. A flash-save cart keeps its flash chip's array (an
-    /// operation the power cuts off counts as done, with a note). On any
-    /// failure the machine is unchanged.
+    /// state holds it. A flash-save cart's chip comes from `flash`: its own
+    /// array by default (an operation the power cuts off counts as done,
+    /// with a note). On any failure the machine is unchanged.
     pub fn power_cycle(
         &mut self,
         battery: Battery<'_>,
+        flash: Flash<'_>,
         rtc_advance: u64,
     ) -> Result<PowerCycled, CoreError> {
         // Keeping the cart's own battery carries the core's state, not a
@@ -50,7 +71,10 @@ impl Machine {
             Battery::Carried(_) | Battery::Sav(_) => None,
         };
         // A flash chip keeps its array whatever happens to the battery.
-        let flash = self.core.flash_contents()?;
+        let own = match flash {
+            Flash::Keep => self.core.flash_contents()?,
+            Flash::Carried(_) | Flash::Image(_) => None,
+        };
         let mut core = (self.backend.build)(core_config(&self.setup, &self.rom))?;
         for patch in &self.patches {
             core.patch_rom(patch.offset, &patch.bytes)?;
@@ -62,8 +86,18 @@ impl Machine {
             }
             (Battery::Sav(sav), _) => (core.load_battery_sav(sav)?, Some(sav.len())),
         };
-        if let Some(contents) = &flash {
-            core.load_flash_contents(contents)?;
+        let (mut flash_bytes, mut flash_sectors_in_image) = (None, 0);
+        match (flash, own.as_deref()) {
+            (Flash::Keep, Some(contents)) | (Flash::Carried(contents), _) => {
+                core.load_flash_contents(contents)?;
+            }
+            (Flash::Image(image), _) => {
+                let changed = core.load_flash_image(image)?;
+                let end = self.rom.len() as u32;
+                flash_sectors_in_image = changed.iter().filter(|s| s.start < end).count();
+                flash_bytes = Some(image.len());
+            }
+            (Flash::Keep, None) => {}
         }
         if rtc_advance > 0 {
             core.advance_rtc(rtc_advance)?;
@@ -74,6 +108,8 @@ impl Machine {
         Ok(PowerCycled {
             battery_bytes: bytes,
             clock,
+            flash_bytes,
+            flash_sectors_in_image,
         })
     }
 }

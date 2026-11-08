@@ -377,6 +377,78 @@ fn contents_survive_a_power_cycle_and_a_cut_off_operation_is_noted() {
     );
 }
 
+/// Each mask is its chip family's command decode (project/2026-11-07-flash-
+/// model.md, "Command-address decode"): AMD-style parts compare A10-A0 and,
+/// in byte mode, A-1 (byte bits 11-0) and treat A11 and up as don't-care; on
+/// a "555" board the cart's A0 is the chip's A0, so 11 bits; SST39SF040
+/// compares A14-A0.
+#[test]
+fn every_profiles_command_mask_is_its_chip_familys() {
+    let expected = [
+        ("generic-wr-aaa-a9", 0xFFF),
+        ("generic-wr-aaa-aa", 0xFFF),
+        ("generic-wr-555-a9", 0x7FF),
+        ("generic-wr-555-aa", 0x7FF),
+        ("generic-audio-aaa-a9", 0xFFF),
+        ("generic-audio-aaa-aa", 0xFFF),
+        ("29dl163bd-90", 0xFFF),
+        ("am29lv160db", 0xFFF),
+        ("mx29lv320et", 0xFFF),
+        ("sst39sf040-audio", 0x7FFF),
+    ];
+    assert_eq!(FlashProfile::names().count(), expected.len());
+    for (name, mask) in expected {
+        assert_eq!(profile(name).command_mask, mask, "{name}");
+    }
+}
+
+/// A11 and up being don't-care, a command in the $4000 window reaches the
+/// chip whichever bank is mapped.
+#[test]
+fn commands_in_the_4000_window_work_on_every_bank() {
+    for bank in 1..=4 {
+        let mut cart = Cart::new(profile("am29lv160db"));
+        cart.bank = bank;
+        for (bus, value) in [
+            (0x4AAA, 0xA9),
+            (0x4555, 0x56),
+            (0x4AAA, 0xA0),
+            (0x4100, 0x00),
+        ] {
+            cart.write(bus, value);
+        }
+        cart.wait(BusyTicks::TYPICAL.program);
+        assert_eq!(cart.read(0x4100), 0x00, "bank {bank}");
+        assert!(cart.chip.take_notes().notes.is_empty(), "bank {bank}");
+    }
+}
+
+/// The board a mask-ROM cart's write would unlock: the first named profile,
+/// /WE on WR, whose first unlock cycle it is.
+#[test]
+fn a_write_names_the_board_it_unlocks() {
+    assert_eq!(
+        FlashProfile::unlocked_by(0x0AAA, 0xA9),
+        Some("generic-wr-aaa-a9")
+    );
+    assert_eq!(
+        FlashProfile::unlocked_by(0x0AAA, 0xAA),
+        Some("generic-wr-aaa-aa")
+    );
+    assert_eq!(
+        FlashProfile::unlocked_by(0x0555, 0xAA),
+        Some("generic-wr-555-aa")
+    );
+    for (addr, value) in [
+        (0x0000, 0x0A),
+        (0x2000, 0x05),
+        (0x0AAA, 0x0A),
+        (0x0555, 0x55),
+    ] {
+        assert_eq!(FlashProfile::unlocked_by(addr, value), None, "{addr:#x}");
+    }
+}
+
 #[test]
 fn every_named_profile_resolves_and_cites_flashgbx() {
     let names: Vec<_> = FlashProfile::names().collect();

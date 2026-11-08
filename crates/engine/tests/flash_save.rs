@@ -14,7 +14,7 @@ use std::path::PathBuf;
 
 use gbcli_core::flash::{BusyTicks, FlashProfile, NoteKind};
 use gbcli_core::{Budget, CoreConfig, Keys, Model, Region};
-use gbcli_engine::{Backend, Battery, Machine, RunOptions};
+use gbcli_engine::{Backend, Battery, Flash, Machine, RunOptions};
 
 /// Where GB Studio's save lands: banks 12-15 (`__start_save` = 12).
 const SAVE_AREA: std::ops::Range<usize> = 0x3_0000..0x4_0000;
@@ -142,7 +142,9 @@ impl Game {
 
     /// Off and on, then Continue.
     fn power_cycle_and_continue(&mut self) {
-        self.m.power_cycle(Battery::Keep, 0).expect("power cycle");
+        self.m
+            .power_cycle(Battery::Keep, Flash::Keep, 0)
+            .expect("power cycle");
         self.open_menu();
         self.press(Keys::DOWN, 20);
         self.press(Keys::A, 240); // Continue

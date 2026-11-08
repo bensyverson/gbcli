@@ -86,6 +86,11 @@ pub enum StoreError {
         session: String,
         given: String,
     },
+    /// A `--flash` (or a session's stored board) that names no profile.
+    UnknownFlashBoard {
+        name: String,
+        known: Vec<String>,
+    },
     /// The session's `session.json` exists but doesn't parse.
     SessionUnreadable {
         name: String,
@@ -127,6 +132,7 @@ pub enum Setting {
     Model,
     Seed,
     Sym,
+    Flash,
 }
 
 impl Setting {
@@ -136,6 +142,7 @@ impl Setting {
             Setting::Model => "--model",
             Setting::Seed => "--seed",
             Setting::Sym => "--sym",
+            Setting::Flash => "--flash",
         }
     }
 }
@@ -156,6 +163,7 @@ impl StoreError {
             StoreError::SessionExists { .. }
             | StoreError::RomMismatch { .. }
             | StoreError::SettingDiffers { .. }
+            | StoreError::UnknownFlashBoard { .. }
             | StoreError::UndoPastOldest { .. }
             | StoreError::BadHistoryRef { .. }
             | StoreError::BadCheckpointName { .. }
@@ -196,6 +204,10 @@ impl StoreError {
                 "drop {flag} (the session keeps {session}), or name a new session with \
                  --session NAME",
                 flag = setting.flag()
+            ),
+            StoreError::UnknownFlashBoard { known, .. } => format!(
+                "name one of the boards: {} (`gbcli help flash` says what each is)",
+                known.join(", ")
             ),
             StoreError::BadSessionName { .. } => {
                 format!("names are {}", gbcli_protocol::SESSION_NAME_RULE)
@@ -366,6 +378,9 @@ impl fmt::Display for StoreError {
                 "session {name:?} has {flag} {session}, not {given}",
                 flag = setting.flag()
             ),
+            StoreError::UnknownFlashBoard { name, .. } => {
+                write!(f, "no flash board is named {name:?}")
+            }
             StoreError::BadSessionName { name } => write!(f, "bad session name {name:?}"),
             StoreError::Busy { name, waited } => {
                 write!(f, "session {name:?} stayed locked for {waited:?}")

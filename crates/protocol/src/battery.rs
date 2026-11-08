@@ -62,15 +62,75 @@ pub struct PowerCycleMade {
     /// Seconds the clock was moved on.
     pub rtc_advanced_s: u64,
     /// Whether the head was saved over another build of the ROM, so the
-    /// cycle went into the ROM on disk carrying only the battery.
+    /// cycle went into the ROM on disk carrying only the battery (and, on a
+    /// flash session, the flash sectors the program changed).
     pub rom_rebuilt: bool,
+    /// On a flash session, where the chip's contents came from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub flash: Option<FlashFrom>,
+    /// The size of the chip image imported, with `flash: image`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub flash_bytes: Option<u64>,
 }
 
 /// A `.sav` that was written.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SavMade {
-    pub path: String,
+    /// The `.sav`'s path; absent when the cart has no battery RAM, so only
+    /// its flash image was written.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
     pub bytes: u64,
     /// The cart RAM's share of `bytes`; the rest is the clock footer.
     pub ram_bytes: u64,
+    /// On a flash session, the chip image written beside the `.sav`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub flash: Option<FlashFileMade>,
+}
+
+/// A flash chip image file: the whole chip as the CPU reads it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FlashFileMade {
+    pub path: String,
+    pub bytes: u64,
+}
+
+/// Where a power cycle's flash chip contents came from, on a flash session.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FlashFrom {
+    /// The head's own chip (across a rebuild, the sectors it changed).
+    Head,
+    /// The chip image beside the `.sav` named in the request.
+    Image,
+}
+
+/// Why the flash model took a note (`gbcli_flash::NoteKind`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FlashNoteKind {
+    DataLines,
+    UnlockAddress,
+    WritePinAudio,
+    BrokenSequence,
+    ProgramSetsBits,
+    WriteWhileBusy,
+    CutOff,
+    /// A mask-ROM cart saw a board's unlock cycle; `board` names it.
+    NoChip,
+}
+
+/// One flash note, as a run reports it: when, the write, why, and the
+/// sentence its warning row carries.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FlashNoteRow {
+    /// Emulated time, in ticks of 2^23 Hz since power-on.
+    pub ticks: u64,
+    pub addr: u16,
+    pub value: u8,
+    pub kind: FlashNoteKind,
+    /// The board the write unlocks, for `no_chip`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub board: Option<String>,
+    pub text: String,
 }

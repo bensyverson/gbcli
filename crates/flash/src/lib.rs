@@ -23,15 +23,17 @@
 //! the power leaves behind (it counts as done, with a note).
 
 mod chip;
+mod hint;
 mod note;
 mod profile;
 mod profiles;
 mod state;
 
 pub use chip::FlashChip;
+pub use hint::UnlockWatch;
 pub use note::{FlashNote, FlashNotes, NoteKind, Operation};
 pub use profile::{BusyTicks, DataLines, FlashProfile, SectorRun, WritePin};
-pub use state::FlashStateError;
+pub use state::{CheckedLoad, FlashStateError};
 
 /// The model's clock: ticks of 2^23 Hz, as `gbcli_core::Ticks` counts them.
 pub const TICKS_PER_SECOND: u64 = 1 << 23;

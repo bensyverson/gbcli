@@ -19,7 +19,7 @@ use crate::sha256::sha256;
 use crate::sym::{SymError, Symbols};
 
 mod power;
-pub use power::{Battery, PowerCycled};
+pub use power::{Battery, Flash, PowerCycled};
 
 /// How to build cores of one backend.
 #[derive(Clone, Copy)]
@@ -87,8 +87,8 @@ struct Setup {
     config: RenderConfig,
     boot_rom: Arc<[u8]>,
     boot_sha256: Sha256,
-    /// The cart's flash board, on a flash-save cart. Not in the checkpoint
-    /// header yet: a restore keeps the machine's own.
+    /// The cart's flash board, on a flash-save cart. The checkpoint header
+    /// records its name, and a restore refuses a state from another cart.
     flash: Option<FlashProfile>,
 }
 
@@ -163,6 +163,24 @@ impl Machine {
     /// records; use [`Machine::patch`] and [`Machine::set_keys`].
     pub fn core_mut(&mut self) -> &mut dyn Core {
         self.core.as_mut()
+    }
+
+    /// The cart's flash board by profile name, or `None` on mask ROM.
+    pub fn flash_board(&self) -> Option<&str> {
+        self.setup.flash.as_ref().map(|p| p.name.as_str())
+    }
+
+    /// The flash chip's whole array as the CPU reads it (the image, its
+    /// patches and everything programmed or erased since), the chip's size:
+    /// what a flasher's ROM backup of the cart holds. `None` on mask ROM.
+    pub fn flash_image(&self) -> Option<Vec<u8>> {
+        self.setup.flash.as_ref()?;
+        self.core.region(Region::Rom).ok().map(|r| r.bytes.to_vec())
+    }
+
+    /// The length of the ROM file the machine was built from.
+    pub fn rom_len(&self) -> usize {
+        self.rom.len()
     }
 
     /// The hash of the unpatched ROM file the machine was built from.
@@ -264,6 +282,7 @@ impl Machine {
             created_by: meta.created_by,
             parent: meta.parent,
             rev: meta.rev,
+            flash: self.flash_board().map(str::to_string),
         }
     }
 
@@ -295,6 +314,15 @@ impl Machine {
             return Err(CheckpointError::ModelConflict {
                 saved: h.model,
                 requested,
+            });
+        }
+        // 3, the cart: a board is fixed when the machine is built, so a state
+        // from another (or from mask ROM, or the reverse) is refused here,
+        // not by the core's blob check.
+        if h.flash.as_deref() != self.flash_board() {
+            return Err(CheckpointError::FlashConflict {
+                saved: h.flash.clone(),
+                ours: self.flash_board().map(str::to_string),
             });
         }
         // 4. Boot ROM.

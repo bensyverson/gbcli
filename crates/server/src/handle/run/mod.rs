@@ -12,7 +12,10 @@ mod raster;
 
 use gbcli_bundle::{SessionStore, Start, validate_checkpoint_name};
 use gbcli_core::Budget;
-use gbcli_engine::{DebugError, EventTap, FrameSink, Machine, Outcome, RunOptions, unapplied_keys};
+use gbcli_engine::{
+    DebugError, EventTap, FrameSink, Machine, Outcome, RunOptions, flash_note_rows, flash_warnings,
+    unapplied_keys,
+};
 use gbcli_protocol::{
     ErrorBody, ErrorCode, KeyEvent, Location, ResultBody, RunArgs, SessionFile, StepArgs, StepKind,
     StopReason, StopRecord, WavChannels,
@@ -183,6 +186,12 @@ impl Handler {
         outcome.stop.budget.limits = limits;
         outcome.stop.budget.defaulted = defaulted;
         warnings.extend(outcome.warnings.iter().map(warning_text));
+        let notes = machine
+            .core_mut()
+            .take_flash_notes()
+            .map_err(|e| Failure::from_core(&e))?;
+        warnings.extend(flash_warnings(&notes));
+        let flash_notes = (!notes.notes.is_empty()).then(|| flash_note_rows(&notes));
 
         let stop = outcome.stop;
         let change = HeadChange {
@@ -262,6 +271,7 @@ impl Handler {
             keys_unapplied,
             checkpoint,
             writes: (!writes.is_empty()).then_some(writes),
+            flash_notes,
             ..ResultBody::default()
         })
     }

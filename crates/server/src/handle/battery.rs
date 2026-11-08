@@ -7,10 +7,10 @@ use std::path::Path;
 
 use gbcli_bundle::{SessionStore, parse_duration};
 use gbcli_core::{CartClock, SavClock};
-use gbcli_engine::{Battery, LoadOptions, Machine};
+use gbcli_engine::{Battery, Flash, LoadOptions, Machine, flash_image_path};
 use gbcli_protocol::{
-    BatteryFrom, ErrorBody, ErrorCode, PowerCycleArgs, PowerCycleMade, ResultBody, SavArgs,
-    SavClockState, SavMade, SessionFile,
+    BatteryFrom, ErrorBody, ErrorCode, FlashFileMade, FlashFrom, PowerCycleArgs, PowerCycleMade,
+    ResultBody, SavArgs, SavClockState, SavMade, SessionFile,
 };
 
 use super::shot::write_atomically;
@@ -38,7 +38,12 @@ impl Handler {
                 .as_secs(),
             None => 0,
         };
-        let file = args.sav.as_deref().map(read_sav).transpose()?;
+        let flash_session = meta.flash.is_some();
+        let (file, image) = match args.sav.as_deref() {
+            None => (None, None),
+            Some(path) if flash_session => read_flash_pair(path, warnings)?,
+            Some(path) => (Some(read_sav(path)?), None),
+        };
         self.forget_warm(store.name());
         let stored = |e| Failure::from_store(&e);
         let mut machine = store.machine(meta).map_err(stored)?;
@@ -60,30 +65,41 @@ impl Handler {
         let rom_rebuilt = head
             .as_ref()
             .is_some_and(|h| h.header.rom_sha256 != machine.rom_sha256());
-        let mut head_state = None;
+        let (mut head_state, mut head_flash) = (None, None);
         match &head {
             Some(head) if rom_rebuilt => {
-                // Only the battery crosses a rebuild; the rest of the state
-                // belongs to the old ROM. The old state is read under the new
-                // build's header (the old ROM is gone), so the cart on disk
-                // decides whether there is a battery. A --sav replaces it.
-                if file.is_none() {
+                // Only the battery (and a flash chip's changed sectors, the
+                // save) crosses a rebuild; the rest of the state belongs to
+                // the old ROM. The old state is read under the new build's
+                // header (the old ROM is gone), so the cart on disk decides
+                // whether there is a battery. A --sav (and its chip image)
+                // replaces what it holds.
+                let wants_flash = flash_session && image.is_none();
+                if file.is_none() || wants_flash {
                     let mut old = store.machine(meta).map_err(stored)?;
                     let forced = LoadOptions {
                         allow_rom_change: true,
                         ..LoadOptions::default()
                     };
                     store.restore(&mut old, head, &forced).map_err(stored)?;
-                    head_state = old
-                        .core_mut()
-                        .battery_state()
-                        .map_err(|e| Failure::from_core(&e))?;
+                    let core = |e| Failure::from_core(&e);
+                    if file.is_none() {
+                        head_state = old.core_mut().battery_state().map_err(core)?;
+                    }
+                    if wants_flash {
+                        head_flash = old.core_mut().flash_contents().map_err(core)?;
+                    }
                 }
-                warnings.push(
+                warnings.push(if flash_session {
+                    "the head was saved over another build of the ROM: power-cycled into the ROM \
+                     on disk, carrying only the battery save and the flash sectors the program \
+                     changed"
+                        .into()
+                } else {
                     "the head was saved over another build of the ROM: power-cycled into the ROM \
                      on disk, carrying only the battery save"
-                        .into(),
-                );
+                        .into()
+                });
             }
             Some(head) => {
                 warnings.extend(
@@ -100,9 +116,23 @@ impl Handler {
             (None, Some(state)) => Battery::Carried(state),
             (None, None) => Battery::Keep,
         };
+        let flash = match (&image, &head_flash) {
+            (Some(image), _) => Flash::Image(image),
+            (None, Some(contents)) => Flash::Carried(contents),
+            (None, None) => Flash::Keep,
+        };
         let cycled = machine
-            .power_cycle(battery, rtc_advance)
+            .power_cycle(battery, flash, rtc_advance)
             .map_err(|e| Failure::from_core(&e))?;
+        if cycled.flash_sectors_in_image > 0 {
+            warnings.push(format!(
+                "the flash image differs from the ROM on disk in {} sector(s) inside the game's \
+                 own {} bytes: the chip holds the image's bytes there, which are another build's \
+                 code if the image is from one",
+                cycled.flash_sectors_in_image,
+                machine.rom_len()
+            ));
+        }
         let from = match (file.is_some(), cycled.battery_bytes) {
             (true, _) => BatteryFrom::Sav,
             (false, Some(_)) => BatteryFrom::Head,
@@ -120,6 +150,12 @@ impl Handler {
                 clock: clock_state(cycled.clock),
                 rtc_advanced_s: rtc_advance,
                 rom_rebuilt,
+                flash: flash_session.then_some(if image.is_some() {
+                    FlashFrom::Image
+                } else {
+                    FlashFrom::Head
+                }),
+                flash_bytes: cycled.flash_bytes.map(|n| n as u64),
             }),
             ..ResultBody::default()
         })
@@ -140,22 +176,38 @@ impl Handler {
             .core()
             .region(gbcli_core::Region::Sram)
             .map_or(0, |r| r.bytes.len());
+        let image = machine.flash_image();
         self.keep_warm(store, meta, machine);
-        let sav = exported
-            .map_err(|e| Failure::from_core(&e))?
-            .ok_or_else(|| {
-                Failure::new(ErrorBody::new(
-                    ErrorCode::BadRequest,
-                    "this cart has no battery, so it keeps nothing to save",
-                    NO_BATTERY_REMEDY,
-                ))
-            })?;
-        write_atomically(Path::new(&args.path), &sav)?;
+        let sav = exported.map_err(|e| Failure::from_core(&e))?;
+        if sav.is_none() && image.is_none() {
+            return Err(Failure::new(ErrorBody::new(
+                ErrorCode::BadRequest,
+                "this cart has no battery, so it keeps nothing to save",
+                NO_BATTERY_REMEDY,
+            )));
+        }
+        // A flash session's save may live in the chip (GB Studio's
+        // batteryless saves do), so the chip image goes beside the `.sav`.
+        let flash = match &image {
+            Some(image) => {
+                let path = flash_image_path(Path::new(&args.path));
+                write_atomically(&path, image)?;
+                Some(FlashFileMade {
+                    path: path.display().to_string(),
+                    bytes: image.len() as u64,
+                })
+            }
+            None => None,
+        };
+        if let Some(sav) = &sav {
+            write_atomically(Path::new(&args.path), sav)?;
+        }
         Ok(ResultBody {
             sav: Some(SavMade {
-                path: args.path.clone(),
-                bytes: sav.len() as u64,
+                path: sav.as_ref().map(|_| args.path.clone()),
+                bytes: sav.as_ref().map_or(0, |s| s.len() as u64),
                 ram_bytes: ram_bytes as u64,
+                flash,
             }),
             ..ResultBody::default()
         })
@@ -196,6 +248,41 @@ pub(super) fn header_warnings(machine: &Machine) -> Vec<String> {
         .iter()
         .map(|m| format!("{m}; {}", m.remedy()))
         .collect()
+}
+
+/// A `--sav`'s files: the `.sav`, and on a flash session the chip image.
+type SavFiles = (Option<Vec<u8>>, Option<Vec<u8>>);
+
+/// A flash session's `--sav PATH`: the `.sav` and the chip image beside it
+/// (`flash_image_path`), each read if it exists, at least one of them. A
+/// half that is missing keeps the head's own, with a warning.
+fn read_flash_pair(path: &str, warnings: &mut Vec<String>) -> Result<SavFiles, Failure> {
+    let image_path = flash_image_path(Path::new(path));
+    let (sav_there, image_there) = (Path::new(path).exists(), image_path.exists());
+    if !sav_there && !image_there {
+        return Err(Failure::new(ErrorBody::new(
+            ErrorCode::IoFailed,
+            format!(
+                "neither the .sav {path} nor its flash image {} exists",
+                image_path.display()
+            ),
+            "check the path; `gbcli sav <file>` writes both from a flash session",
+        )));
+    }
+    let sav = sav_there.then(|| read_sav(path)).transpose()?;
+    let image = image_there
+        .then(|| read_sav(&image_path.display().to_string()))
+        .transpose()?;
+    if sav.is_none() {
+        warnings.push(format!("no .sav at {path}: the cart RAM is the head's"));
+    }
+    if image.is_none() {
+        warnings.push(format!(
+            "no flash image at {}: the flash chip keeps the head's contents",
+            image_path.display()
+        ));
+    }
+    Ok((sav, image))
 }
 
 fn read_sav(path: &str) -> Result<Vec<u8>, Failure> {

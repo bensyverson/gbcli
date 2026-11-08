@@ -263,9 +263,21 @@ pub trait Core {
             reason: "this core doesn't model flash carts",
         })
     }
+    /// Takes over a whole chip image at power-on (the chip's size, the bytes
+    /// the CPU reads): every sector where it differs from the image as built
+    /// becomes the chip's, the rest reads as built. Returns those sectors'
+    /// chip-address ranges. A wrong size is refused and changes nothing.
+    fn load_flash_image(&mut self, _image: &[u8]) -> Result<Vec<std::ops::Range<u32>>, CoreError> {
+        Err(CoreError::Unsupported {
+            feature: Feature::FlashCart,
+            reason: "this core doesn't model flash carts",
+        })
+    }
     /// What the flash chip noted since the last take: commands that missed
-    /// this board, and why ([`FlashNote`](gbcli_flash::FlashNote)). Empty on
-    /// a mask-ROM cart.
+    /// this board, and why ([`FlashNote`](gbcli_flash::FlashNote)). On a
+    /// mask-ROM cart, the first write since the last take that is a named
+    /// board's unlock cycle ([`NoteKind::NoChip`](gbcli_flash::NoteKind)),
+    /// if the core watches for one.
     fn take_flash_notes(&mut self) -> Result<gbcli_flash::FlashNotes, CoreError> {
         Ok(gbcli_flash::FlashNotes::default())
     }

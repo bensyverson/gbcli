@@ -249,6 +249,11 @@ unsafe extern "C" {
     /// The next `GB_run` ends that HALT and runs the instruction at PC.
     pub fn gbcli_speed_switch_halt_ends_into_pc(gb: *mut GB_gameboy_t) -> bool;
     pub fn gbcli_is_mmm01(gb: *mut GB_gameboy_t) -> bool;
+    /// Grows the ROM buffer to `size` bytes ($FF-filled) without
+    /// reconfiguring the cart, so the mapper chosen from the image stays.
+    /// False, changing nothing, unless `size` is a power of two at least the
+    /// buffer's length (or on a failed allocation).
+    pub fn gbcli_set_rom_size(gb: *mut GB_gameboy_t, size: usize) -> bool;
     pub fn gbcli_clear_rtc_epoch(gb: *mut GB_gameboy_t);
     pub fn gbcli_ppu_batched(gb: *mut GB_gameboy_t) -> bool;
     /// Re-converts the CGB color holding palette-RAM byte `index` (0-63) into

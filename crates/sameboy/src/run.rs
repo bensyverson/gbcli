@@ -180,7 +180,11 @@ pub(crate) fn run(core: &mut SameBoy, req: &mut RunRequest<'_>) -> Result<Stop, 
             }
             _ => {}
         }
-        if arming.armed() || tapping || core.hooks().flash.is_some() {
+        if arming.armed()
+            || tapping
+            || core.hooks().flash.is_some()
+            || core.hooks().unlocks.is_some()
+        {
             let ticks = core.ticks;
             let hooks = core.hooks_mut();
             hooks.step_pc = pc;

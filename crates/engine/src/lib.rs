@@ -11,6 +11,7 @@ mod checkpoint_error;
 pub mod cond;
 mod debug;
 pub mod equiv;
+mod flash;
 mod machine;
 pub mod mem;
 pub mod profile;
@@ -25,7 +26,8 @@ pub use debug::{
     CallFrame, DebugError, EventTap, FrameSink, LcdOffOutsideVblank, Outcome, RunOptions, Since,
     core_code, eval_code, expr_code, unapplied_keys,
 };
-pub use machine::{Backend, Battery, Machine, PowerCycled, SetupError};
+pub use flash::{flash_image_path, flash_note_rows, flash_warnings};
+pub use machine::{Backend, Battery, Flash, Machine, PowerCycled, SetupError};
 pub use session::{MachineId, Session};
 pub use sha256::sha256;
 pub use sym::{Area, MappedSymbols, SymError, Symbol, Symbols};

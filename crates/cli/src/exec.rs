@@ -54,6 +54,7 @@ fn open_handler(target: &Target, env: &Env, opens: bool) -> Result<Handler, Box<
         sym: create.sym.clone(),
         model: create.model,
         seed: create.seed,
+        flash: create.flash.clone(),
     });
     if let (None, Some(source)) = (&target.session, &source) {
         return Err(Box::new(ErrorBody::new(

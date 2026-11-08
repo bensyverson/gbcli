@@ -8,6 +8,7 @@ mod common;
 mod equiv;
 mod errors;
 mod filmstrip;
+mod flash;
 mod help;
 mod honesty;
 mod images;

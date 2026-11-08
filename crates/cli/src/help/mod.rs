@@ -1,6 +1,7 @@
 //! The primer, each verb's `--help`, the topics, recipes and the schema.
 //! None of it needs a session, a ROM or the network (cli-design ▸ Grammar).
 
+mod flash;
 mod hardware;
 mod images;
 mod music;
@@ -52,7 +53,7 @@ pub fn primer() -> String {
         \x20       gbcli recipes (goal → command)\n\
         \x20       gbcli help TOPIC: addresses expressions time checkpointing writes\n\
         \x20                         budgets exit-codes hardware traps optimize rgbds\n\
-        \x20                         music images\n\
+        \x20                         music images flash\n\
         \x20       gbcli schema (the JSON request grammar for serve and batch)\n\
         Exit:   0 ok, 1 no, 2 usage, 3 budget/conflict, 4 unreadable, 5 environment\n";
     out

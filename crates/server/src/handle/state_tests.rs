@@ -254,6 +254,7 @@ fn a_bank_qualified_poke_writes_that_bank() {
             sym: None,
             model: Some(Model::CgbE),
             seed: Some(0),
+            flash: None,
         })
         .unwrap();
     let mut h = Handler::new(f.bundle.clone(), Some("cgb".into()), None);

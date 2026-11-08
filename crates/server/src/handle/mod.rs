@@ -347,6 +347,9 @@ mod test_support;
 mod battery_tests;
 
 #[cfg(test)]
+mod flash_tests;
+
+#[cfg(test)]
 mod state_tests;
 
 #[cfg(test)]

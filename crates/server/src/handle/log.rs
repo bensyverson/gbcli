@@ -160,6 +160,7 @@ mod tests {
                 sym: None,
                 model: Some(gbcli_core::Model::DmgB),
                 seed: Some(0),
+                flash: None,
             })
             .unwrap();
         let read = || {

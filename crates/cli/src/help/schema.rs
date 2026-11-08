@@ -57,8 +57,11 @@ opcode  query: TEXT  ("$20", "$CB37", "jr nz, .loop", "ld a, [hl+]")
         to the server's working directory)
 power_cycle  sav?: PATH  rtc_advance?: "45s"|"30m"|"12h"|"7d"
         (a new head at power-on, keeping the cart's battery RAM and clock;
-        rtc_advance at most "1024d" on MBC3, "3584d" on TPP1, "65536d" on HuC3)
-sav     path: PATH   (writes the head's battery save; changes nothing)
+        rtc_advance at most "1024d" on MBC3, "3584d" on TPP1, "65536d" on HuC3;
+        a flash session (serve --flash) also imports the chip image beside
+        it, game.sav → game.flash.gb; either file may be missing)
+sav     path: PATH   (writes the head's battery save, and on a flash session
+        the chip image beside it, game.sav → game.flash.gb; changes nothing)
 
 Response, one line per request:
   {"id", "ok": true, "rev"?: "sN", "result": {…}, "warnings": [TEXT]}
@@ -68,7 +71,8 @@ result holds only the fields the op fills: stop, reads, shot, measure, profile,
 frame_budget, raster, equiv, view, symbols,
 checkpoints, keys_unapplied, writes, checkpoint, restored, breakpoint, watch,
 deleted, registers, ppu, sessions, events, gaps, pruned, kept, busy, removed,
-build, doctor, created, song, song_problem, opcodes, power_cycle, sav.
+build, doctor, created, song, song_problem, opcodes, power_cycle, sav,
+flash_notes (run: each flash note, also a warning).
 `gbcli VERB --json` prints the whole response line, as serve writes it.
 
 Examples:

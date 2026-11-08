@@ -50,6 +50,10 @@ pub enum NoteKind {
     /// The power went off during an operation; the model counts it as done,
     /// where a real chip leaves it partial.
     CutOff { op: Operation },
+    /// On a mask-ROM cart: the first unlock cycle of `board`
+    /// ([`FlashProfile::unlocked_by`](crate::FlashProfile::unlocked_by)), so
+    /// the program expects a flash chip the cart doesn't have.
+    NoChip { board: &'static str },
 }
 
 /// One note: when, the write that caused it, and why.
@@ -125,6 +129,12 @@ impl fmt::Display for FlashNote {
                 "the power went off during a {}; this model counts it as done, but a real chip \
                  is left partly written",
                 op.name()
+            ),
+            NoteKind::NoChip { board } => write!(
+                f,
+                "${addr:04X}<-${value:02X} is a flash chip's unlock cycle, as the {board} board \
+                 decodes it, and this cart is mask ROM: the program sends flash commands, which \
+                 do nothing here"
             ),
         }
     }

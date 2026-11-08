@@ -68,4 +68,8 @@ A `git merge --squash` that conflicted in two files was resolved in one (crates/
 
 ## 2026-11-07 — this checkout has no toolchain and no hook, and commits still pass
 
-In the eleventh session, `git config core.hooksPath` was unset and the machine had no `cargo`, `rustc` or `rgbasm` (no `~/.cargo`, `~/.rustup`, or Homebrew rust), no `tests/corpus/fetched` and no `local/`. So `git commit` ran no hook and succeeded silently (36a03b3 went in untested), and agents briefed "cargo needs the sandbox off" found no cargo at all. Before committing or dispatching, check `command -v cargo rgbasm` and `git config core.hooksPath`; set up with rustup, `brew install rgbds`, `git config core.hooksPath scripts/hooks` and the corpus fetch in AGENTS.md.
+In the eleventh session, `git config core.hooksPath` was unset and the machine had no `cargo`, `rustc` or `rgbasm` (no `~/.cargo`, `~/.rustup`, or Homebrew rust), no `tests/corpus/fetched` and no `local/`. So `git commit` ran no hook and succeeded silently (36a03b3 went in untested), and agents briefed "cargo needs the sandbox off" found no cargo at all. Before committing or dispatching, check `command -v cargo rgbasm` and `git config core.hooksPath` (the AGENTS.md head now says so); setup is in docs/development.md.
+
+## 2026-11-07 — in a worktree, run cargo by its full path
+
+Rust was installed with rustup this session, and `~/.cargo/bin` isn't on agents' `PATH`. In a worktree, the guard refused `. ~/.cargo/env; cargo …` and any command that put a `/Users/ben/git/...` path next to `cargo`. Run `/Users/ben/.cargo/bin/cargo` directly from the worktree, one plain command per call, with the sandbox off. The main thread can source `~/.cargo/env` (leaves DkhKgi, a1393ec).

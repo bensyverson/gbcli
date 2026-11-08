@@ -73,3 +73,7 @@ In the eleventh session, `git config core.hooksPath` was unset and the machine h
 ## 2026-11-07 — in a worktree, run cargo by its full path
 
 Rust was installed with rustup this session, and `~/.cargo/bin` isn't on agents' `PATH`. In a worktree, the guard refused `. ~/.cargo/env; cargo …` and any command that put a `/Users/ben/git/...` path next to `cargo`. Run `/Users/ben/.cargo/bin/cargo` directly from the worktree, one plain command per call, with the sandbox off. The main thread can source `~/.cargo/env` (leaves DkhKgi, a1393ec).
+
+## 2026-11-07 — `.jobs/log/*.jsonl` is tracked, so a `git reset --hard` erases every uncommitted `job` write
+
+The tracker's event log lives in git, and `job` rebuilds its cache from it on open. In the twelfth session, undoing a staged squash with `git reset --hard HEAD` reverted `.jobs/log/Z7rGfP.jsonl` too. Every leaf, note, label and close since the last commit was gone with no error, and the leaves had to be recreated under new ids that running agents had to be told. To undo a squash, unstage and restore only the agent's paths (`git restore --staged --worktree -- <paths>`), and check `git status --short .jobs` before any reset or checkout.

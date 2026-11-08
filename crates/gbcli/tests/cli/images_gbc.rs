@@ -149,7 +149,6 @@ fn a_program_using_every_gbc_label_draws_what_the_gbc_preview_shows() {
         "TOWN_PALETTES",
         "OBJ_PALETTES",
         "PALETTE_FOREST",
-        "GBCLI_GBC",
         "TownTilesGbc",
         "TownAttrmap",
         "TownPalettes",

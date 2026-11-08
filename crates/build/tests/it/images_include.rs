@@ -117,10 +117,12 @@ fn a_gbc_build_labels_each_images_gbc_data() {
         format!("DEF OBJ_PALETTES EQU {}", made.obj_palettes.len()),
         "DEF PALETTE_FOREST EQU 0".into(),
         "DEF PALETTE_EMBER_2 EQU 1".into(),
-        "DEF GBCLI_GBC EQU 1".into(),
     ] {
         assert!(inc.contains(&line), "{line} in\n{inc}");
     }
+    // The build defines GBCLI_GBC for every source (rgbasm -D), so the
+    // include must not define it again.
+    assert!(!inc.contains("DEF GBCLI_GBC "), "{inc}");
     // The attribute map: each map entry's slot, one byte each.
     let attr = fs::read(temp.path("demo/build/images/bg/town.attrmap")).unwrap();
     let slots: Vec<u8> = town
@@ -143,14 +145,9 @@ fn a_gbc_build_labels_each_images_gbc_data() {
         asm.contains("CoinFrame0::\n\tdb 1\n\tdb 0, 0, 0, 0\n"),
         "{asm}"
     );
-    // Every constant is exported, so it is in the .sym.
+    // Every constant images.inc defines is exported, so it is in the .sym.
     let sym = fs::read_to_string(temp.path("demo/build/demo.sym")).unwrap();
-    for name in [
-        "TOWN_PALETTES",
-        "OBJ_PALETTES",
-        "PALETTE_FOREST",
-        "GBCLI_GBC",
-    ] {
+    for name in ["TOWN_PALETTES", "OBJ_PALETTES", "PALETTE_FOREST"] {
         assert!(
             sym.lines().any(|l| l.ends_with(&format!(" {name}"))),
             "{name} in\n{sym}"

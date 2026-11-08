@@ -56,3 +56,24 @@ Found by the main thread while checking: `gbcli gaps --help` said "needs a sessi
 | 4 | `wFrame` read 88 when the stop said `frame=90`: the stop counts from boot, the program from LCD-on. The help says so. | docs (minor) | none; it's documented |
 
 **Gap ledger:** `gbcli gaps` printed `none` over both sessions, `base` and `fast`.
+
+## Run 3 (binary at 5701328), with a fourth part: a background from a PNG
+
+**Result:** all four parts done in about 30 gbcli calls (23 tool calls, 2.5 min).
+1. **Sprite:** RIGHT held 40 frames and DOWN 20 moved it +40/+20 (`view oam`).
+2. **Sound:** `--audio-log` decoded NR10-NR14 at the A press.
+3. **Cycles:** `measure VBlank..MainLoop.wait --at start --iterations 60 --keys 'RIGHT@0 DOWN@0'` fell from 1,884 T to 1,264 T, a cut of 33%. `--max 1318` held. `equiv build/fast.gb --session base --frames 300 --keys '…' --ram wX,2` exited 0.
+4. **Background:** a generated 160×144 three-gray PNG in `assets/bg/` built to 20×18 tiles, 4 unique, through `images.inc`. Its "`help images` and the build-time image conversion worked with no problems".
+
+**Stumbles** (fixes by agent eval-fix3):
+
+| # | Stumble | Tag | Fix |
+|---|---|---|---|
+| 1 | `read wX` printed the symbol's address (`value=49416 hex=$C108`). The agent expected the byte; `[wX]` reads it. | docs/verb | `read --help` says so, and a bare RAM symbol gets a hint |
+| 2 | The piano roll at the default scale was a few dots, and the spectrogram a sliver until `--scale 4`. | docs | a larger default, or the recipe shows `--scale` |
+| 3 | `run --frame-budget` prints 60 rows for 60 frames, with no summary. | verb | a summary row |
+| 4 | The profiler names the halt loop `MainLoop.wait+$1`. | cosmetic | none |
+| 5 | `equiv --ram wX` diverged at frame 1, before init. The optimized build moved `wX`, and power-on WRAM is random, so each side read a different unwritten byte. The remedy talked about checkpoints. The agent worked around it by padding its RAM layout to match. | error | a difference in a never-written byte says so, and how to start after init |
+| 6 | A zsh variable holding a command didn't split; macOS `sed -i`. | my-mistake, environment | none |
+
+**Gap ledger:** `gbcli gaps` printed `none` over five sessions.

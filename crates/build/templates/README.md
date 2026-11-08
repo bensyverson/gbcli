@@ -45,7 +45,10 @@ was running has moved; otherwise it says what moved.
 
 ## What is here
 
-- `src/main.asm`: the header, the VBlank handler and the program.
+- `src/main.asm`: the header, the VBlank handler and the program. Built
+  with `gbcli build --gbc`, the same ROM runs in color on a Game Boy Color
+  (`hGbc` is nonzero there) and as before on the original Game Boy:
+  `gbcli run build/{{name}}.gb --session color --model gbc --shot color.png`.
 - `src/oam_dma.asm`: the OAM DMA routine, copied to HRAM at startup.
 - `include/hardware.inc`: gbdev's hardware.inc v6.0.0 (CC0).
 - `assets/music/theme.song`: the song, as text (`gbcli help music`).

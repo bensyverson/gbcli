@@ -124,6 +124,33 @@ fn the_gbc_target_writes_the_dual_mode_header_and_the_result_records_it() {
     assert_eq!(rom[0x14D], checksum(&rom));
 }
 
+/// `GBCLI_GBC` is defined for every source under the GBC target, by the
+/// build itself, so a project without images (and so without images.inc)
+/// can guard its color code with `IF DEF(GBCLI_GBC)`; the DMG target
+/// leaves it undefined.
+#[test]
+fn gbcli_gbc_is_defined_for_every_source_under_the_gbc_target_only() {
+    let (temp, mut options) = starter("gbc-define");
+    fs::write(
+        temp.path("demo/src/probe.asm"),
+        "IF DEF(GBCLI_GBC)\nSECTION \"probe\", ROM0\nProbe:: db GBCLI_GBC\nENDC\n",
+    )
+    .unwrap();
+    let probe = |temp: &Temp| {
+        let sym = fs::read_to_string(temp.path("demo/build/demo.sym")).unwrap();
+        sym.lines().find(|l| l.ends_with(" Probe")).map(|l| {
+            let addr = u16::from_str_radix(&l[3..7], 16).unwrap();
+            let rom = fs::read(temp.path("demo/build/demo.gb")).unwrap();
+            rom[addr as usize]
+        })
+    };
+    build(&rgbds(), &options).unwrap();
+    assert_eq!(probe(&temp), None, "undefined for the DMG");
+    options.target = BuildTarget::Gbc;
+    build(&rgbds(), &options).unwrap();
+    assert_eq!(probe(&temp), Some(1), "1 for the GBC");
+}
+
 /// A failed GBC build's remedy builds for the GBC again, and its report
 /// still names the target.
 #[test]

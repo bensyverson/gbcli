@@ -27,12 +27,12 @@ $ gbcli build game --gbc
 exit 0
 song path=game/assets/music/theme.song asm=game/build/music/theme.asm descriptor=song_theme
 output kind=rom path=game/build/game.gb bytes=32768
-output kind=sym path=game/build/game.sym bytes=7325
-output kind=map path=game/build/game.map bytes=11118
+output kind=sym path=game/build/game.sym bytes=7544
+output kind=map path=game/build/game.map bytes=11485
 build rgbds=1.0.4 target=gbc sources=5 errors=0 warnings=0
 $ gbcli build game --gbc --json
 exit 0
-{"id":"cli","ok":true,"result":{"build":{"rgbds":"1.0.4","target":"gbc","sources":["game/src/hUGEDriver.asm","game/src/main.asm","game/src/music.asm","game/src/oam_dma.asm","game/build/music/theme.asm"],"outputs":[{"kind":"rom","path":"game/build/game.gb","bytes":32768},{"kind":"sym","path":"game/build/game.sym","bytes":7325},{"kind":"map","path":"game/build/game.map","bytes":11118}],"diagnostics":[],"songs":[{"path":"game/assets/music/theme.song","asm":"game/build/music/theme.asm","descriptor":"song_theme"}]}},"warnings":[]}
+{"id":"cli","ok":true,"result":{"build":{"rgbds":"1.0.4","target":"gbc","sources":["game/src/hUGEDriver.asm","game/src/main.asm","game/src/music.asm","game/src/oam_dma.asm","game/build/music/theme.asm"],"outputs":[{"kind":"rom","path":"game/build/game.gb","bytes":32768},{"kind":"sym","path":"game/build/game.sym","bytes":7544},{"kind":"map","path":"game/build/game.map","bytes":11485}],"diagnostics":[],"songs":[{"path":"game/assets/music/theme.song","asm":"game/build/music/theme.asm","descriptor":"song_theme"}]}},"warnings":[]}
 $ gbcli build game
 exit 4
 diagnostic severity=error tool=rgbasm file=game/src/main.asm line=30 message="syntax error, unexpected end of line"

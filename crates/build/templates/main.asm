@@ -29,6 +29,25 @@ Start:
 	di
 	ld sp, $E000                ; the stack grows down from the top of WRAM
 
+IF DEF(GBCLI_GBC)
+	; `gbcli build --gbc` defines GBCLI_GBC, so only that build carries the
+	; color code, and the same ROM must still run on a DMG: so check at run
+	; time. The boot ROM leaves BOOTUP_A_CGB in A on a GBC, but a GBC hands
+	; A=$11 to a ROM without the header's GBC flag too, and runs it as a
+	; DMG; rgbfix writes that flag ($80 at $0143) under --gbc, and a build
+	; made some other way may lack it, so the check takes both. A is read
+	; now, before the wait below overwrites it.
+	DEF HEADER_GBC_FLAG EQU $0143
+	DEF HEADER_GBC EQU $80
+	cp BOOTUP_A_CGB
+	ld a, 0                     ; not a GBC (ld leaves the flags alone)
+	jr nz, .gbcKnown
+	ld a, [HEADER_GBC_FLAG]
+	and HEADER_GBC
+.gbcKnown
+	ldh [hGbc], a
+ENDC
+
 	; Turn the LCD off, but only during VBlank: turning it off mid-frame
 	; can damage real DMG hardware.
 .waitVBlank
@@ -94,6 +113,15 @@ Start:
 	ldh [rSCX], a
 	ldh [rSCY], a
 
+IF DEF(GBCLI_GBC)
+	; A GBC ignores BGP and OBP0 in GBC mode and colors from palette RAM
+	; instead. A DMG must skip this: it has no VBK, so the attribute map
+	; would land on the tilemap.
+	ldh a, [hGbc]
+	and a
+	call nz, ColorGbc
+ENDC
+
 	; LCD on, BG and sprites on, tiles from block 0, map at $9800.
 	ld a, LCDC_ON | LCDC_BG_ON | LCDC_OBJ_ON | LCDC_BLOCK01 | LCDC_BG_9800
 	ldh [rLCDC], a
@@ -141,6 +169,90 @@ VBlank:
 	pop af
 	reti
 
+IF DEF(GBCLI_GBC)
+; ---------------------------------------------------------------------------
+; GBC mode only, with the LCD off: palette RAM and VRAM are open to the CPU
+; then. The face's tiles serve both machines unchanged, since a palette
+; colors their four shades; art drawn in color has its own GBC tiles to
+; copy instead (`gbcli help images`).
+
+ColorGbc:
+	; BG palettes, then OBJ palettes, from index 0 with autoincrement.
+	ld a, BGPI_AUTOINC
+	ldh [rBCPS], a
+	ld hl, FaceBgPalettes
+	ld b, FaceBgPalettes.end - FaceBgPalettes
+.bg
+	ld a, [hli]
+	ldh [rBCPD], a
+	dec b
+	jr nz, .bg
+	ld a, OBPI_AUTOINC
+	ldh [rOCPS], a
+	ld hl, FaceObjPalettes
+	ld b, FaceObjPalettes.end - FaceObjPalettes
+.obj
+	ld a, [hli]
+	ldh [rOCPD], a
+	dec b
+	jr nz, .obj
+
+	; The attribute map lives in VRAM bank 1, behind the tilemap: palette 0
+	; everywhere, then the faces through BG palettes 0-3 in turn. Sprites
+	; take their palette from OAM's flags instead (0 here).
+	ld a, 1
+	ldh [rVBK], a
+	ld hl, ATTRMAP0
+	ld bc, $400
+	call ClearMem
+	ld hl, ATTRMAP0 + 8 * 32 + 4
+	ld b, 12
+.faces
+	ld a, b
+	and %11                     ; palettes 0-3
+	ld [hli], a
+	dec b
+	jr nz, .faces
+	; Back to bank 0, where the tiles and the tilemap are written.
+	xor a
+	ldh [rVBK], a
+	ret
+
+; One color in palette RAM: red, green and blue from 0 to 31.
+MACRO rgb
+	dw (\1) | (\2) << 5 | (\3) << 10
+ENDM
+
+; Four colors a palette, color 0 first: the face draws in 0 and 3. All
+; four share color 0, the background's.
+FaceBgPalettes:
+	rgb 31, 31, 31
+	rgb 20, 24, 31
+	rgb 10, 14, 28
+	rgb 4, 6, 20                ; blue
+	rgb 31, 31, 31
+	rgb 31, 22, 20
+	rgb 28, 12, 10
+	rgb 22, 2, 4                ; red
+	rgb 31, 31, 31
+	rgb 20, 30, 20
+	rgb 8, 22, 10
+	rgb 2, 14, 4                ; green
+	rgb 31, 31, 31
+	rgb 28, 20, 30
+	rgb 20, 10, 24
+	rgb 14, 2, 18               ; purple
+.end
+
+; An object's color 0 is transparent, so its entry is never drawn.
+FaceObjPalettes:
+	rgb 31, 31, 31
+	rgb 31, 28, 16
+	rgb 31, 20, 4
+	rgb 26, 10, 0               ; orange
+.end
+ENDC
+
 ; ---------------------------------------------------------------------------
 ; Memory helpers.
 
@@ -182,6 +294,14 @@ SECTION "Variables", WRAM0
 
 ; Counts VBlanks since the LCD came on: `gbcli run --until 'u16[wFrame] >= 60'`.
 wFrame:: dw
+
+IF DEF(GBCLI_GBC)
+SECTION "GBC mode", HRAM
+
+; Nonzero in GBC mode: on a GBC, built with `gbcli build --gbc`. Test it
+; before touching VBK, palette RAM or the attribute map.
+hGbc:: db
+ENDC
 
 SECTION "Shadow OAM", WRAM0, ALIGN[8]
 

@@ -250,6 +250,11 @@ pub fn build(tools: &Toolchain, options: &BuildOptions) -> Result<BuildMade, Bui
             args.push("-I".into());
             args.push(dir.display().to_string());
         }
+        if options.target == BuildTarget::Gbc {
+            // Every source can guard its color code with IF DEF(GBCLI_GBC),
+            // even in a project with no images and so no images.inc.
+            args.extend(["-D".into(), "GBCLI_GBC=1".into()]);
+        }
         args.extend(["-o".into(), object.display().to_string()]);
         args.push(rel.display().to_string());
         ok &= run.step(Tool::Rgbasm, &args, Some(source), &[&object])?;

@@ -191,16 +191,12 @@ pub(super) fn image_constants(e: &Entry) -> Vec<Constant> {
     }
 }
 
-/// The constants every image shares: the OBJ palettes' count and
-/// `GBCLI_GBC` under `--gbc`, and each named palette's index.
+/// The constants every image shares: the OBJ palettes' count under
+/// `--gbc`, and each named palette's index. `GBCLI_GBC` isn't one: the
+/// build defines it for every source (`rgbasm -D`), images or not.
 pub(super) fn shared_constants(s: &Shared) -> Vec<Constant> {
     let mut all = Vec::new();
     if let Some(made) = s.gbc {
-        all.push(Constant {
-            name: "GBCLI_GBC".into(),
-            value: "1".into(),
-            comment: "built with --gbc: the GBC labels are defined".into(),
-        });
         all.push(Constant {
             name: "OBJ_PALETTES".into(),
             value: made.obj_palettes.len().to_string(),

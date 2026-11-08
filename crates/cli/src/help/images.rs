@@ -89,7 +89,9 @@ What the program gets (build/images/, rewritten by every build):
                          y, x, tile, attributes per object ($20 X, $40 Y flip)
   named palettes         PaletteForest..PaletteForestEnd (RGB555 dw, 8 bytes),
                          PALETTE_FOREST (its place in assets/palettes.txt)
-  with --gbc             GBCLI_GBC; TownTilesGbc (color art only), TownAttrmap,
+  with --gbc             GBCLI_GBC (the build defines it in every source,
+                         images or not: IF DEF(GBCLI_GBC) guards color code);
+                         TownTilesGbc (color art only), TownAttrmap,
                          TownPalettes, TOWN_PALETTES; HeroTilesGbc;
                          ObjPalettesGbc, OBJ_PALETTES; attribute bits 0-2 are
                          the GBC palette

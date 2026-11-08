@@ -24,5 +24,6 @@ mod recipes;
 mod rgbds;
 mod serve;
 mod song;
+mod starter_gbc;
 mod traps;
 mod verbs;

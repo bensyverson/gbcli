@@ -63,7 +63,12 @@ const MOVE_UNREMARKED: u8 = 1;
 impl Shading {
     /// The shade of each of `colors`, which `choose` was given (by RGB555).
     pub fn shades(&self, colors: &[Rgba]) -> Vec<u8> {
-        colors.iter().map(|&c| self.by_key[&key(c)]).collect()
+        colors.iter().map(|&c| self.shade(c)).collect()
+    }
+
+    /// The shade of `c`, a color `choose` was given (by RGB555).
+    pub fn shade(&self, c: Rgba) -> u8 {
+        self.by_key[&key(c)]
     }
 
     /// Whether the stretch moved `c` far from its nearest shade (Ben's

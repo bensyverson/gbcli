@@ -248,7 +248,7 @@ fn clusters(group: &[Rgba], held: &[Vec<Key>]) -> Vec<Vec<Rgba>> {
 }
 
 /// "a", "a and b", "a, b and c".
-fn and(items: &[String]) -> String {
+pub(crate) fn and(items: &[String]) -> String {
     match items {
         [] => String::new(),
         [one] => one.clone(),

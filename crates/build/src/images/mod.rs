@@ -10,6 +10,7 @@
 mod agree;
 mod bg;
 mod census;
+mod derive;
 mod emit;
 mod find;
 #[cfg_attr(
@@ -29,7 +30,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use gbcli_protocol::{Diagnostic, ImageAsset, ImageKind, ImageLimit, ImageProblem, ImagesMade};
+use gbcli_protocol::{
+    BuildTarget, Diagnostic, ImageAsset, ImageKind, ImageLimit, ImageProblem, ImagesMade,
+};
 
 use crate::project::BuildError;
 use crate::toolchain::Toolchain;
@@ -89,14 +92,43 @@ impl Plan {
     }
 }
 
-/// Converts the project's images; `None` when it has none.
+/// Where an image's DMG version comes from.
+enum Version {
+    /// The image is DMG art: a DMG build's every image, and indexed art.
+    Art,
+    /// Color art under `--gbc`: derived from its colors (`derive`).
+    Derived,
+    /// Color art under `--gbc` with `name.dmg.png` beside it: that image.
+    Override(Pixels),
+}
+
+/// Converts the project's images for `target`; `None` when it has none.
 pub(crate) fn convert(
     tools: &Toolchain,
     project: &Path,
     shown: &dyn Fn(&Path) -> String,
+    target: BuildTarget,
     timeout: Duration,
 ) -> Result<Option<Converted>, BuildError> {
     let sources = find::sources(project, shown)?;
+    // Plan question 9: a DMG version a DMG build would ignore is an error.
+    if target == BuildTarget::Dmg
+        && let Some((s, dmg)) = sources.iter().find_map(|s| Some((s, s.dmg.as_ref()?)))
+    {
+        return Err(BuildError::Layout {
+            message: format!(
+                "{} is the DMG version of {} for a GBC build, but this build is for the DMG, \
+                 where the image itself is the DMG art",
+                shown(dmg),
+                shown(&s.path)
+            ),
+            remedy: format!(
+                "build with --gbc to use it, or remove {} to build {} as DMG art",
+                shown(dmg),
+                shown(&s.path)
+            ),
+        });
+    }
     let mut made = ImagesMade::default();
     let stopped = Converted {
         made: ImagesMade::default(),
@@ -127,40 +159,110 @@ pub(crate) fn convert(
             }
         };
     }
+    let read_png = |path: &Path| {
+        Pixels::read(path).map_err(|e| BuildError::Layout {
+            message: format!("{} isn't a PNG gbcli can read: {e}", shown(path)),
+            remedy: "save it as a PNG (8-bit gray, RGB or RGBA)".into(),
+        })
+    };
     let mut all = Vec::with_capacity(sources.len());
     for s in &sources {
-        let image = shown(&s.path);
-        let pixels = Pixels::read(&s.path).map_err(|e| BuildError::Layout {
-            message: format!("{image} isn't a PNG gbcli can read: {e}"),
-            remedy: "save it as a PNG (8-bit gray, RGB or RGBA)".into(),
-        })?;
-        all.push((s, image, pixels));
+        let pixels = read_png(&s.path)?;
+        let over = s.dmg.as_deref().map(read_png).transpose()?;
+        all.push((s, shown(&s.path), pixels, over));
     }
     // One color, one shade, in every image: the shades are chosen from the
     // whole project's colors before any image is planned.
     // With or without --gbc (plan question 10): `dmg` drives the cascade, the
     // named palettes are checked, and an assigned image builds as DMG art.
-    let declared = match palettes::read(project, &palette_shown, &images) {
-        Ok(named) => named.and_then(|n| n.dmg),
+    let named = match palettes::read(project, &palette_shown, &images) {
+        Ok(named) => named.unwrap_or_default(),
         Err(p) => {
             made.problems.push(p);
             return Ok(Some(Converted { made, ..stopped }));
         }
     };
-    let colors = project_colors(all.iter().map(|(_, _, p)| p));
-    let shading = shades::choose(declared.as_ref(), &colors);
+    // Each image's DMG version. In a DMG build every image is DMG art.
+    let mut versioned = Vec::with_capacity(all.len());
+    for ((s, image, pixels, over), rel) in all.into_iter().zip(&images) {
+        let assigned = named.assignments.get(rel);
+        let version = match (target, assigned, over) {
+            (BuildTarget::Dmg, _, _) | (BuildTarget::Gbc, Some(_), None) => Version::Art,
+            (BuildTarget::Gbc, Some(palette), Some(_)) => {
+                let dmg = s.dmg.as_deref().expect("an override has a path");
+                return Err(BuildError::Layout {
+                    message: format!(
+                        "{} is a DMG version, but {image} is indexed art (assets/palettes.txt \
+                         assigns it `{palette}`): its shades already are its DMG version",
+                        shown(dmg)
+                    ),
+                    remedy: format!(
+                        "remove {} and draw {image} in its 4 shades; or drop the assignment \
+                         to make {image} color art, which the DMG version then overrides",
+                        shown(dmg)
+                    ),
+                });
+            }
+            (BuildTarget::Gbc, None, None) => Version::Derived,
+            (BuildTarget::Gbc, None, Some(o)) => Version::Override(o),
+        };
+        versioned.push((s, image, pixels, version));
+    }
+    // One color, one shade, in every image, overrides included.
+    let colors = project_colors(versioned.iter().flat_map(|(_, _, p, v)| match v {
+        Version::Override(o) => vec![p, o],
+        _ => vec![p],
+    }));
+    let shading = shades::choose(named.dmg.as_ref(), &colors);
     made.shades = Some(shading.choice);
-    let named: Vec<(&str, &Pixels)> = all.iter().map(|(_, i, p)| (i.as_str(), p)).collect();
-    let across = shared::across(&named, &colors, &shading);
+    // Colors shared across images are named only among DMG art: a derived
+    // version's shares are scoped to its tiles and objects (plan question 2).
+    let dmg_art: Vec<(String, &Pixels)> = versioned
+        .iter()
+        .filter_map(|(s, image, p, v)| match v {
+            Version::Art => Some((image.clone(), p)),
+            Version::Override(o) => Some((shown(s.dmg.as_deref()?), o)),
+            Version::Derived => None,
+        })
+        .collect();
+    let dmg_colors = project_colors(dmg_art.iter().map(|(_, p)| *p));
+    let dmg_named: Vec<(&str, &Pixels)> = dmg_art.iter().map(|(i, p)| (i.as_str(), *p)).collect();
+    let across = shared::across(&dmg_named, &dmg_colors, &shading);
+    let grays = derive::gray_shading();
 
     let mut plans: Vec<(&Source, String, Plan)> = Vec::new();
-    // Each plan's pixels, for the merged copy rgbgfx reads (`shared`).
-    let mut read: Vec<Pixels> = Vec::new();
-    for (s, image, pixels) in all {
+    // Each plan's DMG version, for rgbgfx: its pixels, and the file that
+    // holds them, if any (a derived version is written out first).
+    let mut read: Vec<(Pixels, Option<PathBuf>)> = Vec::new();
+    for (s, image, pixels, version) in versioned {
+        let dmg_shown = shown(&find::dmg_path(&s.path));
+        // The DMG version the checks read, under the name they give it.
+        let (checked_name, dmg, file, shading) = match version {
+            Version::Art => (image.clone(), pixels, Some(s.path.clone()), &shading),
+            Version::Override(o) => {
+                if let Some(p) = derive::override_size(&image, &dmg_shown, &pixels, &o) {
+                    made.problems.push(p);
+                    continue;
+                }
+                (dmg_shown, o, s.dmg.clone(), &shading)
+            }
+            Version::Derived => {
+                match derive::derive(&image, &dmg_shown, s.kind, &pixels, &shading) {
+                    Ok(d) => {
+                        made.problems.extend(d.warnings);
+                        (image.clone(), d.pixels, None, &grays)
+                    }
+                    Err(p) => {
+                        made.problems.push(p);
+                        continue;
+                    }
+                }
+            }
+        };
         let checked = match s.kind {
-            ImageKind::Bg => bg::check(&image, &pixels, &shading).map(Plan::Bg),
+            ImageKind::Bg => bg::check(&checked_name, &dmg, shading).map(Plan::Bg),
             ImageKind::Sprites => {
-                sheet::check(&image, &s.stem, &pixels, s.frame, &shading).map(Plan::Sheet)
+                sheet::check(&checked_name, &s.stem, &dmg, s.frame, shading).map(Plan::Sheet)
             }
             ImageKind::Tiles => {
                 unreachable!("find yields no tileset: assets/tiles/ isn't read yet")
@@ -170,7 +272,7 @@ pub(crate) fn convert(
             Ok(plan) => {
                 made.problems.extend(plan.warnings().iter().cloned());
                 plans.push((s, image, plan));
-                read.push(pixels);
+                read.push((dmg, file));
             }
             Err(problems) => made.problems.extend(problems),
         }
@@ -195,12 +297,13 @@ pub(crate) fn convert(
     }
     let mut data_paths = Vec::new();
     let mut ok = true;
-    for ((s, image, plan), pixels) in plans.iter().zip(&read) {
+    for ((s, image, plan), (pixels, file)) in plans.iter().zip(&read) {
         let data = format!("{OUT}/{}/{}", s.kind.dir(), s.stem);
-        // rgbgfx reads the image, or, when colors share a shade, a copy
-        // with them merged, removed once converted.
+        // rgbgfx reads the DMG version's file, or, when colors share a
+        // shade or the version was derived, a copy (with them merged),
+        // removed once converted.
         let merged = PathBuf::from(format!("{data}.merged.png"));
-        let transient = if plan.merges().is_empty() {
+        let transient = if plan.merges().is_empty() && file.is_some() {
             None
         } else {
             // Guarded before it is written, so a failed write leaves no
@@ -209,10 +312,9 @@ pub(crate) fn convert(
             shared::write(pixels, plan.merges(), &removed.0).map_err(io(removed.0.clone()))?;
             Some(removed)
         };
-        let rel = if transient.is_some() {
-            merged.as_path()
-        } else {
-            s.path.strip_prefix(project).unwrap_or(&s.path)
+        let rel = match (&transient, file) {
+            (None, Some(file)) => file.strip_prefix(project).unwrap_or(file),
+            _ => merged.as_path(),
         };
         let preview_path = project.join(format!("{data}.preview.png"));
         let (asset, picture) = match plan {

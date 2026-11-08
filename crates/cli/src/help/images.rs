@@ -40,6 +40,16 @@ color is an error. A build uses the dmg line, checks the rest, and builds
 an assigned image as DMG art; GBC color from the other palettes (build
 --gbc) isn't built yet.
 
+build --gbc: an image no palette is assigned to is color art, in any
+colors. Its DMG version is derived: each color takes its shade by the
+rules above. shared_shade then warns only for two colors in one tile (a
+sheet: one 8x16 object) that fall to one shade, naming those tiles; a
+derived sheet in all 4 shades is dmg_palette. To draw the DMG version
+yourself, put town.dmg.png beside town.png (hero.16x16.dmg.png beside
+hero.16x16.png): the same size, drawn as DMG art. A .dmg.png is an error
+without --gbc, and beside an assigned image, whose shades are already its
+DMG version.
+
 Every hardware limit is a `problem` row: limit, count, max, tiles=x,y (in
 the image's 8x8 grid; --json lists them all), message and remedy.
   bg_tiles_map        256 unique tiles per background map
@@ -62,6 +72,7 @@ the image's 8x8 grid; --json lists them all), message and remedy.
   shade_stretched     a warning: the stretch put a color 2+ shades from its
                       nearest (e.g. #101010 beside only black, drawn white)
   alpha               a pixel half transparent, or any in a background
+  dmg_override_size   build --gbc: town.dmg.png isn't town.png's size
   rgbgfx_agrees       not a limit: rgbgfx drew other indices than gbcli
                       planned (a gbcli bug; re-save the PNG as 8-bit)
 

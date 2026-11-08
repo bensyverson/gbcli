@@ -182,7 +182,13 @@ pub fn build(tools: &Toolchain, options: &BuildOptions) -> Result<BuildMade, Bui
     })?;
     let mut layout = Layout::of(&project, options, &shown)?;
     // Images first: the program includes what they become.
-    let images = crate::images::convert(tools, &project, &shown, options.tool_timeout)?;
+    let images = crate::images::convert(
+        tools,
+        &project,
+        &shown,
+        options.target,
+        options.tool_timeout,
+    )?;
     if let Some(generated) = images.as_ref().and_then(|i| i.generated.as_ref()) {
         layout.sources.push(generated.source.clone());
         layout.include.push(generated.include_dir.clone());

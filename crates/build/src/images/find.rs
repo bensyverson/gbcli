@@ -2,7 +2,9 @@
 //! `assets/sprites/*.png` (`.PNG` too, in any case), each named after its
 //! file so the program can address it (`town.png` is `TownTiles`,
 //! `TOWN_WIDTH`). A sprite sheet's name may carry its frame size:
-//! `hero.16x24.png`.
+//! `hero.16x24.png`. `<name>.dmg.png` beside `<name>.png` is not an image
+//! of its own but that image's DMG version for `build --gbc` (plan
+//! question 3); one with no color image beside it is a layout error.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -27,6 +29,8 @@ pub(crate) struct Source {
     pub constant: String,
     /// A sprite sheet's frame size in pixels, when its name gives one.
     pub frame: Option<(u32, u32)>,
+    /// `<name>.dmg.png` beside it, when there is one: its DMG version.
+    pub dmg: Option<PathBuf>,
 }
 
 /// Every image under `project/assets/`, backgrounds first, each directory
@@ -58,9 +62,35 @@ pub(crate) fn sources(
             }
         }
         paths.sort();
-        for path in paths {
-            found.push(source(kind, path, shown)?);
+        // `<name>.dmg.png` is `<name>.png`'s DMG version, not an image.
+        let (overrides, images): (Vec<PathBuf>, Vec<PathBuf>) =
+            paths.into_iter().partition(|p| color_stem(p).is_some());
+        let mut here: Vec<Source> = images
+            .into_iter()
+            .map(|path| source(kind, path, shown))
+            .collect::<Result<_, _>>()?;
+        for o in overrides {
+            let stem = color_stem(&o).expect("partitioned on it");
+            let Some(s) = here
+                .iter_mut()
+                .find(|s| s.path.file_stem().is_some_and(|f| f == stem.as_str()))
+            else {
+                let image = dir.join(format!("{stem}.png"));
+                return Err(BuildError::Layout {
+                    message: format!(
+                        "{} is a DMG version, but there is no color image {} beside it",
+                        shown(&o),
+                        shown(&image)
+                    ),
+                    remedy: format!(
+                        "add the color image, rename it to match one, or remove {}",
+                        shown(&o)
+                    ),
+                });
+            };
+            s.dmg = Some(o);
         }
+        found.extend(here);
     }
     let mut by_label: BTreeMap<&str, &Source> = BTreeMap::new();
     for s in &found {
@@ -170,7 +200,31 @@ fn source(
         label,
         constant,
         frame,
+        dmg: None,
     })
+}
+
+/// The file stem of the color image `path` is the DMG version of, when its
+/// name ends `.dmg.png` (in any case): `town` for `town.dmg.png`.
+fn color_stem(path: &Path) -> Option<String> {
+    let stem = path.file_stem()?.to_string_lossy();
+    let (color, suffix) = stem.rsplit_once('.')?;
+    suffix
+        .eq_ignore_ascii_case(DMG_SUFFIX)
+        .then(|| color.to_string())
+}
+
+/// What a DMG version's name adds to its color image's, before `.png`.
+const DMG_SUFFIX: &str = "dmg";
+
+/// Where `name.dmg.png`, the DMG version of the color image at `image`,
+/// would be.
+pub(crate) fn dmg_path(image: &Path) -> PathBuf {
+    let stem = image
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    image.with_file_name(format!("{stem}.{DMG_SUFFIX}.png"))
 }
 
 /// `16x24` as (16, 24).
@@ -233,6 +287,75 @@ mod tests {
         assert!(remedy.contains(" hero.16x16.png"), "{remedy}");
         let remedy = named(ImageKind::Bg, "town.16x16.png").unwrap_err();
         assert!(remedy.contains("town_16x16.png"), "{remedy}");
+    }
+
+    /// A project directory with these (empty) files under `assets/`.
+    fn project(name: &str, files: &[&str]) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("gbcli-find-{}-{name}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        for f in files {
+            let path = dir.join("assets").join(f);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, b"").unwrap();
+        }
+        dir
+    }
+
+    fn found(dir: &Path) -> Result<Vec<Source>, BuildError> {
+        sources(dir, &|p| {
+            p.strip_prefix(dir).unwrap_or(p).display().to_string()
+        })
+    }
+
+    #[test]
+    fn a_dmg_png_is_its_color_images_dmg_version_not_an_image() {
+        let dir = project(
+            "dmg-version",
+            &[
+                "bg/town.png",
+                "bg/town.dmg.png",
+                "bg/sky.png",
+                "sprites/hero.16x16.png",
+                "sprites/hero.16x16.DMG.PNG",
+            ],
+        );
+        let found = found(&dir).unwrap();
+        let named: Vec<(&str, Option<PathBuf>)> = found
+            .iter()
+            .map(|s| {
+                let dmg = s.dmg.as_ref().map(|p| p.strip_prefix(&dir).unwrap().into());
+                (s.stem.as_str(), dmg)
+            })
+            .collect();
+        assert_eq!(
+            named,
+            [
+                ("sky", None),
+                ("town", Some(PathBuf::from("assets/bg/town.dmg.png"))),
+                (
+                    "hero",
+                    Some(PathBuf::from("assets/sprites/hero.16x16.DMG.PNG"))
+                ),
+            ]
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_dmg_png_without_its_color_image_is_a_layout_error() {
+        let dir = project("dmg-orphan", &["bg/town.dmg.png", "bg/sky.png"]);
+        let body = found(&dir).unwrap_err().body();
+        assert!(
+            body.message.contains("assets/bg/town.dmg.png"),
+            "{}",
+            body.message
+        );
+        assert!(
+            body.message.contains("assets/bg/town.png"),
+            "{}",
+            body.message
+        );
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

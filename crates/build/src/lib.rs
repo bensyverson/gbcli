@@ -20,6 +20,20 @@ mod project;
 mod scaffold;
 mod toolchain;
 
+/// This process's id, for names two processes mustn't share.
+/// WEB SPIKE CUT: `std::process::id()` panics on wasm32 (as
+/// `gbcli_bundle::process_tag` says); one page is one process.
+pub(crate) fn process_tag() -> u32 {
+    #[cfg(not(target_family = "wasm"))]
+    {
+        std::process::id()
+    }
+    #[cfg(target_family = "wasm")]
+    {
+        0
+    }
+}
+
 pub use assets::{AssetsError, AssetsInput, AssetsOptions, assets};
 pub use diagnostics::parse as parse_diagnostics;
 pub use doctor::{BOOT_ROM_SIZES, DoctorInput, GIT_LOCAL_ENV_VARS, doctor};

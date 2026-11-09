@@ -236,7 +236,7 @@ impl Scratch {
     fn new() -> Result<Scratch, BuildError> {
         static NEXT: AtomicU32 = AtomicU32::new(0);
         let n = NEXT.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("gbcli-assets-{}-{n}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("gbcli-assets-{}-{n}", crate::process_tag()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).map_err(|error| BuildError::Io {
             path: dir.clone(),

@@ -88,3 +88,4 @@ Write one sentence per line (continuation lines indented under their bullet), so
   Every server op is a verb;
   `gbcli --help` lists them, and `crates/cli/src/verbs/` holds the table.
 - **`crates/gbcli`**: the binary, and the CLI's golden transcripts (`tests/cli/`).
+- **`crates/web` (`gbcli-web`, spike/web only)**: the web spike, the server's `Handler` built for `wasm32-wasip1` behind a few C-ABI exports, with Node checks against the native build (`crates/web/node/`, `scripts/web/build-spike.sh`); disposable, and the wasm cuts it needed in other crates are marked `WEB SPIKE CUT` ([project/2026-11-09-web-spike-findings.md](../project/2026-11-09-web-spike-findings.md)).

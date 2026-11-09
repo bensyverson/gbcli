@@ -31,7 +31,7 @@ impl Staging {
         static NEXT: AtomicU32 = AtomicU32::new(0);
         loop {
             let n = NEXT.fetch_add(1, Ordering::Relaxed);
-            let dir = beside.join(format!("{PREFIX}{}-{n}", std::process::id()));
+            let dir = beside.join(format!("{PREFIX}{}-{n}", crate::process_tag()));
             match fs::create_dir(&dir) {
                 Ok(()) => {
                     let lock = lock(&dir);

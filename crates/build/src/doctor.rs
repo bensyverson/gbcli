@@ -283,7 +283,7 @@ fn git_ignores(project: &Path, path_var: Option<&OsStr>, cwd: &Path) -> Option<b
 /// Whether gbcli can write where `.gbcli/` goes, probed with a file it
 /// removes again.
 fn writable(project: &Path) -> CheckMade {
-    let probe = project.join(format!(".gbcli-doctor-{}", std::process::id()));
+    let probe = project.join(format!(".gbcli-doctor-{}", crate::process_tag()));
     let result = fs::write(&probe, b"probe");
     let _ = fs::remove_file(&probe);
     match result {

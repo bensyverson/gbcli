@@ -12,6 +12,20 @@ use crate::error::StoreError;
 /// Distinguishes temp files written by threads of one process.
 static TEMP_SEQ: AtomicU64 = AtomicU64::new(0);
 
+/// This process's id, for names two processes mustn't share.
+/// WEB SPIKE CUT: `std::process::id()` panics ("no pids on this platform")
+/// on wasm32; a page is one process, so any constant serves there.
+pub fn process_tag() -> u32 {
+    #[cfg(not(target_family = "wasm"))]
+    {
+        std::process::id()
+    }
+    #[cfg(target_family = "wasm")]
+    {
+        0
+    }
+}
+
 /// A closure that wraps an `io::Error` with the path it concerns.
 pub(crate) fn io_at(path: &Path) -> impl FnOnce(std::io::Error) -> StoreError + '_ {
     move |source| StoreError::Io {
@@ -41,7 +55,7 @@ fn temp_path(path: &Path) -> PathBuf {
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
     let seq = TEMP_SEQ.fetch_add(1, Ordering::Relaxed);
-    parent.join(format!(".{name}.tmp.{}.{seq}", std::process::id()))
+    parent.join(format!(".{name}.tmp.{}.{seq}", process_tag()))
 }
 
 /// Creates one directory level; an existing directory is fine. The parent must

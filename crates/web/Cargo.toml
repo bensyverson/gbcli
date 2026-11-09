@@ -1,0 +1,20 @@
+[package]
+name = "gbcli-web"
+description = "Web spike (Stage 12): gbcli's protocol handler built for wasm32-wasip1, driven from JavaScript"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# cdylib for the .wasm, rlib so the native reference (examples/) shares the code.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+gbcli-bundle.workspace = true
+gbcli-protocol.workspace = true
+gbcli-server.workspace = true
+gbcli-engine.workspace = true
+gbcli-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true

@@ -26,6 +26,7 @@ pub use checkpoints::validate_checkpoint_name;
 pub use error::StoreError;
 pub use events::EVENTS_ROTATE_AT;
 pub use history::HISTORY_BACK;
+pub use io::process_tag;
 pub use lock::{LOCK_WAIT, SessionLock};
 pub use prune::{PruneReport, parse_duration};
 pub use session::RomSource;

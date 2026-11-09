@@ -37,6 +37,14 @@ pub struct Armed {
 impl Watchdog {
     pub fn new() -> Watchdog {
         let shared = Arc::new(Shared::default());
+        // WEB SPIKE CUT: wasm32 can't spawn a thread ("Not supported"), so
+        // there the guard never fires: only a zero allowance interrupts.
+        if cfg!(target_family = "wasm") {
+            return Watchdog {
+                shared,
+                thread: None,
+            };
+        }
         let thread = {
             let shared = shared.clone();
             std::thread::Builder::new()

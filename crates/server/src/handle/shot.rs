@@ -210,7 +210,7 @@ pub(super) fn write_all_atomically(files: &[(&Path, &[u8])]) -> Result<(), Failu
 
 fn temp_beside(path: &Path) -> std::path::PathBuf {
     let name = path.file_name().unwrap_or_default().to_string_lossy();
-    path.with_file_name(format!(".{name}.{}.tmp", std::process::id()))
+    path.with_file_name(format!(".{name}.{}.tmp", gbcli_bundle::process_tag()))
 }
 
 fn bad(message: String, remedy: String) -> Failure {

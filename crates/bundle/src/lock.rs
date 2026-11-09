@@ -62,6 +62,11 @@ impl SessionStore {
         ensure_dir(&self.bundle().locks_dir())?;
         let path = self.lock_path();
         let file = open_lock_file(&path).map_err(io_at(&path))?;
+        // WEB SPIKE CUT: wasip1 has no flock ("try_lock() not supported");
+        // a page is the only writer of its store, so the file alone serves.
+        if cfg!(target_family = "wasm") {
+            return Ok(SessionLock { file });
+        }
         let start = Instant::now();
         loop {
             match file.try_lock() {

@@ -18,6 +18,8 @@ members = [
     "crates/pixels",
     "crates/font",
     "crates/flash",
+    # Web spike (Stage 12, spike/web only): never merged into main as is.
+    "crates/web",
 ]
 
 [workspace.package]

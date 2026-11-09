@@ -134,7 +134,7 @@ pub(crate) fn new_incarnation() -> u64 {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_nanos() as u64);
-    nanos ^ (u64::from(std::process::id()) << 48)
+    nanos ^ (u64::from(crate::io::process_tag()) << 48)
 }
 
 impl SessionStore {

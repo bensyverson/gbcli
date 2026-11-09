@@ -1,6 +1,6 @@
 # Plan: the last example game (C, first-person raycaster)
 
-2026-11-09, sixteenth session. **Status: draft, Ben's two questions answered. Not imported, and not dispatched until the D/E DX review (`f57YRV`) is back and the fixes Ben accepts from it have landed** (Ben, 2026-11-09). This doc details the placeholder `uI1JDB` under Stage 11 (`7Dap6M`), in the shape of [2026-11-09-games-de-plan.md](2026-11-09-games-de-plan.md). The goal, Ben's rulings and how game agents work are in [2026-11-08-example-games-plan.md](2026-11-08-example-games-plan.md). This doc adds only the game and what D and E taught.
+2026-11-09, sixteenth session. **Status: imported 2026-11-09 (seventeenth session) under `uI1JDB` as rhoqoN, kUjuOP, Vhu7N0, ll9Zq2, TGAudV; after import the tracker is the plan.** Ben's two questions are answered below, and the D/E fixes it waited for have landed. This doc details the placeholder `uI1JDB` under Stage 11 (`7Dap6M`), in the shape of [2026-11-09-games-de-plan.md](2026-11-09-games-de-plan.md). The goal, Ben's rulings and how game agents work are in [2026-11-08-example-games-plan.md](2026-11-08-example-games-plan.md). This doc adds only the game and what D and E taught.
 
 ## What D and E taught the briefs
 

@@ -72,8 +72,11 @@ pub struct RasterWriter {
 }
 
 impl RasterMade {
-    /// Every write counted by register and writer PC, in the order each
-    /// pair first wrote.
+    /// Every write counted by register and writer PC, riskiest first: by
+    /// writes that landed in drawing, then of unknown mode, then in OAM
+    /// scan, most first. A big game has hundreds of writers and a reader
+    /// sees the first few, so those that may have changed a line being drawn
+    /// lead; the safe ones keep the order each pair first wrote.
     pub fn writers(&self) -> Vec<RasterWriter> {
         let mut writers: Vec<RasterWriter> = Vec::new();
         for w in self.rows.iter().flat_map(|r| &r.writes) {
@@ -98,6 +101,8 @@ impl RasterMade {
                 None => &mut writer.unknown,
             } += 1;
         }
+        // Stable, so ties keep first-write order.
+        writers.sort_by_key(|w| std::cmp::Reverse((w.drawing, w.unknown, w.oam_scan)));
         writers
     }
 }
@@ -172,5 +177,31 @@ mod tests {
                 },
             ]
         );
+    }
+
+    /// A big game has hundreds of writer sites and the text shows only the
+    /// first few, so the ones that may have changed a line being drawn come
+    /// first: by writes in drawing, then of unknown mode, then in OAM scan,
+    /// most first; the safe ones (HBlank and VBlank only) keep their order.
+    #[test]
+    fn writers_come_riskiest_first_and_the_safe_ones_in_first_write_order() {
+        use PpuModeView::{Drawing, Hblank, OamScan, Vblank};
+        let made = RasterMade {
+            frames: 1,
+            lines: 154,
+            rows: vec![
+                line(10, vec![write("rSCX", 0xA, Some(Hblank))]),
+                line(11, vec![write("rSCX", 0xB, Some(OamScan))]),
+                line(12, vec![write("rSCX", 0xC, None), write("rSCX", 0xC, None)]),
+                line(13, vec![write("rSCX", 0xD, Some(Drawing))]),
+                line(14, vec![write("rSCY", 0xE, Some(Drawing))]),
+                line(15, vec![write("rSCY", 0xE, Some(Drawing))]),
+                line(16, vec![write("rSCX", 0xF, Some(Vblank))]),
+                line(17, vec![write("rSCX", 0x10, None)]),
+            ],
+            unsupported: Vec::new(),
+        };
+        let order: Vec<u16> = made.writers().iter().map(|w| w.pc).collect();
+        assert_eq!(order, vec![0xE, 0xD, 0xC, 0x10, 0xB, 0xA, 0xF]);
     }
 }

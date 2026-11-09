@@ -310,9 +310,10 @@ pub const RUN: &[FlagSpec] = &[
         "raster",
         "each IO-register write the run made: first a raster_writer row per register and \
          writer PC counting its writes by the PPU mode they landed in (unknown= where the \
-         emulator can't tell), then by frame and line, at most 20 lines with at most 20 writes \
-         each: register, value, writer's PC, ticks into the line (912 per line) and mode= \
-         (--json has every line and write)",
+         emulator can't tell), at most 20, those with writes in drawing, unknown or oam_scan \
+         first, and a more row summing the rest; then by frame and line, at most 40 rows of \
+         lines and writes (20 lines, 20 writes to a line): register, value, writer's PC, \
+         ticks into the line (912 per line) and mode= (--json has every line and write)",
     ),
     value(
         "keys",

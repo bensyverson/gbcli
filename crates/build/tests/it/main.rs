@@ -9,6 +9,7 @@ mod build_env;
 mod build_safety;
 mod common;
 mod doctor;
+mod fonts;
 mod images_bg;
 mod images_dmg_version;
 mod images_edges;

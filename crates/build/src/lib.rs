@@ -10,6 +10,7 @@
 mod assets;
 mod diagnostics;
 mod doctor;
+mod font;
 mod images;
 mod music;
 mod paths;
@@ -21,6 +22,7 @@ mod toolchain;
 pub use assets::{AssetsError, AssetsInput, AssetsOptions, assets};
 pub use diagnostics::parse as parse_diagnostics;
 pub use doctor::{BOOT_ROM_SIZES, DoctorInput, GIT_LOCAL_ENV_VARS, doctor};
+pub use font::font;
 pub use music::{MUSIC_DIR, MUSIC_OUT, song_problem};
 pub use pixels::pixels;
 pub use project::{BuildError, BuildOptions, TOOL_TIMEOUT, build, default_rom, default_target_of};

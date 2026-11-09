@@ -19,6 +19,8 @@ fn help_works_with_no_preconditions_and_leaves_no_trace() {
         &["build", "--help"],
         &["assets", "--help"],
         &["version", "--help"],
+        &["help", "fonts"],
+        &["font", "--help"],
     ] {
         let run = p.gbcli(args);
         assert_eq!(run.code, 0, "{args:?}: {}", run.stderr);

@@ -9,6 +9,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::font::FontAsset;
 use crate::toolchain::Severity;
 
 mod asset;
@@ -183,6 +184,18 @@ pub enum ImageLimit {
     /// entry the palettes don't have; `line` and `column` say where. The
     /// build still checks every other image.
     PixelsText,
+    /// A font file (`assets/fonts/NAME.yaff`) isn't gbcli's YAFF subset;
+    /// `line` and `column` say where.
+    FontText,
+    /// A build emits at most 254 glyphs of a font (`$FE` and `$FF` are the
+    /// charmap's newline and end), and this font holds more with no
+    /// character list (`NAME.charlist`) to limit them; `count` is its
+    /// glyphs, or the list's.
+    FontGlyphs,
+    /// A character asked for (an `assets` request's `glyphs`, or a
+    /// build's character list) that the font has no glyph for; `message`
+    /// names it and its code point.
+    FontMissing,
 }
 
 impl ImageLimit {
@@ -211,6 +224,9 @@ impl ImageLimit {
             ImageLimit::DmgOverrideSize => "dmg_override_size",
             ImageLimit::ShadesUnpinned => "shades_unpinned",
             ImageLimit::PixelsText => "pixels_text",
+            ImageLimit::FontText => "font_text",
+            ImageLimit::FontGlyphs => "font_glyphs",
+            ImageLimit::FontMissing => "font_missing",
         }
     }
 }
@@ -396,6 +412,10 @@ pub struct ImagesMade {
     /// What the images share on the GBC, when the target is the GBC.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gbc: Option<GbcImagesMade>,
+    /// The fonts under `assets/fonts/` (or a manifest's), in name order:
+    /// for a build, the glyphs it emitted; for `assets`, those asked for.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fonts: Vec<FontAsset>,
 }
 
 impl ImagesMade {

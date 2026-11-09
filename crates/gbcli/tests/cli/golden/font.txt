@@ -1,0 +1,23 @@
+$ gbcli font main.yaff
+exit 0
+font path=main.yaff glyphs=4 fixed=0 widths=2..7
+$ gbcli font main.yaff --sample Hi <heart>? --preview line.png
+exit 0
+font path=main.yaff glyphs=4 fixed=0 widths=2..7
+sample width=17 tiles=3 missing=?
+preview path=line.png bytes=143
+$ gbcli font main.yaff --preview all.png
+exit 0
+font path=main.yaff glyphs=4 fixed=0 widths=2..7
+preview path=all.png bytes=157
+$ gbcli font main.yaff --sample HiHi --fit 14
+exit 0
+font path=main.yaff glyphs=4 fixed=0 widths=2..7
+sample width=14 tiles=2 fit=14
+$ gbcli font main.yaff --sample HiHi --fit 13
+exit 1
+font path=main.yaff glyphs=4 fixed=0 widths=2..7
+sample width=14 tiles=2 fit=13
+--- stderr
+gbcli: predicate_false: the sample is 14 px wide, past --fit 13 by 1
+remedy: shorten the text, break it into lines, or use narrower glyphs

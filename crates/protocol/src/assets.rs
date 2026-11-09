@@ -3,7 +3,7 @@
 //! that needs each image's tile map and palettes before and apart from a
 //! build. The images are a project's `assets/`, or a manifest's.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -31,6 +31,11 @@ pub struct AssetsArgs {
     /// it nothing is kept, and the results name no previews.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub keep: Option<String>,
+    /// The glyphs to return from each font, by its path under `assets/`
+    /// (`fonts/talk.yaff`): each a character or a glyph's name, any number
+    /// of them. A font not named here returns every glyph it has.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub glyphs: BTreeMap<String, Vec<String>>,
 }
 
 /// Images to convert without a project, and the palettes and object size
@@ -48,6 +53,20 @@ pub struct AssetManifest {
     /// screen); unset, each sheet's frame height decides (`ObjectSize`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub objects: Option<ObjectSize>,
+    /// Fonts, each named as a project holds it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fonts: Vec<ManifestFont>,
+}
+
+/// One font of a manifest.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifestFont {
+    /// Its path under `assets/` in a project (`fonts/talk.yaff`): it sets
+    /// the font's labels, and the name a request's `glyphs` uses.
+    pub font: String,
+    /// The `.yaff` file to read.
+    pub file: String,
 }
 
 /// One image of a manifest.
@@ -90,6 +109,8 @@ struct UncheckedManifest {
     palettes: NamedPalettes,
     #[serde(default)]
     objects: Option<ObjectSize>,
+    #[serde(default)]
+    fonts: Vec<ManifestFont>,
 }
 
 impl TryFrom<UncheckedManifest> for AssetManifest {
@@ -100,6 +121,7 @@ impl TryFrom<UncheckedManifest> for AssetManifest {
             images: u.images,
             palettes: u.palettes,
             objects: u.objects,
+            fonts: u.fonts,
         };
         manifest.check()?;
         Ok(manifest)
@@ -139,6 +161,18 @@ impl AssetManifest {
                 return Err(format!("image `{}` is listed twice", i.image));
             }
         }
+        let mut fonts = BTreeSet::new();
+        for f in &self.fonts {
+            if !is_font_path(&f.font) {
+                return Err(format!(
+                    "font `{}` isn't a path under assets/: it is fonts/NAME.yaff",
+                    f.font
+                ));
+            }
+            if !fonts.insert(f.font.as_str()) {
+                return Err(format!("font `{}` is listed twice", f.font));
+            }
+        }
         if let Some(image) = self
             .palettes
             .assignments
@@ -155,3 +189,15 @@ impl AssetManifest {
 
 #[cfg(test)]
 mod tests;
+
+/// `fonts/NAME.yaff` (any case of `yaff`): one file in `fonts/`, as a
+/// build finds a project's fonts.
+pub fn is_font_path(path: &str) -> bool {
+    let Some(file) = path.strip_prefix("fonts/") else {
+        return false;
+    };
+    let font = file
+        .rsplit_once('.')
+        .is_some_and(|(stem, ext)| !stem.is_empty() && ext.eq_ignore_ascii_case("yaff"));
+    font && !file.contains(['/', '\\'])
+}

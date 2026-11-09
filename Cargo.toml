@@ -16,6 +16,7 @@ members = [
     "crates/build",
     "crates/music",
     "crates/pixels",
+    "crates/font",
     "crates/flash",
 ]
 
@@ -38,6 +39,7 @@ gbcli-audio = { path = "crates/audio" }
 gbcli-build = { path = "crates/build" }
 gbcli-music = { path = "crates/music" }
 gbcli-pixels = { path = "crates/pixels" }
+gbcli-font = { path = "crates/font" }
 gbcli-flash = { path = "crates/flash" }
 sameboy-sys = { path = "crates/sameboy-sys" }
 cc = "1"

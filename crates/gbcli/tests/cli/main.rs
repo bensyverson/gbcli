@@ -12,6 +12,7 @@ mod errors;
 mod filmstrip;
 mod flash;
 mod flash_build;
+mod font;
 mod help;
 mod honesty;
 mod images;

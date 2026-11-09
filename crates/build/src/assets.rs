@@ -4,6 +4,7 @@
 //! write goes to a scratch directory, removed after, unless the caller
 //! names one to keep it in.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -41,6 +42,9 @@ pub struct AssetsOptions {
     pub keep: Option<PathBuf>,
     /// How long one rgbgfx run may take; default [`TOOL_TIMEOUT`].
     pub tool_timeout: Duration,
+    /// The glyphs to return from each font, by its path under `assets/`
+    /// (`fonts/talk.yaff`); a font not named returns every glyph.
+    pub glyphs: BTreeMap<String, Vec<String>>,
 }
 
 impl AssetsOptions {
@@ -64,6 +68,7 @@ impl AssetsOptions {
         Ok(AssetsOptions {
             target: args.target,
             keep: args.keep.as_ref().map(PathBuf::from),
+            glyphs: args.glyphs.clone(),
             ..AssetsOptions::new(input, base)
         })
     }
@@ -76,6 +81,7 @@ impl AssetsOptions {
             target: BuildTarget::Dmg,
             keep: None,
             tool_timeout: TOOL_TIMEOUT,
+            glyphs: BTreeMap::new(),
         }
     }
 }
@@ -161,6 +167,10 @@ pub fn assets(tool: &ImageTool, options: &AssetsOptions) -> Result<AssetsMade, A
             input::project(&project, &shown)?
         }
         AssetsInput::Manifest(m) => input::manifest(m, &base, &shown)?,
+    };
+    let input = input::Input {
+        glyphs: options.glyphs.clone(),
+        ..input
     };
     let scratch;
     let dir = match &options.keep {

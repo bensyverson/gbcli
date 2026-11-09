@@ -11,7 +11,7 @@ id is yours and is echoed back. session and as default to serve's --session
 and --as. A mutation that passes rev is refused (rev_mismatch) if the session
 moved on. Unknown and repeated fields are refused, naming the nearest field.
 Fields marked ? may be left out; an op with no required field may omit args.
-This schema's protocol version is 2, which the version op reports. It goes up
+This schema's protocol version is 3, which the version op reports. It goes up
 on a breaking change to these shapes (a new value of a response's enum among
 them), not for a new op or a new optional request field.
 
@@ -71,11 +71,16 @@ build   dir?: PATH  src?: [PATH]  include?: [PATH]  out?: PATH
         target?: "dmg"|"gbc"  ("gbc": dual mode, rgbfix -c; default "dmg")
         restore?: CHECKPOINT  (into session, whose ROM must be the build's)
 assets  dir?: PATH | manifest?: MANIFEST  target?: "dmg"|"gbc"  keep?: PATH
+        glyphs?: {FONT: [KEY]}
         (images converted as build converts them, with rgbgfx alone; keep
         keeps the data and previews, else nothing is written; result.assets:
-        {target, images: as result.build.images, diagnostics})
+        {target, images: as result.build.images, diagnostics}; glyphs: the
+        glyphs wanted from each font, FONT its path under assets/
+        (fonts/NAME.yaff), KEY a character or a glyph's name, no cap; a font
+        not named returns every glyph)
         MANIFEST = {images: [{image: IMAGE, file: PATH, dmg?: PATH}],
-                    palettes?: NAMED, objects?: "8x8"|"8x16"}  (IMAGE as
+                    palettes?: NAMED, objects?: "8x8"|"8x16",
+                    fonts?: [{font: FONT, file: PATH}]}  (IMAGE as
                     in assets/, each once; NAMED as below, assigning only
                     listed images; objects: every sheet's object size, as
                     palettes.txt's objects line)
@@ -88,9 +93,17 @@ pixels  file: PATH  text?: PATH  tiles?: true  png?: PATH  preview?: PATH
         frames?, tiles?, wrote: [{kind: "text"|"png"|"preview", path, bytes}]};
         on pixels_unreadable, error.result.pixels_problem: {path, line?,
         column?, x?, y?, message, remedy})
+font    file: PATH  sample?: TEXT  preview?: PATH  fit?: PX
+        (a .yaff font read; result.font: {path, glyphs, fixed, min_width?,
+        max_width?, sample?: {text, width, tiles, missing?: [TEXT], data: HEX
+        (the tiles, 1bpp, gbcli help fonts), fit?}, preview?: {path, bytes}};
+        fit: predicate_false past PX, the result on the error; on
+        font_unreadable, error.result.font_problem: {path, line?, column?,
+        message, remedy})
 version —   (result.version: {gbcli: "0.1.0", protocol: N, sameboy: COMMIT,
         patch_set: HASH}; check protocol before relying on the rest)
-        (build, assets, doctor, new, opcode, pixels and version need no session;
+        (build, assets, doctor, new, opcode, pixels, font and version need no
+        session;
         paths are relative to the server's working directory)
 power_cycle  sav?: PATH  rtc_advance?: "45s"|"30m"|"12h"|"7d"
         (a new head at power-on, keeping the cart's battery RAM and clock;
@@ -109,7 +122,7 @@ frame_budget, raster, audio, oam_log, equiv, view, memory, symbols,
 checkpoints, keys_unapplied, writes, checkpoint, restored, breakpoint, watch,
 deleted, machine, registers, ppu, sessions, events, gaps, pruned, kept, busy, removed,
 build, assets, doctor, created, song, song_problem, pixels, pixels_problem,
-opcodes, version,
+font, font_problem, opcodes, version,
 power_cycle, sav,
 flash_notes (run, step: each flash note, also a warning; a failed run's or
 step's are on its error).
@@ -143,6 +156,14 @@ tile_map (no slot without --gbc); a --gbc build fills gbc for every image.
             pixels_text only); on a hardware limit of a .pixels image, the
             line (block, map row or fill) that drew the most legend
             characters of the first tile in tiles, the later on a tie
+Fonts, in result.build.images.fonts and result.assets.images.fonts (gbcli
+help fonts): [{source, label, fixed, glyphs: [{key, width, rows: [N ×8],
+origin: "drawn"|"composed"}]}], glyphs in glyph-number order (a build's
+charmap numbers; for assets, the font's order among those asked for), rows
+row 0 first, bit 7 the leftmost pixel. problems[].limit also: font_text (with
+line and column), font_glyphs (past 254 in a build, without a character
+list), font_missing (a character asked for that the font lacks).
+  font  {"source":"assets/fonts/talk.yaff","label":"Talk","fixed":false,"glyphs":[{"key":"i","width":2,"rows":[0,128,0,128,128,128,128,0],"origin":"drawn"}]}
 ENTRY = {index: N, flip?: "x"|"y"|"xy", palette?: 0-7}: the tile in the
 image's own data (a sheet unit's top tile, even), how a sheet unit is
 flipped, and its GBC palette slot (on a GBC image, every entry has one).
@@ -195,6 +216,8 @@ Examples:
   {"id":"34","op":"assets","args":{"manifest":{"images":[{"image":"tiles/font.png","file":"art/font.png"}]},"target":"gbc"}}
   {"id":"35","op":"run","args":{"at":"floor5","frames":900,"keys":["A@4700","-A@4702"],"keys_since":"boot","expect":["[wFail] == 0"]}}
   {"id":"36","op":"view","args":{"what":"memory","addr":"wMap","len":16,"out":"map.bin"}}
+  {"id":"37","op":"font","args":{"file":"assets/fonts/talk.yaff","sample":"Press START","fit":144}}
+  {"id":"38","op":"assets","args":{"dir":"game","glyphs":{"fonts/talk.yaff":["H","i","heart"]}}}
 "#;
 
 #[cfg(test)]
@@ -216,7 +239,7 @@ mod tests {
         }
         ops.sort();
         ops.dedup();
-        assert_eq!(ops.len(), 30, "one example per op: {ops:?}");
+        assert_eq!(ops.len(), 31, "one example per op: {ops:?}");
     }
 
     /// run's `expect` and `keys_since`, with an example that parses into
@@ -319,5 +342,41 @@ mod tests {
         ] {
             assert!(SCHEMA.contains(word), "{word}");
         }
+    }
+
+    /// Fonts (leaf IQRDj5): the `font` op, the assets request's glyphs, a
+    /// manifest's fonts, FontAsset's shape, and the new limits and code;
+    /// the FontAsset example parses into the protocol's own type.
+    #[test]
+    fn fonts_are_listed_and_their_examples_parse() {
+        use gbcli_protocol::{FontAsset, GlyphOrigin, ImageLimit, Op};
+        for needed in [
+            "font    file: PATH  sample?: TEXT  preview?: PATH  fit?: PX",
+            "glyphs?: {FONT: [KEY]}",
+            "fonts?: [{font: FONT, file: PATH}]",
+            "font, font_problem,",
+            "font_unreadable",
+            ImageLimit::FontText.name(),
+            ImageLimit::FontGlyphs.name(),
+            ImageLimit::FontMissing.name(),
+        ] {
+            assert!(SCHEMA.contains(needed), "{needed}");
+        }
+        let asset = SCHEMA
+            .lines()
+            .find_map(|l| l.trim().strip_prefix("font  {"))
+            .map(|rest| format!("{{{rest}"))
+            .expect("a font asset example");
+        let asset: FontAsset = serde_json::from_str(&asset).unwrap();
+        assert_eq!(asset.glyphs[0].origin, GlyphOrigin::Drawn);
+        let line = SCHEMA
+            .lines()
+            .map(str::trim)
+            .find(|l| l.contains(r#""op":"assets""#) && l.contains(r#""glyphs""#))
+            .expect("an assets example asking for glyphs");
+        let Op::Assets(args) = parse_request(line).unwrap().op else {
+            panic!("{line}")
+        };
+        assert!(args.glyphs.contains_key("fonts/talk.yaff"));
     }
 }

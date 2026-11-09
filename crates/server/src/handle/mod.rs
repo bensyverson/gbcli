@@ -8,6 +8,7 @@ mod build;
 mod bundle_ops;
 mod config;
 mod failure;
+mod font;
 mod head;
 mod history;
 mod listing;
@@ -257,6 +258,7 @@ impl Handler {
             | Op::Assets(_)
             | Op::Opcode(_)
             | Op::Pixels(_)
+            | Op::Font(_)
             | Op::Version => Err(Failure::new(ErrorBody::new(
                 ErrorCode::BadRequest,
                 "that op doesn't name a session",

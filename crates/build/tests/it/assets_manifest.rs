@@ -25,6 +25,7 @@ fn manifest_of(file: &str, image: &str, dmg: Option<&str>) -> AssetManifest {
         }],
         palettes: NamedPalettes::default(),
         objects: None,
+        fonts: Vec::new(),
     }
 }
 

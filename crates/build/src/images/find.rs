@@ -324,20 +324,7 @@ pub(crate) fn source(
             ),
         });
     }
-    let words: Vec<&str> = stem.split(['_', '-']).filter(|w| !w.is_empty()).collect();
-    let label = words
-        .iter()
-        .map(|w| {
-            let mut c = w.chars();
-            let first = c.next().expect("words are non-empty").to_ascii_uppercase();
-            std::iter::once(first).chain(c).collect::<String>()
-        })
-        .collect();
-    let constant = words
-        .iter()
-        .map(|w| w.to_ascii_uppercase())
-        .collect::<Vec<_>>()
-        .join("_");
+    let (label, constant) = stems(&stem);
     Ok(Source {
         kind,
         path,
@@ -377,7 +364,27 @@ pub(crate) fn dmg_path(image: &Path) -> PathBuf {
     image.with_file_name(format!("{stem}.{DMG_SUFFIX}.{ext}"))
 }
 
-fn is_name(stem: &str) -> bool {
+/// The labels' stem and the constants' stem a file stem gives:
+/// `hero-frame` is `HeroFrame` and `HERO_FRAME`.
+pub(super) fn stems(stem: &str) -> (String, String) {
+    let words: Vec<&str> = stem.split(['_', '-']).filter(|w| !w.is_empty()).collect();
+    let label = words
+        .iter()
+        .map(|w| {
+            let mut c = w.chars();
+            let first = c.next().expect("words are non-empty").to_ascii_uppercase();
+            std::iter::once(first).chain(c).collect::<String>()
+        })
+        .collect();
+    let constant = words
+        .iter()
+        .map(|w| w.to_ascii_uppercase())
+        .collect::<Vec<_>>()
+        .join("_");
+    (label, constant)
+}
+
+pub(super) fn is_name(stem: &str) -> bool {
     let mut chars = stem.chars();
     chars.next().is_some_and(|c| c.is_ascii_alphabetic())
         && chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
@@ -385,7 +392,7 @@ fn is_name(stem: &str) -> bool {
 
 /// The name nearest `stem` that is one: other characters become `_`, and
 /// anything before the first letter goes.
-fn name_like(stem: &str) -> String {
+pub(super) fn name_like(stem: &str) -> String {
     let start = stem.find(|c: char| c.is_ascii_alphabetic());
     let rest = start.map_or("image", |i| &stem[i..]);
     rest.chars()

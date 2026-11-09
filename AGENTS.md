@@ -24,6 +24,7 @@ gbcli is an agent-friendly Game Boy development tool: a headless, deterministic 
 - [scripts/bench/](scripts/bench/) — re-runnable benchmarks and their figures
 - [scripts/corpus/](scripts/corpus/) — fetch the pinned test-ROM corpus, rebuild its manifest, parse the shootout
 - [scripts/disasm/gen_opcodes.py](scripts/disasm/gen_opcodes.py) — regenerates the disassembler's table from [crates/engine/data/gb-opcodes/](crates/engine/data/gb-opcodes/SOURCE); `--check` fails if the table is stale
+- [scripts/fonts/gen_marks.py](scripts/fonts/gen_marks.py) — regenerates the font crate's combining-mark table from Python's `unicodedata`; `--check` fails if it is stale
 - [scripts/music/export-reference.sh](scripts/music/export-reference.sh) — builds hUGETracker's own `uge2source` and exports the reference songs
 - [scripts/help/check-doc-links.py](scripts/help/check-doc-links.py) — checks every Pan Docs and RGBDS link in the help topics; needs the network
 - [scripts/vendor-sameboy.sh](scripts/vendor-sameboy.sh), [scripts/build-roms.sh](scripts/build-roms.sh), [scripts/sameboy-core-hash.sh](scripts/sameboy-core-hash.sh) — re-vendor SameBoy, rebuild the committed boot and test ROMs, hash a `Core/` tree

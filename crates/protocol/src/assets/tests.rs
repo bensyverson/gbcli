@@ -118,3 +118,41 @@ fn a_manifest_may_set_the_object_size_of_every_sheet() {
     let bad = manifest(r#"{"images":[],"objects":"16x16"}"#).unwrap_err();
     assert!(bad.contains("unknown variant"), "{bad}");
 }
+
+#[test]
+fn an_assets_request_names_the_glyphs_it_wants_from_each_font() {
+    let request = parse_request(
+        r#"{"id":"1","op":"assets","args":{"glyphs":{"fonts/talk.yaff":["H","i","heart"]}}}"#,
+    )
+    .unwrap();
+    let Op::Assets(args) = &request.op else {
+        panic!("{:?}", request.op)
+    };
+    assert_eq!(
+        args.glyphs.get("fonts/talk.yaff").map(Vec::as_slice),
+        Some(&["H".to_string(), "i".into(), "heart".into()][..])
+    );
+    // Asking for nothing leaves the field off the wire.
+    let json = serde_json::to_string(&AssetsArgs::default()).unwrap();
+    assert_eq!(json, "{}");
+}
+
+#[test]
+fn a_manifest_names_fonts_as_a_project_holds_them() {
+    let m =
+        manifest(r#"{"images":[],"fonts":[{"font":"fonts/talk.yaff","file":"art/talk.yaff"}]}"#)
+            .expect("reads");
+    assert_eq!(m.fonts[0].font, "fonts/talk.yaff");
+    assert_eq!(m.fonts[0].file, "art/talk.yaff");
+    let e = manifest(r#"{"images":[],"fonts":[{"font":"talk.yaff","file":"t.yaff"}]}"#)
+        .expect_err("not under fonts/");
+    assert!(e.contains("fonts/NAME.yaff"), "{e}");
+    let e = manifest(
+        r#"{"images":[],"fonts":[{"font":"fonts/a.yaff","file":"1"},{"font":"fonts/a.yaff","file":"2"}]}"#,
+    )
+    .expect_err("twice");
+    assert!(e.contains("twice"), "{e}");
+    // A manifest of images alone still reads, and writes no fonts.
+    let m = manifest(r#"{"images":[]}"#).unwrap();
+    assert_eq!(serde_json::to_string(&m).unwrap(), r#"{"images":[]}"#);
+}

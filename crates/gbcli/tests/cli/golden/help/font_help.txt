@@ -1,0 +1,32 @@
+$ gbcli font --help
+exit 0
+gbcli font — read a .yaff font; set a sample, preview it, check it fits
+
+USAGE
+  gbcli font FILE [--sample TEXT] [--preview PATH] [--fit PX] [--json]
+
+Reads FILE, a font in gbcli's YAFF subset (`gbcli help fonts`), and prints a
+`font` row: its glyphs, whether every glyph is 8 wide (fixed), and its
+narrowest and widest glyph. --sample sets TEXT on the host by the layout
+rules, the reference a renderer matches pixel for pixel, and prints a `sample`
+row: its width in pixels, the tiles it touches and any character the font
+lacks (missing, which takes no room); --json adds its tiles as 1bpp hex.
+--preview writes a 4x PNG. --fit PX fails with predicate_false (exit 1) when
+the sample is wider. A font that doesn't read is font_unreadable (exit 4) with
+its line and column in a `problem` row. Needs no session and no RGBDS.
+
+CLASS
+  build: runs RGBDS from PATH, checked against the pinned version (`gbcli doctor`); a session only to reload the build into; `new`, `song`, `pixels` and `font` need neither, and `assets` only rgbgfx.
+
+FLAGS
+  --sample TEXT           set TEXT by the layout rules (`gbcli help fonts`) and print its width and tiles; a named glyph is written <name>
+  --preview PATH          write a 4x PNG with tile boundaries marked: the sample, or without one every glyph (for looking only; never in assets/)
+  --fit PX                fail (exit 1) when the sample is wider than PX pixels
+
+MORE FLAGS
+  --json                  print the protocol's result object instead of rows
+
+EXAMPLE
+  gbcli font assets/fonts/main.yaff --sample "Press START" --fit 144
+    prints the sample's width and tiles, and exits 1 if it is wider than 144
+    px

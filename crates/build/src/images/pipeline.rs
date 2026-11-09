@@ -12,6 +12,7 @@ use gbcli_protocol::{BuildTarget, ImageKind, ImageLimit, ImageProblem, ImagesMad
 use super::derive::{self, Version};
 use super::emit::{self, Entry};
 use super::find::{self, KINDS, Source};
+use super::fonts::{self, Select};
 use super::input::{Input, Origin};
 use super::pixels::{Color, Pixels, Read, Unread};
 use super::{Checked, Converted, Generated, Plan, bg, census, indexed, output, run, shades};
@@ -46,11 +47,24 @@ pub(crate) fn convert(
         palettes,
         objects,
         problems,
+        fonts,
+        glyphs,
     } = input;
     let mut made = ImagesMade {
         problems,
         ..ImagesMade::default()
     };
+    // A build emits what its fonts allow; `assets` returns what was asked.
+    let select = match place.generated {
+        Some(_) => Select::Build,
+        None => Select::Request(&glyphs),
+    };
+    let fonts::Fonts {
+        assets: font_assets,
+        emitted: font_entries,
+        problems: font_problems,
+    } = fonts::convert(&fonts, &select, shown)?;
+    made.fonts = font_assets;
     let stopped = Converted {
         made: ImagesMade::default(),
         diagnostics: Vec::new(),
@@ -60,13 +74,30 @@ pub(crate) fn convert(
     if sources.is_empty() {
         // No images to shade, but a malformed palette file is still the
         // project's mistake to hear about.
-        if made.problems.is_empty() {
+        made.problems.extend(font_problems);
+        if made.problems.is_empty() && fonts.is_empty() {
             return Ok(None);
         }
         let stops = made.first_error().is_some();
+        let generated = if stops {
+            None
+        } else {
+            let shared = emit::Shared {
+                gbc: None,
+                named: &[],
+                objects: None,
+                fonts: &font_entries,
+            };
+            let written = write_generated(place, &[], &shared, shown)?;
+            written.map(|(generated, include)| {
+                made.include = Some(include);
+                generated
+            })
+        };
         return Ok(Some(Converted {
             made,
             stopped: stops,
+            generated,
             ..stopped
         }));
     }
@@ -133,6 +164,7 @@ pub(crate) fn convert(
             .map(|(p, _)| p),
     );
     if bad_palettes {
+        made.problems.extend(font_problems);
         return Ok(Some(Converted { made, ..stopped }));
     }
     find::palette_collision(&sources, &named_palettes, palettes.shown(), shown)?;
@@ -301,6 +333,7 @@ pub(crate) fn convert(
             .extend(indexed::unpinned(&named_palettes, &assigned, &shading));
     }
     locate(&mut made.problems, &texts);
+    made.problems.extend(font_problems);
     if made.first_error().is_some() {
         return Ok(Some(Converted { made, ..stopped }));
     }
@@ -366,8 +399,8 @@ pub(crate) fn convert(
                 gbc: gbc_made.as_ref(),
                 named: &named_palettes.palettes,
                 objects,
+                fonts: &font_entries,
             };
-            let (asm, inc) = (place.dir.join("images.asm"), place.dir.join("images.inc"));
             let data: Vec<String> = plans
                 .iter()
                 .map(|c| format!("{from_project}/{}/{}", c.s.kind.dir(), c.s.stem))
@@ -376,12 +409,11 @@ pub(crate) fn convert(
             // the plans' order), so the include and the protocol can't
             // disagree.
             let entries = entries(&plans, &data, &made);
-            fs::write(&asm, emit::asm(&entries, &shared)).map_err(io(asm.clone()))?;
-            fs::write(&inc, emit::inc(&entries, &shared)).map_err(io(inc.clone()))?;
-            made.include = Some(shown(&inc));
-            Some(Generated {
-                source: asm,
-                include_dir: PathBuf::from(from_project),
+            let written = write_generated(place, &entries, &shared, shown)?;
+            drop(entries);
+            written.map(|(generated, include)| {
+                made.include = Some(include);
+                generated
             })
         }
         None => None,
@@ -393,6 +425,32 @@ pub(crate) fn convert(
         generated,
         stopped: false,
     }))
+}
+
+/// Writes `images.asm` and `images.inc` for a build (`place.generated`),
+/// with the include as shown; nothing for `assets`.
+fn write_generated(
+    place: &Place,
+    entries: &[Entry],
+    shared: &emit::Shared,
+    shown: &dyn Fn(&Path) -> String,
+) -> Result<Option<(Generated, String)>, BuildError> {
+    let Some(from_project) = place.generated else {
+        return Ok(None);
+    };
+    let io = |path: PathBuf| move |error| BuildError::Io { path, error };
+    fs::create_dir_all(place.dir).map_err(io(place.dir.to_path_buf()))?;
+    let (asm, inc) = (place.dir.join("images.asm"), place.dir.join("images.inc"));
+    fs::write(&asm, emit::asm(entries, shared)).map_err(io(asm.clone()))?;
+    fs::write(&inc, emit::inc(entries, shared)).map_err(io(inc.clone()))?;
+    let include = shown(&inc);
+    Ok(Some((
+        Generated {
+            source: asm,
+            include_dir: PathBuf::from(from_project),
+        },
+        include,
+    )))
 }
 
 /// Pixel text that doesn't read (or names a palette entry the palettes

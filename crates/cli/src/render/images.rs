@@ -38,6 +38,14 @@ pub fn rows(m: &ImagesMade) -> String {
             )
             .line();
     }
+    for f in &m.fonts {
+        out += &Row::new("font")
+            .field("source", &f.source)
+            .field("label", &f.label)
+            .field("glyphs", f.glyphs.len())
+            .flag("fixed", f.fixed)
+            .line();
+    }
     for p in &m.problems {
         let severity = match p.severity {
             Severity::Error => "error",
@@ -62,6 +70,7 @@ pub fn rows(m: &ImagesMade) -> String {
     out += &Row::new("images")
         .opt("include", m.include.as_deref())
         .field("converted", m.images.len())
+        .opt("fonts", (!m.fonts.is_empty()).then_some(m.fonts.len()))
         .field("errors", count(Severity::Error))
         .field("warnings", count(Severity::Warning))
         .opt("shades", m.shades.map(|s| s.rule.name()))

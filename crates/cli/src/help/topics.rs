@@ -18,11 +18,12 @@ pub enum Topic {
     Music,
     Images,
     Pixels,
+    Fonts,
     Flash,
 }
 
 impl Topic {
-    pub const ALL: [Topic; 15] = [
+    pub const ALL: [Topic; 16] = [
         Topic::Addresses,
         Topic::Expressions,
         Topic::Time,
@@ -37,6 +38,7 @@ impl Topic {
         Topic::Music,
         Topic::Images,
         Topic::Pixels,
+        Topic::Fonts,
         Topic::Flash,
     ];
 
@@ -56,6 +58,7 @@ impl Topic {
             Topic::Music => "music",
             Topic::Images => "images",
             Topic::Pixels => "pixels",
+            Topic::Fonts => "fonts",
             Topic::Flash => "flash",
         }
     }
@@ -80,6 +83,7 @@ impl Topic {
             Topic::Music => super::music::text(),
             Topic::Images => super::images::IMAGES,
             Topic::Pixels => super::pixels::text(),
+            Topic::Fonts => super::fonts::text(),
             Topic::Flash => super::flash::FLASH,
         }
     }
@@ -243,6 +247,7 @@ Exit codes — one table for every command; errors print to stderr as
      build_failed (RGBDS rejected the sources: see the diagnostic rows)
      song_unreadable (a song file is missing or malformed: see the problem row)
      pixels_unreadable (an image is missing or malformed: see the problem row)
+     font_unreadable (a font isn't gbcli's YAFF: see the problem row)
   5  environment: unsupported no_session boot_rom_missing toolchain_missing
      io_failed internal
 ";
@@ -324,7 +329,7 @@ mod tests {
                 }
             }
         }
-        assert_eq!(seen, 28, "every code in the closed set");
+        assert_eq!(seen, 29, "every code in the closed set");
     }
 
     #[test]
@@ -566,6 +571,47 @@ mod tests {
         }
         assert!(text.contains(gbcli_music::EXAMPLE), "the example, verbatim");
         assert!(text.contains(gbcli_music::FORMAT_LINE));
+        assert!(text.lines().all(|l| l.chars().count() <= 80), "{text}");
+    }
+
+    /// The fonts topic (leaf IQRDj5): the layout rules exactly as
+    /// gbcli-font states them, the subset's refusals, what a build gives
+    /// the program, the character list past 254, and the FontAsset seam.
+    #[test]
+    fn the_fonts_topic_states_the_layout_rules_and_the_build_output() {
+        let text = Topic::from_name("fonts").expect("a fonts topic").text();
+        assert!(text.contains(gbcli_font::RULES), "the rules, verbatim");
+        for needle in [
+            "assets/fonts/NAME.yaff",
+            "gbcli font FILE --sample",
+            "--fit",
+            "--preview",
+            "u+0020:",
+            "'é'",
+            "u+00E9",
+            "\"heart\"",
+            "NFC",
+            "precomposed",
+            "codepoint labels",
+            "MainFontGlyphs",
+            "MainFontWidths",
+            "MAIN_FONT_GLYPHS",
+            "MAIN_FONT_FIXED",
+            "MAIN_FONT_NEWLINE",
+            "MAIN_FONT_END",
+            "MAIN_FONT_CHARMAP hud, $80",
+            "PUSHC hud",
+            "<heart>",
+            "never merged",
+            "NAME.charlist",
+            "font_glyphs",
+            "font_missing",
+            "font_text",
+            "FontAsset",
+            "no cap",
+        ] {
+            assert!(text.contains(needle), "{needle} missing:\n{text}");
+        }
         assert!(text.lines().all(|l| l.chars().count() <= 80), "{text}");
     }
 }

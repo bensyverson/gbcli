@@ -153,6 +153,7 @@ fn a_manifest_with_named_palettes_and_a_tileset_converts_without_a_project() {
         }],
         palettes,
         objects: None,
+        fonts: Vec::new(),
     };
     manifest.check().unwrap();
     let mut options = AssetsOptions::new(AssetsInput::Manifest(manifest), temp.0.clone());
@@ -229,6 +230,7 @@ fn a_manifest_image_that_breaks_a_limit_fails_with_its_problem() {
         }],
         palettes: NamedPalettes::default(),
         objects: None,
+        fonts: Vec::new(),
     };
     let options = AssetsOptions::new(AssetsInput::Manifest(manifest), temp.0.clone());
     let body = assets(rgbds().images(), &options).unwrap_err().body();
@@ -254,6 +256,7 @@ fn a_manifest_file_that_isnt_there_is_a_bad_request_naming_it() {
         }],
         palettes: NamedPalettes::default(),
         objects: None,
+        fonts: Vec::new(),
     };
     let options = AssetsOptions::new(AssetsInput::Manifest(manifest), temp.0.clone());
     let body = assets(rgbds().images(), &options).unwrap_err().body();

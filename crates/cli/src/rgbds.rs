@@ -6,7 +6,8 @@
 use std::path::Path;
 
 use gbcli_protocol::{
-    AssetManifest, AssetsArgs, BuildArgs, BuildTarget, NewArgs, Op, OpcodeArgs, PixelsArgs,
+    AssetManifest, AssetsArgs, BuildArgs, BuildTarget, FontArgs, NewArgs, Op, OpcodeArgs,
+    PixelsArgs,
 };
 
 use crate::Env;
@@ -75,6 +76,7 @@ pub fn assets(inv: &Invocation, env: &Env) -> Result<Command, Usage> {
             BuildTarget::Dmg
         },
         keep: inv.one("keep").map(str::to_string),
+        glyphs: Default::default(),
     };
     Ok(request(only_json(inv), Op::Assets(args)))
 }
@@ -104,6 +106,9 @@ fn manifest(file: &str, env: &Env) -> Result<AssetManifest, Usage> {
     for image in &mut manifest.images {
         resolve(&mut image.file);
         image.dmg.iter_mut().for_each(resolve);
+    }
+    for font in &mut manifest.fonts {
+        resolve(&mut font.file);
     }
     Ok(manifest)
 }
@@ -137,6 +142,26 @@ pub fn pixels(inv: &Invocation) -> Command {
         palettes: path("palettes"),
     };
     request(only_json(inv), Op::Pixels(args))
+}
+
+/// `font`: the path as typed; `--fit` a whole number of pixels.
+pub fn font(inv: &Invocation) -> Result<Command, Usage> {
+    let fit = match inv.one("fit") {
+        Some(px) => Some(px.parse::<u32>().map_err(|_| {
+            Usage::new(
+                format!("--fit takes a width in pixels, not `{px}`"),
+                "`gbcli font FILE --sample TEXT --fit 144`",
+            )
+        })?),
+        None => None,
+    };
+    let args = FontArgs {
+        file: inv.positionals[0].clone(),
+        sample: inv.one("sample").map(str::to_string),
+        preview: inv.one("preview").map(str::to_string),
+        fit,
+    };
+    Ok(request(only_json(inv), Op::Font(args)))
 }
 
 /// `version` (and `--version`): the op, so the text line and a `serve`

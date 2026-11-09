@@ -14,8 +14,9 @@ gbcli help pixels). Keep one form of an image; both is a layout error.
   assets/sprites/hero.16x16.png  frames of 16x16, left to right, then down
   assets/sprites/shot.8x8.png  8x8 objects: a frame whose height is a
                                multiple of 8 but not 16 (shot.16x8.png too)
-  assets/tiles/font.png        a tileset: a background's unique tiles, no
-                               map (build your own from --json's tile_map)
+  assets/tiles/blocks.png      a tileset: a background's unique tiles, no
+                               map (build your own from --json's tile_map);
+                               a font goes in assets/fonts/ (help fonts)
 The hardware has one object size for the whole screen (LCDC bit 2), so a
 project may set it for every sheet: `objects: 8x8` (or `objects: 8x16`) in
 assets/palettes.txt cuts every frame into that size, a 16x16 frame into

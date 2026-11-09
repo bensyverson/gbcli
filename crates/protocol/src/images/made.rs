@@ -5,6 +5,8 @@
 
 use serde::Deserialize;
 
+use crate::font::FontAsset;
+
 use super::{GbcImagesMade, ImageAsset, ImageKind, ImageProblem, ImagesMade, ShadeChoice};
 
 /// [`ImagesMade`] as sent, before its images are checked against `gbc`.
@@ -19,6 +21,8 @@ pub(super) struct Unchecked {
     shades: Option<ShadeChoice>,
     #[serde(default)]
     gbc: Option<GbcImagesMade>,
+    #[serde(default)]
+    fonts: Vec<FontAsset>,
 }
 
 impl TryFrom<Unchecked> for ImagesMade {
@@ -59,6 +63,7 @@ impl TryFrom<Unchecked> for ImagesMade {
             problems: u.problems,
             shades: u.shades,
             gbc: u.gbc,
+            fonts: u.fonts,
         })
     }
 }

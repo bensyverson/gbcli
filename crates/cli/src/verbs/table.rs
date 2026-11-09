@@ -6,6 +6,7 @@ use super::flags::{
 };
 use super::table_battery::{POWER_CYCLE_VERB, SAV_VERB};
 use super::table_build::{ASSETS_VERB, BUILD_VERB, DOCTOR_VERB, NEW_VERB};
+use super::table_font::FONT_VERB;
 use super::table_opcode::OPCODE_VERB;
 use super::table_pixels::PIXELS_VERB;
 use super::table_read::{
@@ -364,6 +365,7 @@ pub const VERBS: &[VerbSpec] = &[
     ASSETS_VERB,
     SONG_VERB,
     PIXELS_VERB,
+    FONT_VERB,
     VerbSpec {
         verb: Verb::Serve,
         name: "serve",
@@ -412,8 +414,8 @@ pub const VERBS: &[VerbSpec] = &[
         flags: &[],
         groups: &[],
         about: "Topics: addresses, expressions, time, checkpointing, writes, budgets, \
-                exit-codes, hardware, traps, optimize, rgbds, music, images, pixels, flash. \
-                `gbcli help VERB` is `gbcli VERB --help`, except where a topic shares the \
+                exit-codes, hardware, traps, optimize, rgbds, music, images, pixels, fonts, \
+                flash. `gbcli help VERB` is `gbcli VERB --help`, except where a topic shares the \
                 verb's name to teach its file format: `gbcli help pixels` is the format, \
                 `gbcli pixels --help` the verb.",
         example: ("gbcli help addresses", "explains the address forms"),

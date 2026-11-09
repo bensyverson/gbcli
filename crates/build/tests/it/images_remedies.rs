@@ -104,6 +104,7 @@ impl Case {
             images,
             palettes,
             objects: None,
+            fonts: Vec::new(),
         };
         AssetsOptions {
             target: self.target,
@@ -308,6 +309,7 @@ fn a_manifests_derived_remedy_names_its_dmg_field_not_a_file_beside_it() {
             }],
             palettes: NamedPalettes::default(),
             objects: None,
+            fonts: Vec::new(),
         };
         let options = AssetsOptions {
             target,

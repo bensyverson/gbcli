@@ -9,6 +9,7 @@ use crate::battery::{FlashNoteRow, PowerCycleMade, SavMade};
 use crate::checkpoint::{Location, WatchAccess};
 use crate::equiv::EquivMade;
 use crate::error::{ErrorBody, ErrorCode};
+use crate::font::{FontMade, FontProblem};
 use crate::keys::KeyEvent;
 use crate::listing::{CheckpointRow, SymbolRow};
 use crate::opcode::OpcodeRow;
@@ -244,6 +245,12 @@ pub struct ResultBody {
     /// `pixels`: why the image didn't load (with `pixels_unreadable`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pixels_problem: Option<PixelsProblem>,
+    /// `font`: the font read, its sample and its preview.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font: Option<FontMade>,
+    /// `font`: why the font didn't load (with `font_unreadable`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_problem: Option<FontProblem>,
     /// `power_cycle`: what the cycle carried across.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub power_cycle: Option<PowerCycleMade>,

@@ -50,6 +50,8 @@
   - A character the font can't supply comes back as a problem naming the character and its code point. A composed glyph whose mark overlaps its base's ink comes back as a warning naming the glyph.
 - **Versioning.** The new op fields are additive and follow gbcli's protocol policy. If any field turns out to need it, `PROTOCOL_VERSION` (2 today) is bumped once with the font work, and LoadHigh's doctor sees it.
 
+  > **Built, 2026-11-09 (leaf IQRDj5): `PROTOCOL_VERSION` is 3.** The new error code `font_unreadable` and the image limits `font_text`, `font_glyphs` and `font_missing` are new values of enums a response carries, so the version went up. The shapes as built: `FontAsset {source, label, fixed, glyphs}` and `FontGlyph {key, width, rows, origin}` in `ImagesMade.fonts`; the request is `AssetsArgs.glyphs: {"fonts/NAME.yaff": [KEY]}`, a font not named returning every glyph; a manifest names fonts as `fonts: [{font: "fonts/NAME.yaff", file}]`. A character a request names that the font lacks fails the request (`build_failed`, a `font_missing` problem naming it and its code point), as an image problem does.
+
 ### The layout rules (normative, in `gbcli help fonts`)
 
 - The pen advances by the glyph's width.

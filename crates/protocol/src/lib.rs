@@ -8,6 +8,7 @@ mod battery;
 mod checkpoint;
 mod equiv;
 mod error;
+mod font;
 mod hex;
 mod images;
 mod keys;
@@ -31,7 +32,7 @@ mod version;
 mod video;
 mod views;
 
-pub use assets::{AssetManifest, AssetsArgs, AssetsMade, ManifestImage};
+pub use assets::{AssetManifest, AssetsArgs, AssetsMade, ManifestFont, ManifestImage};
 pub use audio::{
     ApuWriteLine, AudioArgs, AudioChannel, AudioMade, AudioSummary, RegisterWrites, WavArgs,
     WavChannels, WavMade, WavTake, WriterWrites,
@@ -50,6 +51,9 @@ pub use equiv::{
     EquivMade, EquivSide, RamRangeArg, SideMade, SideName,
 };
 pub use error::{ErrorBody, ErrorCode};
+pub use font::{
+    FontArgs, FontAsset, FontGlyph, FontMade, FontPreview, FontProblem, FontSample, GlyphOrigin,
+};
 pub use images::{
     Flip, GbcImage, GbcImagesMade, ImageArt, ImageAsset, ImageKind, ImageLimit, ImageProblem,
     ImagesMade, KnownPalette, NotPaletteSlot, ObjectSize, PaletteSlot, ShadeChoice, ShadeRule,

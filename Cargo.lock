@@ -97,6 +97,7 @@ dependencies = [
  "gbcli-audio",
  "gbcli-core",
  "gbcli-engine",
+ "gbcli-font",
  "gbcli-music",
  "gbcli-pixels",
  "gbcli-protocol",
@@ -122,6 +123,7 @@ version = "0.1.0"
 dependencies = [
  "gbcli-bundle",
  "gbcli-core",
+ "gbcli-font",
  "gbcli-music",
  "gbcli-pixels",
  "gbcli-protocol",
@@ -163,6 +165,13 @@ dependencies = [
 [[package]]
 name = "gbcli-flash"
 version = "0.1.0"
+
+[[package]]
+name = "gbcli-font"
+version = "0.1.0"
+dependencies = [
+ "gbcli-view",
+]
 
 [[package]]
 name = "gbcli-music"

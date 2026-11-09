@@ -1,0 +1,13 @@
+[package]
+name = "gbcli-font"
+description = "gbcli's pixel fonts: a strict-subset YAFF reader and writer, the layout rules, and previews"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gbcli-view.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,29 @@
+Two of monobit's published YAFF test fonts, unmodified, which
+crates/font/tests/it/monobit.rs reads to test gbcli's YAFF reader (Ben's
+ruling, project/2026-11-09-pixel-fonts-design.md, ruling 1).
+
+Repository: https://github.com/robhagemans/monobit
+Commit:     040b1738085ce7967478499eef2835d2cffc95fd (2026-09-11)
+Fetched:    2026-11-09, from
+            https://raw.githubusercontent.com/robhagemans/monobit/<commit>/tests/fonts/<file>
+
+4x6.yaff
+  sha256 8c8d8caddcc5caa836749c052e98fa3dc9bce9bbda1948160fd6e0b766db8001
+  License: public domain. monobit's tests/fonts/README.md: "4x6.yaff ... created
+  from 4x6.bdf using monobit"; 4x6.bdf is Markus Kuhn's, "in the public domain"
+  (https://www.cl.cam.ac.uk/~mgk25/ucs-fonts.html). The file's own copyright
+  property: "Public domain font.  Share and enjoy."
+
+webby-small-kerned.yaff
+  sha256 224edc779f9a7c0bc045df3e06fc4686336c8ffeda55f6a806fefeac318269b9
+  License: MIT, (c) 2004, 2005 Tristan Grimmer; the full license text is the
+  file's own header comment, kept unmodified. monobit's README: "created from
+  WebbySmall.pcf using pcf2bdf and monobit and manually edited to add some
+  kerning and remove non-ascii glyphs."
+
+monobit itself is MIT-licensed, (c) 2019--2023 Rob Hagemans.
+
+Both fonts lie outside gbcli's subset (6 and 9 rows tall; deprecated and
+codepoint labels; bearings and kerning), so the tests read them with the
+whole grammar (yaff::syntax) and check that the strict reader refuses them
+for the right reason at the right line.

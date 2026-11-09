@@ -15,6 +15,7 @@ mod census;
 mod derive;
 mod emit;
 mod find;
+mod fonts;
 mod gbc;
 mod indexed;
 pub(crate) mod input;

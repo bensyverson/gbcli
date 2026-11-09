@@ -3,11 +3,13 @@
 //! which names each image as a project would hold it, so both convert by
 //! one convention (labels, kinds, frame sizes and assignments alike).
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use gbcli_protocol::{AssetManifest, ImageProblem, NamedPalettes, ObjectSize};
 
 use super::find::{self, KINDS, Source};
+use super::fonts::{self, FontSource};
 use super::palettes;
 use crate::project::BuildError;
 
@@ -109,6 +111,10 @@ pub(crate) struct Input {
     /// What was found before any image was read: the old palette file's
     /// warning, or a bad palette file, an error that stops the conversion.
     pub problems: Vec<ImageProblem>,
+    /// The fonts (`assets/fonts/*.yaff`, or a manifest's).
+    pub fonts: Vec<FontSource>,
+    /// An `assets` request's glyphs, by font name; empty for a build.
+    pub glyphs: BTreeMap<String, Vec<String>>,
 }
 
 /// The project's images and `assets/palettes.txt`.
@@ -117,6 +123,8 @@ pub(crate) fn project(
     shown: &dyn Fn(&Path) -> String,
 ) -> Result<Input, BuildError> {
     let sources = find::sources(project, shown)?;
+    let fonts = fonts::find(project, shown)?;
+    fonts::collisions(&fonts, &sources, shown)?;
     let palette_shown = shown(&project.join(palettes::PATH));
     let mut problems: Vec<ImageProblem> = palettes::old_file(project, shown).into_iter().collect();
     let names: Vec<String> = sources.iter().map(|s| s.name.clone()).collect();
@@ -134,6 +142,8 @@ pub(crate) fn project(
         palettes: PaletteSource::File(palette_shown),
         objects: settings.objects,
         problems,
+        fonts,
+        glyphs: BTreeMap::new(),
     })
 }
 
@@ -171,6 +181,12 @@ pub(crate) fn manifest(
         sources.push(s);
     }
     find::collisions(&sources, shown)?;
+    let fonts: Vec<FontSource> = m
+        .fonts
+        .iter()
+        .map(|f| fonts::source(base.join(&f.file), f.font.clone(), shown))
+        .collect::<Result<_, _>>()?;
+    fonts::collisions(&fonts, &sources, shown)?;
     Ok(Input {
         origin: Origin::Manifest,
         sources,
@@ -178,5 +194,7 @@ pub(crate) fn manifest(
         palettes: PaletteSource::Manifest,
         objects: m.objects,
         problems: Vec::new(),
+        fonts,
+        glyphs: BTreeMap::new(),
     })
 }

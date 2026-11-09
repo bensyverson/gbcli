@@ -354,6 +354,7 @@ fn manifest(objects: Option<ObjectSize>, image: &str) -> AssetManifest {
             ..NamedPalettes::default()
         },
         objects,
+        fonts: Vec::new(),
     }
 }
 

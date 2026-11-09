@@ -11,7 +11,10 @@ use serde::{Deserialize, Serialize};
 /// checks it for equality with the version it was built against. 2 since
 /// leaf nin31Q: the `condition_error` stop reason, and `show`'s `ppu.mode`
 /// null where the core can't know it (design §5's update of 2026-11-09).
-pub const PROTOCOL_VERSION: u32 = 2;
+/// 3 since leaf IQRDj5: fonts, whose error code (`font_unreadable`) and
+/// image limits (`font_text`, `font_glyphs`, `font_missing`) are new values
+/// of enums a response carries.
+pub const PROTOCOL_VERSION: u32 = 3;
 
 /// What `version` answers.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -54,7 +57,7 @@ mod tests {
         };
         assert_eq!(
             serde_json::to_string(&result).unwrap(),
-            r#"{"version":{"gbcli":"0.1.0","protocol":2,"sameboy":"abc","patch_set":"def"}}"#
+            r#"{"version":{"gbcli":"0.1.0","protocol":3,"sameboy":"abc","patch_set":"def"}}"#
         );
     }
 }

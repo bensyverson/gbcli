@@ -15,8 +15,8 @@ its machine, saves it and prints rows; --json prints the response line.
              change the session's settings
   project    gaps, sessions, sessions prune, sessions rm
              every session in .gbcli/, and what they share; no session needed
-  build      new, build, assets, song, pixels
-             RGBDS from PATH: edit, build, restore, measure; song and pixel text
+  build      new, build, assets, song, pixels, font
+             RGBDS from PATH: build, restore, measure; song, pixel text, fonts
   server     serve, batch
              the JSON Lines protocol, for harnesses
   help       help, recipes, schema, doctor, opcode, version
@@ -32,6 +32,6 @@ Help:   gbcli VERB --help (one worked example each)
         gbcli recipes (goal → command)
         gbcli help TOPIC: addresses expressions time checkpointing writes
                           budgets exit-codes hardware traps optimize rgbds
-                          music images pixels flash
+                          music images pixels fonts flash
         gbcli schema (the JSON request grammar for serve and batch)
 Exit:   0 ok, 1 no, 2 usage, 3 budget/conflict, 4 unreadable, 5 environment

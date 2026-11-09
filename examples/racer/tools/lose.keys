@@ -1,0 +1,7 @@
+# A losing race: START on the title, full throttle, but steering hard left
+# from the green light, into the grass (slow) and the trees (crashes), so
+# the clock runs out.
+# gbcli run build/racer.gb --session lose --keys-file tools/lose.keys --until '[wState] == 3' --frames 3400
+A@0
+START@30 -START@32
+LEFT@160

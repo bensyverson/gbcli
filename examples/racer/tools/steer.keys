@@ -1,0 +1,13 @@
+# A steering run for the racer: START on the title, full throttle, then weave.
+# (Racer 1's version had no title screen and so no START.)
+# gbcli run build/racer.gb --session steer --keys-file tools/steer.keys --frames 900 --frame-budget
+A@0
+START@30 -START@32
+RIGHT@200 -RIGHT@250
+LEFT@280 -LEFT@370
+RIGHT@410 -RIGHT@480
+LEFT@530 -LEFT@560
+RIGHT@600 -RIGHT@640
+B@680 -B@710
+LEFT@720 -LEFT@780
+RIGHT@840 -RIGHT@900

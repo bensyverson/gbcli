@@ -22,6 +22,11 @@ pub fn rows(audio: &AudioMade) -> String {
         for line in log {
             out += &Row::new("apu")
                 .field("elapsed", line.elapsed)
+                .field("frame", line.frame)
+                .field(
+                    "ly",
+                    line.ly.map_or_else(|| "off".into(), |ly| ly.to_string()),
+                )
                 .field("pc", addr(line.pc))
                 .field("text", &line.text)
                 .line();

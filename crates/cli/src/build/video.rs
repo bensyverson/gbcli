@@ -1,7 +1,8 @@
 //! The flags of screenshots, views and key timelines → their protocol args.
 
 use gbcli_protocol::{
-    Crop, FilmstripArgs, ImageOut, KeyEvent, MapSel, ShotArgs, ViewArgs, ViewKind, parse_keys,
+    Crop, FilmstripArgs, ImageOut, KeyEvent, MapSel, ShotArgs, TimeBase, ViewArgs, ViewKind,
+    parse_keys,
 };
 
 use crate::Env;
@@ -115,6 +116,20 @@ pub fn keys(inv: &Invocation, env: &Env) -> Result<Vec<KeyEvent>, Usage> {
             "e.g. --keys 'A@0 -A@2 START@10': press at a frame offset, - releases",
         )
     })
+}
+
+/// `run --keys-since BASE`, refused without a key timeline to count.
+pub fn keys_since(inv: &Invocation) -> Result<Option<TimeBase>, Usage> {
+    let Some(base) = inv.one("keys-since") else {
+        return Ok(None);
+    };
+    if !inv.has("keys") && !inv.has("keys-file") {
+        return Err(Usage::new(
+            "--keys-since only applies with --keys or --keys-file",
+            "add the key tokens it counts, or drop it",
+        ));
+    }
+    Ok(Some(values::since(base)))
 }
 
 pub fn view(inv: &Invocation) -> Result<ViewArgs, Usage> {

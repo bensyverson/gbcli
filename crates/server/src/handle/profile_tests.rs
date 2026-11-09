@@ -299,3 +299,61 @@ fn startup_and_a_screen_change_are_lcd_off_frames_not_lag() {
     let busiest = made.busiest.expect("a busiest frame") as usize;
     assert!(!made.frames[busiest].lcd_off, "{busiest}");
 }
+
+/// A frame budget's rows, each as (frame, partial), and the run's stop
+/// frame, for a run of `frames` counted from `since`.
+fn numbered(
+    h: &mut Handler,
+    frames: u64,
+    since: Option<gbcli_protocol::TimeBase>,
+) -> (Vec<(i64, bool)>, i64) {
+    let result = run(
+        h,
+        RunArgs {
+            frames: Some(frames),
+            since,
+            frame_budget: true,
+            ..RunArgs::default()
+        },
+    )
+    .outcome
+    .expect("ran");
+    let rows = result.frame_budget.expect("a frame budget").frames;
+    let stop = result.stop.expect("a stop").time.frame;
+    (rows.iter().map(|r| (r.frame, r.partial)).collect(), stop)
+}
+
+/// Each row's frame is the stop's frame where that frame began: a run from
+/// a stop at frame 2 has rows 2, 3, 4 and stops at 5.
+#[test]
+fn frame_budget_rows_are_numbered_as_the_stop_counts_frames() {
+    let f = Fixture::with_sym("frame-budget-numbered");
+    let mut h = handler(&f);
+    let (rows, stop) = numbered(&mut h, 2, None);
+    assert_eq!((rows, stop), (vec![(0, false), (1, false)], 2));
+    let (rows, stop) = numbered(&mut h, 3, None);
+    assert_eq!(rows, vec![(2, false), (3, false), (4, false)]);
+    assert_eq!(stop, 5);
+
+    // From a checkpoint's time base, as the stop counts from it.
+    let saved = RunArgs {
+        frames: Some(1),
+        checkpoint: Some("cp".into()),
+        ..RunArgs::default()
+    };
+    run(&mut h, saved).outcome.expect("checkpoint");
+    let cp = Some(gbcli_protocol::TimeBase::Checkpoint("cp".into()));
+    let (rows, stop) = numbered(&mut h, 2, cp);
+    assert_eq!((rows, stop), (vec![(0, false), (1, false)], 2));
+
+    // A run started mid-frame: its partial first row is the frame it
+    // started in, the stop's frame there.
+    let mid = RunArgs {
+        instructions: Some(5_000),
+        ..RunArgs::default()
+    };
+    let stop = run(&mut h, mid).outcome.expect("mid").stop.unwrap();
+    let (rows, _) = numbered(&mut h, 2, None);
+    let at = stop.time.frame;
+    assert_eq!(rows, vec![(at, true), (at + 1, false)]);
+}

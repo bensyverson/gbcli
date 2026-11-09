@@ -150,6 +150,9 @@ pub struct ResultBody {
     pub stop: Option<StopRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reads: Option<Vec<ReadValue>>,
+    /// A run's `--expect` conditions, in order, each with its verdict.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expect: Option<Vec<ExpectValue>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shot: Option<ShotMade>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -261,6 +264,19 @@ pub struct ReadValue {
     pub value: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub oam: Option<OamEntryRead>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<ReadFailed>,
+}
+
+/// One `run --expect` condition at the stop: its `value`, and `ok` when that
+/// is nonzero; or, when it couldn't be evaluated (a never-written byte
+/// without `allow_uninit`), its `error`, and `ok` false.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExpectValue {
+    pub expr: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<i64>,
+    pub ok: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<ReadFailed>,
 }

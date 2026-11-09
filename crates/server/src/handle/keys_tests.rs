@@ -110,3 +110,99 @@ fn every_event_applied_reports_nothing_unapplied() {
     assert!(run_frames(&mut h, 1).is_ok());
     assert_eq!(log(&mut h, start, 4), vec![A, A, A, 0]);
 }
+
+/// The whole log: the count, then every entry written.
+fn whole_log(h: &mut Handler) -> Vec<i64> {
+    let count = log_index(h);
+    let mut out = vec![count];
+    out.extend(log(h, 0, count));
+    out
+}
+
+/// One event at the checkpoint's own frame (-A@4), before it (A@2), and after.
+const FROM_BOOT: &str = "A@2 -A@4 START@6 -START@9 RIGHT@11";
+
+#[test]
+fn a_key_file_recorded_from_boot_replays_from_a_mid_run_checkpoint() {
+    use gbcli_protocol::{Start, TimeBase};
+    let f = Fixture::with_rom("keys-since", JOYPAD);
+    let mut h = handler(&f);
+    let keys = parse_keys(FROM_BOOT).unwrap();
+    let straight = h.handle(&request(Op::Run(RunArgs {
+        frames: Some(12),
+        keys: keys.clone(),
+        ..RunArgs::default()
+    })));
+    assert!(straight.is_ok(), "{:?}", straight.error());
+    let straight = whole_log(&mut h);
+
+    let to_cp = h.handle(&request(Op::Run(RunArgs {
+        from: Some(Start::Boot),
+        frames: Some(4),
+        keys: keys.clone(),
+        checkpoint: Some("cp".into()),
+        ..RunArgs::default()
+    })));
+    assert!(to_cp.is_ok(), "{:?}", to_cp.error());
+
+    let from_cp = |h: &mut Handler, keys_since| {
+        h.handle(&request(Op::Run(RunArgs {
+            at: Some("cp".into()),
+            frames: Some(8),
+            keys: keys.clone(),
+            keys_since,
+            ..RunArgs::default()
+        })))
+    };
+    let replay = from_cp(&mut h, Some(TimeBase::Boot));
+    assert!(replay.warnings.is_empty(), "{:?}", replay.warnings);
+    let result = replay.outcome.expect("replayed");
+    assert_eq!(
+        result.keys_unapplied, None,
+        "the events before cp aren't reported"
+    );
+    assert_eq!(result.stop.unwrap().time.frame, 12);
+    assert_eq!(
+        whole_log(&mut h),
+        straight,
+        "the replay is the straight run"
+    );
+
+    // Counted from the checkpoint instead, the same file is a different run.
+    assert!(from_cp(&mut h, None).is_ok());
+    assert_ne!(whole_log(&mut h), straight);
+}
+
+#[test]
+fn keys_since_reports_a_late_event_in_the_files_own_offsets() {
+    use gbcli_protocol::TimeBase;
+    let f = Fixture::with_rom("keys-since-late", JOYPAD);
+    let mut h = handler(&f);
+    assert!(run_frames(&mut h, 3).is_ok());
+    let response = h.handle(&request(Op::Run(RunArgs {
+        frames: Some(2),
+        keys: parse_keys("A@1 B@4 START@9").unwrap(),
+        keys_since: Some(TimeBase::Boot),
+        ..RunArgs::default()
+    })));
+    let result = response.outcome.expect("ran");
+    assert_eq!(result.keys_unapplied, Some(parse_keys("START@9").unwrap()));
+}
+
+#[test]
+fn keys_since_an_unknown_checkpoint_is_refused_before_the_run() {
+    use gbcli_protocol::{ErrorCode, TimeBase};
+    let f = Fixture::with_rom("keys-since-missing", JOYPAD);
+    let mut h = handler(&f);
+    let response = h.handle(&request(Op::Run(RunArgs {
+        frames: Some(2),
+        keys: parse_keys("A@1").unwrap(),
+        keys_since: Some(TimeBase::Checkpoint("nope".into())),
+        ..RunArgs::default()
+    })));
+    let error = response.outcome.expect_err("no such checkpoint");
+    // As `--since nope` is.
+    assert_eq!(error.code, ErrorCode::BadRequest, "{}", error.message);
+    assert!(error.message.contains("nope"), "{}", error.message);
+    assert!(error.stop.is_none(), "nothing ran");
+}

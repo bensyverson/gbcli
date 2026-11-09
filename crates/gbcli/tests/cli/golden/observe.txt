@@ -21,9 +21,9 @@ exit 0
 stop budget_exhausted kind=frames pc=$0040 bank=0 frame=40 t=2808804 since=boot ticks=17379824 ly=144 shown=40 vblank=normal
 budget frames=40/40 instructions=701614 ticks=5617608
 audio since=boot writes=3 channels=noise
-apu elapsed=2106648 pc=$01C5 text="NR42 $A1: noise envelope 10 down, pace 1"
-apu elapsed=2106688 pc=$01C9 text="NR43 $52: noise shift 5, 15-bit, divisor 2 = 4096 Hz"
-apu elapsed=2106728 pc=$01CD text="NR44 $80: noise trigger, length off"
+apu elapsed=2106648 frame=15 ly=144 pc=$01C5 text="NR42 $A1: noise envelope 10 down, pace 1"
+apu elapsed=2106688 frame=15 ly=144 pc=$01C9 text="NR43 $52: noise shift 5, 15-bit, divisor 2 = 4096 Hz"
+apu elapsed=2106728 frame=15 ly=144 pc=$01CD text="NR44 $80: noise trigger, length off"
 audio_summary since=boot writes=3 channels=noise
 audio_register reg=NR42 addr=$FF21 writes=1
 audio_register reg=NR43 addr=$FF22 writes=1

@@ -177,8 +177,11 @@ fn seeded(start: &ApuSnapshot, at: Ticks) -> Vec<DecodedWrite> {
         .map(|addr| {
             let value = start.regs[usize::from(addr - 0xFF10)];
             let trigger_reg = matches!(addr, 0xFF14 | 0xFF19 | 0xFF1E | 0xFF23);
+            // Made up from the snapshot, so it fell in no frame or line.
             ApuWrite {
                 at,
+                frame: 0,
+                line: None,
                 pc: 0,
                 addr,
                 value: if trigger_reg { value & 0x7F } else { value },

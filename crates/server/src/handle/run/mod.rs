@@ -5,6 +5,7 @@
 mod audio;
 mod budget;
 mod equiv;
+mod expect;
 mod filmstrip;
 mod measure;
 mod oam_log;
@@ -13,7 +14,7 @@ mod raster;
 
 use gbcli_bundle::{SessionStore, validate_checkpoint_name};
 use gbcli_core::Budget;
-use gbcli_engine::{DebugError, EventTap, FrameSink, Machine, Outcome, RunOptions, unapplied_keys};
+use gbcli_engine::{DebugError, EventTap, FrameSink, KeyTimeline, Machine, Outcome, RunOptions};
 use gbcli_protocol::{
     ErrorBody, ErrorCode, FlashNoteRow, KeyEvent, Location, ResultBody, RunArgs, SessionFile,
     StepArgs, StepKind, StopReason, StopRecord, WavChannels,
@@ -45,6 +46,7 @@ enum Target {
 /// A run's request, compiled against the machine before it moves.
 struct Plan {
     reads: Vec<CompiledRead>,
+    expect: Vec<CompiledRead>,
     target: Target,
     probes: Probes,
 }
@@ -60,19 +62,22 @@ impl Handler {
         actor: &Option<String>,
         warnings: &mut Vec<String>,
     ) -> Result<ResultBody, Failure> {
-        let mut failure = match self.run_request(store, meta, args, actor, warnings) {
+        let mut keys = None;
+        let mut failure = match self.run_request(store, meta, args, actor, warnings, &mut keys) {
             Ok(result) => return Ok(result),
             Err(failure) => failure,
         };
         if let Some(name) = &args.checkpoint {
             failure.body.message += &format!("; checkpoint `{name}` was not saved");
         }
-        if let Some(stop) = &failure.body.stop {
-            failure.body.keys_unapplied = unapplied(&args.keys, stop);
+        if let (Some(stop), Some(keys)) = (&failure.body.stop, &keys) {
+            failure.body.keys_unapplied = unapplied(keys, stop);
         }
         Err(failure)
     }
 
+    /// `keys` is set to the run's key timeline once the machine is there to
+    /// place it, before the machine moves.
     fn run_request(
         &mut self,
         store: &SessionStore,
@@ -80,6 +85,7 @@ impl Handler {
         args: &RunArgs,
         actor: &Option<String>,
         warnings: &mut Vec<String>,
+        keys: &mut Option<KeyTimeline>,
     ) -> Result<ResultBody, Failure> {
         // What needs no machine.
         if args.until.is_some() && args.to.is_some() {
@@ -97,6 +103,10 @@ impl Handler {
             )));
         }
         let since = self.since(store, args.since.as_ref())?;
+        let keys_since = match &args.keys_since {
+            Some(base) => Some(self.since(store, Some(base))?),
+            None => None,
+        };
         if let Some(name) = &args.checkpoint {
             validate_checkpoint_name(name).map_err(|e| Failure::from_store(&e))?;
         }
@@ -124,6 +134,11 @@ impl Handler {
                 return Err(failure);
             }
         };
+        let timeline = match &keys_since {
+            Some(base) => KeyTimeline::from_base(&args.keys, &machine, base),
+            None => KeyTimeline::from_run_start(&args.keys),
+        };
+        let timeline = &*keys.insert(timeline);
 
         // The machine moves from here on.
         let writes = apply_writes(&mut machine, &args.writes)?;
@@ -163,7 +178,7 @@ impl Handler {
         opts.since = since.clone();
         opts.allow_uninit = args.allow_uninit;
         opts.interrupt = Some(&interrupt);
-        opts.keys = &args.keys;
+        opts.keys = timeline.events();
         // The audio replays run the same request without collecting frames.
         let replay_opts = opts.clone();
         if collector.is_some() || oam_log.is_some() || plan.probes.wants_frames() {
@@ -211,6 +226,14 @@ impl Handler {
             warnings,
             &mut self.gaps_found,
         );
+        let expected = expect::evaluate(
+            &machine,
+            &plan.expect,
+            &since,
+            args.allow_uninit,
+            warnings,
+            &mut self.gaps_found,
+        );
         // After the reads (design §11 step 6); capturing only reads the core.
         let shot = args
             .shot
@@ -222,7 +245,7 @@ impl Handler {
         let measured = plan
             .probes
             .measure(&mut machine, &interrupt, self.wall_guard);
-        let collected_probes = plan.probes.finish(&machine);
+        let collected_probes = plan.probes.finish(&machine, &since);
         let oam_made = oam_log.as_ref().map(|o| o.finish(&machine, &since));
         // The core's gaps reach the ledger whether or not the request fails.
         self.gaps_found
@@ -249,8 +272,9 @@ impl Handler {
             _ => None,
         };
         // Last, and only when everything before it succeeded (step 7); after
-        // the head's save, so the checkpoint records the rev it is.
-        let so_far = so_far && sound.as_ref().is_none_or(Result::is_ok);
+        // the head's save, so the checkpoint records the rev it is. A false
+        // expectation keeps the files, its evidence, but names no state.
+        let so_far = so_far && sound.as_ref().is_none_or(Result::is_ok) && expected.held();
         let checkpoint = match &args.checkpoint {
             Some(name) if so_far => {
                 Some(write_checkpoint(store, &mut machine, name, actor, meta.rev))
@@ -272,10 +296,11 @@ impl Handler {
         let sound = sound.transpose().map_err(with_stop)?;
         let oam_made = oam_made.transpose().map_err(with_stop)?;
         let checkpoint = checkpoint.map_err(with_stop)?;
-        let keys_unapplied = unapplied(&args.keys, &stop);
-        Ok(ResultBody {
+        let keys_unapplied = unapplied(timeline, &stop);
+        let result = ResultBody {
             stop: Some(stop),
             reads: Some(reads),
+            expect: expected.rows(),
             shot,
             filmstrip: strip,
             measure: measured,
@@ -289,7 +314,8 @@ impl Handler {
             writes: (!writes.is_empty()).then_some(writes),
             flash_notes,
             ..ResultBody::default()
-        })
+        };
+        expected.verdict(result)
     }
 
     /// Whether the run reached what it was asked for: not stopped by the
@@ -476,6 +502,7 @@ fn plan_of(machine: &Machine, args: &RunArgs) -> Result<Plan, Failure> {
         audio::check_machine(machine, sound)?;
     }
     let reads = compile_reads(machine, &args.read)?;
+    let expect = expect::compile(machine, &args.expect)?;
     let probes = Probes::plan(machine, args)?;
     let target = match (&args.until, &args.to) {
         (Some(text), _) => {
@@ -491,6 +518,7 @@ fn plan_of(machine: &Machine, args: &RunArgs) -> Result<Plan, Failure> {
     };
     Ok(Plan {
         reads,
+        expect,
         target,
         probes,
     })
@@ -499,8 +527,8 @@ fn plan_of(machine: &Machine, args: &RunArgs) -> Result<Plan, Failure> {
 /// The key events past the stop, for the result: never silently dropped
 /// (design §11 step 3). No warning repeats them: a long keys file would
 /// bury the stop.
-fn unapplied(keys: &[KeyEvent], stop: &StopRecord) -> Option<Vec<KeyEvent>> {
-    let late = unapplied_keys(keys, stop.budget.frames);
+fn unapplied(keys: &KeyTimeline, stop: &StopRecord) -> Option<Vec<KeyEvent>> {
+    let late = keys.unapplied(stop.budget.frames);
     (!late.is_empty()).then_some(late)
 }
 
@@ -516,6 +544,8 @@ fn stop_of(error: &DebugError) -> Option<&StopRecord> {
 
 #[cfg(test)]
 mod checkpoint_tests;
+#[cfg(test)]
+mod expect_tests;
 #[cfg(test)]
 mod target_tests;
 #[cfg(test)]

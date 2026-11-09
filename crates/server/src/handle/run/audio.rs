@@ -173,6 +173,8 @@ pub(super) fn deliver(
             .map(|w| ApuWriteLine {
                 ticks: w.write.at.0,
                 elapsed: w.write.at.0 as i64 - mark.ticks as i64,
+                frame: w.write.frame as i64 - mark.frame as i64,
+                ly: w.write.line,
                 pc: w.write.pc,
                 addr: w.write.addr,
                 value: w.write.value,

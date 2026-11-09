@@ -19,13 +19,20 @@ OP      ARGS
 run     at? from?: "boot"|"power-on"  since?: "boot"|"power-on"|CHECKPOINT
         until?: EXPR  to?: ADDR  frames? instructions? ticks?: N
         writes?: [{kind: "bus"|"poke"|"patch", target: ADDR, bytes: HEX}]
-        read?: [EXPR]  checkpoint?: NAME  allow_uninit?: bool
-        keys?: ["A@0", "-A@2", …]  shot?: SHOT
+        read?: [EXPR]  expect?: [EXPR]  checkpoint?: NAME  allow_uninit?: bool
+        keys?: ["A@0", "-A@2", …]  keys_since?: "boot"|"power-on"|CHECKPOINT
+        shot?: SHOT
         measure?: {from: ADDR, to: ADDR}  profile?: {top?: N}
         frame_budget?: bool  raster?: bool  oam_log?: bool
         audio?: {log?: bool, summary?: bool, channels?: ["square1"|"square2"|
                  "wave"|"noise"], wav?: {path: PATH, channels?: "mixed"|"each"},
                  piano?: PNG, spectrogram?: PNG}  PNG = {path: PATH, scale?: N}
+        (result.expect: [{expr, value, ok, error?}] in order; one not ok fails
+        the run, predicate_false, or the error's code when one couldn't be
+        evaluated, with the whole result in error.result. keys_since counts
+        the key offsets from that base, dropping events before the run's start.
+        result.frame_budget.frames[] and audio.log[] carry frame, counted as
+        stop.time.frame is; audio.log[] also carries ly, null with the LCD off)
 measure from: ADDR  to: ADDR  at?  iterations?: N  max_t?: N
         frames? instructions? ticks?: N  keys?
 equiv   frames: N  b?: {rom?: PATH, sym?: PATH, writes?: [WRITE]}  at?  from?
@@ -92,7 +99,7 @@ Response, one line per request:
   {"id", "ok": true, "rev"?: "sN", "result": {…}, "warnings": [TEXT]}
   {"id", "ok": false, "rev"?, "error": {"code", "exit", "message", "remedy",
    "stop"?, "keys_unapplied"?, "flash_notes"?, "result"?}, "warnings"}
-result holds only the fields the op fills: stop, reads, shot, measure, profile,
+result holds only the fields the op fills: stop, reads, expect, shot, measure, profile,
 frame_budget, raster, audio, oam_log, equiv, view, symbols,
 checkpoints, keys_unapplied, writes, checkpoint, restored, breakpoint, watch,
 deleted, registers, ppu, sessions, events, gaps, pruned, kept, busy, removed,
@@ -181,6 +188,7 @@ Examples:
   {"id":"32","op":"sav","args":{"path":"game.sav"}}
   {"id":"33","op":"version"}
   {"id":"34","op":"assets","args":{"manifest":{"images":[{"image":"tiles/font.png","file":"art/font.png"}]},"target":"gbc"}}
+  {"id":"35","op":"run","args":{"at":"floor5","frames":900,"keys":["A@4700","-A@4702"],"keys_since":"boot","expect":["[wFail] == 0"]}}
 "#;
 
 #[cfg(test)]
@@ -203,6 +211,32 @@ mod tests {
         ops.sort();
         ops.dedup();
         assert_eq!(ops.len(), 30, "one example per op: {ops:?}");
+    }
+
+    /// run's `expect` and `keys_since`, with an example that parses into
+    /// them, and the result's `expect` rows and per-row frames.
+    #[test]
+    fn run_expect_and_keys_since_are_listed_with_an_example() {
+        use gbcli_protocol::{Op, TimeBase};
+        for needed in [
+            "expect?: [EXPR]",
+            "keys_since?: \"boot\"|\"power-on\"|CHECKPOINT",
+            "{expr, value, ok",
+            "frame_budget.frames[] and audio.log[] carry frame",
+        ] {
+            assert!(SCHEMA.contains(needed), "{needed}");
+        }
+        let line = SCHEMA
+            .lines()
+            .map(str::trim)
+            .find(|l| l.contains(r#""expect":"#) && l.contains(r#""keys_since":"#))
+            .expect("an example with both");
+        let Op::Run(args) = parse_request(line).unwrap().op else {
+            panic!("{line}")
+        };
+        assert_eq!(args.keys_since, Some(TimeBase::Boot));
+        assert_eq!(args.at.as_deref(), Some("floor5"));
+        assert!(!args.expect.is_empty());
     }
 
     /// A client checks the protocol version before relying on the rest.

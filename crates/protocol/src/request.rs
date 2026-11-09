@@ -201,12 +201,22 @@ pub struct RunArgs {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub writes: Vec<WriteArg>,
     /// Key presses and releases at frame offsets from the run's start
-    /// (design §11 step 3), in the order given.
+    /// (design §11 step 3), in the order given; from `keys_since` instead
+    /// when it is given.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keys: Vec<KeyEvent>,
+    /// What the key offsets count from, named as `since` is: the run's start
+    /// when absent. Events before the run's start are dropped, since the
+    /// state it starts from already holds them.
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "since_word")]
+    pub keys_since: Option<TimeBase>,
     /// Conditions evaluated at the stop (design §11 step 6).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub read: Vec<String>,
+    /// Conditions that must hold at the stop, evaluated beside `read`: one
+    /// false fails the run with `predicate_false` (exit 1), the run saved.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub expect: Vec<String>,
     /// A screenshot of the stop, after the reads (design §11 step 6). Boxed
     /// to keep `Op` small.
     #[serde(default, skip_serializing_if = "Option::is_none")]

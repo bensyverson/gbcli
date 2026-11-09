@@ -193,6 +193,9 @@ pub fn build(inv: Invocation, env: &Env) -> Result<Command, Usage> {
         Verb::Run => inv.positionals.first().cloned(),
         _ => None,
     };
+    if let Some(rom) = &rom {
+        refuse_expression_as_rom(rom, env)?;
+    }
     if rom.is_some() && inv.has("rom") {
         return Err(Usage::new(
             "the ROM is given twice: as an argument and as --rom",
@@ -256,6 +259,8 @@ fn run(inv: &Invocation, env: &Env) -> Result<RunArgs, Usage> {
         ticks: budget("ticks")?,
         writes,
         read: inv.all("read").map(str::to_string).collect(),
+        expect: inv.all("expect").map(str::to_string).collect(),
+        keys_since: video::keys_since(inv)?,
         checkpoint: inv.one("checkpoint").map(str::to_string),
         allow_uninit: inv.has("allow-uninit"),
         shot: video::run_shot(inv)?.map(Box::new),
@@ -268,6 +273,33 @@ fn run(inv: &Invocation, env: &Env) -> Result<RunArgs, Usage> {
         oam_log: inv.has("oam-log"),
         keys: video::keys(inv, env)?,
     })
+}
+
+/// The file names a ROM argument may end in.
+const ROM_EXTENSIONS: [&str; 4] = ["gb", "gbc", "cgb", "sgb"];
+
+/// A second expression after `--read` (or `--expect`) lands where run's ROM
+/// argument goes, and the session then refused "another ROM", far from the
+/// cause. So an argument that names no file, has no ROM's extension and
+/// holds an expression's brackets or operators is refused here. A real ROM
+/// named `Tetris [!].gb` still runs, as does any file that exists.
+fn refuse_expression_as_rom(rom: &str, env: &Env) -> Result<(), Usage> {
+    let path = std::path::Path::new(rom);
+    let rom_like = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| ROM_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()));
+    let expression_like = rom.contains(['[', ']', '=', '<', '>', '!', '&', '|']);
+    if rom_like || !expression_like || env.cwd.join(path).is_file() {
+        return Ok(());
+    }
+    Err(Usage::new(
+        format!("`{rom}` looks like an expression, not a ROM: --read takes one expression"),
+        format!(
+            "repeat --read for each expression (and --expect for each condition), e.g. \
+             --read '{rom}'"
+        ),
+    ))
 }
 
 fn access(text: &str) -> Result<WatchAccess, Usage> {

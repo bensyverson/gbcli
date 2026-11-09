@@ -183,22 +183,31 @@ pub const RUN: &[FlagSpec] = &[
     repeated(
         "write",
         "TARGET=BYTES",
-        "bus write before the run, as the CPU would",
+        "bus write before the run, as the CPU would; repeat for more",
     ),
     repeated(
         "poke",
         "TARGET=BYTES",
-        "write backing memory before the run, no side effects",
+        "write backing memory before the run, no side effects; repeat for more",
     ),
     repeated(
         "patch",
         "TARGET=BYTES",
-        "patch the ROM before the run (recorded in checkpoints)",
+        "patch the ROM before the run (recorded in checkpoints); repeat for more",
     ),
     repeated(
         "read",
         "EXPR",
-        "evaluate at the stop; repeat for more (a read that fails says why in its own row)",
+        "evaluate one expression at the stop; repeat --read for more (a read that fails says \
+         why in its own row)",
+    ),
+    repeated(
+        "expect",
+        "EXPR",
+        "a condition that must hold at the stop, evaluated beside --read (same grammar, same \
+         never-written rule); prints an expect row (expr, value, ok) for each, and if any is \
+         false the run fails with exit 1 (predicate_false), still saved as the head, without \
+         --checkpoint; one that can't be evaluated fails with its own error; repeat for more",
     ),
     value("checkpoint", "NAME", "save the stop state under this name"),
     ALLOW_UNINIT,
@@ -221,7 +230,8 @@ pub const RUN: &[FlagSpec] = &[
     switch(
         "audio-log",
         "print every write the run made to the sound registers, decoded into notes and \
-         settings, at elapsed 2^23 Hz ticks since --since: the cheap sibling of --wav. Only \
+         settings, at elapsed 2^23 Hz ticks since --since, with the frame (counted as the \
+         stop's frame=) and the line (ly) it fell on: the cheap sibling of --wav. Only \
          this run's: writes made before the run (a sound engine's setup) aren't listed",
     ),
     switch(
@@ -277,8 +287,9 @@ pub const RUN: &[FlagSpec] = &[
         "each frame's active and idle (HALT) T-cycles over the run, and the lag frames: \
          frames in which the CPU never halted with the LCD on (LCD-off frames, as at \
          startup or a screen change, count as lcd_off instead); the first row sums up the \
-         whole LCD-on frames' active T-cycles (min, max, mean) and the busiest one, then a \
-         row per lag frame (--json has every frame; gbcli help budgets)",
+         whole LCD-on frames' active T-cycles (min, max, mean) and the busiest one (a row \
+         index), then a row per lag frame with its index and frame (counted as the stop's \
+         frame=) (--json has every frame, each with its frame; gbcli help budgets)",
     ),
     switch(
         "oam-log",
@@ -303,6 +314,15 @@ pub const RUN: &[FlagSpec] = &[
         "keys-file",
         "FILE",
         "key tokens from a file, after --keys; # starts a comment",
+    ),
+    value(
+        "keys-since",
+        "BASE",
+        "what the key offsets count from: boot, power-on or a checkpoint name, as --since \
+         names them (default: the run's start). So a file recorded from boot replays from a \
+         mid-run checkpoint: --at floor5 --keys-file win.keys --keys-since boot applies only \
+         the events from floor5's frame on (the earlier ones are in floor5 already, and \
+         aren't reported as unapplied)",
     ),
 ];
 

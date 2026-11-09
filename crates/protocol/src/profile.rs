@@ -135,6 +135,9 @@ pub struct ProfileMade {
 /// One frame of `run --frame-budget`, vblank to vblank.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FrameBudgetRow {
+    /// Which frame this is, counted as the stop's `frame` is: the vblanks
+    /// since the run's time base when the frame began.
+    pub frame: i64,
     /// CPU T-cycles running instructions and dispatching interrupts.
     pub active_t: u64,
     /// CPU T-cycles in HALT or STOP.

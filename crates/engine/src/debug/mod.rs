@@ -29,7 +29,7 @@ pub use code::{core_code, eval_code, expr_code};
 pub(crate) use drive::CHUNK;
 use drive::Goal;
 pub(crate) use keys::Schedule;
-pub use keys::unapplied_keys;
+pub use keys::{KeyTimeline, unapplied_keys};
 pub use lcd::LcdOffOutsideVblank;
 
 /// What frame and cycle counts count from (design §9). The default is the

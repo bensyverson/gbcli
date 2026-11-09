@@ -159,6 +159,10 @@ for it (OAM DMA, a frame counter, a joypad read) happens in the next run, so
 run one more frame to see it. A key token K@N changes the buttons at the
 start of the run's frame N (offsets count from the run's start), so every
 joypad read the program makes after that VBlank sees it, and none before.
+With --keys-since BASE (boot, power-on or a checkpoint) offsets count from
+that base instead, as the frame= a stop prints with --since BASE: a key
+file recorded from boot replays from a mid-run checkpoint with
+--at floor5 --keys-since boot, applying only the events from floor5 on.
 ";
 
 const CHECKPOINTING: &str = "\

@@ -8,12 +8,13 @@ const BUILD: &[FlagSpec] = &[
     repeated(
         "src",
         "DIR",
-        "assemble every .asm under DIR instead of src/ (relative to the project)",
+        "assemble every .asm under DIR instead of src/ (relative to the project); repeat \
+         for more",
     ),
     repeated(
         "include",
         "DIR",
-        "put DIR on rgbasm's include path instead of include/",
+        "put DIR on rgbasm's include path instead of include/; repeat for more",
     ),
     value(
         "out",

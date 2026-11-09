@@ -121,8 +121,9 @@ fn flag_lines<'a>(flags: impl Iterator<Item = &'a crate::verbs::FlagSpec>) -> St
     for f in flags {
         let short = f.short.map(|c| format!("-{c}, ")).unwrap_or_default();
         let value = f.value.map(|v| format!(" {v}")).unwrap_or_default();
-        let repeat = if f.repeat { "…" } else { "" };
-        let head = format!("  {short}--{}{value}{repeat}", f.long);
+        // One value per flag even when it repeats: `--read EXPR…` read as
+        // several expressions after one --read. The help says to repeat it.
+        let head = format!("  {short}--{}{value}", f.long);
         if head.len() < 26 {
             out += &format!("{head:<26}{}\n", f.help);
         } else {

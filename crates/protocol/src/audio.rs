@@ -93,6 +93,11 @@ pub struct ApuWriteLine {
     /// Ticks (2^23 Hz) since the time base: negative before it. Not `at`,
     /// which other rows use for wall-clock time.
     pub elapsed: i64,
+    /// The frame the write fell in, counted as the stop's `frame` is: the
+    /// vblanks since the time base.
+    pub frame: i64,
+    /// The line the PPU was on; null with the LCD off.
+    pub ly: Option<u8>,
     pub pc: u16,
     pub addr: u16,
     pub value: u8,
@@ -276,6 +281,8 @@ mod tests {
         let line = ApuWriteLine {
             ticks: 100,
             elapsed: -4,
+            frame: -1,
+            ly: None,
             pc: 0x150,
             addr: 0xFF26,
             value: 0,
@@ -284,6 +291,7 @@ mod tests {
         };
         let json = serde_json::to_string(&line).unwrap();
         assert!(json.contains(r#""effect":"ignored_apu_off""#), "{json}");
+        assert!(json.contains(r#""frame":-1,"ly":null"#), "{json}");
         assert_eq!(serde_json::from_str::<ApuWriteLine>(&json).unwrap(), line);
     }
 

@@ -35,6 +35,12 @@ pub enum ApuWriteEffect {
 pub struct ApuWrite {
     /// When the write happened, to within the M-cycle of the write.
     pub at: Ticks,
+    /// The frame it fell in: the number of the last frame published before
+    /// it, as [`crate::Core::last_complete_frame`] would have said then (0
+    /// before the first).
+    pub frame: u64,
+    /// The line the PPU was on; `None` with the LCD off.
+    pub line: Option<u8>,
     /// The instruction that wrote it.
     pub pc: u16,
     pub addr: u16,

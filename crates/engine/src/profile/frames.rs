@@ -15,10 +15,14 @@
 
 use gbcli_core::{CoreError, CpuStep, Event, EventKinds, EventSink, RunRequest, StopReason};
 
+use crate::cond::eval::frame_number;
 use crate::machine::Machine;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FrameBudget {
+    /// Which frame it is: the vblanks since power-on when it began, as a
+    /// stop record counts them before taking its time base off.
+    pub frame: u64,
     /// CPU T-cycles spent running instructions and dispatching interrupts.
     pub active_t: u64,
     /// CPU T-cycles spent in HALT or STOP.
@@ -29,17 +33,19 @@ pub struct FrameBudget {
     pub lcd_off: bool,
 }
 
-/// The LCD at a frame's edge: on or off, and how many times the machine
-/// had turned it off by then.
+/// A frame's edge: the frame number there, the LCD on or off, and how many
+/// times the machine had turned it off by then.
 #[derive(Clone, Copy, Debug)]
-struct LcdAt {
+struct Edge {
+    frame: u64,
     on: bool,
     offs: u64,
 }
 
-impl LcdAt {
-    fn of(m: &Machine) -> LcdAt {
-        LcdAt {
+impl Edge {
+    fn of(m: &Machine) -> Edge {
+        Edge {
+            frame: frame_number(m.core()),
             on: m.core().ppu().lcd_on,
             offs: m.lcd_offs(),
         }
@@ -52,7 +58,7 @@ impl LcdAt {
 /// machine's LCD-off count, which a drive (or `frame_budget`) keeps.
 pub struct FrameSplit {
     frame: FrameBudget,
-    start: LcdAt,
+    start: Edge,
 }
 
 impl FrameSplit {
@@ -60,15 +66,16 @@ impl FrameSplit {
     pub fn starting(m: &Machine) -> FrameSplit {
         FrameSplit {
             frame: FrameBudget::default(),
-            start: LcdAt::of(m),
+            start: Edge::of(m),
         }
     }
 
-    /// Ends the frame in progress where `m` is now and returns it, LCD-off
-    /// and lag decided; the next frame starts here.
+    /// Ends the frame in progress where `m` is now and returns it, numbered,
+    /// LCD-off and lag decided; the next frame starts here.
     pub fn cut(&mut self, m: &Machine) -> FrameBudget {
-        let end = LcdAt::of(m);
+        let end = Edge::of(m);
         let mut frame = std::mem::take(&mut self.frame);
+        frame.frame = self.start.frame;
         frame.lcd_off = !self.start.on || !end.on || end.offs > self.start.offs;
         frame.lag = frame.idle_t == 0 && !frame.lcd_off;
         self.start = end;

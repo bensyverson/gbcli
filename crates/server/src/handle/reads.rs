@@ -4,8 +4,8 @@ use gbcli_engine::cond::{Condition, EvalCtx, EvalWarning, ExprError, oam_entry};
 use gbcli_engine::inspect::video::{ObjectAttributes, ObjectPalette, object_attributes};
 use gbcli_engine::{Area, Machine, Since};
 use gbcli_protocol::{
-    EventsArgs, OamEntryRead, PpuView, ReadArgs, ReadFailed, ReadValue, RegistersView, ResultBody,
-    SessionFile, TimeBase, TimeMark,
+    ErrorBody, ErrorCode, EventsArgs, OamEntryRead, PpuView, ReadArgs, ReadFailed, ReadValue,
+    RegistersView, ResultBody, SessionFile, TimeBase, TimeMark,
 };
 
 use super::{Failure, Handler, Need};
@@ -124,6 +124,29 @@ pub(super) fn compile_reads(
             })
         })
         .collect()
+}
+
+/// Compiles conditions that must have a truth value (`run --expect`): a
+/// whole OAM entry, which a read prints as fields, has none.
+pub(super) fn compile_conditions(
+    machine: &Machine,
+    exprs: &[String],
+) -> Result<Vec<CompiledRead>, Failure> {
+    let compiled = compile_reads(machine, exprs)?;
+    if let Some(read) = compiled
+        .iter()
+        .find(|r| matches!(r.form, ReadForm::OamEntry(_)))
+    {
+        return Err(Failure::new(ErrorBody::new(
+            ErrorCode::BadRequest,
+            format!(
+                "`{}` is a whole OAM entry, which is neither true nor false",
+                read.text
+            ),
+            "expect one of its bytes, e.g. `oam[0].y == 16`; --read prints the whole entry",
+        )));
+    }
+    Ok(compiled)
 }
 
 fn oam_view(e: &ObjectAttributes) -> OamEntryRead {

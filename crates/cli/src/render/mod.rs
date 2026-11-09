@@ -49,8 +49,12 @@ pub fn response(response: &Response, json: bool, out: &mut dyn Write, err: &mut 
         }
         Err(body) => {
             if let Some(result) = &body.result {
-                // An assertion's answer: what it read when it said no.
+                // An assertion's answer: what it read when it said no. A
+                // run's (--expect) moved the head, so it names the rev.
                 emit(out, &rows(result));
+                if result.stop.is_some() && body.stop.is_none() {
+                    emit(out, &rev());
+                }
             }
             if let Some(stop) = &body.stop {
                 // The state the failure left is still the answer's data.
@@ -145,6 +149,16 @@ pub fn rows(r: &ResultBody) -> String {
             None => row,
         }
         .line();
+    }
+    for e in r.expect.iter().flatten() {
+        out += &Row::new("expect")
+            .field("expr", &e.expr)
+            .opt("value", e.value)
+            .flag("ok", e.ok)
+            .opt("error", e.error.as_ref().map(|e| e.code))
+            .opt("message", e.error.as_ref().map(|e| &e.message))
+            .opt("remedy", e.error.as_ref().map(|e| &e.remedy))
+            .line();
     }
     if let Some(m) = &r.measure {
         out += &profile::measure(m);
@@ -300,6 +314,38 @@ mod tests {
             ..ResultBody::default()
         };
         super::rows(&r)
+    }
+
+    #[test]
+    fn an_expect_row_names_the_expression_its_value_and_the_verdict() {
+        use gbcli_protocol::{ErrorCode, ExpectValue, ReadFailed};
+        let r = ResultBody {
+            expect: Some(vec![
+                ExpectValue {
+                    expr: "[wFail] == 0".into(),
+                    value: Some(0),
+                    ok: false,
+                    error: None,
+                },
+                ExpectValue {
+                    expr: "[wNever]".into(),
+                    value: None,
+                    ok: false,
+                    error: Some(ReadFailed {
+                        code: ErrorCode::UninitializedRead,
+                        message: "never written".into(),
+                        remedy: "--allow-uninit".into(),
+                    }),
+                },
+            ]),
+            ..ResultBody::default()
+        };
+        assert_eq!(
+            super::rows(&r),
+            "expect expr=\"[wFail] == 0\" value=0 ok=0\n\
+             expect expr=[wNever] ok=0 error=uninitialized_read message=\"never written\" \
+             remedy=--allow-uninit\n"
+        );
     }
 
     #[test]

@@ -48,6 +48,10 @@ pub(crate) fn log_write(gb: *mut sb::GB_gameboy_t, hooks: &mut Hooks, addr: u16,
     };
     let write = ApuWrite {
         at: tap_time(gb, hooks),
+        frame: hooks.frame.tag.map_or(0, |tag| tag.number),
+        // SAFETY: a side-effect-free accessor on the live instance. As the
+        // raster log reads it: out of range with the LCD off.
+        line: u8::try_from(unsafe { sb::gbcli_ppu_line(gb) }).ok(),
         pc: hooks.step_pc,
         addr,
         value,

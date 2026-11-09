@@ -79,6 +79,8 @@ mod tests {
     fn write(pc: u16, addr: u16, value: u8) -> ApuWrite {
         ApuWrite {
             at: Ticks(u64::from(pc)),
+            frame: 0,
+            line: None,
             pc,
             addr,
             value,

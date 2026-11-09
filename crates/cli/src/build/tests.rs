@@ -69,6 +69,96 @@ fn run_applies_writes_in_the_order_given_across_kinds() {
 }
 
 #[test]
+fn run_takes_expectations_in_order_and_a_keys_base() {
+    let (_, op) = request(&[
+        "run",
+        "--expect",
+        "[wA] == 1",
+        "--read",
+        "pc",
+        "--expect",
+        "u16[wB]",
+        "--keys",
+        "A@3",
+        "--keys-since",
+        "boot",
+    ]);
+    let Op::Run(args) = op else { panic!() };
+    assert_eq!(args.expect, vec!["[wA] == 1", "u16[wB]"]);
+    assert_eq!(args.read, vec!["pc"]);
+    assert_eq!(args.keys_since, Some(TimeBase::Boot));
+    for (word, base) in [
+        ("power-on", TimeBase::PowerOn),
+        ("floor5", TimeBase::Checkpoint("floor5".into())),
+    ] {
+        let (_, op) = request(&["run", "--keys", "A@3", "--keys-since", word]);
+        let Op::Run(args) = op else { panic!() };
+        assert_eq!(args.keys_since, Some(base));
+    }
+    let (_, op) = request(&["run", "--keys", "A@3"]);
+    let Op::Run(args) = op else { panic!() };
+    assert_eq!(args.keys_since, None, "the run's start");
+}
+
+#[test]
+fn keys_since_without_keys_is_refused() {
+    let alone = command(&["run", "--keys-since", "boot"]).unwrap_err();
+    assert_eq!(
+        alone.message, "--keys-since only applies with --keys or --keys-file",
+        "{alone:?}"
+    );
+    let with_file = command(&["run", "--keys-file", "/nonexistent", "--keys-since", "boot"]);
+    assert!(
+        !with_file.is_err_and(|u| u.message.contains("--keys-since")),
+        "a keys file is keys too"
+    );
+}
+
+/// A second expression after `--read` lands where the ROM goes; the error
+/// said the session runs another ROM (review item E-3).
+#[test]
+fn an_expression_taken_as_the_rom_is_refused_with_the_repeat_remedy() {
+    for stray in ["[wMiss]", "u16[wNow]", "s8[wX]", "[wA] == 3"] {
+        let refused = command(&["run", "--read", "u16[wNow]", stray]).unwrap_err();
+        assert!(refused.message.contains(stray), "{stray}: {refused:?}");
+        assert!(
+            refused.remedy.contains("repeat --read"),
+            "{stray}: {refused:?}"
+        );
+    }
+    // What must still work: ROM paths, a missing one with a ROM's
+    // extension (its own error comes later), and every expression repeated.
+    for rom in ["demo.gb", "build/rhythm.gb", "Tetris [!].gb", "game.gbc"] {
+        let (target, _) = request(&["run", rom, "--read", "[wA]"]);
+        assert!(target.create.is_some(), "{rom}");
+    }
+    let (_, op) = request(&["run", "--read", "u16[wNow]", "--read", "[wMiss]"]);
+    let Op::Run(args) = op else { panic!() };
+    assert_eq!(args.read, vec!["u16[wNow]", "[wMiss]"]);
+}
+
+#[test]
+fn an_existing_rom_named_like_an_expression_still_runs() {
+    let dir = std::env::temp_dir().join(format!("gbcli-rom-named-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("[odd].gb"), b"").unwrap();
+    std::fs::write(dir.join("[odd]"), b"").unwrap();
+    let env = Env {
+        cwd: dir.clone(),
+        ..env()
+    };
+    for rom in ["[odd].gb", "[odd]"] {
+        let args = ["run", rom].iter().map(OsString::from).collect();
+        let Parsed::Verb(inv) = parse(args).unwrap() else {
+            panic!()
+        };
+        let built = build(inv, &env);
+        assert!(built.is_ok(), "{rom}: {built:?}");
+    }
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
 fn the_environment_supplies_session_and_actor_and_flags_win() {
     let (target, _) = request(&["show"]);
     assert_eq!(target.session.as_deref(), Some("envsession"));

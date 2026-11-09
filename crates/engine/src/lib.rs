@@ -23,8 +23,8 @@ mod sym;
 pub use checkpoint::{Checkpoint, LoadOptions, MAGIC, SaveMeta, VERSION};
 pub use checkpoint_error::{CheckpointError, LoadWarning, Moved, MovedRole, SymbolAt, SymbolSide};
 pub use debug::{
-    CallFrame, DebugError, EventTap, FrameSink, LcdOffOutsideVblank, Outcome, RunOptions, Since,
-    core_code, eval_code, expr_code, unapplied_keys,
+    CallFrame, DebugError, EventTap, FrameSink, KeyTimeline, LcdOffOutsideVblank, Outcome,
+    RunOptions, Since, core_code, eval_code, expr_code, unapplied_keys,
 };
 pub use flash::{FlashReport, flash_image_path, flash_note_rows, flash_warnings};
 pub use machine::{Backend, Battery, DebugEntry, Flash, Machine, PowerCycled, Rebased, SetupError};

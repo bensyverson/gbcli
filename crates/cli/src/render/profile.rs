@@ -64,7 +64,8 @@ pub fn profile(p: &ProfileMade) -> String {
 /// active_mean= busiest=`: the whole frames, how many partial ones the run
 /// saw the end or start of (the frame it started in, the one it stopped in),
 /// the lag and LCD-off frames among the whole ones, and the whole LCD-on
-/// frames' summary; then a `frame_cost` row for each lag frame. The frames that made their budget differ only by a few cycles, so
+/// frames' summary; then a `frame_cost` row for each lag frame, by row index
+/// and by frame (counted as the stop's). The frames that made their budget differ only by a few cycles, so
 /// their rows would bury the ones that didn't; `--json` carries every frame,
 /// the partial ones too.
 pub fn frame_budget(b: &FrameBudgetMade) -> String {
@@ -88,6 +89,7 @@ pub fn frame_budget(b: &FrameBudgetMade) -> String {
         }
         out += &Row::new("frame_cost")
             .field("index", i)
+            .field("frame", f.frame)
             .field("active_t", f.active_t)
             .field("idle_t", f.idle_t)
             .field("lag", 1)
@@ -137,8 +139,9 @@ mod tests {
 
     use super::frame_budget;
 
-    fn frame(active_t: u64, lag: Option<bool>, partial: bool) -> FrameBudgetRow {
+    fn frame(n: i64, active_t: u64, lag: Option<bool>, partial: bool) -> FrameBudgetRow {
         FrameBudgetRow {
+            frame: n,
             active_t,
             idle_t: 70224 - active_t,
             lag,
@@ -155,15 +158,15 @@ mod tests {
     fn rows_list_only_the_lag_frames_under_the_summary() {
         let loading = FrameBudgetRow {
             lcd_off: true,
-            ..frame(70224, Some(false), false)
+            ..frame(40, 70224, Some(false), false)
         };
         let made = FrameBudgetMade {
             frames: vec![
                 loading,
-                frame(30000, Some(false), false),
-                frame(70224, Some(true), false),
-                frame(31000, Some(false), false),
-                frame(1000, None, true),
+                frame(41, 30000, Some(false), false),
+                frame(42, 70224, Some(true), false),
+                frame(43, 31000, Some(false), false),
+                frame(44, 1000, None, true),
             ],
             lag: 1,
             lcd_off: 1,
@@ -178,7 +181,7 @@ mod tests {
             frame_budget(&made),
             "frame_budget frames=4 partial=1 lag=1 lcd_off=1 active_min=30000 \
              active_max=70224 active_mean=43741.3 busiest=2\n\
-             frame_cost index=2 active_t=70224 idle_t=0 lag=1\n"
+             frame_cost index=2 frame=42 active_t=70224 idle_t=0 lag=1\n"
         );
     }
 }

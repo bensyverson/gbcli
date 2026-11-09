@@ -168,6 +168,84 @@ fn predicate_false_prints_the_measurement_it_asserted_on() {
 }
 
 #[test]
+fn a_false_expect_exits_1_with_the_stop_and_an_expect_row() {
+    let p = Project::with_session("expect");
+    let run = p.gbcli(&[
+        "run",
+        "--session",
+        "demo",
+        "--frames",
+        "2",
+        "--expect",
+        "[wSpeed] == 0",
+        "--expect",
+        "[wSpeed] == 3",
+    ]);
+    run.fails(1, "predicate_false", "expect");
+    assert!(
+        run.stdout.starts_with("stop budget_exhausted "),
+        "{}",
+        run.stdout
+    );
+    assert!(
+        run.stdout
+            .contains("expect expr=\"[wSpeed] == 0\" value=1 ok=1\nexpect expr=\"[wSpeed] == 3\" value=0 ok=0\n"),
+        "{}",
+        run.stdout
+    );
+    assert!(run.stdout.ends_with("rev s1\n"), "{}", run.stdout);
+    assert!(run.stderr.contains("`[wSpeed] == 3`"), "{}", run.stderr);
+
+    // Every expectation holding is exit 0, with the same rows.
+    let ok = p.gbcli(&[
+        "run",
+        "--session",
+        "demo",
+        "--frames",
+        "1",
+        "--expect",
+        "[wSpeed] == 0",
+    ]);
+    assert_eq!(ok.code, 0, "{}", ok.stderr);
+    assert!(
+        ok.stdout
+            .contains("expect expr=\"[wSpeed] == 0\" value=1 ok=1\n")
+    );
+}
+
+/// A second expression after `--read` became the ROM argument, and the
+/// error was that the session runs another ROM (review item E-3).
+#[test]
+fn a_second_expression_after_read_is_refused_naming_the_repeat() {
+    let p = Project::with_session("read-stray");
+    let run = p.gbcli(&[
+        "run",
+        "--session",
+        "demo",
+        "--frames",
+        "1",
+        "--read",
+        "u16[wFrame]",
+        "[wMiss]",
+    ]);
+    run.fails(2, "bad_request", "repeat --read");
+    assert!(run.stderr.contains("[wMiss]"), "{}", run.stderr);
+    // Repeating the flag works.
+    let ok = p.gbcli(&[
+        "run",
+        "--session",
+        "demo",
+        "--frames",
+        "1",
+        "--read",
+        "u16[wFrame]",
+        "--read",
+        "[wSpeed]",
+    ]);
+    assert_eq!(ok.code, 0, "{}", ok.stderr);
+}
+
+#[test]
 fn rev_mismatch_says_to_re_read() {
     let p = Project::with_session("rev");
     run1(&p);

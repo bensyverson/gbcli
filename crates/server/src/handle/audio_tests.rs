@@ -362,3 +362,89 @@ fn the_sgb_refuses_capture_before_the_run_and_records_the_gap() {
     let audio = audio_of(run(&mut h, tune_run(log)));
     assert_eq!(audio.log.expect("a log").len(), 43);
 }
+
+fn log_only() -> AudioArgs {
+    AudioArgs {
+        log: true,
+        ..AudioArgs::default()
+    }
+}
+
+/// The tune's second note: NR10 = $17, written after a vblank wakes it.
+fn is_sweep(l: &gbcli_protocol::ApuWriteLine) -> bool {
+    (l.addr, l.value) == (0xFF10, 0x17)
+}
+
+/// Each write's frame is the stop's frame where it fell: a run stopped at
+/// frame N hasn't made the write, and the next run's write says frame N.
+#[test]
+fn a_logged_write_carries_its_frame_as_the_stop_counts_frames() {
+    let f = Fixture::with_rom("audio-frames", TUNE);
+    let log = audio_of(run(&mut handler(&f), tune_run(log_only())))
+        .log
+        .expect("a log");
+    assert_eq!(log[0].frame, 0, "the first notes come before any vblank");
+    assert!(log.windows(2).all(|w| w[0].frame <= w[1].frame));
+    let sweep = log.iter().find(|l| is_sweep(l)).expect("the second note");
+    assert!(sweep.frame > 0);
+
+    let fresh = Fixture::with_rom("audio-frames-split", TUNE);
+    let mut h = handler(&fresh);
+    let before = run(
+        &mut h,
+        RunArgs {
+            frames: Some(sweep.frame as u64),
+            audio: Some(Box::new(log_only())),
+            ..RunArgs::default()
+        },
+    )
+    .outcome
+    .expect("ran");
+    assert_eq!(before.stop.unwrap().time.frame, sweep.frame);
+    assert!(!before.audio.unwrap().log.unwrap().iter().any(is_sweep));
+    let next = RunArgs {
+        frames: Some(1),
+        audio: Some(Box::new(log_only())),
+        ..RunArgs::default()
+    };
+    let after = audio_of(run(&mut h, next)).log.expect("a log");
+    let split = after.iter().find(|l| is_sweep(l)).expect("written now");
+    assert_eq!(split.frame, sweep.frame);
+}
+
+/// A write's ly is the line the raster log puts the same write on.
+#[test]
+fn a_logged_write_carries_the_line_the_raster_log_gives_it() {
+    let f = Fixture::with_rom("audio-ly", TUNE);
+    let result = run(
+        &mut handler(&f),
+        RunArgs {
+            raster: true,
+            ..tune_run(log_only())
+        },
+    )
+    .outcome
+    .expect("ran");
+    let raster = result.raster.expect("a raster");
+    let log = result.audio.expect("audio").log.expect("a log");
+    let io = log
+        .iter()
+        .filter(|l| l.addr < 0xFF30 && l.effect == ApuWriteEffect::Applied);
+    let mut checked = 0;
+    for l in io.filter(|l| l.ly.is_some()) {
+        let on_line = raster
+            .rows
+            .iter()
+            .filter(|r| r.line == l.ly)
+            .any(|r| r.writes.iter().any(|w| (w.pc, w.value) == (l.pc, l.value)));
+        assert!(on_line, "{l:?}");
+        checked += 1;
+    }
+    assert!(
+        checked > 10,
+        "the LCD is on for the tune's writes: {checked}"
+    );
+    let sweep = log.iter().find(|l| is_sweep(l)).expect("the second note");
+    let ly = sweep.ly.expect("the LCD is on");
+    assert!((144..=153).contains(&ly), "just after a vblank: {ly}");
+}

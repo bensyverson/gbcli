@@ -155,6 +155,52 @@ fn run_help_describes_the_audio_filter_and_the_oam_log() {
     assert!(view.contains("palettes"), "{view}");
 }
 
+/// A repeatable flag takes one value each time, so its line shows one value
+/// and its help says to repeat it: `--read EXPR…` read as "several
+/// expressions after one --read" (review item E-3).
+#[test]
+fn a_repeatable_flag_shows_one_value_and_says_to_repeat_it() {
+    let run = verb(crate::verbs::by_name("run").unwrap());
+    let read = run
+        .lines()
+        .find(|l| l.trim_start().starts_with("--read "))
+        .expect("the --read line");
+    assert!(read.trim_start().starts_with("--read EXPR "), "{read}");
+    let heads = run
+        .lines()
+        .filter(|l| l.trim_start().starts_with("--"))
+        .map(|l| l.trim_start().split("  ").next().unwrap_or_default());
+    for head in heads {
+        assert!(!head.contains('…'), "{head}");
+    }
+    for spec in VERBS {
+        let groups = spec.groups.iter().flat_map(|g| g.iter());
+        for flag in spec.flags.iter().chain(groups).filter(|f| f.repeat) {
+            assert!(
+                flag.help.contains("repeat"),
+                "{} --{}: {}",
+                spec.name,
+                flag.long,
+                flag.help
+            );
+        }
+    }
+}
+
+/// `--expect` and `--keys-since` are on run's flag list, and the frame
+/// budget and audio log say their rows carry frames.
+#[test]
+fn run_help_offers_expect_and_keys_since() {
+    let run = verb(crate::verbs::by_name("run").unwrap());
+    for needed in [
+        "--expect EXPR",
+        "exit 1 (predicate_false)",
+        "--keys-since BASE",
+    ] {
+        assert!(run.contains(needed), "{needed}: {run}");
+    }
+}
+
 /// The music topic's listening line shows how to enlarge a short clip's
 /// spectrogram, which is 64 columns a second at its default scale.
 #[test]

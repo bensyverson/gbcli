@@ -14,7 +14,8 @@ use crate::stop::StopRecord;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorCode {
-    /// An assertion verb's condition stayed false: `check`, `measure --max`.
+    /// An assertion's condition was false: `measure --max`, `equiv`, `run
+    /// --expect`.
     PredicateFalse,
     /// The last complete frame wasn't a normal one (LCD off, boot), so a
     /// screenshot of it was refused (design §9): pass `--any-frame`.

@@ -8,8 +8,8 @@ use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
 use gbcli_core::{Event, EventKinds, EventSink, Gap};
-use gbcli_engine::Machine;
 use gbcli_engine::profile::{FrameBudget, FrameSplit, MeasureSpec, Profile, Raster, Routines};
+use gbcli_engine::{Machine, Since};
 use gbcli_protocol::{
     CycleStats, ErrorBody, ErrorCode, FrameBudgetMade, FrameBudgetRow, MeasureMade, ProfileMade,
     RasterMade, Real, RoutineRow, RunArgs,
@@ -134,8 +134,8 @@ impl Probes {
         Some(measure_on(machine, &spec, (from, to), None, guard).map(|(made, _)| made))
     }
 
-    /// What the run's sinks collected.
-    pub(super) fn finish(&self, machine: &Machine) -> Collected {
+    /// What the run's sinks collected, frames numbered from `since`.
+    pub(super) fn finish(&self, machine: &Machine, since: &Since) -> Collected {
         let Some(sinks) = &self.sinks else {
             return Collected::default();
         };
@@ -144,8 +144,10 @@ impl Probes {
             .routines
             .map(|r| profile_made(r.finish(machine.symbols()), self.top));
         let frames = &sinks.frames;
+        let base = machine.time_base(since).frame;
         let frame_budget = sinks.split.map(|mut split| {
-            frame_budget_made(frames, split.cut(machine), sinks.started_mid_frame)
+            let rest = split.cut(machine);
+            frame_budget_made(frames, rest, sinks.started_mid_frame, base)
         });
         let timeline = sinks.raster.map(Raster::finish);
         let gaps = timeline.as_ref().map_or(Vec::new(), |t| t.gaps.clone());
@@ -202,13 +204,15 @@ fn profile_made(p: Profile, top: Option<u32>) -> ProfileMade {
 /// is only that frame's tail, so it is partial too. Only the whole frames
 /// are counted as lag or LCD-off, and only the whole LCD-on frames make the
 /// summary and the busiest (a loading frame isn't play); `busiest` is a row
-/// index.
+/// index. Each row's frame counts from `base`, the time base's frame.
 fn frame_budget_made(
     frames: &[FrameBudget],
     rest: FrameBudget,
     started_mid_frame: bool,
+    base: u64,
 ) -> FrameBudgetMade {
     let row = |f: &FrameBudget, partial: bool| FrameBudgetRow {
+        frame: f.frame as i64 - base as i64,
         active_t: f.active_t,
         idle_t: f.idle_t,
         lag: (!partial).then_some(f.lag),
@@ -299,6 +303,7 @@ mod tests {
             idle_t: 70_224 - active_t,
             lag,
             lcd_off: false,
+            frame: 0,
         }
     }
 
@@ -310,8 +315,9 @@ mod tests {
             idle_t: 0,
             lag: false,
             lcd_off: false,
+            frame: 0,
         };
-        let made = frame_budget_made(&frames, rest, false);
+        let made = frame_budget_made(&frames, rest, false, 0);
         // The partial frame (9,000 T) is in the rows, not the summary.
         assert_eq!(
             made.active_t,
@@ -329,7 +335,7 @@ mod tests {
     fn a_run_started_mid_frame_leaves_its_first_frame_out_and_indexes_rows() {
         let frames = [frame(70_000, true), frame(100, false), frame(400, true)];
         let rest = FrameBudget::default();
-        let made = frame_budget_made(&frames, rest, true);
+        let made = frame_budget_made(&frames, rest, true, 0);
         assert!(made.frames[0].partial && made.frames[0].lag.is_none());
         assert_eq!(made.frames.len(), 3, "no trailing row at a vblank stop");
         assert_eq!(made.active_t.map(|s| (s.min, s.max)), Some((100, 400)));
@@ -344,8 +350,9 @@ mod tests {
             idle_t: 0,
             lag: false,
             lcd_off: false,
+            frame: 0,
         };
-        let made = frame_budget_made(&[], rest, false);
+        let made = frame_budget_made(&[], rest, false, 0);
         assert_eq!((made.active_t, made.busiest), (None, None));
     }
 
@@ -361,7 +368,7 @@ mod tests {
             frame(100, false),
             frame(300, false),
         ];
-        let made = frame_budget_made(&frames, FrameBudget::default(), false);
+        let made = frame_budget_made(&frames, FrameBudget::default(), false, 0);
         assert_eq!((made.lag, made.lcd_off), (0, 2));
         assert_eq!(made.active_t.map(|s| (s.min, s.max)), Some((100, 300)));
         assert_eq!(made.busiest, Some(3), "a frame of play, not a loading one");
@@ -375,7 +382,7 @@ mod tests {
             lcd_off: true,
             ..frame(70_224, false)
         };
-        let made = frame_budget_made(&[off, off], FrameBudget::default(), false);
+        let made = frame_budget_made(&[off, off], FrameBudget::default(), false, 0);
         assert_eq!((made.active_t, made.busiest, made.lcd_off), (None, None, 2));
     }
 }

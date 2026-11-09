@@ -62,10 +62,10 @@ pub const VERBS: &[VerbSpec] = &[
                 from --at, the head, or the boot handoff; apply --patch, --poke and --write \
                 in the order given; schedule --keys; run until --until holds, --to is reached, a breakpoint or \
                 watch fires, or the budget ends (--profile, --frame-budget, --raster and --oam-log collect \
-                during the run); --measure on a copy of the stop; evaluate --read; save --shot; save the audio \
+                during the run); --measure on a copy of the stop; evaluate --read and --expect; save --shot; save the audio \
                 (--audio-log, --audio-summary, --wav, --piano, --spectrogram); save \
-                --checkpoint. The stop \
-                becomes the session's new head. A ROM argument is the same as --rom.",
+                --checkpoint (not when an --expect is false). The stop \
+                becomes the session's new head, whatever --expect says. A ROM argument is the same as --rom.",
         example: (
             "gbcli run game.gb --session dx --until 'u16[wFrame] >= 60' --read '[wSpriteX]'",
             "creates session dx from game.gb, runs to the frame where wFrame reaches 60, \

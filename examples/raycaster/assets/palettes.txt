@@ -1,0 +1,6 @@
+# The DMG's four grays, shades 0-3, and one palette for every image: the
+# images are drawn in exactly those grays, so their tiles serve both builds.
+dmg:  #ffffff #aaaaaa #555555 #000000
+gray: #ffffff #aaaaaa #555555 #000000
+tiles/font.pixels = gray
+bg/title.pixels = gray

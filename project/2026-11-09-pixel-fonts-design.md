@@ -282,3 +282,8 @@ Ben ruled after reading LoadHigh's response, [loadhigh/project/2026-11-09-pixel-
    - Third, the starter renderer (question 7, C2), with an original default font as `.yaff`.
    - LoadHigh can consume `FontAsset` after the first.
 5. **Two text formats are accepted:** YAFF for fonts, `.pixels` for every other image. A font has labels and widths that an image doesn't, and other tools read YAFF.
+
+**Ben's rulings on leaf 1's calls (2026-11-09, seventeenth session):**
+- **The character list is `assets/fonts/NAME.charlist`**, plain text holding the characters a program's strings use, a named glyph written `<name>`, line breaks ignored. It limits what a build emits past 254 glyphs, and with the `assets` request it is what composition (leaf 2) serves.
+- **`PROTOCOL_VERSION` 3 stands** (the new error code and image limits; [2026-11-09-pixel-fonts-for-loadhigh.md](2026-11-09-pixel-fonts-for-loadhigh.md) says so to LoadHigh).
+- Leaf 1's other calls stand, at the main thread's discretion: the `assets` request takes keys per font; keys refuse control characters, and a name is two or more ASCII letters, digits, `_` or `-`; a subset request numbers glyphs among those asked for.

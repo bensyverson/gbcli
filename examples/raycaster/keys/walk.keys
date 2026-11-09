@@ -1,0 +1,15 @@
+# The scripted walk: 600 frames of turning and walking through the test
+# map, from checkpoint start (120 frames after boot). Offsets count from the
+# run's start. Used for profiling, measuring and equivalence checks.
+RIGHT@0 -RIGHT@15
+UP@15 -UP@75
+LEFT@75 -LEFT@105
+UP@105 -UP@165
+RIGHT@165 -RIGHT@205
+UP@205 -UP@260
+LEFT@260 -LEFT@300
+DOWN@300 -DOWN@330
+RIGHT@330 -RIGHT@420
+UP@420 -UP@480
+LEFT@480 RIGHT@480 -LEFT@540 -RIGHT@540
+UP@540 -UP@600

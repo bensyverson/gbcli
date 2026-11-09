@@ -1,0 +1,58 @@
+; Text as font tiles: tools/draw_art.py draws assets/tiles/font.png in this
+; order, loaded at T_FONT. The space is a dark tile, the window's blank.
+; Strings end at 255.
+
+IF !DEF(CHARMAP_INC)
+DEF CHARMAP_INC EQU 1
+
+include "game.inc"
+
+DEF TEXT_END EQU 255
+DEF T_SPACE EQU T_FONT
+DEF T_DIGITS EQU T_FONT + 1                ; "0"
+
+CHARMAP " ", T_FONT + 0
+CHARMAP "0", T_FONT + 1
+CHARMAP "1", T_FONT + 2
+CHARMAP "2", T_FONT + 3
+CHARMAP "3", T_FONT + 4
+CHARMAP "4", T_FONT + 5
+CHARMAP "5", T_FONT + 6
+CHARMAP "6", T_FONT + 7
+CHARMAP "7", T_FONT + 8
+CHARMAP "8", T_FONT + 9
+CHARMAP "9", T_FONT + 10
+CHARMAP "A", T_FONT + 11
+CHARMAP "B", T_FONT + 12
+CHARMAP "C", T_FONT + 13
+CHARMAP "D", T_FONT + 14
+CHARMAP "E", T_FONT + 15
+CHARMAP "F", T_FONT + 16
+CHARMAP "G", T_FONT + 17
+CHARMAP "H", T_FONT + 18
+CHARMAP "I", T_FONT + 19
+CHARMAP "J", T_FONT + 20
+CHARMAP "K", T_FONT + 21
+CHARMAP "L", T_FONT + 22
+CHARMAP "M", T_FONT + 23
+CHARMAP "N", T_FONT + 24
+CHARMAP "O", T_FONT + 25
+CHARMAP "P", T_FONT + 26
+CHARMAP "Q", T_FONT + 27
+CHARMAP "R", T_FONT + 28
+CHARMAP "S", T_FONT + 29
+CHARMAP "T", T_FONT + 30
+CHARMAP "U", T_FONT + 31
+CHARMAP "V", T_FONT + 32
+CHARMAP "W", T_FONT + 33
+CHARMAP "X", T_FONT + 34
+CHARMAP "Y", T_FONT + 35
+CHARMAP "Z", T_FONT + 36
+CHARMAP "x", T_FONT + 37
+CHARMAP "-", T_FONT + 38
+CHARMAP ":", T_FONT + 39
+CHARMAP ".", T_FONT + 40
+CHARMAP "!", T_FONT + 41
+CHARMAP "^", T_FONT + 42
+
+ENDC

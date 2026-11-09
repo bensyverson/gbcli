@@ -1,0 +1,25 @@
+# Vesper Swarm's palettes, lightest first (tools/draw_art.py draws with the
+# same colors). The dmg line pins the four shades for every image, and each
+# palette has one color near each shade, so on the DMG index i is shade i.
+dmg:    #ffffff #aaaaaa #555555 #000000
+text:   #f8f0d8 #c8a860 #5c3c54 #0c1028
+ship:   #ffffff #80b0f0 #2858b0 #081838
+enemy:  #ffffff #ffd860 #d04020 #300808
+shot:   #ffffff #f060a0 #a02060 #300818
+boss:   #ffffff #d0f080 #7040b0 #180828
+stars:  #f0f0ff #9098d0 #404870 #0c1028
+peaks:  #e8ecf8 #8a90c8 #3a3f6a #0c1028
+forest: #e0f8c8 #80c070 #305838 #0c1810
+ground: #f0e0c0 #c09868 #604030 #1c1008
+title:  #fff0c0 #f0a030 #803060 #0c1028
+
+tiles/font.png = text
+tiles/ship.png = ship
+tiles/enemies.png = enemy
+tiles/bullet.png = shot
+tiles/boss.png = boss
+bg/sky0.png = stars
+bg/sky1.png = peaks
+bg/sky2.png = forest
+bg/sky3.png = ground
+bg/title.png = title

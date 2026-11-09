@@ -5,7 +5,7 @@ Original Game Boy games built entirely by AI agents with gbcli, as a test of the
 | Folder | Game | What it shows |
 |---|---|---|
 | `racer/` | A pseudo-3D road racer (in progress) | Curves and hills drawn by changing the scroll registers on every scanline |
-| `shooter/` | A bullet-heavy shooter (in progress) | 30+ sprites at once by multiplexing, and parallax from mid-frame scroll splits |
+| `shooter/` | Vesper Swarm, a bullet-heavy shooter | 30+ sprites at once by multiplexing, and parallax from mid-frame scroll splits |
 
 ## Build and play one
 

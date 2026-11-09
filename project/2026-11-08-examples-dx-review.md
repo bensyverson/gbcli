@@ -187,3 +187,10 @@ tasks:
     desc: |
       Placeholder: implement the format as Ben approves it in the pixdesign leaf's doc. Detail this leaf from that doc before dispatching.
 ```
+
+## Later rulings (Ben, 2026-11-08)
+
+Raised by the fix agents, ruled the same day:
+- **The 8x8 object size is a project setting.** A game in 8x8 sprite mode sets it once for every sheet, matching LCDC's one object size for the whole screen. So a `hero.16x16.png` frame can be drawn as 8x8 objects. The height rule (a frame height that's a multiple of 8 but not 16 makes 8x8 objects) stays for projects that don't set it. Leaf: "Images: a project-wide 8x8 object size".
+- **Label breakpoints and watches are re-resolved when the session's ROM changes,** not only on `run --from boot` and `power-cycle`. After a rebuild whose head still loads, each one set by a symbol moves to where the new `.sym` puts it, with a warning per move. Design §7's "resolved when set" becomes "resolved when set, and again when the ROM changes". Leaf: "Re-resolve label breakpoints and watches whenever the ROM changes".
+- **Push after review:** main goes to origin once this batch's three reviews report and their fixes land.

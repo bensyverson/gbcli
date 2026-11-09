@@ -31,6 +31,9 @@ Every game is an original design: its own name, characters, art, music and level
 
 - **The binary.** The main thread builds one gbcli at the commit of dispatch, outside the checkout (LoadHigh runs `target/release/gbcli`, which must not be swapped under it), and names its absolute path and commit in each brief: `cargo build --release -p gbcli --target-dir /Users/ben/.cache/gbcli-examples/target`. RGBDS comes from `PATH`.
 - **The project.** `gbcli new` makes the project under `examples/<game>/`. Before the first run, the agent makes `examples/<game>/.gbcli/`: gbcli finds sessions by walking up from the working directory, and without one there, sessions land in the repo's own `.gbcli/` (a trap of nesting a project in gbcli's repo, not one a user meets). `.gbcli/` and `build/` stay uncommitted.
+
+  > **Correction, 2026-11-09:** making `.gbcli/` by hand is no longer needed: `gbcli new` makes it since leaf nqXbq4 (`created path=…/.gbcli/`). The raycaster's DX review caught the stale line ([2026-11-09-examples-dx-review-c.md](2026-11-09-examples-dx-review-c.md), What the brief got wrong).
+
 - **A game agent's context line (Ben, 2026-11-08):** past 40%, it keeps going if it has finished at least half its leaves, finishing the leaf in hand before it stops; short of half, it stops after the leaf in hand and a fresh agent takes the rest.
 - **One worktree per game; each game's leaves in order, by one agent as far as its context line allows.** A and B touch disjoint folders and DX docs, so they run in parallel; each game's leaves are a chain. The main thread integrates each session by squash-merging its branch, as usual.
 - **Tools beyond gbcli.** Python 3 standard library only, for art scripts (write PNGs with `zlib` and `struct`) and any other generator, kept in `examples/<game>/tools/`. No new dependencies.

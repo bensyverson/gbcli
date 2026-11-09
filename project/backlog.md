@@ -117,14 +117,6 @@ Eval run 5 asked for axis labels or a legend on the image too; `help music` now 
 
 **Un-park when:** a sound task needs the spectrogram (noise, timbre, a mix where the log's note names don't tell enough) and an agent can't read it.
 
-## 2026-11-07 — Conditions that compare a bare RAM symbol
-
-**What:** `--until wX >= 3` compares wX's address, not its byte, the same trap `read wX` had. `read` and `run --read` now warn about it (b486fc9); conditions don't.
-
-**Why parked:** no eval run hit it, and the expressions topic already says a bare symbol is its address.
-
-**Un-park when:** an agent writes a condition on a bare RAM symbol and the run never stops, or stops at once.
-
 ## 2026-11-08 — A bespoke Rust emulator core
 
 **What:** a Rust core implementing the same core trait as the SameBoy backend: DMG first, no APU, judged by blargg, mooneye, dmg-acid2 and lockstep with SameBoy. It would answer what the wrapper reports as *unsupported*: side-effect-free reads, sub-instruction stepping, saved cycle counters. The spike plan is in [2026-11-06-backend-evaluation.md](2026-11-06-backend-evaluation.md) ▸ The bespoke core question.
@@ -178,4 +170,20 @@ What: let pixel text (or a sheet's name) name its tiles and frames so `images.in
 
 > **Update, 2026-11-09:** the condition used to read "the D or E DX doc shows an input bot … costing real time or calls again". D's bot made about 1,100 cheap calls (6.5 s a win), and the agent ranked it its best help; E had no bot. The condition held by its wording but not its intent, so Ben kept the entry parked and sharpened the condition ([2026-11-09-examples-dx-review-de.md](2026-11-09-examples-dx-review-de.md), question 5).
 
-> **Update, 2026-11-09 (seventeenth session):** C's bot won Lantern in 108 calls and about 4 s, and its agent judged that gbcli needs no embedded scripting for it, so speed doesn't un-park this. But Ben ruled that gbcli must stay usable in a web IDE built to WASM ([2026-11-09-web-target.md](2026-11-09-web-target.md)), where there is no Python or shell. That makes **portability** the stronger argument: one bot script that runs the same in the CLI, under `serve` and in a browser. QuickJS compiles to WASM; the alternatives are each host driving the protocol in its own language (bots don't move between hosts) or a small built-in input driver in the protocol. **Un-park also when:** the web work starts (its spike decides), or a bot is needed in a web host.
+> **Update, 2026-11-09 (seventeenth session):** C's bot won Lantern in 108 calls and about 4 s, and its agent judged that gbcli needs no embedded scripting for it, so speed doesn't un-park this. But Ben ruled that gbcli must stay usable in a web IDE built to WASM ([2026-11-09-web-target.md](2026-11-09-web-target.md)), where there is no Python or shell. That makes **portability** the stronger argument: one bot script that runs the same in the CLI, under `serve` and in a browser. QuickJS compiles to WASM; the alternatives are each host driving the protocol in its own language (bots don't move between hosts) or a small built-in input driver in the protocol. **Un-park also when:** the web work starts (its spike decides), or a bot is needed in a web host. C's bot is mostly *planning* (a BFS over the map) and only lightly *driving* (one call a turn or straight stretch): a built-in input driver could run its segments but not its search, which only a script engine or the host's own language can.
+
+## 2026-11-09 — `equiv --sync-on EXPR`: compare frames where an expression changes
+
+**What:** equiv compares the two sides not at the end of every frame but each time an expression changes (`--sync-on 'u16[wViews]'`), so a faster renderer that shows each view sooner still matches view for view.
+
+**Why parked:** C (the raycaster) wanted it for its speed-ups, but a renderer that takes a new pose each view samples input at different frames once it is faster, so the faster build shows *different* views while keys are held, not only earlier ones. A frame-locked test mode in the ROM is the sound check, and `help optimize` now says so; `equiv --screen off` covers the timing-free `--ram` compare ([2026-11-09-examples-dx-review-c.md](2026-11-09-examples-dx-review-c.md), C-1).
+
+**Un-park when:** a game whose views don't depend on input timing (a demo, a replayed cutscene, a pose taken from a fixed table) needs to check a speed-up and a frame lock won't do.
+
+## 2026-11-09 — The screen's shade indices as data in `shot --json`
+
+**What:** `shot --json` carries the 160x144 screen as shade indices (0-3, or CGB colors), so a caller compares pixels without decoding a PNG. Useful to Rust-library and web callers, who may have no PNG decoder.
+
+**Why parked:** one agent (C) decoded `shot`'s 2-bit palette PNG, once, with a small fix to its decoder; `shot --help` now names the format ([2026-11-09-examples-dx-review-c.md](2026-11-09-examples-dx-review-c.md), C-9).
+
+**Un-park when:** a second agent decodes `shot` PNGs to compare pixels, or a library or web caller needs the screen as data.

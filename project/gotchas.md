@@ -77,3 +77,7 @@ The tracker's event log lives in git, and `job` rebuilds its cache from it on op
 ## 2026-11-07 — LoadHigh runs this checkout's `target/release/gbcli`
 
 Another project's sessions (`~/git/loadhigh`) drive `/Users/ben/git/gbcli/target/release/gbcli` (`serve`, `batch`) while they work, so `cargo build --release` in the main checkout swaps the binary under their running jobs. In the thirteenth session, five release builds for the agent eval replaced it mid-run, along with the behavior LoadHigh saw. Build an eval or scratch binary with `--target-dir` outside the checkout (or copy one from a worktree), and check `ps -Ao args | grep target/release/gbcli` first. Its processes also load the machine, so a suite time taken while they run is noise.
+
+## 2026-11-09 — every parallel agent edits the same one-line paragraphs of docs/architecture.md
+
+Each crate's entry in `docs/architecture.md` is one long line, so any two agents that document a change in the same crate conflict on the whole paragraph, however far apart their clauses are. In the eighteenth session it conflicted on four of eight squashes (engine, server, cli, protocol entries). Resolve by taking main's line and splicing in the agent's clause (`difflib.SequenceMatcher` over the two sides shows the inserted clause), never by taking either side whole. Splitting the entries into one sentence per line would end it; nobody has done that yet.

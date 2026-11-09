@@ -4,9 +4,11 @@
 ; states the layout rules TextDraw follows; `gbcli font assets/fonts/main.yaff
 ; --sample TEXT` sets TEXT by the same rules, so its pixels are TextDraw's.
 ;
-; Both routines write tiles: give them VRAM only with the LCD off (or in
-; VBlank, for a tile or two), or draw into a WRAM buffer and copy it in
-; VBlank. VRAM is closed to the CPU while the LCD draws (`gbcli help traps`).
+; Both routines write tiles: give them VRAM only with the LCD off, or draw
+; into a WRAM buffer and copy it in VBlank. VRAM is closed to the CPU while
+; the LCD draws (`gbcli help traps`), and a TextDraw runs far past VBlank's
+; 1,140 M-cycles (a glyph takes up to 954). Only TextLoadTiles, 360 M-cycles
+; a tile, fits VRAM in VBlank, for two or three tiles.
 ; The font is in ROMX: on a cartridge with an MBC, switch to
 ; BANK(MainFontGlyphs) first.
 
@@ -300,7 +302,7 @@ TextShades:
 ; glyph sits at its tile's left edge, so it suits a fixed-width font.
 ; In: de the first glyph's rows (MainFontGlyphs + 8 * its number), hl the
 ;     first tile, a how many glyphs (0 loads none), b ink and c paper, 0-3.
-; Out: hl past the last tile, de past the last glyph. Clobbers bc.
+; Out: hl past the last tile, de past the last glyph, a 0. Clobbers bc.
 TextLoadTiles::
 	and a
 	ret z

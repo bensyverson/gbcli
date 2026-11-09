@@ -161,11 +161,12 @@ BANK(MainFontGlyphs) first. The starter keeps 20 tiles, 236-255 (a line the
 screen's width), as its line buffer, at map row 11. The image checks don't
 count them: keep a background's tiles below 236, or move the buffer.
 
-Cost: TextDraw takes 517-948 M-cycles a glyph, so at most 950 M-cycles a glyph,
-about 5% of a frame (every glyph of main.yaff at two pen offsets: gbcli measure
-TextDraw.glyph..TextDraw.glyph --iterations 191). The width hardly matters;
-the most is a glyph that crosses into a tile the line hasn't reached. The
-starter's 16-glyph line takes 11,112 (63% of a frame), once, with the LCD off.
+Cost: TextDraw takes 517 to at most 954 M-cycles a glyph, about 5% of a frame
+(every glyph of main.yaff at all 8 pen offsets: gbcli measure
+TextDraw.glyph..TextDraw.glyph --iterations <glyphs>). The width hardly
+matters; the most is a glyph that crosses into a tile the line hasn't reached.
+The starter's 16-glyph line takes 11,112 (63% of a frame), once, with the LCD
+off.
 
 The typewriter (a recipe: one character a step, as a dialogue box prints):
   1. Draw the whole line once into a WRAM buffer (TextDraw with de in WRAM, so

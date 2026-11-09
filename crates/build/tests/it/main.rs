@@ -47,3 +47,4 @@ mod pngs;
 mod rom_banks;
 mod scaffold;
 mod text;
+mod text_shades;

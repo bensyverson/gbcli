@@ -36,7 +36,8 @@ pub fn eval_code(e: &EvalError) -> ErrorCode {
         | EvalError::NoAccess { .. }
         | EvalError::OldUnknown
         | EvalError::ShiftOutOfRange { .. }
-        | EvalError::AddressOutOfRange { .. } => ErrorCode::BadExpression,
+        | EvalError::AddressOutOfRange { .. }
+        | EvalError::BlockPastArea { .. } => ErrorCode::BadExpression,
     }
 }
 

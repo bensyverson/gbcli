@@ -167,7 +167,8 @@ pub struct WriterWrites {
     pub pc: u16,
     /// The `.sym` label containing `pc`, as `Name` or `Name+$3` (as a stop
     /// record spells it). The log keeps no bank, so a PC in a switchable
-    /// area is named only when the `.sym` has labels there in one bank.
+    /// area is named only when the `.sym` has labels there in one bank, and
+    /// a PC that wrote from the boot ROM is never named.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub symbol: Option<String>,
     pub writes: u64,

@@ -183,6 +183,7 @@ fn seeded(start: &ApuSnapshot, at: Ticks) -> Vec<DecodedWrite> {
                 frame: 0,
                 line: None,
                 pc: 0,
+                boot_rom: false,
                 addr,
                 value: if trigger_reg { value & 0x7F } else { value },
                 effect: ApuWriteEffect::Applied,

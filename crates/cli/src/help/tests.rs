@@ -228,6 +228,17 @@ fn read_help_says_a_bare_symbol_is_its_address() {
     }
 }
 
+/// A memory block over $FEA0-$FEFF is refused whole, as read refuses one
+/// byte there, and a banked block stops at its area's end: view's help says
+/// both, so neither refusal is a surprise.
+#[test]
+fn view_help_names_the_blocks_it_refuses() {
+    let view = verb(crate::verbs::by_name("view").unwrap());
+    for word in ["FEA0-FEFF", "refused whole", "area's end"] {
+        assert!(view.contains(word), "{word}: {view}");
+    }
+}
+
 /// `view memory` (leaf zuYlzs) is documented where an agent looks: view's
 /// help, read's help (which pointed nowhere for a block), and the schema.
 #[test]

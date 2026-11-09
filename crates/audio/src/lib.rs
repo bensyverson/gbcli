@@ -27,5 +27,5 @@ pub use pitch::{Note, NoteName, Pitch, midi_of, nearest_note, noise_hz};
 pub use reg::{Direction, Duty, Envelope, LfsrWidth, SoundReg, Sweep, WaveLevel, channel_name};
 pub use replay::{Takes, record_takes, record_takes_with};
 pub use spectrogram::{FLOOR_DB, HOP, HZ_PER_ROW, LEVELS, ROWS, Spectrum, spectrogram, spectrum};
-pub use summary::{on_channels, summarize};
+pub use summary::{name_writers, on_channels, summarize};
 pub use wav::wav;

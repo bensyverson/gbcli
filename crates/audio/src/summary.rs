@@ -71,6 +71,28 @@ pub fn summarize(log: &[&DecodedWrite]) -> AudioSummary {
     }
 }
 
+/// Names `summary`'s writers with `name` (a `.sym` lookup by PC), leaving
+/// unnamed a writer that wrote from the boot ROM in `log`: that code is no
+/// cart byte, and a row whose PC both ran counts both, so neither name fits.
+pub fn name_writers(
+    summary: &mut AudioSummary,
+    log: &[&DecodedWrite],
+    name: impl Fn(u16) -> Option<String>,
+) {
+    let boot: BTreeSet<u16> = log
+        .iter()
+        .filter(|w| w.write.boot_rom)
+        .map(|w| w.write.pc)
+        .collect();
+    for w in &mut summary.writers {
+        w.symbol = if boot.contains(&w.pc) {
+            None
+        } else {
+            name(w.pc)
+        };
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use gbcli_core::{ApuWrite, ApuWriteEffect, Ticks};
@@ -84,10 +106,47 @@ mod tests {
             frame: 0,
             line: None,
             pc,
+            boot_rom: false,
             addr,
             value,
             effect: ApuWriteEffect::Applied,
         }
+    }
+
+    /// A writer is named by `name` unless one of its writes ran from the
+    /// boot ROM: the cart's labels don't name the boot ROM's code, and the
+    /// row counts both when they share a PC.
+    #[test]
+    fn a_writer_is_named_unless_the_boot_rom_wrote_from_its_pc() {
+        let writes = [
+            ApuWrite {
+                boot_rom: true,
+                ..write(0x000E, 0xFF26, 0x80)
+            },
+            write(0x0400, 0xFF12, 0xF0),
+            write(0x0050, 0xFF24, 0x77),
+            ApuWrite {
+                boot_rom: true,
+                ..write(0x0050, 0xFF25, 0xF3)
+            },
+        ];
+        let powered = ApuSnapshot {
+            regs: [0; 0x17],
+            powered: true,
+        };
+        let log = decode(&powered, &writes);
+        let all: Vec<&DecodedWrite> = log.iter().collect();
+        let mut s = summarize(&all);
+        name_writers(&mut s, &all, |pc| Some(format!("L{pc:04X}")));
+        let names: Vec<(u16, Option<&str>)> = s
+            .writers
+            .iter()
+            .map(|w| (w.pc, w.symbol.as_deref()))
+            .collect();
+        assert_eq!(
+            names,
+            vec![(0x0050, None), (0x000E, None), (0x0400, Some("L0400"))]
+        );
     }
 
     /// Music on square 1 from $0400, effects on noise from $1595 and

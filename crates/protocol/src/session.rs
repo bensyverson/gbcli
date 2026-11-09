@@ -111,9 +111,10 @@ pub struct MachineView {
 pub struct SessionRow {
     pub name: String,
     pub rom: String,
-    /// The model the session was created with.
-    #[serde(with = "ModelDef")]
-    pub model: Model,
+    /// The model the session was created with; absent in a response from
+    /// before the field, where it is unknown.
+    #[serde(default, with = "opt_model", skip_serializing_if = "Option::is_none")]
+    pub model: Option<Model>,
     /// The header CGB flag of the ROM file the session names, as it is on
     /// disk now; absent when the file can't be read.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -131,6 +132,25 @@ pub struct SessionRow {
     /// pruning, never by emulation.
     pub last_used: u64,
     pub checkpoints: usize,
+}
+
+/// An optional [`Model`] by its wire name, through [`ModelDef`].
+mod opt_model {
+    use gbcli_core::Model;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    use crate::checkpoint::ModelDef;
+
+    #[derive(Serialize, Deserialize)]
+    struct Named(#[serde(with = "ModelDef")] Model);
+
+    pub fn serialize<S: Serializer>(model: &Option<Model>, s: S) -> Result<S::Ok, S::Error> {
+        model.map(Named).serialize(s)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Model>, D::Error> {
+        Ok(Option::<Named>::deserialize(d)?.map(|Named(m)| m))
+    }
 }
 
 /// One line of `events.jsonl`: who changed what, and the revisions either side.
@@ -238,6 +258,26 @@ mod tests {
         let file: SessionFile = serde_json::from_value(json).unwrap();
         assert_eq!(file.flash, None);
         assert!(serde_json::to_value(&file).unwrap().get("flash").is_none());
+    }
+
+    /// A newer client reads an older serve's `sessions` rows, which carry no
+    /// model: the model is unknown then, not guessed.
+    #[test]
+    fn a_session_row_from_before_the_model_reads_with_no_model() {
+        let json = serde_json::json!({
+            "name": "demo", "rom": "demo.gb", "rev": "s1", "size_bytes": 10,
+            "last_used": 0, "checkpoints": 0,
+        });
+        let row: SessionRow = serde_json::from_value(json).unwrap();
+        assert_eq!(row.model, None);
+        assert!(serde_json::to_value(&row).unwrap().get("model").is_none());
+        let named = SessionRow {
+            model: Some(Model::CgbE),
+            ..row
+        };
+        let json = serde_json::to_value(&named).unwrap();
+        assert_eq!(json["model"], "cgb-e");
+        assert_eq!(serde_json::from_value::<SessionRow>(json).unwrap(), named);
     }
 
     #[test]

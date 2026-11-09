@@ -4,9 +4,9 @@
 //! region's backing store; IO registers without side effects; and a
 //! never-written RAM byte an error naming the first, unless `allow_uninit`.
 
-use super::eval::{self, EvalCtx, EvalError, EvalWarning};
+use super::eval::{self, AreaEnd, EvalCtx, EvalError, EvalWarning};
 use super::{Expr, ExprError, Place, parse};
-use crate::sym::Symbols;
+use crate::sym::{Area, Symbols};
 
 /// The most a block reads: the whole address space.
 pub const MAX_BLOCK: u32 = 0x1_0000;
@@ -36,7 +36,8 @@ impl BlockStart {
     }
 
     /// Reads `len` bytes (1 to [`MAX_BLOCK`]). A block that would run past
-    /// $FFFF fails before reading. With `ctx.allow_uninit`, never-written
+    /// $FFFF fails before reading, as does a banked or region block that
+    /// would run past its area's end (`BlockPastArea`). With `ctx.allow_uninit`, never-written
     /// bytes are read as their power-on values under one warning.
     pub fn read(
         &self,
@@ -64,6 +65,9 @@ impl BlockStart {
                 });
             }
         }
+        if let Some((end, fits)) = past_area(&place, len, ctx) {
+            return Err(EvalError::BlockPastArea { end, fits });
+        }
         let mut read = Vec::new();
         let mut bytes = Vec::with_capacity(len as usize);
         for i in 0..len {
@@ -75,6 +79,39 @@ impl BlockStart {
         warnings.extend(collapsed(read));
         Ok(Block { addr, bank, bytes })
     }
+}
+
+/// Where a banked or region block of `len` bytes would run past the end of
+/// what its bank or offset names, and how many bytes fit before it: a bank
+/// carried into the next area would read a bank nothing maps there. A CPU
+/// address names no bank, so its block reads on through the mapped banks.
+/// A region start already past its end is left to the read's own error.
+fn past_area(place: &Place, len: u32, ctx: &EvalCtx<'_>) -> Option<(AreaEnd, u32)> {
+    let (end, fits) = match *place {
+        Place::Cpu(_) => return None,
+        Place::Banked { bank, addr } => {
+            let last = Area::of(addr).last();
+            (
+                AreaEnd::Banked { bank, last },
+                u32::from(last) - u32::from(addr) + 1,
+            )
+        }
+        Place::Region { region, offset } => {
+            let size = ctx.core.region(region).ok()?.bytes.len();
+            let offset = offset as usize;
+            if offset >= size {
+                return None;
+            }
+            (
+                AreaEnd::Region {
+                    region,
+                    last: size - 1,
+                },
+                u32::try_from(size - offset).unwrap_or(u32::MAX),
+            )
+        }
+    };
+    (len > fits).then_some((end, fits))
 }
 
 /// A block's warnings with its never-written bytes as one.

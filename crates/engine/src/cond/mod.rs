@@ -18,7 +18,9 @@ use crate::sym::{Symbol, Symbols};
 
 pub use block::{Block, BlockStart, MAX_BLOCK};
 pub(crate) use cadence::Triggers;
-pub use eval::{AccessValues, EvalCtx, EvalError, EvalWarning, StopTrigger, UninitRead, Verdict};
+pub use eval::{
+    AccessValues, AreaEnd, EvalCtx, EvalError, EvalWarning, StopTrigger, UninitRead, Verdict,
+};
 
 /// A compiled condition: its source and its tree, symbols already resolved.
 #[derive(Clone, Debug, PartialEq, Eq)]

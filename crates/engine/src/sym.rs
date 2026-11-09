@@ -52,6 +52,24 @@ impl Area {
         }
     }
 
+    /// The area's last CPU address.
+    pub fn last(self) -> u16 {
+        match self {
+            Area::Rom0 => 0x3FFF,
+            Area::RomX => 0x7FFF,
+            Area::Vram => 0x9FFF,
+            Area::Sram => 0xBFFF,
+            Area::Wram0 => 0xCFFF,
+            Area::WramX => 0xDFFF,
+            Area::Echo => 0xFDFF,
+            Area::Oam => 0xFE9F,
+            Area::Unusable => 0xFEFF,
+            Area::Io => 0xFF7F,
+            Area::Hram => 0xFFFE,
+            Area::Ie => 0xFFFF,
+        }
+    }
+
     pub fn is_rom(self) -> bool {
         matches!(self, Area::Rom0 | Area::RomX)
     }
@@ -336,6 +354,16 @@ fn glob(pattern: &[char], name: &[char]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_areas_last_address_is_the_last_of_its_addresses() {
+        for addr in 0..=u16::MAX {
+            let area = Area::of(addr);
+            let last = area.last() == addr;
+            let next_is_another = addr == u16::MAX || Area::of(addr + 1) != area;
+            assert_eq!(last, next_is_another, "{addr:#06x}");
+        }
+    }
 
     /// A PC recorded without its bank (an audio writer's) is named only
     /// where the bank can't matter (leaf jGOxRH): a fixed area, or a

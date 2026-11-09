@@ -53,6 +53,10 @@ pub(crate) fn log_write(gb: *mut sb::GB_gameboy_t, hooks: &mut Hooks, addr: u16,
         // raster log reads it: out of range with the LCD off.
         line: u8::try_from(unsafe { sb::gbcli_ppu_line(gb) }).ok(),
         pc: hooks.step_pc,
+        // SAFETY: a side-effect-free accessor on the live instance. The
+        // write that unmaps the boot ROM ($FF50) is no sound write, so the
+        // mapping now is the mapping the instruction was fetched under.
+        boot_rom: unsafe { sb::gbcli_reads_boot_rom(gb, hooks.step_pc) },
         addr,
         value,
         effect,

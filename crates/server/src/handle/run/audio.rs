@@ -7,8 +7,8 @@
 use std::path::{Path, PathBuf};
 
 use gbcli_audio::{
-    ApuSnapshot, AudioError, PianoRoll, Takes, decode, note_spans, on_channels, piano_roll,
-    record_takes_with, spectrogram, summarize, wav,
+    ApuSnapshot, AudioError, PianoRoll, Takes, decode, name_writers, note_spans, on_channels,
+    piano_roll, record_takes_with, spectrogram, summarize, wav,
 };
 use gbcli_core::{
     ApuChannel, AudioCapture, AudioSamples, Core, CoreError, Feature, Support, Ticks,
@@ -169,9 +169,7 @@ pub(super) fn deliver(
     let summary = args.summary.then(|| {
         let mut summary = summarize(&shown);
         if let Some(symbols) = machine.symbols() {
-            for w in &mut summary.writers {
-                w.symbol = symbols.label_any_bank(w.pc);
-            }
+            name_writers(&mut summary, &shown, |pc| symbols.label_any_bank(pc));
         }
         summary
     });

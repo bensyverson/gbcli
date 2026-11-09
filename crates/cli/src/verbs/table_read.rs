@@ -51,8 +51,10 @@ pub const VIEW_VERB: VerbSpec = VerbSpec {
             address read takes (wMap, $C000, wMap+$10, a banked symbol or 03:4000 for that \
             bank, wram:1A0), and in a switchable area otherwise the bank mapped at the head. \
             Each byte is read as read reads it, without side effects; a byte the program \
-            never wrote is an error naming the first, unless --allow-uninit. --out FILE \
-            also writes the raw bytes.",
+            never wrote is an error naming the first, unless --allow-uninit. A block from a \
+            CPU address reads on through the banks mapped at the head; one from a bank or \
+            region must end by its area's end, or is refused naming the length that fits. A block over FEA0-FEFF (no backing store) is refused whole, as read \
+            refuses a byte there. --out FILE also writes the raw bytes.",
     example: (
         "gbcli view memory wMap 64 --session dx",
         "prints the 64 bytes from wMap, 16 a row; --out map.bin also saves them",

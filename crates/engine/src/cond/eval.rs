@@ -150,6 +150,36 @@ pub enum EvalError {
     AddressOutOfRange {
         value: i64,
     },
+    /// A block in a named bank or region that runs past its area's end,
+    /// where the bank or offset stops naming anything; `fits` bytes do.
+    BlockPastArea {
+        end: AreaEnd,
+        fits: u32,
+    },
+}
+
+/// Where a block's bank or region offset stops applying.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AreaEnd {
+    /// The last CPU address of the area a banked start is in.
+    Banked { bank: u16, last: u16 },
+    /// A region's last offset.
+    Region { region: Region, last: usize },
+}
+
+impl fmt::Display for AreaEnd {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AreaEnd::Banked { bank, last } => {
+                write!(f, "${last:04X}, the end of the area bank {bank:02X} is in")
+            }
+            AreaEnd::Region { region, last } => write!(
+                f,
+                "{}:{last:X}, the region's last offset",
+                crate::inspect::regions::region_name(*region)
+            ),
+        }
+    }
 }
 
 impl EvalError {
@@ -166,6 +196,16 @@ impl EvalError {
             }
             EvalError::ShiftOutOfRange { .. } => "shift by 0 to 63".into(),
             EvalError::AddressOutOfRange { .. } => "addresses run from $0000 to $FFFF".into(),
+            EvalError::BlockPastArea { end, fits } => {
+                let past = match end {
+                    AreaEnd::Banked { last, .. } => format!(
+                        "; for the bytes after ${last:04X}, start a block there, or start from \
+                         a CPU address to read through the banks mapped now"
+                    ),
+                    AreaEnd::Region { .. } => String::new(),
+                };
+                format!("read at most {fits} bytes from this start{past}")
+            }
         }
     }
 }
@@ -180,6 +220,9 @@ impl fmt::Display for EvalError {
             EvalError::OldUnknown => write!(f, "`old` is unknown for this access"),
             EvalError::ShiftOutOfRange { by } => write!(f, "shift by {by}"),
             EvalError::AddressOutOfRange { value } => write!(f, "address {value:#x} out of range"),
+            EvalError::BlockPastArea { end, fits } => {
+                write!(f, "the block runs past {end}; {fits} bytes fit")
+            }
         }
     }
 }

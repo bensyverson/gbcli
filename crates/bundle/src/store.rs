@@ -153,7 +153,7 @@ impl SessionStore {
         Ok(SessionRow {
             name: self.name.clone(),
             rom: meta.rom.clone(),
-            model: meta.model,
+            model: Some(meta.model),
             cgb: self
                 .rom_header(meta)
                 .and_then(|h| gbcli_engine::cart::cgb_flag(&h)),
@@ -280,7 +280,10 @@ mod tests {
         let f = Fixture::new("list-model");
         f.demo();
         let row = &f.bundle.list().unwrap()[0];
-        assert_eq!((row.model, row.cgb), (Model::DmgB, Some(CgbFlag::Dmg)));
+        assert_eq!(
+            (row.model, row.cgb),
+            (Some(Model::DmgB), Some(CgbFlag::Dmg))
+        );
         // Rebuilt as dual mode: the row reads the file as it is now.
         let mut rom = crate::test_fixture::ROM.to_vec();
         rom[0x143] = 0x80;
@@ -290,7 +293,7 @@ mod tests {
         let gone = &f.bundle.list().unwrap()[0];
         assert_eq!(
             (gone.model, gone.cgb),
-            (Model::DmgB, None),
+            (Some(Model::DmgB), None),
             "no file, no flag"
         );
     }

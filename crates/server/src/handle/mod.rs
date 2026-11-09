@@ -416,6 +416,8 @@ mod oam_read_tests;
 mod profile_tests;
 #[cfg(test)]
 mod raster_tests;
+#[cfg(test)]
+mod writer_symbol_tests;
 
 #[cfg(test)]
 mod tests {

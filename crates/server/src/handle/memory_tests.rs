@@ -3,9 +3,11 @@
 
 use gbcli_protocol::{ErrorCode, MemoryMade, Op, ReadArgs, Response, Rev, ViewArgs, ViewKind};
 
+use gbcli_core::Model;
+
 use super::Handler;
 use super::test_support::{handler, request, run_frames};
-use crate::fixture::Fixture;
+use crate::fixture::{Fixture, GBC_PALETTE};
 
 /// The V1 ROM with its symbols, run until Main has written wFrame and
 /// wSpeed ($C000-$C002); wNever ($C003) is never written.
@@ -139,6 +141,66 @@ fn a_block_past_ffff_or_of_no_bytes_is_refused() {
     assert_eq!(empty.code, ErrorCode::BadRequest);
     // The last byte of the address space still reads (IE, an IO register).
     assert_eq!(made(view(&mut h, memory("$FFFF", 1))).bytes.len(), 1);
+}
+
+fn refused(h: &mut Handler, addr: &str, len: u32) -> gbcli_protocol::ErrorBody {
+    view(
+        h,
+        ViewArgs {
+            allow_uninit: true,
+            ..memory(addr, len)
+        },
+    )
+    .outcome
+    .expect_err(addr)
+}
+
+/// A bank names one area's bank: carried past the area's end it would read
+/// the next area in a bank nothing maps (VRAM bank 1 on a GBC, a VRAM bank
+/// a DMG lacks). Such a block is refused, naming the area's last address
+/// and the length that fits.
+#[test]
+fn a_banked_block_past_its_areas_end_is_refused_naming_what_fits() {
+    let f = Fixture::with_model("memory-cross-gbc", GBC_PALETTE, Model::CgbE);
+    let mut h = handler(&f);
+    assert!(run_frames(&mut h, 5).is_ok());
+    let err = refused(&mut h, "01:7FF0", 0x20);
+    assert_eq!(err.code, ErrorCode::BadExpression, "{err:?}");
+    assert!(err.message.contains("$7FFF"), "{}", err.message);
+    assert!(err.remedy.contains("16"), "{}", err.remedy);
+    // What fits still reads, and a CPU address crosses through the mapped banks.
+    assert!(view(&mut h, memory("01:7FF0", 0x10)).outcome.is_ok());
+    assert!(view(&mut h, memory("$7FF0", 0x20)).outcome.is_ok());
+
+    let (_f, mut dmg) = running("memory-cross-dmg");
+    let err = refused(&mut dmg, "01:7FF0", 0x20);
+    assert!(err.message.contains("$7FFF"), "{}", err.message);
+    assert!(err.remedy.contains("16"), "{}", err.remedy);
+}
+
+/// `00:3E00 $400` would read ROM bank 0 again at $4000, the header at $4100.
+#[test]
+fn a_bank0_block_past_4000_is_refused() {
+    let (_f, mut h) = running("memory-cross-bank0");
+    let err = refused(&mut h, "00:3E00", 0x400);
+    assert!(err.message.contains("$3FFF"), "{}", err.message);
+    assert!(err.remedy.contains("512"), "{}", err.remedy);
+    assert_eq!(
+        made(view(&mut h, memory("00:3E00", 0x200))).bytes.len(),
+        0x200
+    );
+}
+
+/// A region offset spans the region's whole backing store; past its end
+/// there is nothing to read.
+#[test]
+fn a_region_block_past_the_regions_end_is_refused_naming_what_fits() {
+    let (_f, mut h) = running("memory-cross-region");
+    // A DMG's VRAM is $2000 bytes.
+    let err = refused(&mut h, "vram:1FF0", 0x20);
+    assert_eq!(err.code, ErrorCode::BadExpression, "{err:?}");
+    assert!(err.message.contains("vram:1FFF"), "{}", err.message);
+    assert!(err.remedy.contains("16"), "{}", err.remedy);
 }
 
 #[test]

@@ -43,6 +43,9 @@ pub struct ApuWrite {
     pub line: Option<u8>,
     /// The instruction that wrote it.
     pub pc: u16,
+    /// Whether `pc` was the boot ROM's: it was mapped over the address, so
+    /// the instruction was no cart byte and no `.sym` label names it.
+    pub boot_rom: bool,
     pub addr: u16,
     pub value: u8,
     pub effect: ApuWriteEffect,

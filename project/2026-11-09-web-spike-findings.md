@@ -457,3 +457,10 @@ For the main thread to put to Ben.
 
 ## Ben's decisions
 
+2026-11-09, nineteenth session:
+
+1. **Keep SameBoy; the bespoke-core entry stays parked.** Its web condition is answered (backlog entry updated).
+2. **Pause the web track.** Neither the library entry point nor a web stage is scheduled; both rulings in [2026-11-09-web-target.md](2026-11-09-web-target.md) still bind new work.
+3. **Spike code stays on the `spike/web` branch** (pushed); nothing lands on main.
+4. **rgbgfx on the web:** Ben asked what replacing rgbgfx would take (answered in the session: only rgbgfx, not the rest of RGBDS, since gbcli already plans every pixel and rgbgfx only encodes the plan); no decision yet.
+

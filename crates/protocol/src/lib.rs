@@ -31,7 +31,10 @@ mod video;
 mod views;
 
 pub use assets::{AssetManifest, AssetsArgs, AssetsMade, ManifestImage};
-pub use audio::{ApuWriteLine, AudioArgs, AudioMade, WavArgs, WavChannels, WavMade, WavTake};
+pub use audio::{
+    ApuWriteLine, AudioArgs, AudioChannel, AudioMade, AudioSummary, RegisterWrites, WavArgs,
+    WavChannels, WavMade, WavTake, WriterWrites,
+};
 pub use battery::{
     BatteryFrom, FlashFileMade, FlashFrom, FlashNoteKind, FlashNoteRow, PowerCycleArgs,
     PowerCycleMade, SavArgs, SavClockState, SavMade,
@@ -89,7 +92,7 @@ pub use toolchain::{
 };
 pub use version::{PROTOCOL_VERSION, VersionMade};
 pub use video::{
-    AddressingView, ImageMade, ImageOut, MapAreaView, MapSel, OamView, TileView, VideoData,
-    ViewArgs, ViewKind, ViewMade,
+    AddressingView, CgbColorView, CgbPaletteView, DmgPaletteView, ImageMade, ImageOut, MapAreaView,
+    MapSel, OamFrameView, OamLogMade, OamView, TileView, VideoData, ViewArgs, ViewKind, ViewMade,
 };
 pub use views::{FlagsView, PpuModeView, PpuView, RegistersView};

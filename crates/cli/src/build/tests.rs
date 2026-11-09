@@ -323,7 +323,7 @@ fn the_read_verbs_for_shots_views_symbols_and_checkpoints_build_their_ops() {
     assert_eq!((args.map, args.png), (None, None));
     assert_eq!(
         command(&["view", "sprites"]).unwrap_err().message,
-        "`sprites` isn't tiles, map or oam"
+        "`sprites` isn't tiles, map, oam or palettes"
     );
     assert_eq!(
         command(&["view", "tiles", "--scale", "2"])
@@ -351,6 +351,57 @@ fn run_collects_audio_only_when_asked() {
     let audio = run_audio(&["run", "--audio-log", "--piano", "p.png"]).unwrap();
     assert!(audio.log && audio.wav.is_none());
     assert_eq!(audio.piano.unwrap().path, "p.png");
+}
+
+#[test]
+fn run_audio_filters_by_channel_by_number_or_name_and_summarizes() {
+    use gbcli_protocol::AudioChannel;
+    let audio = run_audio(&["run", "--audio-summary"]).unwrap();
+    assert!(audio.summary && !audio.log && audio.channels.is_empty());
+    let audio = run_audio(&[
+        "run",
+        "--audio-log",
+        "--audio-channel",
+        "4",
+        "--audio-channel",
+        "square2",
+    ])
+    .unwrap();
+    assert_eq!(
+        audio.channels,
+        vec![AudioChannel::Noise, AudioChannel::Square2]
+    );
+    for (word, channel) in [
+        ("1", AudioChannel::Square1),
+        ("2", AudioChannel::Square2),
+        ("3", AudioChannel::Wave),
+        ("wave", AudioChannel::Wave),
+        ("noise", AudioChannel::Noise),
+    ] {
+        let audio = run_audio(&["run", "--audio-log", "--audio-channel", word]).unwrap();
+        assert_eq!(audio.channels, vec![channel], "{word}");
+    }
+    let bad = command(&["run", "--audio-log", "--audio-channel", "5"]).unwrap_err();
+    assert!(bad.message.contains("`5`"), "{bad:?}");
+    assert!(bad.remedy.contains("noise"), "{bad:?}");
+}
+
+#[test]
+fn run_oam_log_is_a_switch() {
+    let oam_log = |line: &[&str]| match request(line).1 {
+        Op::Run(args) => args.oam_log,
+        other => panic!("{other:?}"),
+    };
+    assert!(oam_log(&["run", "--frames", "3", "--oam-log"]));
+    assert!(!oam_log(&["run", "--frames", "3"]));
+}
+
+#[test]
+fn view_palettes_is_a_view() {
+    let Op::View(args) = request(&["view", "palettes"]).1 else {
+        panic!()
+    };
+    assert_eq!(args.what, gbcli_protocol::ViewKind::Palettes);
 }
 
 #[test]

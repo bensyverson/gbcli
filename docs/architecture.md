@@ -13,7 +13,7 @@ Add a crate or a major capability here when you build it; keep the head of `AGEN
 
 ## The engine and the session
 
-- **`crates/engine` (`gbcli-engine`)**: inspection, the disassembler and `gbcli opcode`'s lookup (`disasm::lookup`, checked against rgbasm by a seeded differential test), sessions, checkpoints, the debugger, the cycle profiler (`measure`: cycles between two addresses, under a run's key timeline when given one; cycles per routine and the per-frame budget) and the A/B equivalence check (`equiv::compare`: two builds under one key timeline, the first frame whose pixels, chosen RAM or sound-register writes differ, naming a RAM byte a side has never written, so its power-on value is random). Run's `--measure`, `--profile`, `--frame-budget` and `--raster` (IO-register writes by line, each with the PPU mode it landed in, which `crates/sameboy` reads from SameBoy's display state without running it) come from here.
+- **`crates/engine` (`gbcli-engine`)**: inspection, the disassembler and `gbcli opcode`'s lookup (`disasm::lookup`, checked against rgbasm by a seeded differential test), sessions, checkpoints, the debugger, the cycle profiler (`measure`: cycles between two addresses, under a run's key timeline when given one; cycles per routine, named by the `.sym` label at the entry or the hardware vector there (`STAT_vector`), and the per-frame budget) and the A/B equivalence check (`equiv::compare`: two builds under one key timeline, the first frame whose pixels, chosen RAM or sound-register writes differ, naming a RAM byte a side has never written, so its power-on value is random). Run's `--measure`, `--profile`, `--frame-budget` and `--raster` (IO-register writes by line, each with the PPU mode it landed in, which `crates/sameboy` reads from SameBoy's display state without running it) come from here. `inspect::video` decodes tiles, maps, OAM (with the 10-per-line drops) and the palettes (`palettes`: BGP/OBP0/OBP1, and palette RAM on a CGB) for `view` and `run --oam-log`. `Symbols::containing` picks, among labels at one address, any but an end marker (`TilesEnd`, `end_zero`), since the `.sym` alone can't say which section a label ends.
 - **`crates/protocol` (`gbcli-protocol`)**: the wire types every crate shares: requests and responses, the checkpoint header and stop record, the build and image results, and the named palettes with their one rule set (`NamedPalettes::check`, which the file parser and deserialization both apply). A type crossing the JSONL seam is defined once, here. So is `PROTOCOL_VERSION`, which the `version` op reports and which goes up on any breaking wire change.
 - **`crates/bundle` (`gbcli-bundle`)**: the session bundle store (no daemon).
 - **`crates/corpus` (`gbcli-corpus`)**: the test-ROM runner and the SameBoy baseline ([project/2026-11-06-sameboy-baseline.md](../project/2026-11-06-sameboy-baseline.md)).
@@ -21,7 +21,7 @@ Add a crate or a major capability here when you build it; keep the head of `AGEN
 ## Views
 
 - **`crates/view` (`gbcli-view`)**: image views as deterministic PNG pinned by goldens: labeled frames, scales and crops, filmstrips, frame diffs, tileset, tilemap and OAM.
-- **`crates/audio` (`gbcli-audio`)**: the sound-register write log decoded into notes and settings, WAV export (mixed and per channel), piano roll and spectrograms, pinned by goldens; wired into `run` as `--audio-log`, `--wav PATH [--channels each]`, `--piano PATH` and `--spectrogram PATH`.
+- **`crates/audio` (`gbcli-audio`)**: the sound-register write log decoded into notes and settings, WAV export (mixed and per channel), piano roll and spectrograms, pinned by goldens; wired into `run` as `--audio-log`, `--audio-summary` (writes by register and writer PC), `--audio-channel N` (the log and summary narrowed to channels), `--wav PATH [--channels each]`, `--piano PATH` and `--spectrogram PATH`.
 
 ## The build loop and assets
 
@@ -35,6 +35,6 @@ Add a crate or a major capability here when you build it; keep the head of `AGEN
 
 ## Adapters
 
-- **`crates/server` (`gbcli-server`)**: request handling over the library crates, screenshots, VRAM/OAM views, key input on runs, and the JSONL stdio server (`gbcli serve`).
+- **`crates/server` (`gbcli-server`)**: request handling over the library crates, screenshots, VRAM, OAM and palette views, the per-frame OAM log (`run --oam-log`), key input on runs, and the JSONL stdio server (`gbcli serve`).
 - **`crates/cli` (`gbcli-cli`)**: argv to protocol requests, answered in-process by the server's handler; rows or `--json` (the serve response line); the primer, `--help`, help topics, recipes and the schema. Every server op is a verb; `gbcli --help` lists them, and `crates/cli/src/verbs/` holds the table.
 - **`crates/gbcli`**: the binary, and the CLI's golden transcripts (`tests/cli/`).

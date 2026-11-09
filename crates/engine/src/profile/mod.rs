@@ -4,6 +4,7 @@
 
 mod frames;
 mod measure;
+mod names;
 mod raster;
 mod routines;
 

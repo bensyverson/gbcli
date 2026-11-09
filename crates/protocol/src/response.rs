@@ -166,6 +166,8 @@ pub struct ResultBody {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audio: Option<AudioMade>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oam_log: Option<crate::video::OamLogMade>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub view: Option<ViewMade>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub symbols: Option<Vec<SymbolRow>>,

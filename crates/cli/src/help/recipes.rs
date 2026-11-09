@@ -57,8 +57,13 @@ What does my music do?
   gbcli run --frames 120 --audio-log (every sound write, decoded into notes), then
   --wav music.wav to hear it, --channels each for one file per channel, --piano
   roll.png or --spectrogram spec.png to see it (--scale 4 enlarges a short clip)
-Look at tiles, the background map or sprites
-  gbcli view tiles, gbcli view map --map window, gbcli view oam
+Look at tiles, the background map, sprites or the palettes
+  gbcli view tiles, gbcli view map --map window, gbcli view oam, gbcli view palettes
+Is every sprite drawn in some frame? (a multiplexer, the 10-per-line limit)
+  gbcli run --frames 120 --oam-log (a row per frame: objects on screen, dropped=)
+Which code writes one sound channel?
+  gbcli run --frames 600 --audio-summary --audio-channel 4 (writes per register
+  and per writer PC; add --audio-log for every write)
 Find a symbol's address
   gbcli sym 'Player*'
 Read variables, registers or IO

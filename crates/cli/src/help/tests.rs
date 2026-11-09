@@ -111,6 +111,25 @@ fn the_audio_log_says_it_holds_only_this_runs_writes() {
     assert!(text.contains("writes made before the run"), "{text}");
 }
 
+/// hUGETracker names notes an octave above scientific pitch, so `E-5` in a
+/// song logs as E4 (project/2026-11-08-dx-shooter.md).
+#[test]
+fn the_music_topic_says_song_notes_are_an_octave_above_scientific_pitch() {
+    let text = crate::help::Topic::from_name("music").unwrap().text();
+    assert!(text.contains("C-3 sounds as C2 (65 Hz)"), "{text}");
+}
+
+/// The audio log's filter and summary, and the OAM log, say what they hold.
+#[test]
+fn run_help_describes_the_audio_filter_and_the_oam_log() {
+    let text = verb(crate::verbs::by_name("run").unwrap());
+    assert!(text.contains("--audio-channel N"), "{text}");
+    assert!(text.contains("NR50-NR52"), "{text}");
+    assert!(text.contains("--oam-log"), "{text}");
+    let view = verb(crate::verbs::by_name("view").unwrap());
+    assert!(view.contains("palettes"), "{view}");
+}
+
 /// The music topic's listening line shows how to enlarge a short clip's
 /// spectrogram, which is 64 columns a second at its default scale.
 #[test]

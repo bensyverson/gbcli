@@ -75,6 +75,8 @@ A cell is hUGETracker's clipboard spelling: note, instrument, volume, effect.
   C-5 01 ... 2FF   note C-3 to B-8, or ...; instrument 01-15 from the
                    channel's bank, or ..; volume is unused, always ...;
                    effect: code and parameter in hex, or ... for none
+Note names are hUGETracker's, an octave above scientific pitch:
+C-3 sounds as C2 (65 Hz), and `run --audio-log` names the note it plays C2.
 A pattern several orders play is shown in every block that plays it, and
 every copy must read the same. Rows, fields, instruments and waves left out
 take hUGETracker's defaults; --text writes the canonical form, with all 64

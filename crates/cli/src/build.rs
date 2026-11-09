@@ -262,6 +262,7 @@ fn run(inv: &Invocation, env: &Env) -> Result<RunArgs, Usage> {
         profile: profile::run_profile(inv)?,
         frame_budget: inv.has("frame-budget"),
         raster: inv.has("raster"),
+        oam_log: inv.has("oam-log"),
         keys: video::keys(inv, env)?,
     })
 }

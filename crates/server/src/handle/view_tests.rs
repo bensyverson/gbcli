@@ -141,3 +141,82 @@ fn oam_with_a_png_writes_the_sheet_beside_the_data() {
     let width = u32::from_be_bytes(bytes[16..20].try_into().unwrap());
     assert_eq!(width, png.width);
 }
+
+fn palettes_view(h: &mut Handler) -> VideoData {
+    view(
+        h,
+        ViewArgs {
+            what: ViewKind::Palettes,
+            map: None,
+            png: None,
+        },
+    )
+    .data
+}
+
+#[test]
+fn palettes_on_a_dmg_are_the_three_registers() {
+    let (_f, mut h) = booted("view-palettes-dmg");
+    let registers = reads(
+        &mut h,
+        vec!["[$FF47]".into(), "[$FF48]".into(), "[$FF49]".into()],
+    );
+    let VideoData::Palettes {
+        bgp,
+        obp0,
+        obp1,
+        bg,
+        obj,
+    } = palettes_view(&mut h)
+    else {
+        panic!("not palettes")
+    };
+    let values = [bgp.value, obp0.value, obp1.value].map(i64::from);
+    assert_eq!(values.to_vec(), registers);
+    assert_eq!(
+        bgp.shades,
+        gbcli_protocol::DmgPaletteView::of(bgp.value).shades
+    );
+    assert!(bg.is_empty() && obj.is_empty(), "a DMG has no palette RAM");
+}
+
+#[test]
+fn palettes_on_a_gbc_include_palette_ram() {
+    use gbcli_core::Model;
+    let f = Fixture::with_model(
+        "view-palettes-gbc",
+        crate::fixture::GBC_PALETTE,
+        Model::CgbE,
+    );
+    let mut h = handler(&f);
+    assert!(run_frames(&mut h, 30).is_ok());
+    let VideoData::Palettes { bg, obj, .. } = palettes_view(&mut h) else {
+        panic!("not palettes")
+    };
+    assert_eq!(bg.len(), 8);
+    assert_eq!(obj.len(), 8);
+    assert!(
+        bg.iter()
+            .enumerate()
+            .all(|(i, p)| p.index as usize == i && p.colors.len() == 4)
+    );
+    // The ROM's orange: red 31, green 16, blue 0.
+    assert_eq!(bg[0].colors[0].rgb555, 0x021F);
+    assert_eq!(bg[0].colors[0].hex, "#FF8400");
+}
+
+#[test]
+fn palettes_have_no_png() {
+    let (_f, mut h) = booted("view-palettes-png");
+    let response = h.handle(&request(Op::View(ViewArgs {
+        what: ViewKind::Palettes,
+        map: None,
+        png: Some(ImageOut {
+            path: "p.png".into(),
+            scale: None,
+        }),
+    })));
+    let err = response.outcome.expect_err("refused");
+    assert_eq!(err.code, gbcli_protocol::ErrorCode::BadRequest);
+    assert!(err.remedy.contains("--png"), "{}", err.remedy);
+}

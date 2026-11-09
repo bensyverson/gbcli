@@ -1,0 +1,70 @@
+$ gbcli run v1.gb --frames 2 --session oam
+exit 0
+stop budget_exhausted kind=frames pc=$0163 bank=0 frame=2 t=140288 since=boot ticks=12042792 ly=144 shown=2 vblank=normal
+budget frames=2/2 instructions=11276 ticks=280576
+rev s1
+$ gbcli run --frames 3 --poke oam:0=80,8,0,0,80,16,1,0,80,24,2,0,80,32,3,0,80,40,4,0,80,48,5,0,80,56,6,0,80,64,7,0,80,72,8,0,80,80,9,0,80,88,10,0,80,96,11,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 --oam-log --session oam
+exit 0
+write kind=poke target=oam:0 bytes=$50,$08,$00,$00,$50,$10,$01,$00,$50,$18,$02,$00,$50,$20,$03,$00,$50,$28,$04,$00,$50,$30,$05,$00,$50,$38,$06,$00,$50,$40,$07,$00,$50,$48,$08,$00,$50,$50,$09,$00,$50,$58,$0A,$00,$50,$60,$0B,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00 addr=$FE00
+stop budget_exhausted kind=frames pc=$015E bank=0 frame=5 t=350952 since=boot ticks=12464120 ly=144 shown=5 vblank=normal
+budget frames=3/3 instructions=16935 ticks=421328
+oam_log since=boot frames=3
+oam_frame frame=3 height=8 on_screen=12 objects=0,1,2,3,4,5,6,7,8,9,10,11 dropped=10,11
+oam_frame frame=4 height=8 on_screen=12 objects=0,1,2,3,4,5,6,7,8,9,10,11 dropped=10,11
+oam_frame frame=5 height=8 on_screen=12 objects=0,1,2,3,4,5,6,7,8,9,10,11 dropped=10,11
+rev s2
+$ gbcli run --frames 1 --oam-log --json --session oam
+exit 0
+{"id":"cli","ok":true,"rev":"s3","result":{"stop":{"reason":"budget_exhausted","kind":"frames","pc":364,"bank":0,"symbol":null,"time":{"ticks":12604552,"t":421168,"since":{"kind":"boot"},"frame":6,"ly":144,"dot":null},"frame_shown":{"n":6,"vblank":"normal"},"budget":{"ticks":140432,"instructions":5644,"frames":1,"limits":{"frames":1},"defaulted":false}},"reads":[],"oam_log":{"since":{"kind":"boot"},"frames":[{"frame":6,"height":8,"objects":[{"index":0,"y":80,"x":8,"tile":0,"flags":0,"screen_x":0,"screen_y":64,"on_screen":true,"dropped_by_line_limit":false},{"index":1,"y":80,"x":16,"tile":1,"flags":0,"screen_x":8,"screen_y":64,"on_screen":true,"dropped_by_line_limit":false},{"index":2,"y":80,"x":24,"tile":2,"flags":0,"screen_x":16,"screen_y":64,"on_screen":true,"dropped_by_line_limit":false},{"index":3,"y":80,"x":32,"tile":3,"flags":0,"screen_x":24,"screen_y":64,"on_screen":true,"dropped_by_line_limit":false},{"index":4,"y":80,"x":40,"tile":4,"flags":0,"screen_x":32,"screen_y":64,"on_screen":true,"dropped_by_line_limit":false},{"index":5,"y":80,"x":48,"tile":5,"flags":0,"screen_x":40,"screen_y":64,"on_screen":true,"dropped_by_line_limit":false},{"index":6,"y":80,"x":56,"tile":6,"flags":0,"screen_x":48,"screen_y":64,"on_screen":true,"dropped_by_line_limit":false},{"index":7,"y":80,"x":64,"tile":7,"flags":0,"screen_x":56,"screen_y":64,"on_screen":true,"dropped_by_line_limit":false},{"index":8,"y":80,"x":72,"tile":8,"flags":0,"screen_x":64,"screen_y":64,"on_screen":true,"dropped_by_line_limit":false},{"index":9,"y":80,"x":80,"tile":9,"flags":0,"screen_x":72,"screen_y":64,"on_screen":true,"dropped_by_line_limit":false},{"index":10,"y":80,"x":88,"tile":10,"flags":0,"screen_x":80,"screen_y":64,"on_screen":true,"dropped_by_line_limit":true},{"index":11,"y":80,"x":96,"tile":11,"flags":0,"screen_x":88,"screen_y":64,"on_screen":true,"dropped_by_line_limit":true}]}]}},"warnings":[]}
+$ gbcli run tune.gb --frames 40 --audio-log --audio-summary --audio-channel 4 --session tune
+exit 0
+stop budget_exhausted kind=frames pc=$0040 bank=0 frame=40 t=2808804 since=boot ticks=17379824 ly=144 shown=40 vblank=normal
+budget frames=40/40 instructions=701614 ticks=5617608
+audio since=boot writes=3 channels=noise
+apu elapsed=2106648 pc=$01C5 text="NR42 $A1: noise envelope 10 down, pace 1"
+apu elapsed=2106688 pc=$01C9 text="NR43 $52: noise shift 5, 15-bit, divisor 2 = 4096 Hz"
+apu elapsed=2106728 pc=$01CD text="NR44 $80: noise trigger, length off"
+audio_summary since=boot writes=3 channels=noise
+audio_register reg=NR42 addr=$FF21 writes=1
+audio_register reg=NR43 addr=$FF22 writes=1
+audio_register reg=NR44 addr=$FF23 writes=1
+audio_writer pc=$01C5 writes=1 registers=NR42
+audio_writer pc=$01C9 writes=1 registers=NR43
+audio_writer pc=$01CD writes=1 registers=NR44
+rev s1
+$ gbcli view palettes --session oam
+exit 0
+dmg_palette reg=BGP value=$FC shades=0,3,3,3
+dmg_palette reg=OBP0 value=$FF shades=3,3,3,3
+dmg_palette reg=OBP1 value=$FF shades=3,3,3,3
+rev s3
+$ gbcli run palette.gb --model gbc --frames 30 --session gbc
+exit 0
+stop budget_exhausted kind=frames pc=$0180 bank=0 frame=30 t=2055624 since=boot ticks=30282696 ly=144 shown=30 vblank=normal
+budget frames=30/30 instructions=214996 ticks=4111248
+rev s1
+$ gbcli view palettes --session gbc
+exit 0
+dmg_palette reg=BGP value=$FC shades=0,3,3,3
+dmg_palette reg=OBP0 value=$00 shades=0,0,0,0
+dmg_palette reg=OBP1 value=$00 shades=0,0,0,0
+bg_palette index=0 rgb555=$021F,$7FFF,$7FFF,$7FFF hex=#FF8400,#FFFFFF,#FFFFFF,#FFFFFF
+bg_palette index=1 rgb555=$FFFF,$7FFF,$7FFF,$7FFF hex=#FFFFFF,#FFFFFF,#FFFFFF,#FFFFFF
+bg_palette index=2 rgb555=$FFFF,$7FFF,$7FFF,$7FFF hex=#FFFFFF,#FFFFFF,#FFFFFF,#FFFFFF
+bg_palette index=3 rgb555=$FFFF,$7FFF,$7FFF,$7FFF hex=#FFFFFF,#FFFFFF,#FFFFFF,#FFFFFF
+bg_palette index=4 rgb555=$FFFF,$7FFF,$7FFF,$7FFF hex=#FFFFFF,#FFFFFF,#FFFFFF,#FFFFFF
+bg_palette index=5 rgb555=$FFFF,$7FFF,$7FFF,$7FFF hex=#FFFFFF,#FFFFFF,#FFFFFF,#FFFFFF
+bg_palette index=6 rgb555=$FFFF,$7FFF,$7FFF,$7FFF hex=#FFFFFF,#FFFFFF,#FFFFFF,#FFFFFF
+bg_palette index=7 rgb555=$FFFF,$7FFF,$7FFF,$7FFF hex=#FFFFFF,#FFFFFF,#FFFFFF,#FFFFFF
+obj_palette index=0 rgb555=$CCAE,$2629,$AA8B,$B1D8 hex=#73299C,#4A8C4A,#5AA552,#C67363
+obj_palette index=1 rgb555=$F3FD,$8C5E,$5401,$7C83 hex=#EFFFE7,#F71018,#0800AD,#1821FF
+obj_palette index=2 rgb555=$ADCF,$9B66,$7A5A,$A11D hex=#7B735A,#31DE31,#D694F7,#EF4242
+obj_palette index=3 rgb555=$DE92,$0268,$D206,$1B0E hex=#94A5BD,#429C00,#3184A5,#73C631
+obj_palette index=4 rgb555=$AD1D,$ABF1,$349A,$5A61 hex=#EF425A,#8CFF52,#D6216B,#089CB5
+obj_palette index=5 rgb555=$3683,$D894,$B755,$EF17 hex=#18A56B,#A521B5,#ADD66B,#BDC6DE
+obj_palette index=6 rgb555=$A107,$4F26,$AB05,$E056 hex=#394242,#31CE9C,#29C652,#B510C6
+obj_palette index=7 rgb555=$E13C,$4B2B,$ABB4,$8E77 hex=#E74AC6,#5ACE94,#A5EF52,#BD9C18
+rev s1
+$ gbcli view palettes --json --session gbc
+exit 0
+{"id":"cli","ok":true,"rev":"s1","result":{"view":{"data":{"kind":"palettes","bgp":{"value":252,"shades":[0,3,3,3]},"obp0":{"value":0,"shades":[0,0,0,0]},"obp1":{"value":0,"shades":[0,0,0,0]},"bg":[{"index":0,"colors":[{"rgb555":543,"hex":"#FF8400"},{"rgb555":32767,"hex":"#FFFFFF"},{"rgb555":32767,"hex":"#FFFFFF"},{"rgb555":32767,"hex":"#FFFFFF"}]},{"index":1,"colors":[{"rgb555":65535,"hex":"#FFFFFF"},{"rgb555":32767,"hex":"#FFFFFF"},{"rgb555":32767,"hex":"#FFFFFF"},{"rgb555":32767,"hex":"#FFFFFF"}]},{"index":2,"colors":[{"rgb555":65535,"hex":"#FFFFFF"},{"rgb555":32767,"hex":"#FFFFFF"},{"rgb555":32767,"hex":"#FFFFFF"},{"rgb555":32767,"hex":"#FFFFFF"}]},{"index":3,"colors":[{"rgb555":65535,"hex":"#FFFFFF"},{"rgb555":32767,"hex":"#FFFFFF"},{"rgb555":32767,"hex":"#FFFFFF"},{"rgb555":32767,"hex":"#FFFFFF"}]},{"index":4,"colors":[{"rgb555":65535,"hex":"#FFFFFF"},{"rgb555":32767,"hex":"#FFFFFF"},{"rgb555":32767,"hex":"#FFFFFF"},{"rgb555":32767,"hex":"#FFFFFF"}]},{"index":5,"colors":[{"rgb555":65535,"hex":"#FFFFFF"},{"rgb555":32767,"hex":"#FFFFFF"},{"rgb555":32767,"hex":"#FFFFFF"},{"rgb555":32767,"hex":"#FFFFFF"}]},{"index":6,"colors":[{"rgb555":65535,"hex":"#FFFFFF"},{"rgb555":32767,"hex":"#FFFFFF"},{"rgb555":32767,"hex":"#FFFFFF"},{"rgb555":32767,"hex":"#FFFFFF"}]},{"index":7,"colors":[{"rgb555":65535,"hex":"#FFFFFF"},{"rgb555":32767,"hex":"#FFFFFF"},{"rgb555":32767,"hex":"#FFFFFF"},{"rgb555":32767,"hex":"#FFFFFF"}]}],"obj":[{"index":0,"colors":[{"rgb555":52398,"hex":"#73299C"},{"rgb555":9769,"hex":"#4A8C4A"},{"rgb555":43659,"hex":"#5AA552"},{"rgb555":45528,"hex":"#C67363"}]},{"index":1,"colors":[{"rgb555":62461,"hex":"#EFFFE7"},{"rgb555":35934,"hex":"#F71018"},{"rgb555":21505,"hex":"#0800AD"},{"rgb555":31875,"hex":"#1821FF"}]},{"index":2,"colors":[{"rgb555":44495,"hex":"#7B735A"},{"rgb555":39782,"hex":"#31DE31"},{"rgb555":31322,"hex":"#D694F7"},{"rgb555":41245,"hex":"#EF4242"}]},{"index":3,"colors":[{"rgb555":56978,"hex":"#94A5BD"},{"rgb555":616,"hex":"#429C00"},{"rgb555":53766,"hex":"#3184A5"},{"rgb555":6926,"hex":"#73C631"}]},{"index":4,"colors":[{"rgb555":44317,"hex":"#EF425A"},{"rgb555":44017,"hex":"#8CFF52"},{"rgb555":13466,"hex":"#D6216B"},{"rgb555":23137,"hex":"#089CB5"}]},{"index":5,"colors":[{"rgb555":13955,"hex":"#18A56B"},{"rgb555":55444,"hex":"#A521B5"},{"rgb555":46933,"hex":"#ADD66B"},{"rgb555":61207,"hex":"#BDC6DE"}]},{"index":6,"colors":[{"rgb555":41223,"hex":"#394242"},{"rgb555":20262,"hex":"#31CE9C"},{"rgb555":43781,"hex":"#29C652"},{"rgb555":57430,"hex":"#B510C6"}]},{"index":7,"colors":[{"rgb555":57660,"hex":"#E74AC6"},{"rgb555":19243,"hex":"#5ACE94"},{"rgb555":43956,"hex":"#A5EF52"},{"rgb555":36471,"hex":"#BD9C18"}]}]}}},"warnings":[]}

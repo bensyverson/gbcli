@@ -8,11 +8,12 @@ use gbcli_bundle::SessionStore;
 use gbcli_core::{Core, Region};
 use gbcli_engine::Machine;
 use gbcli_engine::inspect::video::{
-    MapArea, ObjectHeight, TILES_PER_BANK, TileAddressing, oam, tile, tilemap,
+    self, CgbPalette, MapArea, OamEntry, ObjectHeight, TILES_PER_BANK, TileAddressing, oam, tile,
+    tilemap,
 };
 use gbcli_protocol::{
-    AddressingView, ImageMade, MapAreaView, MapSel, OamView, ResultBody, SessionFile, TileView,
-    TimeBase, VideoData, ViewArgs, ViewKind, ViewMade,
+    AddressingView, CgbColorView, CgbPaletteView, DmgPaletteView, ImageMade, MapAreaView, MapSel,
+    OamView, ResultBody, SessionFile, TileView, TimeBase, VideoData, ViewArgs, ViewKind, ViewMade,
 };
 use gbcli_view::{DEFAULT_SCALE, Image, MapChoice, TilePalette, ViewError, map_layout};
 
@@ -34,6 +35,13 @@ impl Handler {
                 gbcli_protocol::ErrorCode::BadRequest,
                 "only the map view takes a map choice",
                 "drop --map, or view map",
+            )));
+        }
+        if args.png.is_some() && args.what == ViewKind::Palettes {
+            return Err(Failure::new(gbcli_protocol::ErrorBody::new(
+                gbcli_protocol::ErrorCode::BadRequest,
+                "the palettes view is text only",
+                "drop --png; `gbcli shot` shows the colors on screen",
             )));
         }
         if let Some(png) = &args.png {
@@ -63,6 +71,7 @@ fn view_of(machine: &Machine, args: &ViewArgs) -> Result<ViewMade, Failure> {
         ViewKind::Tiles => tiles(core)?,
         ViewKind::Map => map(core, choice).map_err(failed)?,
         ViewKind::Oam => objects(core).map_err(failed)?,
+        ViewKind::Palettes => palettes(core)?,
     };
     let png = match &args.png {
         None => None,
@@ -71,6 +80,7 @@ fn view_of(machine: &Machine, args: &ViewArgs) -> Result<ViewMade, Failure> {
                 ViewKind::Tiles => gbcli_view::tileset(core, TilePalette::Background(0)),
                 ViewKind::Map => gbcli_view::tilemap(core, choice),
                 ViewKind::Oam => gbcli_view::oam_sheet(core),
+                ViewKind::Palettes => unreachable!("refused before the machine loads"),
             };
             Some(write_png(image.map_err(failed)?, &out.path, out.scale)?)
         }
@@ -159,22 +169,34 @@ fn map(core: &dyn Core, choice: MapChoice) -> Result<VideoData, ViewError> {
     })
 }
 
+fn palettes(core: &dyn Core) -> Result<VideoData, Failure> {
+    let p = video::palettes(core).map_err(|e| Failure::from_core(&e))?;
+    let set = |palettes: &[CgbPalette; 8]| {
+        palettes
+            .iter()
+            .enumerate()
+            .map(|(i, p)| CgbPaletteView {
+                index: i as u8,
+                colors: p.colors.iter().map(|&c| CgbColorView::of(c)).collect(),
+            })
+            .collect()
+    };
+    let (bg, obj) = match &p.cgb {
+        Some((bg, obj)) => (set(bg), set(obj)),
+        None => (Vec::new(), Vec::new()),
+    };
+    Ok(VideoData::Palettes {
+        bgp: DmgPaletteView::of(p.bgp),
+        obp0: DmgPaletteView::of(p.obp0),
+        obp1: DmgPaletteView::of(p.obp1),
+        bg,
+        obj,
+    })
+}
+
 fn objects(core: &dyn Core) -> Result<VideoData, ViewError> {
     let height = gbcli_view::object_height(core)?;
-    let objects = oam(core, height)?
-        .iter()
-        .map(|o| OamView {
-            index: o.index,
-            y: o.y,
-            x: o.x,
-            tile: o.tile,
-            flags: o.flags,
-            screen_x: o.screen_x,
-            screen_y: o.screen_y,
-            on_screen: o.on_screen,
-            dropped_by_line_limit: o.dropped_by_line_limit,
-        })
-        .collect();
+    let objects = oam(core, height)?.iter().map(oam_view).collect();
     Ok(VideoData::Oam {
         height: match height {
             ObjectHeight::Eight => 8,
@@ -182,4 +204,19 @@ fn objects(core: &dyn Core) -> Result<VideoData, ViewError> {
         },
         objects,
     })
+}
+
+/// One OAM entry on the wire, as `view oam` and `run --oam-log` give it.
+pub(super) fn oam_view(o: &OamEntry) -> OamView {
+    OamView {
+        index: o.index,
+        y: o.y,
+        x: o.x,
+        tile: o.tile,
+        flags: o.flags,
+        screen_x: o.screen_x,
+        screen_y: o.screen_y,
+        on_screen: o.on_screen,
+        dropped_by_line_limit: o.dropped_by_line_limit,
+    }
 }

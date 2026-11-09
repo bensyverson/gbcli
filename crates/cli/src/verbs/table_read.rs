@@ -30,19 +30,22 @@ pub const VIEW_VERB: VerbSpec = VerbSpec {
     verb: Verb::View,
     name: "view",
     class: Class::Read,
-    summary: "VRAM tiles, a tile map or OAM, as text (and a PNG)",
-    usage: "tiles|map|oam [--map WHICH] [--png PATH [--scale N]] [flags]",
+    summary: "VRAM tiles, a tile map, OAM or the palettes, as text (and a PNG)",
+    usage: "tiles|map|oam|palettes [--map WHICH] [--png PATH [--scale N]] [flags]",
     arity: Arity {
         min: 1,
         max: Some(1),
-        name: "tiles|map|oam",
+        name: "tiles|map|oam|palettes",
     },
     flags: VIEW,
     groups: &[SESSION, OUTPUT],
     about: "tiles: every non-blank tile as eight rows of color indexes 0-3. map: the \
             32x32 tile ids of the background or window map (--map), with CGB attributes. \
             oam: the 40 objects with screen positions and which ones the 10-per-line \
-            limit drops. --png saves the same view as an image.",
+            limit drops (run --oam-log gives it for every frame of a run). palettes: \
+            BGP, OBP0 and OBP1 with the shade each color index gets, and on a GBC the 8 \
+            background and 8 object palettes from palette RAM as RGB555 and #RRGGBB. --png \
+            saves the same view as an image (not for palettes).",
     example: (
         "gbcli view oam --session dx",
         "lists the sprites: position, tile, flags and whether each is on screen",

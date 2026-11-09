@@ -58,6 +58,66 @@ fn pcm(path: &Path) -> Vec<i16> {
 }
 
 #[test]
+fn a_channel_filter_narrows_the_log_and_the_summary_counts_it() {
+    use gbcli_protocol::AudioChannel;
+    let f = Fixture::with_rom("audio-filter", TUNE);
+    let audio = audio_of(run(
+        &mut handler(&f),
+        tune_run(AudioArgs {
+            log: true,
+            summary: true,
+            channels: vec![AudioChannel::Noise],
+            ..AudioArgs::default()
+        }),
+    ));
+    assert_eq!(audio.channels, vec![AudioChannel::Noise]);
+    let log = audio.log.expect("a log");
+    assert!(!log.is_empty(), "the tune plays noise at frame 15");
+    assert!(
+        log.iter().all(|l| (0xFF20..=0xFF23).contains(&l.addr)),
+        "{log:#?}"
+    );
+    let summary = audio.summary.expect("a summary");
+    assert_eq!(summary.writes, log.len() as u64);
+    assert!(summary.registers.iter().all(|r| r.reg.starts_with("NR4")));
+    let by_writers: u64 = summary.writers.iter().map(|w| w.writes).sum();
+    assert_eq!(by_writers, summary.writes);
+
+    // A summary alone counts every write and lists none.
+    let f = Fixture::with_rom("audio-summary", TUNE);
+    let audio = audio_of(run(
+        &mut handler(&f),
+        tune_run(AudioArgs {
+            summary: true,
+            ..AudioArgs::default()
+        }),
+    ));
+    assert_eq!(audio.log, None);
+    assert_eq!(audio.summary.expect("a summary").writes, 43);
+}
+
+#[test]
+fn a_channel_filter_with_nothing_to_filter_is_refused() {
+    use gbcli_protocol::AudioChannel;
+    let f = Fixture::with_rom("audio-filter-alone", TUNE);
+    let response = run(
+        &mut handler(&f),
+        tune_run(AudioArgs {
+            channels: vec![AudioChannel::Wave],
+            piano: Some(ImageOut {
+                path: path_in(&f, "p.png"),
+                scale: None,
+            }),
+            ..AudioArgs::default()
+        }),
+    );
+    let err = response.outcome.expect_err("refused");
+    assert_eq!(err.code, ErrorCode::BadRequest);
+    assert!(err.remedy.contains("--audio-log"), "{}", err.remedy);
+    assert_eq!(response.rev, Some(Rev(0)), "refused before the run");
+}
+
+#[test]
 fn the_audio_log_is_the_decoded_writes_timed_from_the_session_base() {
     let f = Fixture::with_rom("audio-log", TUNE);
     let response = run(

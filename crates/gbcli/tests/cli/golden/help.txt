@@ -40,16 +40,16 @@ exit 0
 gbcli run — advance the machine to a stop, then read and save
 
 USAGE
-  gbcli run [ROM] [--frames N | --until EXPR | --to ADDR] [--keys TOKENS] [--read EXPR]… [--shot PATH] [--audio-log] [--wav PATH] [--measure FROM..TO] [--profile] [flags]
+  gbcli run [ROM] [--frames N | --until EXPR | --to ADDR] [--keys TOKENS] [--read EXPR]… [--shot PATH] [--audio-log] [--wav PATH] [--measure FROM..TO] [--profile] [--oam-log] [flags]
 
 The experiment verb. In this order, whatever the order of the flags: start
 from --at, the head, or the boot handoff; apply --patch, --poke and --write in
 the order given; schedule --keys; run until --until holds, --to is reached, a
-breakpoint or watch fires, or the budget ends (--profile, --frame-budget and
---raster collect during the run); --measure on a copy of the stop; evaluate
---read; save --shot; save the audio (--audio-log, --wav, --piano,
---spectrogram); save --checkpoint. The stop becomes the session's new head. A
-ROM argument is the same as --rom.
+breakpoint or watch fires, or the budget ends (--profile, --frame-budget,
+--raster and --oam-log collect during the run); --measure on a copy of the
+stop; evaluate --read; save --shot; save the audio (--audio-log,
+--audio-summary, --wav, --piano, --spectrogram); save --checkpoint. The stop
+becomes the session's new head. A ROM argument is the same as --rom.
 
 CLASS
   act: advances or changes the machine and saves the new head; needs a session (name one with a ROM to create it).
@@ -73,6 +73,8 @@ FLAGS
   --filmstrip PATH        save a PNG of the frames the run passed, in a row, each labeled (LCD-off frames kept); at most 16, more are counted and warned about
   --every N               with --filmstrip: keep a frame every N frames of the run (default 1)
   --audio-log             print every write the run made to the sound registers, decoded into notes and settings, at elapsed 2^23 Hz ticks since --since: the cheap sibling of --wav. Only this run's: writes made before the run (a sound engine's setup) aren't listed
+  --audio-summary         print the run's sound-register writes counted by register (wave RAM as WAVE) and by writer PC, most first, with the registers each wrote: the log in a few rows
+  --audio-channel N…      with --audio-log or --audio-summary: only channel N's writes, 1-4 or square1, square2, wave, noise (its NRxy registers; wave RAM is the wave channel's; NR50-NR52 are no channel's and are left out); repeat for more
   --wav PATH              save what the run played as a WAV (16-bit stereo, 32,768 Hz)
   --channels mixed|each   with --wav: each also saves every channel alone beside it (PATH's stem with -square1, -square2, -wave, -noise) by replaying the run muted
   --piano PATH            save a piano roll PNG of the notes the run's sound writes played
@@ -81,6 +83,7 @@ FLAGS
   --profile               cycles per routine over the run, by .sym, most exclusive cycles first
   --top N                 with --profile: only the N routines with the most exclusive cycles
   --frame-budget          each frame's active and idle (HALT) T-cycles over the run, and the lag frames: frames in which the CPU never halted; the first row sums up the whole frames' active T-cycles (min, max, mean) and the busiest one, then a row per lag frame (--json has every frame)
+  --oam-log               OAM at every vblank the run passes: a row per frame with the objects on screen and the OAM indices the 10-per-line limit dropped (--json has every object's fields); each frame's OAM is the one it was drawn from
   --raster                each IO-register write the run made, by frame and line: register, value, writer's PC, ticks into the line (912 per line) and the PPU mode it landed in (mode=, absent where the emulator can't tell)
   --keys TOKENS           press and release buttons: 'A@0 -A@2 START@10' (frame offsets)
   --keys-file FILE        key tokens from a file, after --keys; # starts a comment

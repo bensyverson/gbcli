@@ -84,6 +84,7 @@ name = "gbcli-audio"
 version = "0.1.0"
 dependencies = [
  "gbcli-core",
+ "gbcli-protocol",
  "gbcli-sameboy",
  "gbcli-view",
 ]

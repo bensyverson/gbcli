@@ -3,7 +3,7 @@
 //! registers and palette RAM, through the core's own RGB555 conversion.
 //! Only the chrome (outlines, gaps, transparency, diff marks) is ours.
 
-use gbcli_core::{ColorMode, Core, CoreError, Feature, IoReg, Region};
+use gbcli_core::{ColorMode, Core, CoreError, IoReg};
 use gbcli_engine::inspect::video::{PaletteSet, cgb_palettes};
 
 use crate::ViewError;
@@ -44,26 +44,9 @@ pub(crate) struct Colors {
 }
 
 /// A display register (LCDC, SCX, SCY, BGP, OBP0, OBP1) as the CPU last wrote
-/// it. The core refuses to decode these while the PPU has batched mode-3
-/// cycles, because a bus read would sync the PPU first; but each of them is
-/// stored as written, every bit readable, and the PPU never changes it
-/// (`Source::Stored` in the engine's register table), so the stored byte is
-/// its value and a view can be drawn at any instant.
+/// it, readable at any instant (see the engine's `display_register`).
 pub(crate) fn display_register(core: &dyn Core, reg: IoReg) -> Result<u8, ViewError> {
-    match core.io_register(reg) {
-        Err(CoreError::Unsupported {
-            feature: Feature::SideEffectFreeIo,
-            ..
-        }) => {
-            let io = core.region(Region::Io)?.bytes;
-            io.get(usize::from(reg.0)).copied().ok_or_else(|| {
-                ViewError::Core(CoreError::InvalidState {
-                    reason: format!("no IO storage for register {:#04x}", reg.0),
-                })
-            })
-        }
-        other => Ok(other?),
-    }
+    Ok(gbcli_engine::inspect::video::display_register(core, reg)?)
 }
 
 fn dmg_shade(register: u8, index: u8) -> usize {

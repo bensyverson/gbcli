@@ -7,6 +7,7 @@ mod budget;
 mod equiv;
 mod filmstrip;
 mod measure;
+mod oam_log;
 mod probes;
 mod raster;
 
@@ -142,10 +143,14 @@ impl Handler {
         let (budget, limits, defaulted) = budget_of(args);
         let interrupt = self.interrupt.clone();
         let collector = args.filmstrip.as_deref().map(filmstrip::Collector::new);
+        let oam_log = args.oam_log.then(oam_log::Collector::default);
         let sinks = plan.probes.sinks.as_ref();
         let sink = |m: &Machine, done: u64| {
             if let Some(c) = &collector {
                 c.on_frame(m, done);
+            }
+            if let Some(o) = &oam_log {
+                o.on_frame(m);
             }
             if let Some(s) = sinks {
                 s.borrow_mut().cut();
@@ -158,7 +163,7 @@ impl Handler {
         opts.keys = &args.keys;
         // The audio replays run the same request without collecting frames.
         let replay_opts = opts.clone();
-        if collector.is_some() || plan.probes.wants_frames() {
+        if collector.is_some() || oam_log.is_some() || plan.probes.wants_frames() {
             opts.on_frame = Some(FrameSink(&sink));
         }
         if let Some(s) = sinks {
@@ -205,6 +210,7 @@ impl Handler {
             .probes
             .measure(&mut machine, &interrupt, self.wall_guard);
         let collected_probes = plan.probes.finish(&machine);
+        let oam_made = oam_log.as_ref().map(|o| o.finish(&machine, &since));
         // The core's gaps reach the ledger whether or not the request fails.
         self.gaps_found
             .extend(collected_probes.gaps.iter().cloned());
@@ -253,6 +259,7 @@ impl Handler {
         let measured = measured.transpose().map_err(with_stop)?;
         let strip = strip.transpose().map_err(with_stop)?;
         let sound = sound.transpose().map_err(with_stop)?;
+        let oam_made = oam_made.transpose().map_err(with_stop)?;
         let checkpoint = checkpoint.map_err(with_stop)?;
         let keys_unapplied = unapplied(&args.keys, &stop, warnings);
         Ok(ResultBody {
@@ -265,6 +272,7 @@ impl Handler {
             frame_budget: collected_probes.frame_budget,
             raster: collected_probes.raster,
             audio: sound,
+            oam_log: oam_made,
             keys_unapplied,
             checkpoint,
             writes: (!writes.is_empty()).then_some(writes),

@@ -7,8 +7,8 @@
 use std::path::{Path, PathBuf};
 
 use gbcli_audio::{
-    ApuSnapshot, AudioError, PianoRoll, Takes, decode, note_spans, piano_roll, record_takes_with,
-    spectrogram, wav,
+    ApuSnapshot, AudioError, PianoRoll, Takes, decode, note_spans, on_channels, piano_roll,
+    record_takes_with, spectrogram, summarize, wav,
 };
 use gbcli_core::{
     ApuChannel, AudioCapture, AudioSamples, Core, CoreError, Feature, Support, Ticks,
@@ -44,6 +44,13 @@ pub(super) struct Collected {
 
 /// What can be refused before anything loads: the files' paths and scales.
 pub(super) fn check(args: &AudioArgs) -> Result<(), Failure> {
+    if !args.channels.is_empty() && !args.log && !args.summary {
+        return Err(bad(
+            "a channel filter narrows the write log or its summary, and the run asks for neither"
+                .into(),
+            "add --audio-log or --audio-summary, or drop --audio-channel".into(),
+        ));
+    }
     if let Some(w) = &args.wav {
         check_wav(&w.path)?;
     }
@@ -155,8 +162,12 @@ pub(super) fn deliver(
 ) -> Result<AudioMade, Failure> {
     let (base, mark) = machine.named_base(since);
     let log = decode(&collected.snapshot, &collected.writes);
+    let channels: Vec<ApuChannel> = args.channels.iter().map(|c| c.apu()).collect();
+    let shown = on_channels(&log, &channels);
+    let summary = args.summary.then(|| summarize(&shown));
     let lines = args.log.then(|| {
-        log.iter()
+        shown
+            .iter()
             .map(|w| ApuWriteLine {
                 ticks: w.write.at.0,
                 elapsed: w.write.at.0 as i64 - mark.ticks as i64,
@@ -189,6 +200,8 @@ pub(super) fn deliver(
     };
     Ok(AudioMade {
         since: base,
+        channels: args.channels.clone(),
+        summary,
         log: lines,
         wavs,
         piano,

@@ -168,13 +168,15 @@ impl Symbols {
     }
 
     /// The nearest symbol at or below `addr` in the same area and bank: the
-    /// label whose code or data `addr` is in. Local labels count.
+    /// label whose code or data `addr` is in. Local labels count. Where
+    /// several share that address, an end marker (`TilesEnd`, `end_zero`:
+    /// the end of the section before) loses to the others.
     pub fn containing(&self, bank: u16, addr: u16) -> Option<&Symbol> {
         let area = Area::of(addr);
         self.symbols
             .iter()
             .filter(|s| Area::of(s.addr) == area && s.bank == bank && s.addr <= addr)
-            .max_by_key(|s| s.addr)
+            .max_by_key(|s| (s.addr, !is_end_marker(&s.name)))
     }
 
     /// Names close to `name` (case-insensitive edit distance at most 2), nearest first.
@@ -251,6 +253,32 @@ pub(crate) fn edit_distance(a: &str, b: &str) -> usize {
         }
     }
     row[b.len()]
+}
+
+/// Whether a name marks where something ends: one of its words is `end`.
+/// Words split at `_` and `.` and where an uppercase letter starts one
+/// (`wOAMEnd` is `w`, `OAM`, `End`), so `Send` and `Legend` are no markers.
+pub(crate) fn is_end_marker(name: &str) -> bool {
+    let chars: Vec<char> = name.chars().collect();
+    let mut word = String::new();
+    let mut words = Vec::new();
+    for (i, &c) in chars.iter().enumerate() {
+        if c == '_' || c == '.' {
+            words.push(std::mem::take(&mut word));
+            continue;
+        }
+        let prev = i.checked_sub(1).map(|p| chars[p]);
+        let next = chars.get(i + 1);
+        let starts = c.is_uppercase()
+            && (prev.is_some_and(|p| p.is_lowercase() || p.is_ascii_digit())
+                || prev.is_some_and(char::is_uppercase) && next.is_some_and(|n| n.is_lowercase()));
+        if starts {
+            words.push(std::mem::take(&mut word));
+        }
+        word.push(c);
+    }
+    words.push(word);
+    words.iter().any(|w| w.eq_ignore_ascii_case("end"))
 }
 
 /// Whether `name` matches `pattern`: `*` any run, `?` any one character.
@@ -365,6 +393,49 @@ mod tests {
         );
         assert_eq!(syms.containing(0, 0x4000), None, "ROMX bank 0 has none");
         assert_eq!(syms.containing(0, 0xC001).unwrap().name, "wFrame");
+    }
+
+    #[test]
+    fn at_a_shared_address_an_end_marker_loses_to_the_label_that_starts_there() {
+        // rgblink lists a shared address's names in name order, so the
+        // previous section's end marker can come last (00:c504 end_zero).
+        let syms = Symbols::parse(
+            "00:c500 start_zero\n00:c504 RoadLoops\n00:c504 VLoop\n00:c504 end_zero\n\
+             00:0200 TilesEnd\n00:0200 Init\n00:0300 Map\n00:0300 Map.end\n\
+             00:0400 wOAMEnd\n00:0400 Next\n00:0500 tiles_end\n00:0500 Draw\n",
+        )
+        .unwrap();
+        let name = |addr| syms.containing(0, addr).unwrap().name.as_str();
+        assert_eq!(name(0xC504), "VLoop");
+        assert_eq!(name(0xC506), "VLoop", "inside the code, too");
+        assert_eq!(name(0x0201), "Init");
+        assert_eq!(name(0x0300), "Map");
+        assert_eq!(name(0x0400), "Next");
+        assert_eq!(name(0x0500), "Draw");
+        assert_eq!(name(0xC502), "start_zero");
+        // Alone at its address, an end marker still names it.
+        let alone = Symbols::parse("00:0200 TilesEnd\n").unwrap();
+        assert_eq!(alone.containing(0, 0x0204).unwrap().name, "TilesEnd");
+    }
+
+    #[test]
+    fn an_end_marker_is_a_whole_word_end() {
+        for marker in [
+            "end_zero",
+            "TilesEnd",
+            ".end",
+            "Map.end",
+            "wOAMEnd",
+            "tiles_end",
+            "End",
+        ] {
+            assert!(is_end_marker(marker), "{marker}");
+        }
+        for name in [
+            "Send", "Backend", "Legend", "Ending", "VBlank", "endless", "Spend",
+        ] {
+            assert!(!is_end_marker(name), "{name}");
+        }
     }
 
     #[test]

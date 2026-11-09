@@ -1,9 +1,10 @@
 //! Rows for screenshots, VRAM views, symbols, stored states and the keys a
 //! run didn't reach.
 
-use gbcli_protocol::{ResultBody, VideoData};
+use gbcli_protocol::{OamLogMade, ResultBody, VideoData};
 
 use super::row::{Row, addr, byte};
+use super::stop::since;
 
 pub fn rows(r: &ResultBody) -> String {
     let mut out = String::new();
@@ -36,6 +37,9 @@ pub fn rows(r: &ResultBody) -> String {
         }
     }
     out += &unapplied(r.keys_unapplied.as_deref());
+    if let Some(log) = &r.oam_log {
+        out += &oam_log(log);
+    }
     if let Some(view) = &r.view {
         out += &data(&view.data);
         if let Some(png) = &view.png {
@@ -117,6 +121,37 @@ fn data(data: &VideoData) -> String {
                 out += &indented(attributes);
             }
         }
+        VideoData::Palettes {
+            bgp,
+            obp0,
+            obp1,
+            bg,
+            obj,
+        } => {
+            for (reg, p) in [("BGP", bgp), ("OBP0", obp0), ("OBP1", obp1)] {
+                let shades: Vec<String> = p.shades.iter().map(u8::to_string).collect();
+                out += &Row::new("dmg_palette")
+                    .field("reg", reg)
+                    .field("value", byte(p.value))
+                    .field("shades", shades.join(","))
+                    .line();
+            }
+            for (kind, set) in [("bg_palette", bg), ("obj_palette", obj)] {
+                for p in set {
+                    let rgb555: Vec<String> = p
+                        .colors
+                        .iter()
+                        .map(|c| format!("${:04X}", c.rgb555))
+                        .collect();
+                    let hex: Vec<&str> = p.colors.iter().map(|c| c.hex.as_str()).collect();
+                    out += &Row::new(kind)
+                        .field("index", p.index)
+                        .field("rgb555", rgb555.join(","))
+                        .field("hex", hex.join(","))
+                        .line();
+                }
+            }
+        }
         VideoData::Oam { height, objects } => {
             out += &Row::new("oam").field("height", height).line();
             for o in objects {
@@ -133,6 +168,27 @@ fn data(data: &VideoData) -> String {
                     .line();
             }
         }
+    }
+    out
+}
+
+/// `run --oam-log`: a row per frame; `--json` has every object's fields.
+fn oam_log(log: &OamLogMade) -> String {
+    let mut out = Row::new("oam_log")
+        .field("since", since(&log.since))
+        .field("frames", log.frames.len())
+        .line();
+    for frame in &log.frames {
+        let dropped: Vec<String> = frame.dropped().iter().map(u8::to_string).collect();
+        let shown: Vec<String> = frame.objects.iter().map(|o| o.index.to_string()).collect();
+        out += &Row::new("oam_frame")
+            .field("frame", frame.frame)
+            .opt("lcd_off", frame.lcd_off.then_some(1))
+            .field("height", frame.height)
+            .field("on_screen", frame.objects.len())
+            .opt("objects", (!shown.is_empty()).then(|| shown.join(",")))
+            .opt("dropped", (!dropped.is_empty()).then(|| dropped.join(",")))
+            .line();
     }
     out
 }

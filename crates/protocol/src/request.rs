@@ -220,6 +220,10 @@ pub struct RunArgs {
     /// The IO-register writes the run made, by frame and line.
     #[serde(default, skip_serializing_if = "is_false")]
     pub raster: bool,
+    /// OAM at every vblank the run passes: the objects on screen and which
+    /// the 10-per-line limit dropped.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub oam_log: bool,
     /// Save the stop state under this name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checkpoint: Option<String>,

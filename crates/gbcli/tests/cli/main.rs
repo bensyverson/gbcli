@@ -18,6 +18,7 @@ mod images;
 mod images_gbc;
 mod model;
 mod music;
+mod observe;
 mod opcode;
 mod profile;
 mod raster;

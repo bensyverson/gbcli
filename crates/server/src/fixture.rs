@@ -52,6 +52,9 @@ pub const LATE_A_SYM: &[u8] = include_bytes!("../../engine/tests/roms/equiv_late
 pub const LATE_B: &[u8] = include_bytes!("../../engine/tests/roms/equiv_late_b.gb");
 pub const LATE_B_SYM: &[u8] = include_bytes!("../../engine/tests/roms/equiv_late_b.sym");
 
+/// Sets BG palette 0's color 0 to orange ($021F) on a CGB (`gbc_palette.asm`).
+pub const GBC_PALETTE: &[u8] = include_bytes!("../../engine/tests/roms/gbc_palette.gb");
+
 impl Fixture {
     /// A project directory with `demo.gb` and a `demo` session created.
     pub fn new(name: &str) -> Fixture {

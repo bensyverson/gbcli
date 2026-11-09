@@ -122,9 +122,10 @@ pub fn view(inv: &Invocation) -> Result<ViewArgs, Usage> {
         "tiles" => ViewKind::Tiles,
         "map" => ViewKind::Map,
         "oam" => ViewKind::Oam,
+        "palettes" => ViewKind::Palettes,
         other => {
             return Err(Usage::new(
-                format!("`{other}` isn't tiles, map or oam"),
+                format!("`{other}` isn't tiles, map, oam or palettes"),
                 "e.g. `gbcli view oam`",
             ));
         }

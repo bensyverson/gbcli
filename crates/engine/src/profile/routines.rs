@@ -60,7 +60,8 @@ pub struct Entry {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RoutineCost {
     pub entry: Entry,
-    /// The `.sym` label at the entry, or `Label+$n` inside one.
+    /// The `.sym` label at the entry, the hardware vector entered when no
+    /// label is there (`STAT_vector`), or `Label+$n` inside one.
     pub name: Option<String>,
     /// Times entered by a CALL, RST or interrupt.
     pub calls: u64,
@@ -211,7 +212,7 @@ impl Routines {
             .into_iter()
             .map(|(entry, c)| RoutineCost {
                 entry,
-                name: symbols.and_then(|s| name(s, entry)),
+                name: super::names::routine_name(symbols, entry),
                 calls: c.calls,
                 exclusive_t: c.exclusive_t,
                 inclusive_t: c.inclusive_t,
@@ -311,14 +312,6 @@ fn call_len(opcode: u8) -> Option<u16> {
 
 fn is_return(opcode: u8) -> bool {
     matches!(opcode, 0xC9 | 0xD9 | 0xC0 | 0xC8 | 0xD0 | 0xD8)
-}
-
-fn name(symbols: &Symbols, entry: Entry) -> Option<String> {
-    let s = symbols.containing(entry.bank, entry.addr)?;
-    Some(match entry.addr - s.addr {
-        0 => s.name.clone(),
-        off => format!("{}+${off:X}", s.name),
-    })
 }
 
 impl Machine {

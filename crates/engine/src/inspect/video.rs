@@ -1,7 +1,7 @@
 //! Tiles, tilemaps, OAM and CGB palettes as data, decoded from VRAM, OAM and
 //! palette RAM (images are stage 4).
 
-use gbcli_core::{ColorMode, Core, CoreError, IoReg, Region};
+use gbcli_core::{ColorMode, Core, CoreError, Feature, IoReg, Region};
 
 const TILE_BYTES: usize = 16;
 /// Tiles in one VRAM bank (8000-97FF).
@@ -157,9 +157,9 @@ impl ObjectHeight {
     }
 }
 
-/// The object height LCDC selects now; fails where LCDC doesn't decode.
+/// The object height LCDC selects now.
 pub fn object_height(core: &dyn Core) -> Result<ObjectHeight, CoreError> {
-    let lcdc = core.io_register(IoReg::LCDC)?;
+    let lcdc = display_register(core, IoReg::LCDC)?;
     Ok(if lcdc & 0x04 != 0 {
         ObjectHeight::Sixteen
     } else {
@@ -345,6 +345,58 @@ pub fn cgb_palettes(core: &dyn Core, set: PaletteSet) -> Result<[CgbPalette; 8],
             u16::from_le_bytes([bytes[at], bytes[at + 1]])
         }),
     }))
+}
+
+/// A display register (LCDC, SCX, SCY, BGP, OBP0, OBP1) as the CPU last wrote
+/// it. The core refuses to decode these while the PPU has batched mode-3
+/// cycles, because a bus read would sync the PPU first; but each of them is
+/// stored as written, every bit readable, and the PPU never changes it
+/// (`Source::Stored` in the register table), so the stored byte is its value
+/// and a view can read it at any instant.
+pub fn display_register(core: &dyn Core, reg: IoReg) -> Result<u8, CoreError> {
+    match core.io_register(reg) {
+        Err(CoreError::Unsupported {
+            feature: Feature::SideEffectFreeIo,
+            ..
+        }) => {
+            let io = core.region(Region::Io)?.bytes;
+            io.get(usize::from(reg.0))
+                .copied()
+                .ok_or_else(|| CoreError::InvalidState {
+                    reason: format!("no IO storage for register {:#04x}", reg.0),
+                })
+        }
+        other => other,
+    }
+}
+
+/// Every palette the PPU can color with now.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Palettes {
+    pub bgp: u8,
+    pub obp0: u8,
+    pub obp1: u8,
+    /// Background and object palette RAM, on a model that has it: a CGB in
+    /// CGB mode or running a DMG cartridge (which colors BGP's shades from
+    /// background palette 0, OBP0's and OBP1's from object palettes 0 and 1).
+    pub cgb: Option<([CgbPalette; 8], [CgbPalette; 8])>,
+}
+
+/// The DMG palette registers, and palette RAM where the model has it.
+pub fn palettes(core: &dyn Core) -> Result<Palettes, CoreError> {
+    let cgb = match core.color_mode()? {
+        ColorMode::CgbPalettes | ColorMode::CgbDmgCompat => Some((
+            cgb_palettes(core, PaletteSet::Background)?,
+            cgb_palettes(core, PaletteSet::Object)?,
+        )),
+        ColorMode::DmgShades | ColorMode::Sgb => None,
+    };
+    Ok(Palettes {
+        bgp: display_register(core, IoReg::BGP)?,
+        obp0: display_register(core, IoReg::OBP0)?,
+        obp1: display_register(core, IoReg::OBP1)?,
+        cgb,
+    })
 }
 
 /// An RGB555 color's 5-bit red, green and blue.

@@ -22,7 +22,10 @@ run     at? from?: "boot"|"power-on"  since?: "boot"|"power-on"|CHECKPOINT
         read?: [EXPR]  checkpoint?: NAME  allow_uninit?: bool
         keys?: ["A@0", "-A@2", …]  shot?: SHOT
         measure?: {from: ADDR, to: ADDR}  profile?: {top?: N}
-        frame_budget?: bool  raster?: bool
+        frame_budget?: bool  raster?: bool  oam_log?: bool
+        audio?: {log?: bool, summary?: bool, channels?: ["square1"|"square2"|
+                 "wave"|"noise"], wav?: {path: PATH, channels?: "mixed"|"each"},
+                 piano?: PNG, spectrogram?: PNG}  PNG = {path: PATH, scale?: N}
 measure from: ADDR  to: ADDR  at?  iterations?: N  max_t?: N
         frames? instructions? ticks?: N  keys?
 equiv   frames: N  b?: {rom?: PATH, sym?: PATH, writes?: [WRITE]}  at?  from?
@@ -30,7 +33,7 @@ equiv   frames: N  b?: {rom?: PATH, sym?: PATH, writes?: [WRITE]}  at?  from?
 shot    shot: SHOT  since?
         SHOT = {path: PATH, scale?: 1-8, crop?: {x, y, width, height},
                 live?: bool, any_frame?: bool}
-view    what: "tiles"|"map"|"oam"  map?: "background"|"window"|"9800"|"9c00"
+view    what: "tiles"|"map"|"oam"|"palettes"  map?: "background"|"window"|"9800"|"9c00"
         png?: {path: PATH, scale?: N}
 sym     pattern: GLOB
 checkpoints  —
@@ -81,7 +84,7 @@ Response, one line per request:
   {"id", "ok": false, "rev"?, "error": {"code", "exit", "message", "remedy",
    "stop"?, "keys_unapplied"?, "flash_notes"?, "result"?}, "warnings"}
 result holds only the fields the op fills: stop, reads, shot, measure, profile,
-frame_budget, raster, equiv, view, symbols,
+frame_budget, raster, audio, oam_log, equiv, view, symbols,
 checkpoints, keys_unapplied, writes, checkpoint, restored, breakpoint, watch,
 deleted, registers, ppu, sessions, events, gaps, pruned, kept, busy, removed,
 build, assets, doctor, created, song, song_problem, opcodes, version,

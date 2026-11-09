@@ -216,6 +216,18 @@ pub const RUN: &[FlagSpec] = &[
          settings, at elapsed 2^23 Hz ticks since --since: the cheap sibling of --wav. Only \
          this run's: writes made before the run (a sound engine's setup) aren't listed",
     ),
+    switch(
+        "audio-summary",
+        "print the run's sound-register writes counted by register (wave RAM as WAVE) and \
+         by writer PC, most first, with the registers each wrote: the log in a few rows",
+    ),
+    repeated(
+        "audio-channel",
+        "N",
+        "with --audio-log or --audio-summary: only channel N's writes, 1-4 or square1, \
+         square2, wave, noise (its NRxy registers; wave RAM is the wave channel's; NR50-NR52 \
+         are no channel's and are left out); repeat for more",
+    ),
     value(
         "wav",
         "PATH",
@@ -258,6 +270,12 @@ pub const RUN: &[FlagSpec] = &[
          frames in which the CPU never halted; the first row sums up the whole frames' \
          active T-cycles (min, max, mean) and the busiest one, then a row per lag frame \
          (--json has every frame)",
+    ),
+    switch(
+        "oam-log",
+        "OAM at every vblank the run passes: a row per frame with the objects on screen and \
+         the OAM indices the 10-per-line limit dropped (--json has every object's fields); \
+         each frame's OAM is the one it was drawn from",
     ),
     switch(
         "raster",

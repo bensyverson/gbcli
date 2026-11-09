@@ -111,14 +111,74 @@ pub(crate) enum ApuWriteEffectDef {
     WaveRamWhilePlaying,
 }
 
+/// A sound channel, as the write log's filter names it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AudioChannel {
+    Square1,
+    Square2,
+    Wave,
+    Noise,
+}
+
+impl AudioChannel {
+    pub fn apu(self) -> ApuChannel {
+        match self {
+            AudioChannel::Square1 => ApuChannel::Square1,
+            AudioChannel::Square2 => ApuChannel::Square2,
+            AudioChannel::Wave => ApuChannel::Wave,
+            AudioChannel::Noise => ApuChannel::Noise,
+        }
+    }
+
+    /// The wire spelling.
+    pub fn name(self) -> &'static str {
+        WavTake::solo(self.apu()).name()
+    }
+}
+
+/// How many writes the log holds, by register and by the code that made them.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AudioSummary {
+    pub writes: u64,
+    /// In address order; wave RAM bytes are one register, `WAVE`.
+    pub registers: Vec<RegisterWrites>,
+    /// Most writes first, then by PC.
+    pub writers: Vec<WriterWrites>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RegisterWrites {
+    /// `NR41`, or `WAVE` for wave RAM.
+    pub reg: String,
+    /// The register's address; wave RAM's first byte for `WAVE`.
+    pub addr: u16,
+    pub writes: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WriterWrites {
+    /// The PC of the writing instruction.
+    pub pc: u16,
+    pub writes: u64,
+    /// The registers it wrote, in address order.
+    pub registers: Vec<String>,
+}
+
 /// What a run's audio flags produced.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AudioMade {
     /// What each write's `elapsed` counts from.
     pub since: TimeBase,
+    /// The channels the log and summary were filtered to; empty for all.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub channels: Vec<AudioChannel>,
     /// Every write the run made, in order: with `audio_log`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub log: Option<Vec<ApuWriteLine>>,
+    /// The writes counted: with `summary`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<AudioSummary>,
     /// The mix first, then any channels alone.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub wavs: Vec<WavMade>,
@@ -135,6 +195,14 @@ pub struct AudioArgs {
     /// Return the decoded write log: the cheap text sibling of the WAV.
     #[serde(default, skip_serializing_if = "crate::request::is_false")]
     pub log: bool,
+    /// Return the writes counted by register and by writer PC.
+    #[serde(default, skip_serializing_if = "crate::request::is_false")]
+    pub summary: bool,
+    /// Only these channels' writes in the log and the summary: a channel's
+    /// own registers, and wave RAM for the wave channel. NR50-NR52 belong to
+    /// none, so a filter leaves them out. Empty for every write.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub channels: Vec<AudioChannel>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wav: Option<WavArgs>,
     /// A piano roll of the notes the run's writes played; scale default 2 (its width is capped, so a long
@@ -149,7 +217,7 @@ pub struct AudioArgs {
 impl AudioArgs {
     /// Whether anything needs the write log.
     pub fn wants_log(&self) -> bool {
-        self.log || self.piano.is_some()
+        self.log || self.summary || self.piano.is_some()
     }
 
     /// Whether anything needs rendered samples.
@@ -217,6 +285,26 @@ mod tests {
         let json = serde_json::to_string(&line).unwrap();
         assert!(json.contains(r#""effect":"ignored_apu_off""#), "{json}");
         assert_eq!(serde_json::from_str::<ApuWriteLine>(&json).unwrap(), line);
+    }
+
+    #[test]
+    fn a_run_filters_its_log_by_channel_and_asks_for_a_summary() {
+        let line = r#"{"id":"1","op":"run","args":{"audio":{"summary":true,"channels":["noise","square2"]}}}"#;
+        let request = parse_request(line).expect("parses");
+        let Op::Run(RunArgs {
+            audio: Some(audio), ..
+        }) = &request.op
+        else {
+            panic!("{request:?}")
+        };
+        assert!(audio.summary && !audio.log);
+        assert!(audio.wants_log(), "a summary counts the log");
+        assert_eq!(
+            audio.channels,
+            vec![AudioChannel::Noise, AudioChannel::Square2]
+        );
+        assert_eq!(AudioChannel::Noise.apu(), ApuChannel::Noise);
+        assert_eq!(serde_json::to_string(&request).unwrap(), line);
     }
 
     #[test]

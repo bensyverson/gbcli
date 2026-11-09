@@ -10,8 +10,15 @@ publish.workspace = true
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+# `cli`: links the CLI crate and exports `gbw_cli` (help, recipes, rows).
+# Off, the module is the handler alone, for the size comparison.
+[features]
+default = ["cli"]
+cli = ["dep:gbcli-cli"]
+
 [dependencies]
 gbcli-bundle.workspace = true
+gbcli-cli = { workspace = true, optional = true }
 gbcli-protocol.workspace = true
 gbcli-server.workspace = true
 gbcli-engine.workspace = true

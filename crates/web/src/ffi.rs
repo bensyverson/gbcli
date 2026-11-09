@@ -149,6 +149,31 @@ pub unsafe extern "C" fn gbw_color_table_sha256(ptr: *const u8, len: usize) -> u
     }
 }
 
+#[cfg(feature = "cli")]
+/// Runs one `gbcli` invocation in-process from `{"args": [...], "cwd"}`
+/// ([`crate::cli`]); answers `{"code","out","err"}`.
+///
+/// # Safety
+/// `ptr..ptr+len` is a buffer of this module.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn gbw_cli(ptr: *const u8, len: usize) -> u64 {
+    #[derive(serde::Deserialize)]
+    struct Call {
+        args: Vec<String>,
+        cwd: String,
+    }
+    // SAFETY: the caller's contract.
+    let call: Result<Call, String> =
+        unsafe { text(ptr, len) }.and_then(|t| serde_json::from_str(t).map_err(|e| e.to_string()));
+    match call {
+        Ok(call) => pack(crate::cli(&call.args, &call.cwd).to_string().into_bytes()),
+        Err(e) => {
+            let body = ErrorBody::plain(ErrorCode::BadRequest, format!("cli: {e}"));
+            pack(error_json(&body))
+        }
+    }
+}
+
 /// Reads `path` from the module's filesystem; `u64::MAX` if it can't.
 ///
 /// # Safety

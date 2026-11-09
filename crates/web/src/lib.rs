@@ -105,6 +105,36 @@ pub fn color_table_sha256(rom: &[u8]) -> Result<String, String> {
     Ok(gbcli_engine::sha256(&bytes).to_string())
 }
 
+#[cfg(feature = "cli")]
+/// One `gbcli` invocation, in-process: `args` without the program name, run
+/// in `cwd` with no `PATH`, stdin empty. The CLI crate's own entry point,
+/// so its help, recipes, schema and row rendering are all reachable from a
+/// host without a process (findings doc ▸ Help). Answers
+/// `{"code", "out", "err"}`.
+pub fn cli(args: &[String], cwd: &str) -> serde_json::Value {
+    let env = gbcli_cli::Env {
+        cwd: PathBuf::from(cwd),
+        ..gbcli_cli::Env::default()
+    };
+    let mut stdin = Cursor::new(Vec::new());
+    let mut out = Vec::new();
+    let mut err = Vec::new();
+    let code = gbcli_cli::run(
+        args.iter().map(Into::into).collect(),
+        &env,
+        gbcli_cli::Io {
+            stdin: &mut stdin,
+            out: &mut out,
+            err: &mut err,
+        },
+    );
+    serde_json::json!({
+        "code": code,
+        "out": String::from_utf8_lossy(&out),
+        "err": String::from_utf8_lossy(&err),
+    })
+}
+
 thread_local! {
     /// The one handler a page drives; wasm32 has one thread.
     static SPIKE: RefCell<Option<Spike>> = const { RefCell::new(None) };

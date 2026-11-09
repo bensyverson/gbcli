@@ -244,6 +244,7 @@ name = "gbcli-web"
 version = "0.1.0"
 dependencies = [
  "gbcli-bundle",
+ "gbcli-cli",
  "gbcli-core",
  "gbcli-engine",
  "gbcli-protocol",

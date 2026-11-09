@@ -1,0 +1,29 @@
+<!doctype html>
+<!-- Web spike (Stage 12, leaf 0Mfl87): gbcli's handler as wasm32-wasip1 in a
+     browser, through @bjorn3/browser_wasi_shim with an in-memory filesystem.
+     A demo, not a design. Serve the repo root (node crates/web/page/serve.mjs)
+     and open /crates/web/page/ ; ?rom=PATH picks a ROM, ?bench runs the
+     benchmark instead. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gbcli web spike</title>
+<style>
+  :root { color-scheme: light dark; --bg: #f4f4f0; --fg: #1d1d1b; --muted: #6b6b66; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #161615; --fg: #e8e8e3; --muted: #9a9a94; } }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg);
+         font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  canvas { display: block; width: 480px; max-width: 100%; aspect-ratio: 160 / 144;
+           image-rendering: pixelated; background: #000; }
+  #status { white-space: pre-wrap; color: var(--muted); margin-top: 12px; }
+  h1 { font-size: 16px; margin: 0 0 12px; }
+</style>
+</head>
+<body>
+<h1>gbcli web spike: the protocol handler in wasm32</h1>
+<canvas id="screen" width="160" height="144"></canvas>
+<div id="status">loading...</div>
+<script type="module" src="main.js"></script>
+</body>
+</html>

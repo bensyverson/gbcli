@@ -1,0 +1,12 @@
+{
+  "name": "gbcli-web-spike-page",
+  "private": true,
+  "description": "Web spike (Stage 12, spike/web only): a demo page and benchmarks for the wasm32 build of gbcli's handler. Disposable.",
+  "type": "module",
+  "dependencies": {
+    "@bjorn3/browser_wasi_shim": "0.4.2"
+  },
+  "devDependencies": {
+    "playwright": "1.64.1"
+  }
+}

@@ -18,3 +18,6 @@ scripts/bench/rust-build/target/
 
 # gbcli session bundles created by runs in this checkout
 .gbcli/
+
+# Web spike (spike/web only): the page's npm dependencies
+/crates/web/page/node_modules/

@@ -6,6 +6,9 @@
 #
 #   scripts/web/build-spike.sh            build and check
 #   WASI_SDK=/path/to/wasi-sdk-34.0-arm64-macos scripts/web/build-spike.sh
+#
+# When the page's dependencies and Playwright's Chromium are installed
+# (findings doc, "The page"), it also runs the same check in the browser.
 set -eu
 
 WASI_SDK="${WASI_SDK:-$HOME/.local/wasi/wasi-sdk-34.0-arm64-macos}"
@@ -31,3 +34,12 @@ check crates/engine/tests/roms/joypad.gb 600
 check crates/engine/tests/roms/gbc_palette.gb 600 gbc
 check crates/sameboy/tests/roms/layers_cgb.gb 1200 gbc
 node crates/web/node/colors.mjs "$WASM" crates/engine/tests/roms/gbc_palette.gb target/release/examples/native_colors
+
+# The browser: the page's check against native, if Playwright is set up.
+BROWSERS="$ROOT/target/web-spike/ms-playwright"
+if [ -d crates/web/page/node_modules/playwright ] && [ -d "$BROWSERS" ]; then
+  PLAYWRIGHT_BROWSERS_PATH="$BROWSERS" node crates/web/page/browser.mjs check \
+    crates/sameboy/tests/roms/layers.gb target/release/examples/native_ref 600
+else
+  echo "browser check skipped: see the findings doc's The page section"
+fi

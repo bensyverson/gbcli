@@ -613,3 +613,14 @@ fn run_filmstrip_takes_every_and_refuses_it_alone() {
     let alone = command(&["run", "--every", "5"]).unwrap_err();
     assert!(alone.message.contains("--filmstrip"), "{alone:?}");
 }
+
+#[test]
+fn measure_takes_from_as_run_does() {
+    let (_, op) = request(&["measure", "A..B", "--from", "power-on"]);
+    let Op::Measure(args) = op else { panic!() };
+    assert_eq!(args.start, Some(Start::PowerOn));
+    assert_eq!((args.from.as_str(), args.to.as_str()), ("A", "B"));
+    let (_, op) = request(&["measure", "A..B"]);
+    let Op::Measure(args) = op else { panic!() };
+    assert_eq!(args.start, None);
+}

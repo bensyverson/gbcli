@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use gbcli_protocol::{
     CheckpointArgs, CpuSpeedName, ErrorCode, MeasureArgs, MeasureMade, Op, Response, RunArgs,
-    RunMeasure, StopReason,
+    RunMeasure, Start, StopReason,
 };
 
 use super::Handler;
@@ -251,4 +251,35 @@ fn measure_reports_the_key_events_it_never_reached() {
         .map(|k| k.to_string())
         .collect();
     assert_eq!(late, vec!["START@500"]);
+}
+
+#[test]
+fn measure_from_boot_or_power_on_starts_a_cold_copy_and_leaves_the_head() {
+    let f = Fixture::with_sym("measure-start");
+    let mut h = handler(&f);
+    let ran = run_frames(&mut h, 2);
+    for start in [Start::Boot, Start::PowerOn] {
+        let args = MeasureArgs {
+            start: Some(start),
+            ..main_loop(2)
+        };
+        let m = made(measure(&mut h, args));
+        assert_eq!((m.t.min, m.t.max), (PASS_T, PASS_T), "{start:?}");
+    }
+    let after = h.handle(&request(Op::Show));
+    assert_eq!(after.rev, ran.rev);
+}
+
+#[test]
+fn measure_refuses_at_with_from() {
+    let f = Fixture::with_sym("measure-start-at");
+    let mut h = handler(&f);
+    run_frames(&mut h, 2);
+    let args = MeasureArgs {
+        at: Some("~0".into()),
+        start: Some(Start::Boot),
+        ..main_loop(1)
+    };
+    let err = measure(&mut h, args).outcome.expect_err("both");
+    assert_eq!(err.code, ErrorCode::BadRequest);
 }

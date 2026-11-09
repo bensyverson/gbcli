@@ -19,7 +19,10 @@ pub const SHOT_VERB: VerbSpec = VerbSpec {
     about: "Writes the last complete frame the LCD showed, as the real screen's four \
             grays, and prints which frame it is. A frame that isn't normal (LCD off, the \
             blank frame after the LCD turns on) is refused with exit 1 unless --any-frame; \
-            --live takes the pixels drawn so far instead.",
+            --live takes the pixels drawn so far instead. The PNG is palette-indexed at \
+            the smallest bit depth that holds its colors (2 bits for a four-gray screen), \
+            with indices in order of first appearance, not shade order: a decoder reads \
+            the PLTE chunk, not the raw index.",
     example: (
         "gbcli shot title.png --session dx",
         "saves the head's last frame at 4x as title.png and prints its frame number",

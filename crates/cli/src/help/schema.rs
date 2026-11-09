@@ -33,7 +33,7 @@ run     at? from?: "boot"|"power-on"  since?: "boot"|"power-on"|CHECKPOINT
         the key offsets from that base, dropping events before the run's start.
         result.frame_budget.frames[] and audio.log[] carry frame, counted as
         stop.time.frame is; audio.log[] also carries ly, null with the LCD off)
-measure from: ADDR  to: ADDR  at?  iterations?: N  max_t?: N
+measure from: ADDR  to: ADDR  at?  start?: "boot"|"power-on"  iterations?: N  max_t?: N
         frames? instructions? ticks?: N  keys?
 equiv   frames: N  b?: {rom?: PATH, sym?: PATH, writes?: [WRITE]}  at?  from?
         keys?  ram?: [{at: ADDR, len: N}]  audio?: "writes"|"timed"|"off"

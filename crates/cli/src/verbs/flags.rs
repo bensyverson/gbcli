@@ -391,6 +391,11 @@ pub const MEASURE: &[FlagSpec] = &[
         "measure from a named checkpoint or the head N changes back (default: the head)",
     ),
     value(
+        "from",
+        "boot|power-on",
+        "measure from the boot handoff or from power-on instead of the head; not with --at",
+    ),
+    value(
         "iterations",
         "N",
         "how many FROM-to-TO spans to measure (default 1)",
@@ -398,7 +403,10 @@ pub const MEASURE: &[FlagSpec] = &[
     value(
         "max",
         "T",
-        "fail with exit 1 (predicate_false) if any iteration takes more than T T-cycles",
+        "fail with exit 1 (predicate_false) if any iteration takes more than T T-cycles; \
+         an iteration ends at the next arrival at TO, so when TO isn't \
+         reached on every pass the max spans several passes: read min, or pick a TO every pass \
+         reaches",
     ),
     value(
         "frames",

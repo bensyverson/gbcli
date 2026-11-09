@@ -474,9 +474,12 @@ fn build_restore_needs_a_session_over_the_rom_it_built() {
         .fails(2, "bad_request", "--session NAME");
     p.rgbds(&["build", "game", "--session", "game"])
         .fails(2, "bad_request", "--restore NAME");
-    // --dir only finds the session to reload into: alone, it would be ignored.
-    p.rgbds(&["build", "game", "--dir", "."])
+    // --as only names who reloads the session: alone, it would be ignored.
+    p.rgbds(&["build", "game", "--as", "me"])
         .fails(2, "bad_request", "--restore NAME");
+    // --dir is the project, as in every verb: it builds without a restore.
+    let built = p.rgbds(&["build", "game", "--dir", "."]);
+    assert_eq!(built.code, 0, "{}", built.stderr);
     // A session over another ROM would restore into that ROM, not the build.
     let wrong = p.rgbds(&["build", "game", "--session", "demo", "--restore", "start"]);
     wrong.fails(2, "bad_request", "gbcli run game/build/game.gb --session");
@@ -802,4 +805,17 @@ fn the_loop_in_rows_and_json() {
         transcript += &p.rgbds(args).transcript(args, &p.dir);
     }
     golden("rgbds.txt", &transcript);
+}
+
+#[test]
+fn build_dir_names_the_project_as_it_does_for_every_verb() {
+    let p = Project::new("rgbds-build-dir");
+    let made = p.rgbds(&["new", "game"]);
+    assert_eq!(made.code, 0, "{}", made.stderr);
+    let built = p.rgbds(&["build", "--dir", "game"]);
+    assert_eq!(built.code, 0, "{}{}", built.stdout, built.stderr);
+    assert!(
+        p.path("game/build").exists(),
+        "built the project --dir names"
+    );
 }

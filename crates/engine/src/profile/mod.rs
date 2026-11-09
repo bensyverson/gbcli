@@ -4,7 +4,7 @@
 
 mod frames;
 mod measure;
-mod names;
+pub(crate) mod names;
 mod raster;
 mod routines;
 #[cfg(test)]

@@ -29,8 +29,15 @@ impl Handler {
         if iterations == 0 {
             return Err(failure(&MeasureError::NoIterations, self.wall_guard));
         }
+        if args.at.is_some() && args.start.is_some() {
+            return Err(Failure::new(ErrorBody::new(
+                ErrorCode::BadRequest,
+                "a measurement starts from --at or --from, not both",
+                "drop one of them: --at names the state to start from",
+            )));
+        }
         let (mut machine, loaded) =
-            self.machine_for(store, meta, Need::Start(None), args.at.as_deref())?;
+            self.machine_for(store, meta, Need::Start(args.start), args.at.as_deref())?;
         warnings.extend(loaded);
         let (budget, _, _) = budget_from(args.frames, args.instructions, args.ticks);
         let interrupt = self.interrupt.clone();
@@ -44,8 +51,9 @@ impl Handler {
                 let names = (args.from.as_str(), args.to.as_str());
                 measure_on(&mut machine, &spec, names, args.max_t, guard)
             });
-        // Only the head's machine may stay warm: `--at` loaded another state.
-        if args.at.is_none() {
+        // Only the head's machine may stay warm: `--at` and `--from` loaded
+        // another state.
+        if args.at.is_none() && args.start.is_none() {
             self.keep_warm(store, meta, machine);
         }
         let (measure, frames) = measured?;

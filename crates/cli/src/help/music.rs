@@ -26,7 +26,8 @@ to itself. Make room by dropping the music calls (MusicInit, MusicVBlank),
 or by muting the effect's channel after MusicInit (hUGE_init unmutes all
 four): ld b, CH (0-3 for CH1-CH4), ld c, 1 (0 unmutes), call
 hUGE_mute_channel. The driver then leaves that channel alone until it is
-unmuted.
+unmuted. (hUGE_init writes the channel once, with a note, before the mute
+can take hold; that blip is harmless.)
 
 The data's labels are the song's: song_NAME.P0 for a pattern, and for
 routine N song_NAME__hUGE_Routine_N and song_NAME__end_hUGE_Routine_N, not

@@ -41,6 +41,7 @@ pub fn measure(inv: &Invocation, env: &Env, text: &str) -> Result<MeasureArgs, U
         at: inv.one("at").map(str::to_string),
         from,
         to,
+        start: inv.one("from").map(values::start).transpose()?,
         iterations,
         max_t: number("max")?,
         frames: number("frames")?,

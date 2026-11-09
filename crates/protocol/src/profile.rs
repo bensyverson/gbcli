@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::keys::KeyEvent;
-use crate::request::is_false;
+use crate::request::{Start, is_false};
 
 /// `measure`: cycles from each arrival at `from` to the next arrival at `to`,
 /// on a copy of `at` or the head. The head never moves.
@@ -14,8 +14,14 @@ pub struct MeasureArgs {
     /// A named checkpoint or `~N` to measure from; the head when absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub at: Option<String>,
+    /// The first address of each span (`measure FROM..TO`); `start` is where
+    /// the copy begins.
     pub from: String,
     pub to: String,
+    /// Begin the copy at the boot handoff or at power-on instead of the
+    /// head, as `run`'s `from`; not with `at`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start: Option<Start>,
     /// At least one; 1 when absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub iterations: Option<u32>,

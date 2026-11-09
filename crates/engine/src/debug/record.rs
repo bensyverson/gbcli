@@ -4,7 +4,6 @@ use gbcli_core::Usage;
 use gbcli_protocol::{FrameShown, StopReason, StopRecord, StopTime, TimeBase, TimeMark};
 
 use super::Since;
-use crate::addr::label;
 use crate::cond::eval::frame_number;
 use crate::machine::Machine;
 use crate::mem;
@@ -23,10 +22,9 @@ pub fn base(m: &Machine, since: &Since) -> (TimeBase, TimeMark) {
 /// The symbol containing `pc` in the bank mapped there now, as `Name` or
 /// `Name+$3`.
 pub fn symbol_at(m: &Machine, pc: u16) -> Option<String> {
-    m.symbols()
-        .zip(mem::cart_bank_at(m.core(), pc))
-        .and_then(|(s, bank)| s.containing(bank, pc))
-        .map(|s| label(&s.name, i64::from(pc - s.addr)))
+    let symbols = m.symbols()?;
+    let bank = mem::cart_bank_at(m.core(), pc)?;
+    crate::profile::names::name_at(Some(symbols), bank, pc)
 }
 
 pub fn record(m: &Machine, reason: StopReason, used: Usage, since: &Since) -> StopRecord {

@@ -35,11 +35,12 @@ pub fn build(inv: &Invocation, env: &Env) -> Result<Command, Usage> {
         },
     };
     if args.restore.is_none() {
-        // --dir and --as only steer the restore's session; neither changes
-        // a build that restores nothing, so either is a mistake.
-        if let Some(flag) = ["dir", "as"].into_iter().find(|f| inv.has(f)) {
+        // --as only steers the restore's session; it changes nothing in a
+        // build that restores nothing, so it is a mistake. --dir is the
+        // project, as in every verb (the invocation already runs from it).
+        if inv.has("as") {
             return Err(Usage::new(
-                format!("--{flag} only applies when --restore reloads the build"),
+                "--as only applies when --restore reloads the build",
                 "add --restore NAME (a checkpoint of the session), or drop it",
             ));
         }

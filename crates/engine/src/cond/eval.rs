@@ -69,6 +69,9 @@ pub enum EvalWarning {
     InStop,
     /// The run turned the LCD off outside VBlank (leaf jXavVc).
     LcdOffOutsideVblank(crate::debug::LcdOffOutsideVblank),
+    /// The run's program wrote VRAM in mode 3 or OAM in modes 2-3, and the
+    /// PPU ignored it (leaf si5fnG): one a kind.
+    WritesIgnored(crate::debug::WritesIgnored),
 }
 
 /// A condition that triggers a stop.
@@ -101,6 +104,7 @@ impl fmt::Display for EvalWarning {
                  ends; hold one with `run --keys`",
             ),
             EvalWarning::LcdOffOutsideVblank(off) => off.fmt(f),
+            EvalWarning::WritesIgnored(found) => found.fmt(f),
         }
     }
 }

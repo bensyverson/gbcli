@@ -153,6 +153,62 @@ fn a_watch_on_the_byte_stops_after_the_dropped_write_only() {
     }
 }
 
+/// The run warns about the dropped write, once, in the LCD-off warning's
+/// form, and `--json` carries every field of it in `ignored_writes`.
+#[test]
+fn a_vram_write_in_mode_3_warns_and_json_has_every_field() {
+    let p = demo_in("vram_mode3", "trap-vram_mode3-warning");
+    let args = ["run", "vram_mode3.gb", "--session", "t", "--frames", "2"];
+    let run = p.gbcli(&args);
+    assert_eq!(run.code, 0, "a warning, not a failure: {}", run.stderr);
+    let warnings: Vec<&str> = run
+        .stderr
+        .lines()
+        .filter(|l| l.contains("ignored in mode"))
+        .collect();
+    assert_eq!(warnings.len(), 1, "one a kind:\n{}", run.stderr);
+    assert!(
+        warnings[0].starts_with(
+            "warning: 1 VRAM write ignored in mode 3, first at $017A (Dropped), line 10 of frame "
+        ),
+        "{}",
+        warnings[0]
+    );
+
+    let mut json_args = args.to_vec();
+    json_args[3] = "u";
+    let r = json(&p, &json_args, 0);
+    let rows = r["result"]["ignored_writes"].as_array().expect("rows");
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    let row = &rows[0];
+    let frame = row["frame"].as_i64().expect("frame");
+    assert_eq!(
+        *row,
+        serde_json::json!({
+            "kind": "vram", "count": 1, "pc": 0x017A, "symbol": "Dropped",
+            "addr": 0x8000, "line": 10, "frame": frame,
+        })
+    );
+    let text = format!(
+        "1 VRAM write ignored in mode 3, first at $017A (Dropped), line 10 of frame {frame}"
+    );
+    assert!(warnings[0].contains(&text), "{}", warnings[0]);
+    let in_json = r["warnings"].as_array().unwrap();
+    assert!(
+        in_json
+            .iter()
+            .any(|w| w.as_str().unwrap().starts_with(&text)),
+        "{in_json:?}"
+    );
+
+    // The topic quotes the warning as it reads.
+    let topic = p.gbcli(&["help", "traps"]).stdout;
+    assert!(
+        topic.contains("gbcli run warns: 1 VRAM write ignored in mode 3"),
+        "{topic}"
+    );
+}
+
 #[test]
 fn raster_shows_the_lcd_turned_off_mid_frame_and_in_vblank() {
     let p = demo("lcd_off");

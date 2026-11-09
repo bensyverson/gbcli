@@ -158,6 +158,9 @@ impl SameBoy {
         if let Some(log) = &mut hooks.lcd_off_log {
             log.clear();
         }
+        if let Some(log) = &mut hooks.ignored_log {
+            log.clear();
+        }
         if hooks.audio.is_some() {
             // As in `set_capture`: a state saved by another build may hold
             // batched cycles. The sync may render into the hooks, so it runs

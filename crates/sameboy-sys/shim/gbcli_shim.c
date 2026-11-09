@@ -66,6 +66,13 @@ bool gbcli_set_rom_size(GB_gameboy_t *gb, size_t size)
 // NULL detaches the buffer. SameBoy keeps the pointer, so the caller owns it.
 void gbcli_set_layer_buffer(GB_gameboy_t *gb, uint8_t *buffer) { gb->layer_buffer = buffer; }
 
+// The callback the mode-blocked-writes patch calls for each CPU write the PPU
+// ignores (VRAM in mode 3, $FE00-$FEFF in modes 2-3); NULL removes it.
+void gbcli_set_ignored_write_callback(GB_gameboy_t *gb, gbcli_ignored_write_callback_t callback)
+{
+    gb->ignored_write_callback = callback;
+}
+
 // Whether the vblank ending now belongs to the blank frame SameBoy substitutes
 // after the LCD is turned on: display.c scrubs the screen to the LCD-off colour
 // at that vblank, then clears the state. Read from inside the vblank callback,

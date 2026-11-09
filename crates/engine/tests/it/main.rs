@@ -19,6 +19,7 @@ mod flash_save;
 mod flash_session;
 mod frame_sink;
 mod idle_breakpoints;
+mod ignored_writes;
 mod illegal_opcode_targets;
 mod inspect_hwreg;
 mod inspect_pure;

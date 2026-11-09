@@ -11,10 +11,10 @@ use gbcli_protocol::{Location, StepKind, StopReason, WatchAccess};
 
 use super::decide::{Notes, compile, decide, exec_breakpoint, exec_hit, reached, remove_once};
 use super::keys::Schedule;
-use super::lcd;
 use super::record::record;
 use super::until::Until;
 use super::{DebugError, Outcome, RunOptions};
+use super::{ignored, lcd};
 use crate::cond::Condition;
 use crate::machine::Machine;
 use crate::mem;
@@ -112,7 +112,8 @@ pub fn drive_until(
     run(m, opts, Goal::Run, Some(condition))
 }
 
-/// Runs with the core's LCD-off log on (`lcd`), and off again after.
+/// Runs with the core's LCD-off and ignored-write logs on (`lcd`,
+/// `ignored`), and off again after.
 fn run(
     m: &mut Machine,
     opts: &RunOptions<'_>,
@@ -120,7 +121,9 @@ fn run(
     condition: Option<&Condition>,
 ) -> Result<Outcome, DebugError> {
     lcd::watch(m, true);
+    ignored::watch(m, true);
     let outcome = run_watched(m, opts, goal, condition);
+    ignored::watch(m, false);
     lcd::watch(m, false);
     outcome
 }
@@ -237,6 +240,7 @@ fn run_watched(
         let stop = stop?;
         used += stop.used;
         lcd::collect(m, &opts.since, &mut notes.lcd_off);
+        ignored::collect(m, &opts.since, &mut notes.ignored);
         keys.apply_due(m, used.frames);
         if let Some(sink) = opts.on_frame
             && stop.used.frames > 0

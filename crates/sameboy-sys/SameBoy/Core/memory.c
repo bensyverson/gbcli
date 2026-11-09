@@ -1019,6 +1019,7 @@ static void write_vram(GB_gameboy_t *gb, uint16_t addr, uint8_t value)
     GB_display_sync(gb);
     if (unlikely(gb->vram_write_blocked)) {
         //GB_log(gb, "Wrote %02x to %04x (VRAM) during mode 3\n", value, addr);
+        if (gb->ignored_write_callback) gb->ignored_write_callback(gb, addr);
         return;
     }
     gb->vram[(addr & 0x1FFF) + (gb->cgb_vram_bank? 0x2000 : 0)] = value;
@@ -1373,6 +1374,7 @@ static void write_high_memory(GB_gameboy_t *gb, uint16_t addr, uint8_t value)
     if (addr < 0xFF00) {
         GB_display_sync(gb);
         if (gb->oam_write_blocked) {
+            if (gb->ignored_write_callback) gb->ignored_write_callback(gb, addr);
             GB_trigger_oam_bug(gb, addr);
             return;
         }

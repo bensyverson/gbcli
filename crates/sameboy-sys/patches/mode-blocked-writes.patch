@@ -1,0 +1,55 @@
+gbcli's mode-blocked-writes patch for SameBoy ea667ad (leaf si5fnG).
+
+Observation only: memory.c calls an optional callback as a CPU write the PPU
+ignores returns, so gbcli can count them exactly: a write to VRAM while it is
+blocked (mode 3) and one to $FE00-$FEFF while OAM is blocked (modes 2-3).
+gb.h declares the callback type and holds the pointer in the unsaved section,
+so no save state changes; gbcli's shim sets it
+(gbcli_set_ignored_write_callback). With no callback set, the work left is a
+null test on the already-unlikely blocked path.
+
+Applied by scripts/vendor-sameboy.sh after re-vendoring, after
+layer-identity.patch (name order). The vendored tree in this repository
+already has it applied, so a normal build needs no patch step. Rebase it (do
+not drop it) if SameBoy's commit moves.
+--- a/crates/sameboy-sys/SameBoy/Core/gb.h
++++ b/crates/sameboy-sys/SameBoy/Core/gb.h
+@@ -286,6 +286,9 @@
+ typedef void (*GB_execution_callback_t)(GB_gameboy_t *gb, uint16_t address, uint8_t opcode);
+ typedef void (*GB_lcd_line_callback_t)(GB_gameboy_t *gb, uint8_t line);
+ typedef void (*GB_lcd_status_callback_t)(GB_gameboy_t *gb, bool on);
++/* gbcli: a CPU write the PPU ignored, to VRAM while VRAM is blocked (mode 3)
++   or to $FE00-$FEFF while OAM is blocked (modes 2-3). */
++typedef void (*gbcli_ignored_write_callback_t)(GB_gameboy_t *gb, uint16_t addr);
+ 
+ struct GB_breakpoint_s;
+ struct GB_watchpoint_s;
+@@ -745,6 +748,10 @@
+         GB_execution_callback_t execution_callback;
+         GB_lcd_line_callback_t lcd_line_callback;
+         GB_lcd_status_callback_t lcd_status_callback;
++        /* gbcli: called from memory.c as a blocked write returns; NULL when
++           unset (gbcli_set_ignored_write_callback). Observation only: no
++           state depends on it. */
++        gbcli_ignored_write_callback_t ignored_write_callback;
+                
+ #ifndef GB_DISABLE_DEBUGGER
+         /*** Debugger ***/
+--- a/crates/sameboy-sys/SameBoy/Core/memory.c
++++ b/crates/sameboy-sys/SameBoy/Core/memory.c
+@@ -1019,6 +1019,7 @@
+     GB_display_sync(gb);
+     if (unlikely(gb->vram_write_blocked)) {
+         //GB_log(gb, "Wrote %02x to %04x (VRAM) during mode 3\n", value, addr);
++        if (gb->ignored_write_callback) gb->ignored_write_callback(gb, addr);
+         return;
+     }
+     gb->vram[(addr & 0x1FFF) + (gb->cgb_vram_bank? 0x2000 : 0)] = value;
+@@ -1373,6 +1374,7 @@
+     if (addr < 0xFF00) {
+         GB_display_sync(gb);
+         if (gb->oam_write_blocked) {
++            if (gb->ignored_write_callback) gb->ignored_write_callback(gb, addr);
+             GB_trigger_oam_bug(gb, addr);
+             return;
+         }

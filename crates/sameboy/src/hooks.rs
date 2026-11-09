@@ -125,6 +125,8 @@ pub(crate) struct Hooks {
     /// The LCD toggles of the current step, while the log is on; the run loop
     /// logs an LCD-off from them with the step's PC and time.
     pub lcd_toggles: Option<LcdToggles>,
+    /// The ignored-write log, while it is on.
+    pub ignored_log: Option<crate::ignored::IgnoredLog>,
     /// The cart's flash chip, on a flash-save cart; it keeps both memory
     /// callbacks installed for the core's life.
     pub flash: Option<gbcli_core::flash::FlashChip>,
@@ -188,6 +190,7 @@ impl Hooks {
             lcd_turning_off: false,
             lcd_off_log: None,
             lcd_toggles: None,
+            ignored_log: None,
             flash: None,
             unlocks: None,
         }

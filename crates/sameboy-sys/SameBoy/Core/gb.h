@@ -286,6 +286,9 @@ typedef void (*GB_boot_rom_load_callback_t)(GB_gameboy_t *gb, GB_boot_rom_t type
 typedef void (*GB_execution_callback_t)(GB_gameboy_t *gb, uint16_t address, uint8_t opcode);
 typedef void (*GB_lcd_line_callback_t)(GB_gameboy_t *gb, uint8_t line);
 typedef void (*GB_lcd_status_callback_t)(GB_gameboy_t *gb, bool on);
+/* gbcli: a CPU write the PPU ignored, to VRAM while VRAM is blocked (mode 3)
+   or to $FE00-$FEFF while OAM is blocked (modes 2-3). */
+typedef void (*gbcli_ignored_write_callback_t)(GB_gameboy_t *gb, uint16_t addr);
 
 struct GB_breakpoint_s;
 struct GB_watchpoint_s;
@@ -745,6 +748,10 @@ struct GB_gameboy_internal_s {
         GB_execution_callback_t execution_callback;
         GB_lcd_line_callback_t lcd_line_callback;
         GB_lcd_status_callback_t lcd_status_callback;
+        /* gbcli: called from memory.c as a blocked write returns; NULL when
+           unset (gbcli_set_ignored_write_callback). Observation only: no
+           state depends on it. */
+        gbcli_ignored_write_callback_t ignored_write_callback;
                
 #ifndef GB_DISABLE_DEBUGGER
         /*** Debugger ***/

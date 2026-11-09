@@ -7,6 +7,8 @@
 `crates/sameboy-sys/SameBoy/` holds SameBoy's `Core/`, the boot ROM sources from `BootROMs/` (`*.asm`, `*.inc`, `pb12.c`, `SameBoyLogo.png`), `LICENSE` (Expat) and `version.mk`, at **`ea667ad79aa28409f034b1fd6da7304e1844750d`** (2026-11-02, "Merge branch 'master' of github.com:LIJI32/SameBoy"; version 1.0.5). The commit is also in `SameBoy/COMMIT`, which `sameboy_sys::SAMEBOY_COMMIT` reads, so the checkpoint envelope can name its core commit from the one place.
 
 > **Correction, 2026-11-06 (leaf n2WX5r): `Core/` is no longer unmodified.** It carries one observation-only patch of ours, [the layer-identity patch](#gbclis-layer-identity-patch), applied by `scripts/vendor-sameboy.sh`. Everything else is still upstream's.
+>
+> **Update, 2026-11-09 (leaf si5fnG): a second observation-only patch,** [the mode-blocked-writes patch](#gbclis-mode-blocked-writes-patch), reports the CPU writes the PPU ignores. It adds no saved state, but like any patch it changes the core identity, so states saved by earlier builds are refused ([The core identity](#the-core-identity)).
 
 **Why this commit:** it was the latest `master` when the scaffold was built (a `git clone --depth 1` on 2026-11-06 resolved to it), and it is the commit the backend evaluation read and measured, so every line reference and measured figure in [2026-11-06-backend-evaluation.md](2026-11-06-backend-evaluation.md) applies to the vendored code as is.
 
@@ -58,6 +60,17 @@ Eight simultaneously-started, interleaved pairs at 7,200 frames each: **median +
 
 **On, through the backend.** After a 100-frame boot, `cargo run --release -p gbcli-sameboy --example bench -- tests/corpus/fetched/blargg/cpu_instrs/cpu_instrs.gb 3600 1 <mode>`, where `plain` leaves capture off and `layers` turns it on: best of eight interleaved runs each gave `plain` 23.7× and `layers` 22.7× realtime; five paired runs put the on cost at **median 3.1%** (range 1.2–6.8%). The on path writes one byte per drawn pixel (23,040 bytes a frame) and takes the branch instead of predicting it. These figures were taken under load 25–45 and are not comparable with the stage-1 `plain` 19.2× recorded at load 3–6.
 
+
+## gbcli's mode-blocked-writes patch
+
+`crates/sameboy-sys/patches/mode-blocked-writes.patch` (leaf si5fnG, 2026-11-09) lets gbcli count, exactly, the program's writes the PPU drops, for the run warning "N VRAM writes ignored in mode 3, first at …" and its OAM twin (design §11, the 2026-11-09 update). SameBoy decides a write is dropped in one place per kind and returns without a trace: `write_vram` returns when `vram_write_blocked` is set (mode 3), and `write_high_memory` returns for $FE00-$FEFF when `oam_write_blocked` is set (modes 2-3), after triggering the DMG OAM bug. Both have just synced the display (`GB_display_sync`), so the flag is exact even inside a mode 3 that `render_line` batches.
+
+- **`Core/gb.h`**: a callback type, `gbcli_ignored_write_callback_t (gb, addr)`, and its pointer `ignored_write_callback` after `lcd_status_callback`, in the `unsaved` section: no save state changes (`the_log_leaves_the_state_as_it_was` in `crates/sameboy/tests/it/ignored_writes.rs` compares the states of the same run with the log on and off).
+- **`Core/memory.c`**: one line in each blocked branch, `if (gb->ignored_write_callback) gb->ignored_write_callback(gb, addr);`, before the return (and before `GB_trigger_oam_bug`). With no callback the cost is a null test on a path that is already `unlikely`.
+- **Not counted:** OAM DMA and HDMA (not CPU writes; HDMA writes VRAM even in mode 3), a CPU write that OAM DMA, not the mode, drops or redirects (`is_addr_in_dma_use` in `GB_write_memory`, and `GB_is_dma_active` after the blocked check), and $FEA0-$FEFF (blocked with OAM but holding none; the callback reports it and `crates/sameboy` filters it).
+- **Shim and Rust:** `gbcli_set_ignored_write_callback` in `shim/gbcli_shim.c` sets the pointer. `crates/sameboy/src/ignored.rs` installs the callback for the instance's lifetime (as the LCD-status one), records a drop only while a run is in progress and the log is on (a `bus_write` by gbcli itself is not the program's), reads the line with `gbcli_ppu_line`, and the run loop stamps each step's drops with its PC, start and frame number, keeping per kind the count and the first. The core API is `Core::set_ignored_write_log` / `take_ignored_writes` (`gbcli_core::IgnoredWrites`, `Feature::IgnoredWriteLog`).
+
+Rejected: the write-memory callback with a `GB_display_sync` of our own before the write, which needs no patch but would sync the display from outside SameBoy's own write path, on every VRAM and OAM write of every run, and checking `gbcli_ppu_mode` there, which is unknown (`-1`) exactly late in a batched mode 3. The patch is observation only and small enough to offer upstream.
 
 ## The core identity
 

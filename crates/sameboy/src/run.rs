@@ -231,6 +231,7 @@ pub(crate) fn run(core: &mut SameBoy, req: &mut RunRequest<'_>) -> Result<Stop, 
             pass_exec(core, &mut **sink, pc, before, ticks as u32);
         }
         log_lcd_off(core, pc);
+        crate::ignored::stamp(core, pc);
         core.ticks += ticks;
         used.ticks += ticks;
         used.instructions += 1;

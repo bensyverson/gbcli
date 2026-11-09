@@ -9,6 +9,7 @@ mod blob;
 mod display;
 mod flash;
 mod hooks;
+mod ignored;
 mod memory;
 mod raster;
 mod run;
@@ -20,10 +21,10 @@ use std::sync::Mutex;
 
 use gbcli_core::{
     ApuState, ApuWrite, AudioCapture, AudioSamples, BootRom, Budget, BudgetKind, CartClock,
-    ColorMode, Core, CoreConfig, CoreError, CoreInfo, Feature, FrameRef, HaltWake, IoReg,
-    JoypadBounce, Keys, LayerMap, LcdOff, LiveFrame, Model, PpuMode, PpuStatus, Region, RegionView,
-    Registers, Rendering, RtcMode, RunRequest, SavClock, StepUnit, Stop, StopReason, Support,
-    Ticks, WriteTracking, WrittenView,
+    ColorMode, Core, CoreConfig, CoreError, CoreInfo, Feature, FrameRef, HaltWake, IgnoredWrites,
+    IoReg, JoypadBounce, Keys, LayerMap, LcdOff, LiveFrame, Model, PpuMode, PpuStatus, Region,
+    RegionView, Registers, Rendering, RtcMode, RunRequest, SavClock, StepUnit, Stop, StopReason,
+    Support, Ticks, WriteTracking, WrittenView,
 };
 use sameboy_sys as sb;
 
@@ -117,6 +118,7 @@ impl SameBoy {
             sb::GB_set_pixels_output(raw, (*hooks.as_ptr()).screen.as_mut_ptr());
             sb::GB_set_vblank_callback(raw, Some(hooks::on_vblank));
             sb::GB_set_lcd_status_callback(raw, Some(raster::on_lcd_status));
+            sb::gbcli_set_ignored_write_callback(raw, Some(ignored::on_ignored_write));
             sb::GB_set_rendering_disabled(raw, !rendering);
             sb::GB_load_boot_rom_from_buffer(raw, boot_rom.as_ptr(), boot_rom.len());
             sb::GB_load_rom_from_buffer(raw, config.rom.as_ptr(), config.rom.len());
@@ -446,6 +448,20 @@ impl Core for SameBoy {
             .lcd_off_log
             .as_mut()
             .map(std::mem::take)
+            .unwrap_or_default())
+    }
+
+    fn set_ignored_write_log(&mut self, on: bool) -> Result<(), CoreError> {
+        self.hooks_mut().ignored_log = on.then(Default::default);
+        Ok(())
+    }
+
+    fn take_ignored_writes(&mut self) -> Result<Vec<IgnoredWrites>, CoreError> {
+        Ok(self
+            .hooks_mut()
+            .ignored_log
+            .as_mut()
+            .map(|log| log.take())
             .unwrap_or_default())
     }
 

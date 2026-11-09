@@ -11,16 +11,22 @@ gbcli's repository, run by its tests. Rules behind them: gbcli help hardware.
 VRAM write during mode 3
   Symptom  a tile or map byte keeps its old value: the PPU owns VRAM in mode
            3 and ignores the write
-  See it   gbcli run --frames 2 --read '[$8000]' (the byte you wrote). To
-           catch the write that was dropped, watch the byte and stop only
-           when it didn't take the value written (checked after the write):
+  See it   gbcli run warns: 1 VRAM write ignored in mode 3, first at $017A
+           (Dropped), line 10 of frame 0, counting every write the run made
+           that the PPU ignored (OAM written in modes 2-3 warns the same
+           way; every field is in --json). To prove a whole copy safe, run
+           past it: no warning means no write was dropped. A watch covers
+           one byte; to stop on a dropped write, watch it and stop only when
+           it didn't take the value written (checked after the write):
            gbcli watch write '$8000' --if '[$8000] != new', then gbcli run;
            the stop's writer_pc= is the instruction. Checking STAT before
            the write misses some: one that starts at the end of mode 2 lands
            in mode 3. (IO writes: gbcli run --raster prints the mode each
            one landed in; gbcli recipes, HBlank)
   Fix      write VRAM in VBlank or with the LCD off; mid-frame, wait for STAT
-           mode 0 or 1 first, and keep the write within that mode
+           mode 0 or 1 first, and keep the write within that mode. To test
+           for VBlank, use the mode (STAT bits 0-1; mode == 1 in a gbcli
+           condition), not LY > 143: LY reads 0 through most of line 153
   Docs     https://gbdev.io/pandocs/Accessing_VRAM_and_OAM.html#accessing-vram-and-oam
   Demo     crates/gbcli/tests/traps/vram_mode3.asm
 
@@ -82,6 +88,12 @@ mod tests {
             }
             let docs = trap.lines().find(|l| l.trim().starts_with("Docs")).unwrap();
             assert!(docs.contains("https://") && docs.contains('#'), "{docs}");
+        }
+        // The VRAM trap proves a whole copy in one run, and warns off LY as
+        // a VBlank test (the raycaster review, leaf si5fnG).
+        let vram = TRAPS.split("\n\n").nth(1).unwrap();
+        for part in ["prove a whole copy safe", "line 153", "mode == 1"] {
+            assert!(vram.contains(part), "{part:?}:\n{vram}");
         }
         for line in TRAPS.lines() {
             assert!(

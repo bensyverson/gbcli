@@ -57,6 +57,10 @@ pub enum Feature {
     /// A log of the LCD being turned off during a run, with the line it was
     /// on (`Core::set_lcd_off_log`).
     LcdOffLog,
+    /// A log of the program's writes the PPU ignored during a run (VRAM in
+    /// mode 3, OAM in modes 2-3), counted, with the first of each kind
+    /// (`Core::set_ignored_write_log`).
+    IgnoredWriteLog,
     /// A flash-save cart: the CPU's command writes reach a modeled flash
     /// chip (`CoreConfig::flash`, `Core::flash_contents`).
     FlashCart,
@@ -76,6 +80,7 @@ impl Feature {
             Feature::ApuChannels => "apu_channels",
             Feature::ApuWriteLog => "apu_write_log",
             Feature::LcdOffLog => "lcd_off_log",
+            Feature::IgnoredWriteLog => "ignored_write_log",
             Feature::AudioSamples => "audio_samples",
             Feature::WriteHookCoversDma => "write_hook_covers_dma",
             Feature::CartRamWrites => "cart_ram_writes",

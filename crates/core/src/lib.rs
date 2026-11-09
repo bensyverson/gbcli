@@ -28,8 +28,8 @@ pub use region::{
     FrameRef, FrameTag, Layer, LayerMap, Pixels, Region, RegionView, VblankKind, WrittenView,
 };
 pub use run::{
-    Budget, BudgetKind, CpuStep, Event, EventKinds, EventSink, FirstStep, InStop, LcdOff, PpuMode,
-    RunRequest, StepUnit, Usage,
+    Budget, BudgetKind, CpuStep, Event, EventKinds, EventSink, FirstStep, IgnoredWriteKind,
+    IgnoredWrites, InStop, LcdOff, PpuMode, RunRequest, StepUnit, Usage,
 };
 pub use state::{
     BootRom, CoreConfig, CoreInfo, HaltWake, IoReg, JoypadBounce, Keys, Model, PpuStatus,
@@ -169,6 +169,26 @@ pub trait Core {
         Err(CoreError::Unsupported {
             feature: Feature::LcdOffLog,
             reason: "this core can't report the LCD turning off",
+        })
+    }
+    /// Turns the ignored-write log on or off ([`Feature::IgnoredWriteLog`]).
+    /// While on, every run counts the program's writes the PPU ignores
+    /// (VRAM in mode 3, OAM in modes 2-3), keeping the first of each kind.
+    /// Off by default; turning it off drops what wasn't taken. The default
+    /// is for a core without it.
+    fn set_ignored_write_log(&mut self, _on: bool) -> Result<(), CoreError> {
+        Err(CoreError::Unsupported {
+            feature: Feature::IgnoredWriteLog,
+            reason: "this core can't report writes the PPU ignored",
+        })
+    }
+    /// What the log counted since it was turned on or last taken: at most
+    /// one entry a kind, VRAM first. A load drops it: it belongs to the
+    /// timeline it replaced.
+    fn take_ignored_writes(&mut self) -> Result<Vec<IgnoredWrites>, CoreError> {
+        Err(CoreError::Unsupported {
+            feature: Feature::IgnoredWriteLog,
+            reason: "this core can't report writes the PPU ignored",
         })
     }
     /// Starts rendering audio samples, at [`AudioCapture::SAMPLE_RATE`] with

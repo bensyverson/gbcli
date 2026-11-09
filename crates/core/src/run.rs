@@ -295,6 +295,36 @@ pub struct LcdOff {
     pub frame: u64,
 }
 
+/// Which memory a write the PPU ignored was aimed at.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum IgnoredWriteKind {
+    /// VRAM ($8000-$9FFF), which the PPU owns in mode 3.
+    Vram,
+    /// OAM ($FE00-$FE9F), which the PPU owns in modes 2 and 3.
+    Oam,
+}
+
+/// The CPU writes of one kind the PPU ignored during a run, counted
+/// exactly, and the first of them
+/// ([`Feature::IgnoredWriteLog`](crate::Feature::IgnoredWriteLog)).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct IgnoredWrites {
+    pub kind: IgnoredWriteKind,
+    /// How many, the first included.
+    pub count: u64,
+    /// The PC of the instruction that made the first.
+    pub pc: u16,
+    /// The address the first was aimed at.
+    pub addr: u16,
+    /// The PPU's line when the first landed.
+    pub line: u8,
+    /// The start of the first's step.
+    pub at: Ticks,
+    /// The [`FrameTag`](crate::FrameTag) number of the last complete frame
+    /// when the first happened, as [`LcdOff::frame`] counts.
+    pub frame: u64,
+}
+
 /// Receives events during a run. Must not call back into the core.
 pub trait EventSink {
     fn kinds(&self) -> EventKinds;

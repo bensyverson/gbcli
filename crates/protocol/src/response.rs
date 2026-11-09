@@ -185,6 +185,10 @@ pub struct ResultBody {
     /// Key events the run stopped before reaching (design §11 step 3).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub keys_unapplied: Option<Vec<KeyEvent>>,
+    /// A run's or step's writes the PPU ignored, one row a kind, VRAM
+    /// first; absent when there were none. Each row is a warning too.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ignored_writes: Option<Vec<crate::IgnoredWritesRow>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checkpoint: Option<CheckpointMade>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

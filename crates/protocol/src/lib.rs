@@ -11,6 +11,7 @@ mod error;
 mod font;
 mod font_author;
 mod hex;
+mod ignored;
 mod images;
 mod keys;
 mod listing;
@@ -61,6 +62,7 @@ pub use font_author::{
     FontImportArgs, FontNewArgs, FontOverlap, FontSaveArgs, FontWritten, GlyphChange,
     GlyphChangeKind,
 };
+pub use ignored::IgnoredWritesRow;
 pub use images::{
     Flip, GbcImage, GbcImagesMade, ImageArt, ImageAsset, ImageKind, ImageLimit, ImageProblem,
     ImagesMade, KnownPalette, NotPaletteSlot, ObjectSize, PaletteSlot, ShadeChoice, ShadeRule,

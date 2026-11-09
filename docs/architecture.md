@@ -8,7 +8,7 @@ Add a crate or a major capability here when you build it; keep the head of `AGEN
 
 - **`crates/core` (`gbcli-core`)**: the `Core` trait, our own seam over any emulator backend, and its types (`CoreConfig`, cart clocks, flash notes).
 - **`crates/sameboy-sys`**: vendored SameBoy, built by the `cc` crate, with hand-written FFI and the small C accessors in `shim/`. The vendored commit, compile flags and patches: [project/2026-11-06-sameboy-vendoring.md](../project/2026-11-06-sameboy-vendoring.md).
-- **`crates/sameboy` (`gbcli-sameboy`)**: the SameBoy backend implementing `Core`: bank-aware filters, never-written tracking, the checkpoint blob, and a flash chip on flash-save carts.
+- **`crates/sameboy` (`gbcli-sameboy`)**: the SameBoy backend implementing `Core`: bank-aware filters, never-written tracking, the checkpoint blob, a flash chip on flash-save carts, and the logs behind a run's hardware warnings (the LCD turned off outside VBlank; VRAM and OAM writes the PPU ignored, counted exactly through a SameBoy patch), whose wording the engine owns.
 - **`crates/flash` (`gbcli-flash`)**: an AMD/JEDEC flash-chip model for flash-save carts such as GB Studio's batteryless saves, parameterized by board (unlock addresses, D0/D1 swap, sector map, /WE pin, chip size, busy times) with named profiles from FlashGBX's database; commands that miss the board become `FlashNote`s, and mask-ROM programs that send flash commands get a hint. A session takes a board with `--flash BOARD` (`gbcli help flash`; [project/2026-11-07-flash-model.md](../project/2026-11-07-flash-model.md)).
 
 ## The engine and the session

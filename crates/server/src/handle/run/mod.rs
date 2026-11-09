@@ -14,10 +14,11 @@ mod raster;
 
 use gbcli_bundle::{SessionStore, validate_checkpoint_name};
 use gbcli_core::Budget;
+use gbcli_engine::cond::EvalWarning;
 use gbcli_engine::{DebugError, EventTap, FrameSink, KeyTimeline, Machine, Outcome, RunOptions};
 use gbcli_protocol::{
-    ErrorBody, ErrorCode, FlashNoteRow, KeyEvent, Location, ResultBody, RunArgs, SessionFile,
-    StepArgs, StepKind, StopReason, StopRecord, WavChannels,
+    ErrorBody, ErrorCode, FlashNoteRow, IgnoredWritesRow, KeyEvent, Location, ResultBody, RunArgs,
+    SessionFile, StepArgs, StepKind, StopReason, StopRecord, WavChannels,
 };
 
 use super::history::write_checkpoint;
@@ -212,6 +213,7 @@ impl Handler {
         outcome.stop.budget.limits = limits;
         outcome.stop.budget.defaulted = defaulted;
         warnings.extend(outcome.warnings.iter().map(warning_text));
+        let ignored_writes = ignored_rows(&outcome.warnings);
         let flash_notes = report_flash(&mut machine, warnings)?;
 
         let stop = outcome.stop;
@@ -314,6 +316,7 @@ impl Handler {
             audio: sound,
             oam_log: oam_made,
             keys_unapplied,
+            ignored_writes,
             checkpoint,
             writes: (!writes.is_empty()).then_some(writes),
             flash_notes: flash_notes.clone(),
@@ -422,6 +425,7 @@ impl Handler {
         };
         let guarded = self.guarded(&mut outcome);
         warnings.extend(outcome.warnings.iter().map(warning_text));
+        let ignored_writes = ignored_rows(&outcome.warnings);
         let flash_notes = report_flash(&mut machine, warnings)?;
         let stop = outcome.stop;
         let change = HeadChange {
@@ -437,10 +441,32 @@ impl Handler {
         }
         Ok(ResultBody {
             stop: Some(stop),
+            ignored_writes,
             flash_notes,
             ..ResultBody::default()
         })
     }
+}
+
+/// The writes the PPU ignored among a run's warnings, as rows: every field
+/// of those warnings, which the text carries too.
+fn ignored_rows(warnings: &[EvalWarning]) -> Option<Vec<IgnoredWritesRow>> {
+    let rows: Vec<IgnoredWritesRow> = warnings
+        .iter()
+        .filter_map(|w| match w {
+            EvalWarning::WritesIgnored(found) => Some(IgnoredWritesRow {
+                kind: found.kind,
+                count: found.count,
+                pc: found.pc,
+                symbol: found.symbol.clone(),
+                addr: found.addr,
+                line: found.line,
+                frame: found.frame,
+            }),
+            _ => None,
+        })
+        .collect();
+    (!rows.is_empty()).then_some(rows)
 }
 
 /// Takes the flash notes the machine took, a mask-ROM cart's hint too

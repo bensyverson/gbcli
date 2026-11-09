@@ -36,5 +36,6 @@ mod profile;
 mod profile_accounting;
 mod raster;
 mod rgbasm;
+mod truth_positions;
 mod until;
 mod watch_targets;

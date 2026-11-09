@@ -66,10 +66,11 @@ fn indent_of(line: &str) -> &str {
     &line[..line.len() - line.trim_start_matches([' ', '\t']).len()]
 }
 
-/// Whether an indented line's content opens a glyph's rows.
+/// Whether an indented line's content opens a glyph's rows: nothing but
+/// `.` and `@` (a value line may start with `.`), or `-`.
 fn opens_rows(line: &str) -> bool {
     let content = line.trim();
-    content.starts_with(['.', '@']) || content == "-"
+    content == "-" || (!content.is_empty() && content.chars().all(|c| matches!(c, '.' | '@')))
 }
 
 /// A property key: ASCII letters, digits, `_`, `-` and `.`.

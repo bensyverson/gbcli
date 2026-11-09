@@ -374,6 +374,11 @@ fn check_bare_ram_symbols(e: &Expr, text: &str) -> Result<(), ExprError> {
             }
             check_bare_ram_symbols(inner, text)
         }
+        // An address is arithmetic too: `[wTable + !wFrame]` takes a truth.
+        Expr::Read {
+            place: Place::Cpu(address),
+            ..
+        } => check_bare_ram_symbols(address, text),
         _ => Ok(()),
     }
 }

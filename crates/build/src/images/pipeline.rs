@@ -79,7 +79,8 @@ pub(crate) fn convert(
             return Ok(None);
         }
         let stops = made.first_error().is_some();
-        let generated = if stops {
+        // A warning alone, with no fonts, generates nothing, as before fonts.
+        let generated = if stops || fonts.is_empty() {
             None
         } else {
             let shared = emit::Shared {

@@ -58,6 +58,8 @@ What: read SameBoy's HuC3 and TPP1 clock footers on `power-cycle --sav` without 
 
 What: sprite sheets of 8x8 objects (today `assets/sprites/` is 8x16 only, as the leaf specified), and a configurable reserve of tiles for an engine's font or HUD in the `vram_tiles` and `bg_tiles_map` checks. Why parked: both need a per-project setting, and `build` has no build file by design; neither has been asked for. Un-park when a user or the agent eval needs 8x8 sprites, or a starter grows a font that the image budget must leave room for (then decide where the setting lives: a directory such as `assets/sprites8/`, a name suffix, or a flag).
 
+> **2026-11-09 (leaf RDlaLo): the starter now has a font.** `gbcli new` draws a line of text into a fixed 20-tile line buffer, tiles 236-255, which the image checks don't count; `gbcli help fonts` and the starter document it. Per design question 9 the reserve stays parked: the next check that miscounts because of it un-parks this.
+
 ## 2026-11-07 — Image checks at runtime and a preview of a failing image
 
 What: the objects-per-line check from OAM during a run ("frame 120, line 64: 12 objects; 2 will not draw", research doc, `obj_per_line`), and a preview drawn from gbcli's own analysis when an image fails its checks (today only converted images get one; a problem names its tiles instead). Why parked: the build-time checks answer the asset question; the runtime one belongs with the OAM views, and a failing image's tiles are already listed. Un-park when an agent misses a flicker the build-time check can't see (sprites from several sheets on one line), or asks to see a failing image.

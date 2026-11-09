@@ -28,6 +28,8 @@ fn the_starter_builds_a_fixed_rom_with_its_sym_and_map() {
             "demo/src/main.asm",
             "demo/src/music.asm",
             "demo/src/oam_dma.asm",
+            "demo/src/text.asm",
+            "demo/build/images/images.asm",
             "demo/build/music/theme.asm",
         ]
     );
@@ -459,7 +461,15 @@ fn the_layout_can_be_overridden_and_sources_are_found_in_subdirectories() {
     options.include = vec![PathBuf::from("inc")];
     options.out = Some(PathBuf::from("out/game.gb"));
     let made = build(&rgbds(), &options).unwrap();
-    assert_eq!(made.sources, ["code/main.asm", "code/sub/oam_dma.asm"]);
+    assert_eq!(
+        made.sources,
+        [
+            "code/main.asm",
+            "code/sub/oam_dma.asm",
+            "code/text.asm",
+            "build/images/images.asm"
+        ]
+    );
     let paths: Vec<_> = made.outputs.iter().map(|o| o.path.as_str()).collect();
     assert_eq!(paths, ["out/game.gb", "out/game.sym", "out/game.map"]);
 }
@@ -487,7 +497,15 @@ fn a_source_directory_outside_the_project_keeps_its_objects_in_the_project() {
     found.sort();
     assert_eq!(
         found,
-        ["hUGEDriver.o", "main.o", "music.o", "oam_dma.o", "theme.o"]
+        [
+            "hUGEDriver.o",
+            "images.o",
+            "main.o",
+            "music.o",
+            "oam_dma.o",
+            "text.o",
+            "theme.o"
+        ]
     );
 }
 
@@ -585,7 +603,7 @@ fn a_tool_that_fails_without_a_diagnostic_still_reports_one() {
     );
     let fake = Toolchain::discover(Some(&path), &temp.0).unwrap();
     let made = failed(build(&fake, &options));
-    assert_eq!(made.diagnostics.len(), 5, "one per source");
+    assert_eq!(made.diagnostics.len(), 7, "one per source");
     let error = &made.diagnostics[1];
     assert_eq!(error.tool, Tool::Rgbasm);
     assert_eq!(error.file.as_deref(), Some("demo/src/main.asm"));

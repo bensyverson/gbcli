@@ -102,7 +102,8 @@ fn a_background_becomes_tiles_a_tilemap_and_an_include_with_a_preview() {
 
 #[test]
 fn a_project_without_images_reports_none_and_builds_as_before() {
-    let (_temp, options) = starter("bg-none");
+    let (temp, options) = starter("bg-none");
+    crate::common::without_text(&temp.path("demo"));
     let made = build(&rgbds(), &options).unwrap();
     assert_eq!(made.images, None);
     assert!(

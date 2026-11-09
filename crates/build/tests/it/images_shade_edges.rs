@@ -405,6 +405,7 @@ fn a_malformed_palette_is_refused_without_images() {
 #[test]
 fn a_good_palette_without_images_builds_as_before() {
     let (temp, options) = starter("edge-pal-noimg-ok");
+    crate::common::without_text(&temp.path("demo"));
     fs::write(
         temp.path("demo/assets/palettes.txt"),
         "dmg: #ffffff #aaaaaa #555555 #000000\nforest: #fff #8c4 #363 #021\n",

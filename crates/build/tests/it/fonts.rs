@@ -48,6 +48,7 @@ fn main_font(temp: &Temp) {
         ("\"heart\"", HEART),
         ("'\"'", QUOTE),
     ]);
+    common::without_text(&temp.path("demo"));
     fs::create_dir_all(temp.path("demo/assets/fonts")).unwrap();
     fs::write(temp.path("demo/assets/fonts/main.yaff"), text).unwrap();
 }

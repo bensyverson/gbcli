@@ -33,7 +33,7 @@ const TEST_SONG_EXPORT: &str = "tests/data/every_effect_but_6xx.asm";
 fn rom_with_asm(temp: &Temp, name: &str, asm: &[u8]) -> Vec<u8> {
     let (_keep, mut options) = starter(name);
     let project = options.project.clone();
-    fs::remove_dir_all(project.join("assets")).unwrap();
+    fs::remove_dir_all(project.join("assets/music")).unwrap();
     fs::write(project.join("src/song.asm"), asm).unwrap();
     options.display_base = temp.0.clone();
     build(&rgbds(), &options).unwrap();
@@ -332,7 +332,9 @@ fn one_changed_note_diverges_in_its_sound_register_writes() {
     // player's first write (MusicInit turning the APU on). The divergence's
     // ticks count from the handover, the write log's from power-on.
     let handover = booted(&a).core().now().0;
-    let start = player::play(&a, 1).writes[0].at.0;
+    // Three frames: the starter draws its line of text, with the LCD off
+    // for most of a frame, before MusicInit (leaf RDlaLo).
+    let start = player::play(&a, 3).writes[0].at.0;
     let at = (handover + d.ticks - start) as f64 / f64::from(1 << 23);
     assert!((5.95..6.1).contains(&at), "{at} s");
 }

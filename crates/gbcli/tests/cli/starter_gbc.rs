@@ -117,8 +117,10 @@ fn gbc_register_writes(p: &Project, model: &str) -> Vec<String> {
         model,
         "--model",
         model,
+        // Drawing its line of text keeps the LCD off for most of a frame
+        // before the color path runs (leaf RDlaLo), so 2 frames end too soon.
         "--frames",
-        "2",
+        "3",
         "--raster",
         "--json",
     ]);

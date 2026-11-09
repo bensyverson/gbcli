@@ -55,6 +55,11 @@ const FILES: &[(&str, &str)] = &[
     HUGEDRIVER[2],
     ("src/music.asm", include_str!("../templates/music.asm")),
     ("assets/music/theme.song", gbcli_music::EXAMPLE),
+    ("src/text.asm", include_str!("../templates/text.asm")),
+    (
+        "assets/fonts/main.yaff",
+        include_str!("../templates/main.yaff"),
+    ),
 ];
 
 impl NewError {

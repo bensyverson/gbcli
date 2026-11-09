@@ -101,3 +101,41 @@ font_text, with line= and column=.
 in glyph-number order, each with key, width, 8 row bytes (by rule 3) and
 origin (drawn), and fixed. Its request's `glyphs` names the characters
 wanted from each font (by its path, fonts/NAME.yaff), with no cap.
+
+The starter's renderer: `gbcli new` writes src/text.asm, a font drawn for
+gbcli (assets/fonts/main.yaff: the 95 printable ASCII characters, 2-6 px wide,
+glyph n is ASCII 32 + n), and one line drawn with them in src/main.asm.
+  TextDraw       in: hl a string (MAIN_FONT_CHARMAP text, 0), de the line's
+                 first tile, b ink and c paper (shades 0-3). Draws by the rules
+                 above up to MAIN_FONT_END or MAIN_FONT_NEWLINE, papering each
+                 tile as the line reaches it. Out: a the tiles touched,
+                 (width + 7) / 8; hl past the end (after a NEWLINE, the next
+                 line's string). Tiles past the line keep what they held.
+  TextLoadTiles  in: de glyph rows (MainFontGlyphs + 8 * n), hl the first tile,
+                 a how many, b ink, c paper. Each glyph becomes a tile, at its
+                 left edge: a fixed-width font for text written straight into
+                 the tilemap (MAIN_FONT_CHARMAP hud, $80 for tiles from $80).
+Both write tiles: VRAM only with the LCD off, else a WRAM buffer copied in
+VBlank (`gbcli help traps`). The font is in ROMX: with an MBC, switch to
+BANK(MainFontGlyphs) first. The starter keeps 20 tiles, 236-255 (a line the
+screen's width), as its line buffer, at map row 11. The image checks don't
+count them: keep a background's tiles below 236, or move the buffer.
+
+Cost: TextDraw takes 517-948 M-cycles a glyph, so at most 950 M-cycles a glyph,
+about 5% of a frame (every glyph of main.yaff at two pen offsets: gbcli measure
+TextDraw.glyph..TextDraw.glyph --iterations 191). The width hardly matters;
+the most is a glyph that crosses into a tile the line hasn't reached. The
+starter's 16-glyph line takes 11,112 (63% of a frame), once, with the LCD off.
+
+The typewriter (a recipe: one character a step, as a dialogue box prints):
+  1. Draw the whole line once into a WRAM buffer (TextDraw with de in WRAM, so
+     the LCD stays on), and paper the line's tiles in VRAM.
+  2. Keep the revealed width in WRAM, from 0. Each step (a frame, or every
+     few), read the string's next byte k (stop at MAIN_FONT_END) and add the
+     glyph's width, [MainFontWidths + k].
+  3. In VBlank, copy the tiles from the one holding the glyph's first pixel
+     to the one holding its last: whole if the tile ends at or before the
+     revealed width, else each byte ANDed with $FF << (8 - width % 8), which
+     leaves later glyphs unshown (for paper shade 0; another paper also ORs
+     the mask's complement into the planes paper sets). At most 2 tiles, 32
+     bytes, well inside VBlank's 1,140 M-cycles.

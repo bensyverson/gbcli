@@ -65,6 +65,36 @@ fn the_starter_song_is_the_help_topics_example() {
     assert!(player.contains("song_theme"), "{player}");
 }
 
+/// The starter's font: the 95 printable ASCII characters in code order,
+/// so glyph n is ASCII 32 + n, each with its spacing drawn in (its last
+/// column paper), in canonical YAFF, so a rewrite by `gbcli font` leaves
+/// it as it is.
+#[test]
+fn the_starter_font_is_printable_ascii_in_order_with_spacing_drawn_in() {
+    let temp = Temp::new("new-font");
+    new_project(&temp.path("demo"), &temp.0).unwrap();
+    let text = fs::read_to_string(temp.path("demo/assets/fonts/main.yaff")).unwrap();
+    let font = gbcli_font::read(&text).unwrap();
+    let keys: Vec<String> = font.glyphs.iter().map(|g| g.key.charmap()).collect();
+    let ascii: Vec<String> = (32u8..127).map(|c| char::from(c).to_string()).collect();
+    assert_eq!(keys, ascii);
+    for g in &font.glyphs {
+        let last = 0x80u8 >> (g.width - 1);
+        assert!(
+            g.rows.iter().all(|r| r & last == 0),
+            "{:?}: its last column holds ink",
+            g.key
+        );
+        // Every glyph but the space draws something.
+        assert_eq!(g.rows.iter().all(|&r| r == 0), g.key.charmap() == " ");
+    }
+    assert_eq!(gbcli_font::write(&font), text, "canonical YAFF");
+    let text_asm = fs::read_to_string(temp.path("demo/src/text.asm")).unwrap();
+    for routine in ["TextDraw::", "TextLoadTiles::"] {
+        assert!(text_asm.contains(routine), "{routine}");
+    }
+}
+
 #[test]
 fn new_writes_the_starter_and_says_what_to_run_next() {
     let temp = Temp::new("new-writes");
@@ -84,6 +114,8 @@ fn new_writes_the_starter_and_says_what_to_run_next() {
             "demo/src/hUGEDriver.asm",
             "demo/src/music.asm",
             "demo/assets/music/theme.song",
+            "demo/src/text.asm",
+            "demo/assets/fonts/main.yaff",
             "demo/.gbcli/",
         ]
     );

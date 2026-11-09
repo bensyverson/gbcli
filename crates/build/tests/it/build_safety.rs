@@ -314,6 +314,8 @@ fn a_symlink_loop_under_src_is_followed_once() {
             "demo/src/main.asm",
             "demo/src/music.asm",
             "demo/src/oam_dma.asm",
+            "demo/src/text.asm",
+            "demo/build/images/images.asm",
             "demo/build/music/theme.asm",
         ]
     );

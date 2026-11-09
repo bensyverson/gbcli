@@ -221,9 +221,12 @@ fn code_in_a_ram_section_is_one_row_with_its_lines_and_a_remedy_naming_a_rom_sec
             "diagnostic severity=error tool=rgbasm file=game/src/main.asm line={first} \
              lines={first}-{last} count=5 message=\"Section \\\"W\\\" cannot contain code or \
              data (not `ROM0` or `ROMX`)\"\n\
+             font source=game/assets/fonts/main.yaff label=Main glyphs=95 fixed=0\n\
+             images include=game/build/images/images.inc converted=0 fonts=1 errors=0 \
+             warnings=0\n\
              song path=game/assets/music/theme.song asm=game/build/music/theme.asm \
              descriptor=song_theme\n\
-             build rgbds=1.0.4 target=dmg sources=5 errors=1 warnings=0\n"
+             build rgbds=1.0.4 target=dmg sources=7 errors=1 warnings=0\n"
         ),
         "{}",
         rows.stdout

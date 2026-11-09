@@ -31,5 +31,6 @@ mod serve;
 mod serve_bare;
 mod song;
 mod starter_gbc;
+mod starter_text;
 mod traps;
 mod verbs;

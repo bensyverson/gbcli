@@ -3,6 +3,18 @@
 ; include path, and links them into build/<project>.gb with .sym and .map.
 
 include "hardware.inc"                ; every register, plus PAD_* (and B_PAD_*) for a joypad byte with the D-pad in bits 4-7
+include "images.inc"                  ; made by `gbcli build` from assets/: here, the font
+
+	; The charmap `text`: a string's characters as the font's glyph numbers,
+	; which text.asm's TextDraw reads (`gbcli help fonts`).
+	MAIN_FONT_CHARMAP text, 0
+
+; The line buffer: 20 tiles, the screen's width, kept for one line of text
+; at the top of the BG's tiles (236-255, so images loaded from low tile
+; numbers can't reach it), shown at map row 11.
+DEF LINE_FIRST_TILE EQU 236
+DEF LINE_TILES EQU 20
+DEF LINE_ROW EQU 11
 
 ; ---------------------------------------------------------------------------
 ; Restart vectors ($0000-$003F), claimed so rgblink can't place other code
@@ -102,6 +114,26 @@ ENDC
 	ld [hli], a
 	dec b
 	jr nz, .faces
+
+	; A line of text below the faces: the line buffer papered (shade 0) and
+	; mapped across row 11, then the string drawn from its tile 5, 40 px in,
+	; in shade 3. With the LCD off, TextDraw may write VRAM directly.
+	ld hl, TILEBLOCK0 + LINE_FIRST_TILE * 16
+	ld bc, LINE_TILES * 16
+	call ClearMem
+	ld hl, TILEMAP0 + LINE_ROW * 32
+	ld b, LINE_TILES
+	ld a, LINE_FIRST_TILE
+.lineMap
+	ld [hli], a
+	inc a
+	dec b
+	jr nz, .lineMap
+	ld hl, Hello
+	ld de, TILEBLOCK0 + (LINE_FIRST_TILE + 5) * 16
+	ld b, 3                     ; ink
+	ld c, 0                     ; paper
+	call TextDraw
 
 	; One sprite: the face, near the top. Shadow OAM is copied to OAM by
 	; the VBlank handler, so the program only ever writes wShadowOAM.
@@ -288,6 +320,13 @@ CopyMem:
 	or c
 	jr nz, CopyMem
 	ret
+
+; The line, in the charmap `text`. A character the font lacks is rgbasm's
+; warning (Unmapped character): draw it in assets/fonts/main.yaff.
+Hello:
+	PUSHC text
+	db "Hello, Game Boy!", MAIN_FONT_END
+	POPC
 
 FaceTile:
 	dw `00333300

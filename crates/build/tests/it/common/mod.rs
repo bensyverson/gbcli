@@ -81,7 +81,7 @@ pub fn starter(name: &str) -> (Temp, BuildOptions) {
 /// Takes the music out of a starter at `project`: the song, the player,
 /// hUGEDriver and main.asm's calls into the player.
 pub fn without_music(project: &Path) {
-    fs::remove_dir_all(project.join("assets")).unwrap();
+    fs::remove_dir_all(project.join("assets/music")).unwrap();
     for file in ["src/music.asm", "src/hUGEDriver.asm"] {
         fs::remove_file(project.join(file)).unwrap();
     }
@@ -92,6 +92,29 @@ pub fn without_music(project: &Path) {
         .filter(|l| !l.contains("call Music"))
         .map(|l| format!("{l}\n"))
         .collect();
+    fs::write(&main, text).unwrap();
+}
+
+/// Takes the text out of a starter at `project`: its font, text.asm and
+/// main.asm's line of text, for a project with no font (or a test's own
+/// `main.yaff`, whose glyphs the starter's string would miss).
+pub fn without_text(project: &Path) {
+    fs::remove_dir_all(project.join("assets/fonts")).unwrap();
+    fs::remove_file(project.join("src/text.asm")).unwrap();
+    let main = project.join("src/main.asm");
+    let mut text = fs::read_to_string(&main).unwrap();
+    for (from, to) in [
+        ("include \"images.inc\"", "MAIN_FONT_CHARMAP text, 0\n"),
+        ("\t; A line of text below the faces", "\tcall TextDraw\n"),
+        ("; The line, in the charmap", "\tPOPC\n"),
+    ] {
+        let start = text
+            .find(from)
+            .unwrap_or_else(|| panic!("{from:?} in main.asm"));
+        let end = start + text[start..].find(to).unwrap() + to.len();
+        text.replace_range(start..end, "");
+    }
+    assert!(!text.contains("Text") && !text.contains("FONT"), "{text}");
     fs::write(&main, text).unwrap();
 }
 

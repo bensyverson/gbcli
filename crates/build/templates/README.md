@@ -56,6 +56,13 @@ was running has moved; otherwise it says what moved.
 - `src/music.asm`: starts the song and ticks the driver, once a frame or
   from the timer when the song turns it on. To play another song, change
   `song_theme` there.
+- `assets/fonts/main.yaff`: the font, as text, drawn for gbcli: the 95
+  printable ASCII characters, 2-6 px wide (`gbcli help fonts`; check a
+  string's width with `gbcli font assets/fonts/main.yaff --sample "Hi"`).
+- `src/text.asm`: `TextDraw` sets a string in the font, variable width,
+  into a run of tiles; `TextLoadTiles` loads glyphs as tiles for text
+  written straight into the tilemap. `main.asm` draws one line with
+  `TextDraw` into tiles 236-255, its line buffer, shown at map row 11.
 - `src/hUGEDriver.asm`, `include/hUGE.inc`, `include/hUGE_note_table.inc`:
   hUGEDriver (public domain), the player hUGETracker songs are written for.
   It costs about 1.9 KB of ROM0, 100 bytes of WRAM and 2,500-5,900 cycles a

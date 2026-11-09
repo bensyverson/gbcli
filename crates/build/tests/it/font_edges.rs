@@ -172,6 +172,7 @@ fn a_charlist_over_the_cap_is_refused() {
 #[test]
 fn no_images_no_fonts_and_an_old_palette_file_generate_nothing() {
     let (temp, options) = starter("review-fonts-nofont");
+    crate::common::without_text(&temp.path("demo"));
     fs::write(
         temp.path("demo/assets/palette.txt"),
         "#FFFFFF #AAAAAA #555555 #000000\n",

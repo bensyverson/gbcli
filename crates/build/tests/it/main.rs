@@ -45,3 +45,4 @@ mod player;
 mod pngs;
 mod rom_banks;
 mod scaffold;
+mod text;

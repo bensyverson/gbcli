@@ -76,7 +76,7 @@ pub(crate) fn log_write(gb: *mut sb::GB_gameboy_t, hooks: &mut Hooks, addr: u16,
 
 /// The mode STAT would read now, where SameBoy's display state says it
 /// without being run.
-fn ppu_mode(gb: *mut sb::GB_gameboy_t) -> Option<PpuMode> {
+pub(crate) fn ppu_mode(gb: *mut sb::GB_gameboy_t) -> Option<PpuMode> {
     // SAFETY: a side-effect-free accessor on the live instance.
     match unsafe { sb::gbcli_ppu_mode(gb) } {
         0 => Some(PpuMode::HBlank),

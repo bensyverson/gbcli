@@ -96,8 +96,9 @@ bool gbcli_ppu_batched(GB_gameboy_t *gb) { return gb->display_cycles > 0; }
 //   - state 5, the OAM scan: 80 dots of mode 2, so it is still mode 2;
 //   - state 3, mode 3's start, by mode3_batching_length: that length is
 //     exact (167 + SCX % 8, no objects or window), so it is still mode 3;
-//     or 300, an upper bound where mode 3 has objects but no HBlank interrupt
-//     can be seen, so it is mode 3 only before the shortest mode 3 could end.
+//     or 300, an upper bound where mode 3 has objects or the window but no
+//     HBlank interrupt can be seen, so it is mode 3 only before the shortest
+//     mode 3 could end.
 // No PPU register write happens inside a batch: each one syncs the display.
 int gbcli_ppu_mode(GB_gameboy_t *gb)
 {

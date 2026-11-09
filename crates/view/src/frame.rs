@@ -44,12 +44,13 @@ pub(crate) fn describe_tag(tag: &FrameTag) -> String {
     format!("complete frame {} (vblank {kind})", tag.number)
 }
 
-fn mode_name(mode: PpuMode) -> &'static str {
+fn mode_name(mode: Option<PpuMode>) -> &'static str {
     match mode {
-        PpuMode::HBlank => "hblank",
-        PpuMode::VBlank => "vblank",
-        PpuMode::OamScan => "oam_scan",
-        PpuMode::Drawing => "drawing",
+        Some(PpuMode::HBlank) => "hblank",
+        Some(PpuMode::VBlank) => "vblank",
+        Some(PpuMode::OamScan) => "oam_scan",
+        Some(PpuMode::Drawing) => "drawing",
+        None => "mode unknown",
     }
 }
 
@@ -136,5 +137,36 @@ impl Frame {
         }
         .label(LabelKey::View, "frame")
         .label(LabelKey::Frame, self.source.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn live(mode: Option<PpuMode>) -> String {
+        FrameSource::Live {
+            ppu: PpuStatus {
+                ly: 50,
+                mode,
+                dot: None,
+                lcd_on: true,
+            },
+            at: Ticks(0),
+            after: Some(3),
+        }
+        .to_string()
+    }
+
+    #[test]
+    fn a_live_frame_names_its_mode_or_says_it_is_unknown() {
+        assert_eq!(
+            live(Some(PpuMode::Drawing)),
+            "live partial frame: LY 50 (drawing), after complete frame 3"
+        );
+        assert_eq!(
+            live(None),
+            "live partial frame: LY 50 (mode unknown), after complete frame 3"
+        );
     }
 }

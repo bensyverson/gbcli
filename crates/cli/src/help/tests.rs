@@ -264,6 +264,10 @@ fn shell_words(line: &str) -> Vec<String> {
 
 /// The HBlank check both example games invented (examples DX review, item
 /// 1): the recipe exists, and each of its commands parses into a request.
+/// The proof is the raster rows' mode= (where each write landed), over a
+/// whole run; the STAT breakpoint only finds writes that start outside
+/// HBlank, since one that starts late in HBlank can land in the next line's
+/// OAM scan (`crates/sameboy/tests/it/mode_sweep.rs`).
 #[test]
 fn the_hblank_recipes_commands_parse() {
     let title = "Does every scroll or palette write land in HBlank?";
@@ -279,12 +283,25 @@ fn the_hblank_recipes_commands_parse() {
         .map(shell_words)
         .collect();
     let verbs: Vec<&str> = commands.iter().map(|c| c[0].as_str()).collect();
-    assert_eq!(verbs, ["run", "break", "run"], "{block}");
+    assert_eq!(verbs, ["run", "run", "break"], "{block}");
     assert!(commands[0].iter().any(|w| w == "--raster"), "{commands:?}");
+    let whole = &commands[1];
+    for flag in ["--raster", "--keys-file", "--frames"] {
+        assert!(whole.iter().any(|w| w == flag), "{flag}: {whole:?}");
+    }
     assert!(
-        commands[1].iter().any(|w| w == "([rSTAT] & 3) != 0"),
+        commands[2].iter().any(|w| w == "([rSTAT] & 3) != 0"),
         "{commands:?}"
     );
+    let prose = block
+        .lines()
+        .skip(1)
+        .take_while(|l| l.starts_with("  "))
+        .flat_map(str::split_whitespace)
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(!prose.contains("no stop is the proof"), "{prose}");
+    assert!(prose.contains("mode= is the proof"), "{prose}");
     // The run reads its keys file as it parses.
     let cwd = std::env::temp_dir().join(format!("gbcli-hblank-{}", std::process::id()));
     std::fs::create_dir_all(&cwd).unwrap();

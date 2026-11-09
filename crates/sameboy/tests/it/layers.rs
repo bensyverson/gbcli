@@ -221,7 +221,8 @@ fn busy_rom_takes_the_per_pixel_path() {
             run(&mut core, Budget::instructions(1));
             let ppu = core.ppu();
             let synced = core.io_register(IoReg::HDMA5).is_ok();
-            if synced && ppu.mode == PpuMode::Drawing && usize::from(ppu.ly) < WINDOW_CUT_LINE {
+            if synced && ppu.mode == Some(PpuMode::Drawing) && usize::from(ppu.ly) < WINDOW_CUT_LINE
+            {
                 synced_in_mode_3[usize::from(ppu.ly)] += 1;
             }
         }
@@ -332,7 +333,7 @@ fn a_mid_frame_load_publishes_no_stale_tags() {
     loop {
         run(&mut saved, Budget::instructions(1));
         let ppu = saved.ppu();
-        if (72..SCREEN_HEIGHT as u8).contains(&ppu.ly) && ppu.mode != PpuMode::VBlank {
+        if (72..SCREEN_HEIGHT as u8).contains(&ppu.ly) && ppu.mode != Some(PpuMode::VBlank) {
             break;
         }
     }
@@ -362,7 +363,7 @@ fn a_mid_frame_load_publishes_no_stale_tags() {
 fn a_load_at_a_frame_boundary_maps_the_next_frame() {
     let mut saved = settled_layers(false);
     run(&mut saved, Budget::frames(1));
-    assert_eq!(saved.ppu().mode, PpuMode::VBlank);
+    assert_eq!(saved.ppu().mode, Some(PpuMode::VBlank));
     let state = saved.save();
 
     let mut core = quick_dmg(LAYERS);
@@ -378,7 +379,7 @@ fn capture_turned_on_at_a_vblank_maps_the_next_frame() {
     let mut core = quick_dmg(LAYERS);
     select_loop(&mut core, false);
     run(&mut core, Budget::frames(SETTLE_FRAMES));
-    assert_eq!(core.ppu().mode, PpuMode::VBlank);
+    assert_eq!(core.ppu().mode, Some(PpuMode::VBlank));
     core.set_pixel_layers(true).unwrap();
     run(&mut core, Budget::frames(1));
     assert_map_matches_pixels(&core, "the first frame captured whole");

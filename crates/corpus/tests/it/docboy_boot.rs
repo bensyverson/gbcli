@@ -82,7 +82,7 @@ fn hands_over_with_docboys_registers() {
     );
     assert_eq!((r.sp, r.pc), (0xFFFE, 0x0100));
     let ppu = d.core.ppu();
-    assert_eq!(ppu.mode, PpuMode::VBlank);
+    assert_eq!(ppu.mode, Some(PpuMode::VBlank));
     assert!(ppu.lcd_on);
     let mut io = |IoReg(low)| d.core.bus_read(0xFF00 | u16::from(low)).unwrap();
     assert_eq!(io(IoReg::DIV), 0xAB);

@@ -17,7 +17,7 @@ mod video;
 
 use std::io::Write;
 
-use gbcli_protocol::{ErrorBody, EventLogLine, Response, ResultBody};
+use gbcli_protocol::{ErrorBody, EventLogLine, PpuModeView, Response, ResultBody};
 
 use crate::exec::emit;
 pub use row::Row;
@@ -103,10 +103,9 @@ pub fn rows(r: &ResultBody) -> String {
             .line();
     }
     if let Some(ppu) = &r.ppu {
-        let json = serde_json::to_value(ppu).expect("serializes");
         out += &Row::new("ppu")
             .field("ly", ppu.ly)
-            .field("mode", json["mode"].as_str().unwrap_or("?"))
+            .field("mode", ppu.mode.map_or("unknown", PpuModeView::name))
             .flag("lcd_on", ppu.lcd_on)
             .opt("dot", ppu.dot)
             .line();
@@ -284,4 +283,31 @@ fn event(e: &EventLogLine) -> String {
         row = row.json("args", args);
     }
     row.line()
+}
+
+#[cfg(test)]
+mod tests {
+    use gbcli_protocol::{PpuModeView, PpuView, ResultBody};
+
+    fn ppu_row(mode: Option<PpuModeView>) -> String {
+        let r = ResultBody {
+            ppu: Some(PpuView {
+                ly: 50,
+                mode,
+                lcd_on: true,
+                dot: None,
+            }),
+            ..ResultBody::default()
+        };
+        super::rows(&r)
+    }
+
+    #[test]
+    fn the_ppu_row_says_when_the_mode_is_unknown() {
+        assert_eq!(ppu_row(None), "ppu ly=50 mode=unknown lcd_on=1\n");
+        assert_eq!(
+            ppu_row(Some(PpuModeView::Drawing)),
+            "ppu ly=50 mode=drawing lcd_on=1\n"
+        );
+    }
 }

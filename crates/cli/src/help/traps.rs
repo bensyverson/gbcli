@@ -12,10 +12,13 @@ VRAM write during mode 3
   Symptom  a tile or map byte keeps its old value: the PPU owns VRAM in mode
            3 and ignores the write
   See it   gbcli run --frames 2 --read '[$8000]' (the byte you wrote). To
-           catch it, break on the write only if STAT says mode 3:
-           gbcli break Dropped --if '([rSTAT] & 3) == 3', then gbcli run
-           (IO writes: gbcli run --raster prints each one's mode=; gbcli
-           recipes, HBlank)
+           catch the write that was dropped, watch the byte and stop only
+           when it didn't take the value written (checked after the write):
+           gbcli watch write '$8000' --if '[$8000] != new', then gbcli run;
+           the stop's writer_pc= is the instruction. Checking STAT before
+           the write misses some: one that starts at the end of mode 2 lands
+           in mode 3. (IO writes: gbcli run --raster prints the mode each
+           one landed in; gbcli recipes, HBlank)
   Fix      write VRAM in VBlank or with the LCD off; mid-frame, wait for STAT
            mode 0 or 1 first, and keep the write within that mode
   Docs     https://gbdev.io/pandocs/Accessing_VRAM_and_OAM.html#accessing-vram-and-oam

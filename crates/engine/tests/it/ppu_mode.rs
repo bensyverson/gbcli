@@ -8,7 +8,7 @@ use crate::common;
 use common::{machine, quick_dmg};
 use gbcli_core::{Budget, Core, Event, EventKinds, EventSink, IoReg, PpuMode, RunRequest};
 use gbcli_engine::{DebugError, Machine, RunOptions, Symbols};
-use gbcli_protocol::{Location, StopReason};
+use gbcli_protocol::{Location, StopReason, WatchAccess};
 
 const ROM: &[u8] = include_bytes!("../../../sameboy/tests/roms/ppu_mode.gb");
 const SYM: &str = include_str!("../../../sameboy/tests/roms/ppu_mode.sym");
@@ -116,4 +116,58 @@ fn a_condition_that_cannot_be_evaluated_is_an_error_not_a_breakpoint_stop() {
     };
     assert_eq!(stop.reason, StopReason::ConditionError { id });
     assert_eq!(m.core().registers().pc, addr("Line100Late"));
+}
+
+const SWEEP: &[u8] = include_bytes!("../../../sameboy/tests/roms/mode_sweep.gb");
+const SWEEP_SYM: &str = include_str!("../../../sameboy/tests/roms/mode_sweep.sym");
+/// The frame of the sweep whose VRAM write starts at the end of mode 2 and
+/// lands in mode 3 (`crates/sameboy/tests/it/mode_sweep.rs`).
+const K: u16 = 107;
+
+/// `help traps`' check for a dropped VRAM write: a write watch on the byte
+/// whose condition says it didn't take the value written. It is evaluated
+/// after the write, so it sees where the write landed, and catches the write
+/// that STAT at the instruction's start (the trap's old breakpoint) misses.
+#[test]
+fn a_watch_on_the_byte_catches_a_dropped_vram_write_a_stat_breakpoint_misses() {
+    let sweep_addr = |name: &str| Symbols::parse(SWEEP_SYM).unwrap().get(name).unwrap().addr;
+    let opts = RunOptions::new(Budget::frames(130));
+
+    let mut m = machine(SWEEP, Some(SWEEP_SYM));
+    let at_write = Location {
+        addr: sweep_addr("WriteVram"),
+        bank: None,
+        symbol: None,
+    };
+    let condition = format!("([rSTAT] & 3) == 3 && [$FF80] == {K}");
+    m.add_breakpoint(at_write, Some(&condition)).unwrap();
+    let stop = m.run(&opts).expect("runs").stop;
+    assert!(
+        matches!(stop.reason, StopReason::BudgetExhausted { .. }),
+        "{:?}",
+        stop.reason
+    );
+    assert_eq!(m.core_mut().bus_read(0x8000 + K).unwrap(), 0, "dropped");
+
+    let mut m = machine(SWEEP, Some(SWEEP_SYM));
+    let byte = Location {
+        addr: 0x8000 + K,
+        bank: None,
+        symbol: None,
+    };
+    let condition = format!("[${:04X}] != new", 0x8000 + K);
+    let id = m
+        .add_watch(WatchAccess::Write, byte, Some(&condition), false)
+        .unwrap();
+    let stop = m.run(&opts).expect("runs").stop;
+    let StopReason::Watchpoint {
+        id: hit,
+        new,
+        writer_pc,
+        ..
+    } = stop.reason
+    else {
+        panic!("{:?}", stop.reason)
+    };
+    assert_eq!((hit, new, writer_pc), (id, 0xFF, sweep_addr("WriteVram")));
 }

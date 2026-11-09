@@ -181,7 +181,9 @@ impl SameBoy {
     /// ahead of that, even while it batches.
     fn frame_untouched(&self) -> bool {
         let ppu = self.ppu();
-        !ppu.lcd_on || ppu.mode == PpuMode::VBlank || (ppu.ly == 0 && ppu.mode == PpuMode::OamScan)
+        !ppu.lcd_on
+            || ppu.mode == Some(PpuMode::VBlank)
+            || (ppu.ly == 0 && ppu.mode == Some(PpuMode::OamScan))
     }
 
     fn raw(&self) -> *mut sb::GB_gameboy_t {
@@ -322,23 +324,18 @@ impl Core for SameBoy {
         memory::io_register(self, reg)
     }
 
-    /// LY and the mode come from the IO array. LY is always current; the
-    /// mode is too, except late in a mode 3 SameBoy batched by an upper
-    /// bound, where it reads mode 3 whatever the PPU would say
-    /// (`gbcli_ppu_mode` in the shim).
+    /// LY comes from the IO array and is always current. The mode comes from
+    /// the display's state (`gbcli_ppu_mode` in the shim), as a raster
+    /// write's does: the IO array's STAT reads mode 3 late in a mode 3
+    /// SameBoy batched by an upper bound, whatever the PPU would say, so the
+    /// mode is unknown there.
     fn ppu(&self) -> PpuStatus {
         let io = memory::region(self, Region::Io)
             .expect("the IO region always exists")
             .bytes;
-        let mode = match io[usize::from(IoReg::STAT.0)] & 3 {
-            0 => PpuMode::HBlank,
-            1 => PpuMode::VBlank,
-            2 => PpuMode::OamScan,
-            _ => PpuMode::Drawing,
-        };
         PpuStatus {
             ly: io[usize::from(IoReg::LY.0)],
-            mode,
+            mode: raster::ppu_mode(self.raw()),
             dot: None,
             lcd_on: io[usize::from(IoReg::LCDC.0)] & 0x80 != 0,
         }

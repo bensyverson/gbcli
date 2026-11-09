@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::request::is_false;
 use crate::stop::{FrameShown, TimeBase, vblank_name};
-use crate::views::PpuView;
+use crate::views::{PpuModeView, PpuView};
 
 /// A screenshot to write after the run (or now, for the `shot` verb).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -113,7 +113,7 @@ impl ShotFrame {
                 format!(
                     "live partial frame: LY {} ({}){lcd}, {after}",
                     ppu.ly,
-                    ppu.mode.name()
+                    ppu.mode.map_or("mode unknown", PpuModeView::name)
                 )
             }
         }
@@ -166,7 +166,6 @@ mod tests {
     use super::*;
     use crate::parse::parse_request;
     use crate::request::{Op, RunArgs};
-    use crate::views::PpuModeView;
 
     #[test]
     fn a_run_carries_a_shot_and_refuses_strangers_inside_it() {
@@ -249,7 +248,7 @@ mod tests {
             frame: ShotFrame::LivePartial {
                 ppu: PpuView {
                     ly: 67,
-                    mode: PpuModeView::OamScan,
+                    mode: Some(PpuModeView::OamScan),
                     lcd_on: true,
                     dot: None,
                 },
@@ -263,6 +262,24 @@ mod tests {
         assert_eq!(
             live.frame_label(),
             "live partial frame: LY 67 (oam_scan), after complete frame 6 since boot"
+        );
+
+        let unknown = ShotMade {
+            frame: ShotFrame::LivePartial {
+                ppu: PpuView {
+                    ly: 67,
+                    mode: None,
+                    lcd_on: true,
+                    dot: None,
+                },
+                ticks: 1000,
+                after: Some(6),
+            },
+            ..live
+        };
+        assert_eq!(
+            unknown.frame_label(),
+            "live partial frame: LY 67 (mode unknown), after complete frame 6 since boot"
         );
     }
 }

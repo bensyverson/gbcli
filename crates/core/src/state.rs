@@ -65,7 +65,10 @@ impl std::ops::BitOr for Keys {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PpuStatus {
     pub ly: u8,
-    pub mode: PpuMode,
+    /// The mode STAT would read now; `None` where the core can't know it
+    /// without running the PPU ahead (on SameBoy: late in a mode 3 it batched
+    /// by an upper bound). Unknown, never wrong.
+    pub mode: Option<PpuMode>,
     /// The dot within the line, if the core can report it ([`Feature::PpuDot`](crate::Feature::PpuDot)).
     pub dot: Option<u16>,
     pub lcd_on: bool,

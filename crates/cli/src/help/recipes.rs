@@ -91,13 +91,18 @@ Find who writes a variable
 Stop at a routine only in some cases
   gbcli break Main.loop --if 'a == 3', then gbcli run
 Does every scroll or palette write land in HBlank?
-  gbcli run --frames 2 --raster (mode= on each IO write: hblank, oam_scan,
-  drawing or vblank; none where the emulator can't tell). To prove it over a
-  whole run from boot, break on each write instruction if STAT isn't mode 0:
-  gbcli break YourWrite --if '([rSTAT] & 3) != 0' --rom game.gb --session hb
-  gbcli run --session hb --frames 3000 --keys-file play.txt (no stop is the
-  proof; STAT is read as the instruction starts, just before it writes; a
-  condition_error stop means STAT couldn't be read there, so it proves nothing)
+  gbcli run --frames 2 --raster (mode= on each IO write is the mode it landed
+  in: hblank, oam_scan, drawing or vblank; none where the emulator can't
+  tell). Over a whole run from boot, mode= is the proof:
+  gbcli run game.gb --session hb --frames 3000 --keys-file play.txt --raster
+  (every write to the register reads mode=hblank, or vblank; any other row
+  names its instruction with pc=, and a row with no mode= proves nothing).
+  To stop at a write that starts outside HBlank and look around, break on it,
+  then gbcli run --session hb --from boot:
+  gbcli break YourWrite --if '([rSTAT] & 3) != 0' --session hb
+  (STAT is read as the instruction starts, before it writes, so no stop
+  proves nothing: a write that starts late in HBlank can land in the next
+  line's OAM scan)
 Try a value without rebuilding (what if wSpeed were 2?)
   gbcli run --at before --poke wSpeed=2 --until 'u16[wFrame] >= 60' --read '[wSpriteX]'
 Turn the LCD on as the program would

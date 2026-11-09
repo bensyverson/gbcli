@@ -68,7 +68,11 @@ impl RegistersView {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PpuView {
     pub ly: u8,
-    pub mode: PpuModeView,
+    /// The mode STAT would read now; null where the core can't know it
+    /// without running the PPU ahead (on SameBoy: late in a mode 3 it
+    /// batched by an upper bound), as a raster write's `mode` is.
+    #[serde(default)]
+    pub mode: Option<PpuModeView>,
     pub lcd_on: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dot: Option<u16>,
@@ -110,9 +114,33 @@ impl PpuView {
     pub fn of(p: &gbcli_core::PpuStatus) -> Self {
         PpuView {
             ly: p.ly,
-            mode: p.mode.into(),
+            mode: p.mode.map(Into::into),
             lcd_on: p.lcd_on,
             dot: p.dot,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_ppu_mode_the_core_cant_know_is_null_on_the_wire() {
+        let status = gbcli_core::PpuStatus {
+            ly: 50,
+            mode: None,
+            dot: None,
+            lcd_on: true,
+        };
+        let view = PpuView::of(&status);
+        let json = serde_json::to_string(&view).unwrap();
+        assert_eq!(json, r#"{"ly":50,"mode":null,"lcd_on":true}"#);
+        assert_eq!(serde_json::from_str::<PpuView>(&json).unwrap(), view);
+        let known = PpuView::of(&gbcli_core::PpuStatus {
+            mode: Some(gbcli_core::PpuMode::Drawing),
+            ..status
+        });
+        assert_eq!(known.mode, Some(PpuModeView::Drawing));
     }
 }

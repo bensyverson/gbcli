@@ -17,6 +17,7 @@ mod io_decode;
 mod layers;
 mod mappers;
 mod memory;
+mod mode_sweep;
 mod run;
 mod save_load_property;
 mod speed_switch;

@@ -113,26 +113,43 @@ fn a_vram_write_in_mode_3_is_dropped_and_one_in_hblank_lands() {
     assert_eq!(reads(&r), [0, 0xFF], "mode 3 dropped, HBlank kept");
 }
 
-/// The trap's mode check, as the topic gives it: a breakpoint that stops
-/// only where STAT says mode 3 stops before the dropped write, and never
-/// before the one in HBlank.
+/// The trap's check, as the topic gives it: a write watch on the byte that
+/// holds only when the byte didn't take the value written stops after the
+/// dropped write, naming it, and never after the one in HBlank. (A STAT
+/// breakpoint, the old check, misses a write that starts at the end of mode
+/// 2: `crates/engine/tests/it/ppu_mode.rs`.)
 #[test]
-fn a_breakpoint_on_stat_stops_before_the_mode_3_write_only() {
-    let check = "gbcli break Dropped --if '([rSTAT] & 3) == 3'";
+fn a_watch_on_the_byte_stops_after_the_dropped_write_only() {
+    let check = "gbcli watch write '$8000' --if '[$8000] != new'";
     let topic = Project::new("traps-mode-check").gbcli(&["help", "traps"]);
     assert!(topic.stdout.contains(check), "{}", topic.stdout);
-    let p = demo_in("vram_mode3", "trap-vram_mode3-break");
-    for (label, stops) in [("Dropped", true), ("Kept", false)] {
-        let session = label.to_lowercase();
-        let rom = ["--rom", "vram_mode3.gb", "--session", &session];
-        let args: Vec<&str> = ["break", label, "--if", "([rSTAT] & 3) == 3"]
+    assert!(!topic.stdout.contains("[rSTAT]"), "{}", topic.stdout);
+    let p = demo_in("vram_mode3", "trap-vram_mode3-watch");
+    for (byte, writer) in [("$8000", Some("Dropped")), ("$8010", None)] {
+        let session = byte.trim_start_matches('$');
+        let condition = format!("[{byte}] != new");
+        let rom = ["--rom", "vram_mode3.gb", "--session", session];
+        let args: Vec<&str> = ["watch", "write", byte, "--if", &condition]
             .into_iter()
             .chain(rom)
             .collect();
         json(&p, &args, 0);
-        let r = json(&p, &["run", "--session", &session, "--frames", "2"], 0);
-        let reason = r["result"]["stop"]["reason"].as_str().unwrap();
-        assert_eq!(reason == "breakpoint", stops, "{label}: {reason}");
+        let r = json(&p, &["run", "--session", session, "--frames", "2"], 0);
+        let stop = &r["result"]["stop"];
+        match writer {
+            Some(label) => {
+                assert_eq!(stop["reason"], "watchpoint", "{byte}: {stop}");
+                let sym = std::fs::read_to_string(p.path("vram_mode3.sym")).unwrap();
+                let at = sym
+                    .lines()
+                    .find(|l| l.ends_with(&format!(" {label}")))
+                    .and_then(|l| l.split([':', ' ']).nth(1))
+                    .unwrap();
+                let pc = i64::from_str_radix(at, 16).unwrap();
+                assert_eq!(stop["writer_pc"], pc, "{byte}: {stop}");
+            }
+            None => assert_eq!(stop["reason"], "budget_exhausted", "{byte}: {stop}"),
+        }
     }
 }
 

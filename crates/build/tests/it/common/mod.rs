@@ -3,6 +3,7 @@
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use gbcli_build::{BuildError, BuildOptions, Toolchain, install_remedy, new_project};
 use gbcli_protocol::{BuildMade, Tool};
@@ -10,9 +11,15 @@ use gbcli_protocol::{BuildMade, Tool};
 /// A directory removed on drop.
 pub struct Temp(pub PathBuf);
 
+/// Makes each [`Temp`] in this process unique: two tests that pick the same
+/// name (a sample's warm and whole comparisons) run in parallel.
+static NEXT_TEMP: AtomicU32 = AtomicU32::new(0);
+
 impl Temp {
     pub fn new(name: &str) -> Temp {
-        let dir = std::env::temp_dir().join(format!("gbcli-build-{}-{name}", std::process::id()));
+        let n = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
+        let dir =
+            std::env::temp_dir().join(format!("gbcli-build-{}-{n}-{name}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         Temp(dir)

@@ -1,0 +1,17 @@
+format gbcli-pixels 1
+# The lantern-bearer: hooded, lantern held out in the right hand.
+size 8 8
+color . clear
+color 1 lantern 1
+color 2 lantern 2
+color 3 lantern 3
+
+rows 0 0
+..333...
+.32223..
+.31313..
+..333.3.
+.3222313
+.32223.3
+..3.3...
+.33.33..

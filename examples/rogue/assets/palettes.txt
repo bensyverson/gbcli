@@ -1,0 +1,13 @@
+# Lanternfall's palettes. The dmg line pins the four shades for every image;
+# each palette's entries run lightest to darkest so they keep those shades.
+dmg:     #e8e0c8 #a09078 #504448 #100c14
+stone:   #e8e0c8 #a09078 #504448 #100c14    # the dungeon and the font
+ember:   #f0e0b8 #c09050 #683828 #100810    # the title screen
+lantern: #fff8e0 #d0a058 #704028 #100808    # the lantern-bearer
+blight:  #e0f0d0 #88a868 #3c5838 #081008    # the deep's creatures
+objects: 8x8
+tiles/dungeon.pixels = stone
+tiles/font.pixels = stone
+bg/title.pixels = ember
+sprites/hero.8x8.pixels = lantern
+sprites/foes.8x8.pixels = blight

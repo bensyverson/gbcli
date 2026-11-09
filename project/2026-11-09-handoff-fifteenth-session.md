@@ -1,6 +1,6 @@
 # Handoff: 2026-11-09 (fifteenth session)
 
-This handoff is current until the next commit after the one that adds it, unless that commit is one of the game merges named under "In flight" below. Start with `job orient`, then read this. The previous handoff is [2026-11-09-handoff-fourteenth-session.md](2026-11-09-handoff-fourteenth-session.md).
+This handoff is current until the next commit after the one that adds it. Start with `job orient`, then read this. The previous handoff is [2026-11-09-handoff-fourteenth-session.md](2026-11-09-handoff-fourteenth-session.md).
 
 ## State of play
 
@@ -32,14 +32,20 @@ Ben was around and ruled as things came up. The gbcli fixes from the first wave 
 
 **Landed since this handoff was first written:** E, the rhythm game **Lantern Drum** (`examples/rhythm/`, `lantern-drum.gb`, DX doc [2026-11-09-dx-rhythm.md](2026-11-09-dx-rhythm.md); wired into `scripts/examples/build-roms.sh`), and the **pixel fonts design** ([2026-11-09-pixel-fonts-design.md](2026-11-09-pixel-fonts-design.md), leaf `5UVSjE`): ten questions for Ben, each with a recommendation; nothing is built until he decides.
 
-Still in flight: **rogue15**, D, the roguelike (`QdPmrv`, `JQiBBs`, `H1Fbvm`, `RRqjrZ`), worktree `.claude/worktrees/agent-a5923bad21ab961aa`, DX doc `project/2026-11-09-dx-rogue.md`, on the pinned binary `/Users/ben/.cache/gbcli-examples/target/release/gbcli` built from `c38cd29`.
+And D, the roguelike **Lanternfall** (`examples/rogue/`, `lanternfall.gb`, DX doc [2026-11-09-dx-rogue.md](2026-11-09-dx-rogue.md); in `build-roms.sh`). **Nothing is in flight.** Both second-wave games are in; C (`uI1JDB`) is the last game.
 
-If this session ends before it reports: the worktree holds the agent's uncommitted work and job notes on its leaves say where it stopped. Integrate as usual (snapshot with `write-tree`/`commit-tree`, `git merge --squash`, read the diff, commit through the hook, close the finished leaves, push). A leaf left unfinished goes to a fresh agent with the same brief (below) and a summary of the state. When it is in, add it to `examples/README.md`'s table and to `scripts/examples/build-roms.sh` if the agent didn't (game agents may not read `scripts/`), then do the DX review for D and E as `review-ab` did for A and B, before C (`uI1JDB`).
+**What the D and E agents said the briefs got wrong** (for C's brief):
+- The leaves said to look at `scripts/examples/build-roms.sh`, which the user contract forbids; the integrator wires each ROM in at merge.
+- "Put the binary's directory first on PATH" fails: the worktree guard refuses a `PATH=…:$PATH` prefix and a `$G`-style variable for the binary. Brief the absolute path only.
+- `gbcli gaps` lists only what the emulator core couldn't do; it printed `none` every session. Stumbles belong in the DX doc alone.
+- The halfway rule never applied: each whole four-leaf chain fit in about 35% of a 1M window.
+
+**Top stumbles from the two DX docs, unreviewed** (for the DX review): no block memory read (`read 'wMap..wMap+16'`; the rogue used 3,075 expressions in one read); key files count frames since boot, so the plain and `--gbc` builds diverge on the same keys, and `show` doesn't say which build a session runs; the frame budget covers only a whole run, with no frame numbers in its JSON; no run-level assertion (`--expect`); song text repeats every shared pattern in full; audio-log rows have no frame number; `--read` takes one expression despite its usage line, and no signed reads.
 
 ## Next, in order
 
-1. Integrate the roguelike (above). Bring Ben the fonts design's ten questions, and the embedded-scripting question below.
-2. Read both DX docs and `gbcli gaps`; bring Ben a ranked list (the shape of [2026-11-08-examples-dx-review.md](2026-11-08-examples-dx-review.md)).
+1. The DX review of D and E, as `review-ab` did for A and B (stumbles above; read both docs whole), and bring Ben the fonts design's ten questions.
+2. Bring Ben the ranked list in the shape of [2026-11-08-examples-dx-review.md](2026-11-08-examples-dx-review.md); check the embedded-scripting backlog entry's un-park condition against both docs.
 3. Re-time the warm suite on an idle machine: every hook run this session warned 43-51 s against 30 s, all taken with agents compiling (load average 17-25). `python3 -I scripts/bench/test-times.py`, twice, take the second; only then move tests to pre-release.
 4. Then C, the raycaster: detail `uI1JDB` after D and E.
 

@@ -7,6 +7,7 @@ Original Game Boy games built entirely by AI agents with gbcli, as a test of the
 | `racer/` | Switchback: a pseudo-3D road race against the clock ([play: `switchback.gb`](racer/switchback.gb)) | Curves and hills drawn by changing the scroll registers on every scanline, in HBlank |
 | `shooter/` | Vesper Swarm, a bullet-heavy shooter ([play: `vesper-swarm.gb`](shooter/vesper-swarm.gb)) | 30+ sprites at once by multiplexing, and parallax from mid-frame scroll splits |
 | `rhythm/` | Lantern Drum, a rhythm game ([play: `lantern-drum.gb`](rhythm/lantern-drum.gb)) | Notes judged against the music driver's own tick, so the chart can't drift from the song; checked against the audio log |
+| `rogue/` | Lanternfall, a turn-based dungeon crawl down five generated floors ([play: `lanternfall.gb`](rogue/lanternfall.gb)) | Dungeons generated in assembly from a seed, on a map bigger than the background, streamed in as it scrolls |
 
 ## Play one
 

@@ -1,0 +1,28 @@
+format gbcli-pixels 1
+# The deep's creatures, in the order of S_RAT and S_GHOUL: a cave rat and a
+# hollow ghoul.
+size 16 8
+color . clear
+color 1 blight 1
+color 2 blight 2
+color 3 blight 3
+
+rows 0 0   # rat
+........
+........
+.....33.
+.3..3213
+3.33222.
+.322223.
+..3..3..
+........
+
+rows 8 0   # ghoul
+..3333..
+.322223.
+.313313.
+.322223.
+..3223..
+.322223.
+3.3223.3
+..3..3..

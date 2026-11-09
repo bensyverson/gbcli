@@ -29,6 +29,7 @@ VRAM write during mode 3
            condition), not LY > 143: LY reads 0 through most of line 153.
            mode == 1 is a reliable VBlank test everywhere; mode == 0 and
            mode == 3 may be unknown late in mode 3 on a line with objects
+           or the window
   Docs     https://gbdev.io/pandocs/Accessing_VRAM_and_OAM.html#accessing-vram-and-oam
   Demo     crates/gbcli/tests/traps/vram_mode3.asm
 

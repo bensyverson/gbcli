@@ -36,7 +36,8 @@ STAT ($FF41) bits 0-1 hold the mode; LY ($FF44) is the line, 0-153, but
 LY reads 0 through most of line 153 (153 only for its first few dots). Test
 VBlank by the mode (mode == 1 in gbcli's expressions), not by LY > 143:
 mode == 1 is a reliable VBlank test everywhere, but mode == 0 and mode == 3
-may be unknown late in mode 3 on a line with objects (an error in gbcli).
+may be unknown late in mode 3 on a line with objects or the window (an
+error in gbcli).
   https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status
   https://gbdev.io/pandocs/STAT.html#ff44--ly-lcd-y-coordinate-read-only
 

@@ -523,6 +523,7 @@ fn hardware_traps_and_expressions_give_modes_caveat() {
         for part in [
             "mode == 1 is a reliable VBlank test everywhere",
             "mode == 0 and mode == 3 may be unknown late in mode 3",
+            "on a line with objects or the window",
         ] {
             assert!(flat.contains(part), "{topic:?}: {part:?} in {flat}");
         }

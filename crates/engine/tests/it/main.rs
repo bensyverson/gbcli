@@ -34,6 +34,7 @@ mod opcode_lookup_spellings;
 mod opcode_rgbasm_differential;
 mod power_cycle;
 mod ppu_mode;
+mod ppu_mode_probes;
 mod profile;
 mod profile_accounting;
 mod raster;

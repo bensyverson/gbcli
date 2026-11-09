@@ -202,7 +202,8 @@ fn the_mode_keyword_still_fails_where_hblank_must_be_told_from_drawing() {
 }
 
 /// The predicate form: `--until "mode == 1"` from inside the window runs on
-/// to VBlank instead of failing (on `ppu_mode.gb`, which has the window).
+/// to VBlank instead of failing (on `ppu_mode.gb`, whose ten objects open
+/// the stretch of time where the mode is only 0 or 3).
 #[test]
 fn until_mode_1_runs_through_the_unknown_window_to_vblank() {
     let mut m = machine(ROM, Some(SYM));

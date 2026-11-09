@@ -133,3 +133,19 @@ Eval run 5 asked for axis labels or a legend on the image too; `help music` now 
 - an agent's real work (an eval run or a LoadHigh session) records an `unsupported` that blocks its task, and no adapter work can serve it;
 - SameBoy disagrees with hardware truth (a hardware-verified test ROM or a hardware capture) in a way that affects programs gbcli users write, and upstream won't take a fix;
 - an eval task class that needs mid-mode-3 effects is added, and it fails on SameBoy where docboy passes.
+
+## 2026-11-08 — Small run and view refinements from the example games
+
+**What:** three items from [2026-11-08-examples-dx-review.md](2026-11-08-examples-dx-review.md), item 12. First, keys-file offsets counted from a time base (`--keys-since boot`), so a recording can resume from a checkpoint. Second, separate default output names for the DMG and GBC builds (both write `build/NAME.gb` today). Third, `dropped_by_line_limit` saying which lines dropped an object.
+
+**Why parked:** each cost an agent five minutes or less, each had a clean workaround (measure from boot, `--out`, read the screenshot), and Ben accepted the review's call to backlog them.
+
+**Un-park when:** a later example game or LoadHigh hits one of them again.
+
+## 2026-11-08 — Placing generated data in a ROM bank
+
+**What:** a way to keep generated images, songs or tables in a chosen bank (or ROM0), so an MBC game can read them every frame without bank switching ([2026-11-08-examples-dx-review.md](2026-11-08-examples-dx-review.md), item 8).
+
+**Why parked:** the racer hit 32 KB under `--gbc` and shrank its data instead; no game has needed MBC yet. A help note that `--gbc` color art roughly doubles image ROM covers the surprise for now.
+
+**Un-park when:** an example game or LoadHigh needs more than 32 KB with generated data read every frame.

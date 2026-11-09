@@ -107,6 +107,8 @@ Each question gives the recommended answer first and names the leaf that waits o
 7. **Scope.** GBC-only ROMs (`-C`, VRAM bank 1, BG flips) go to the backlog (recommended).
 8. **Previews.** They match gbcli's SameBoy setup (no color correction), not the look of a real GBC LCD. Acceptable? (Recommended: yes, since previews must match screenshots.) Leaf `api`.
 9. **`.dmg.png` without `--gbc`.** Recommended: an error, naming `--gbc`, so a stray file isn't silently ignored. Leaf `derive`.
+
+   > **Superseded (Ben, 2026-11-08, fourteenth session): a plain build uses color art too.** Both example-game agents were pushed to indexed art because only `--gbc` derived a color image's DMG version, so a project couldn't build clean both ways ([2026-11-08-examples-dx-review.md](2026-11-08-examples-dx-review.md), item 2). Now a plain `build` derives the DMG version exactly as `--gbc` does and honors `name.dmg.png`. The question-9 worry, a stray file silently ignored, no longer applies, because the file is used.
 10. **Palettes and assignments without `--gbc` (new in revision 2).** Recommended: `dmg` still drives the shade cascade, the named palettes are checked and emitted (so a DMG build of a GBC-ready project still assembles), and indexed art builds as DMG art. Alternative: refuse non-`dmg` lines without `--gbc`, as question 9 does for `.dmg.png`. The difference: an assignment is harmless on the DMG, while a `.dmg.png` would be silently ignored. Leaf `palettes`.
 
 ## Order and why

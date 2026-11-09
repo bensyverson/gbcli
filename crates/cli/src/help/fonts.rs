@@ -46,11 +46,12 @@ first; then each glyph is one label and 8 indented rows of . (paper) and @
 A key is one character ('é':), a code point (u+00E9:), or a name (\"heart\":
 two or more ASCII letters, digits, _ and -, starting with a letter) for a
 symbol Unicode lacks. Keys are NFC: a letter followed by a combining mark
-that gbcli's mark table knows (Latin-1 and Latin Extended-A) is refused,
-naming its precomposed letter. Refused too: codepoint labels (0x41:),
-several characters in one key, unquoted labels (A:), a second label for a
-glyph, control characters, YAFF's empty glyph (-), per-glyph properties,
-kerning and bearings. `gbcli font` names the line and column of the first.
+that gbcli's mark table knows (Latin-1, Latin Extended-A, and kana with
+u+3099 or u+309A) is refused, naming its precomposed letter. Refused too:
+codepoint labels (0x41:), several characters in one key, unquoted labels
+(A:), a second label for a glyph, control characters, YAFF's empty glyph
+(-), per-glyph properties, kerning and bearings. `gbcli font` names the
+line and column of the first.
 
 The layout rules (normative; `gbcli font --sample` is the reference, and its
 --json `data` is the line's tiles by rule 3):
@@ -96,11 +97,12 @@ no cap.
 Composed letters. A letter asked for (by a request's `glyphs`, or a
 character list) that the font doesn't draw is made from its base and its
 combining mark when the font draws both: é from 'e' and u+0301, for
-gbcli's mark table (Latin-1 and Latin Extended-A). The mark's pixels are
-laid over the base's at the base's width; a drawn é always wins. Composed
-glyphs follow the drawn ones, origin composed. A mark landing on its
-base's ink is a warning naming the glyph (`overlap`, and font_overlaps in
---json): draw that letter by hand. Nothing is composed unless asked for.
+gbcli's mark table (Latin-1, Latin Extended-A, and kana voiced by u+3099
+or u+309A, so が from か and u+3099). The mark's pixels are laid over the
+base's at the base's width; a drawn é always wins. Composed glyphs follow
+the drawn ones, origin composed. A mark landing on its base's ink is a
+warning naming the glyph (`overlap`, and font_overlaps in --json): draw
+that letter by hand. Nothing is composed unless asked for.
 
 Authoring. The .yaff is the font's one source, committed; a PNG or BDF is
 a working copy for an editing tool, never committed:

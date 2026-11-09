@@ -5,7 +5,7 @@
 
 use std::fmt;
 
-use crate::marks;
+use gbcli_protocol::marks;
 
 /// A glyph's key.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -33,11 +33,25 @@ fn bad(message: impl Into<String>, remedy: impl Into<String>) -> KeyError {
 
 /// `'é' (u+00E9)`, how a message names a character.
 pub(crate) fn said(c: char) -> String {
-    if c.is_control() || c.is_whitespace() || marks::is_combining(c) {
+    if c.is_control() || c.is_whitespace() || is_combining(c) {
         format!("u+{:04X}", u32::from(c))
     } else {
         format!("'{c}' (u+{:04X})", u32::from(c))
     }
+}
+
+/// Whether `c` draws over the character before it, so a message, a label
+/// or a sidecar writes its code point rather than the character: the mark
+/// table's class, and the other blocks of combining marks.
+pub(crate) fn is_combining(c: char) -> bool {
+    marks::is_combining_mark(c)
+        || matches!(
+            c,
+            '\u{1AB0}'..='\u{1AFF}'
+                | '\u{1DC0}'..='\u{1DFF}'
+                | '\u{20D0}'..='\u{20FF}'
+                | '\u{FE20}'..='\u{FE2F}'
+        )
 }
 
 const KEY_REMEDY: &str = "key a glyph by one character ('A':), a code point (u+0041:) or a \
@@ -75,7 +89,7 @@ impl Key {
         let chars = elements(label)?;
         match chars.as_slice() {
             [c] => Key::char(*c),
-            [base, mark] => match marks::precomposed(*base, *mark) {
+            [base, mark] => match marks::compose(*base, *mark) {
                 Some(letter) => Err(bad(
                     format!(
                         "`{label}` is {} followed by the combining mark u+{:04X}: a decomposed \
@@ -196,7 +210,7 @@ fn quotable(c: char) -> bool {
     !(c.is_control()
         || c.is_whitespace()
         || c == '\''
-        || marks::is_combining(c)
+        || is_combining(c)
         || matches!(c, '\u{200B}'..='\u{200F}' | '\u{2028}'..='\u{202E}' | '\u{FEFF}'))
 }
 

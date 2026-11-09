@@ -9,8 +9,7 @@
 //! A character list (`--chars FILE` on `import` and `new`) is the same
 //! text with its line breaks ignored.
 
-use crate::key::{Key, said};
-use crate::marks;
+use crate::key::{Key, is_combining, said};
 use crate::problem::Problem;
 
 /// A `.chars` file's extension.
@@ -119,7 +118,7 @@ pub fn write_chars(rows: &[Vec<Slot>]) -> String {
                     // U+FEFF first in the file would read as a byte order
                     // mark and be dropped.
                     let bom = *c == '\u{FEFF}';
-                    if c.is_whitespace() || marks::is_combining(*c) || ambiguous || bom {
+                    if c.is_whitespace() || is_combining(*c) || ambiguous || bom {
                         out.push_str(&format!("<u+{:04X}>", u32::from(*c)));
                     } else {
                         out.push(*c);

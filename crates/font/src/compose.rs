@@ -7,8 +7,8 @@
 //! only for what the font lacks.
 
 use crate::key::Key;
-use crate::marks;
 use crate::model::{Font, Glyph};
+use gbcli_protocol::marks;
 
 /// A letter composed from two drawn glyphs.
 #[derive(Clone, Debug, PartialEq, Eq)]

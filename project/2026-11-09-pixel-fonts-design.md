@@ -282,6 +282,7 @@ Ben ruled after reading LoadHigh's response, [loadhigh/project/2026-11-09-pixel-
    - An overlap is a warning naming the glyph.
    - Keys must be NFC: a decomposed key the table knows is refused, naming its precomposed form.
    - Composition happens only for requested characters: the `assets` op's request, or a build's character list.
+   > **Update 2026-11-09 (leaf lIr4Rl):** the table now lives in `gbcli_protocol::marks`, not in gbcli-font, by Ben's ruling that there is one composition table, owned by gbcli and read by both gbcli and LoadHigh (which composes string literals to NFC with it; [2026-11-09-pixel-fonts-for-loadhigh.md](2026-11-09-pixel-fonts-for-loadhigh.md) row 7). It also holds the kana voicing marks: every hiragana and katakana letter whose canonical decomposition is a kana base and U+3099 (dakuten, 48 letters) or U+309A (handakuten, 10). gbcli-font reads it, so a decomposed voiced-kana key (`'か', u+3099`) is now refused like a decomposed Latin one, and a font drawing か and U+3099 composes が. `scripts/fonts/gen_marks.py` writes it to `crates/protocol/src/marks/table.rs`.
 4. **The order of work: three leaves.**
    - First, the core: the strict YAFF reader and writer, the font kind, the build output, `FontAsset`, `gbcli font` with `--sample`/`--preview`/`--fit`, and `help fonts` with the layout rules.
    - Second, authoring: edit/save with working copies, `.chars` and guides, BDF import and export, `new` and `diff`, and composition.

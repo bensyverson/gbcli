@@ -83,3 +83,34 @@ fn a_key_writes_a_label_that_reads_back_and_a_charmap_string() {
     assert_eq!(Key::Char('é').charmap(), "é");
     assert!(Key::from_wire("").is_err());
 }
+
+#[test]
+fn a_decomposed_voiced_kana_key_is_refused_naming_its_precomposed_form() {
+    for (label, letter, code) in [
+        ("'か', u+3099", "'が'", "u+304C"),
+        ("u+30DB, u+309A", "'ポ'", "u+30DD"),
+    ] {
+        let e = refused(label);
+        assert!(e.message.contains("decomposed"), "{label}: {}", e.message);
+        assert!(
+            e.remedy.contains(letter) && e.remedy.contains(code),
+            "{}",
+            e.remedy
+        );
+    }
+    // The precomposed letters and the marks alone are still keys.
+    assert_eq!(Key::from_label("'が'"), Ok(Key::Char('が')));
+    assert_eq!(Key::from_label("u+3099"), Ok(Key::Char('\u{3099}')));
+}
+
+#[test]
+fn a_kana_voicing_mark_is_written_by_its_code_point() {
+    for mark in ['\u{3099}', '\u{309A}'] {
+        let key = Key::Char(mark);
+        assert_eq!(key.label(), format!("u+{:04X}", u32::from(mark)));
+        assert_eq!(key.to_string(), format!("u+{:04X}", u32::from(mark)));
+        assert_eq!(Key::from_label(&key.label()), Ok(key.clone()));
+    }
+    // The spacing voicing mark doesn't draw over its neighbor.
+    assert_eq!(Key::Char('\u{309B}').label(), "'\u{309B}'");
+}

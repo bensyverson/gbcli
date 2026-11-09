@@ -171,6 +171,7 @@ name = "gbcli-font"
 version = "0.1.0"
 dependencies = [
  "gbcli-pixels",
+ "gbcli-protocol",
  "gbcli-view",
 ]
 

@@ -15,6 +15,7 @@ mod ignored;
 mod images;
 mod keys;
 mod listing;
+pub mod marks;
 mod moved;
 mod opcode;
 mod palettes;

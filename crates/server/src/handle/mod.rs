@@ -307,13 +307,13 @@ impl Handler {
             rev: meta.rev,
             exact: warnings.is_empty(),
         });
-        *machine.debugger_config_mut() = meta.debugger.clone();
         let mut warnings = warnings;
-        // A restart is where a rebuild meets the session's breakpoints: those
-        // set by a symbol follow it, and the head the run saves keeps them.
-        if cold {
-            warnings.extend(machine.rebase_debugger().iter().map(|r| r.to_string()));
-        }
+        // The session's breakpoints may have been resolved against another
+        // build (a head or checkpoint that loaded across a rebuild, or a
+        // restart): those set by a symbol follow it, warning per move, and a
+        // request that saves the session keeps them.
+        let rebased = machine.attach_debugger(meta.debugger.clone());
+        warnings.extend(rebased.iter().map(|r| r.to_string()));
         // On every request, warm or cold: the ROM is the same file either way.
         warnings.extend(battery::header_warnings(&machine));
         Ok((machine, warnings))
@@ -371,6 +371,9 @@ mod review_tests;
 
 #[cfg(test)]
 mod restart_tests;
+
+#[cfg(test)]
+mod relabel_tests;
 
 #[cfg(test)]
 mod rom_change_tests;

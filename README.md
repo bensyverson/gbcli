@@ -15,8 +15,9 @@ Build from source with `cargo build --release`; the binary is `target/release/gb
 ```sh
 gbcli doctor                    # checks RGBDS 1.0.4 and the project directory
 gbcli new game                  # a starter project that builds and runs
-gbcli build game                # assemble, link and fix the header; errors come back with file and line
-gbcli run game/build/game.gb --session game --frames 120 --shot first.png
+cd game                         # its own .gbcli/ keeps the sessions you run here
+gbcli build                     # assemble, link and fix the header; errors come back with file and line
+gbcli run build/game.gb --session game --frames 120 --shot first.png
 gbcli                           # the primer: what the tool does and where to go next
 ```
 

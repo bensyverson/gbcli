@@ -106,11 +106,14 @@ fn new_writes_the_starter_and_says_what_to_run_next() {
     let ignore = fs::read_to_string(temp.path("demo/.gitignore")).unwrap();
     assert!(ignore.lines().any(|l| l == "/.gbcli/"), "{ignore}");
     assert!(ignore.lines().any(|l| l == "/build/"), "{ignore}");
+    // Into the project first, so its own .gbcli/ is the bundle every later
+    // command finds.
     assert_eq!(
         made.next,
         [
-            "gbcli build demo",
-            "gbcli run demo/build/demo.gb --session demo --frames 120 --shot first.png",
+            "cd demo",
+            "gbcli build",
+            "gbcli run build/demo.gb --session demo --frames 120 --shot first.png",
         ]
     );
 }
@@ -121,6 +124,7 @@ fn new_into_an_existing_empty_directory_is_fine() {
     fs::create_dir(temp.path("game")).unwrap();
     let made = new_project(&temp.path("game"), &temp.path("game")).unwrap();
     assert_eq!(made.dir, ".");
+    assert_eq!(made.next.len(), 2, "already there, no cd: {:?}", made.next);
     assert_eq!(made.next[0], "gbcli build");
     assert!(made.next[1].starts_with("gbcli run build/game.gb --session game"));
 }
@@ -135,8 +139,9 @@ fn new_prints_commands_a_shell_can_run() {
     assert_eq!(
         made.next,
         [
-            "gbcli build 'my games/demo'",
-            "gbcli run 'my games/demo/build/demo.gb' --session demo --frames 120 --shot first.png",
+            "cd 'my games/demo'",
+            "gbcli build",
+            "gbcli run build/demo.gb --session demo --frames 120 --shot first.png",
         ]
     );
     let refused = new_project(&temp.path("my games/Demo Two"), &temp.0).unwrap_err();
@@ -217,7 +222,10 @@ fn every_name_new_accepts_is_a_session_name() {
         let made = new_project(&temp.path(name), &temp.0).unwrap();
         assert!(gbcli_protocol::is_session_name(&made.name), "{name}");
         assert!(
-            made.next[1].contains(&format!("--session {name} ")),
+            made.next
+                .last()
+                .unwrap()
+                .contains(&format!("--session {name} ")),
             "{:?}",
             made.next
         );

@@ -79,10 +79,26 @@ impl Project {
     }
 
     pub fn gbcli_with(&self, args: &[&str], env: &[(&str, &str)], stdin: Option<&str>) -> Run {
+        self.gbcli_at(&self.dir, args, env, stdin)
+    }
+
+    /// `gbcli args…` from `cwd` (a directory inside the project), as a user
+    /// who has `cd`'d there would run it.
+    pub fn gbcli_in(&self, cwd: &Path, args: &[&str], env: &[(&str, &str)]) -> Run {
+        self.gbcli_at(cwd, args, env, None)
+    }
+
+    fn gbcli_at(
+        &self,
+        cwd: &Path,
+        args: &[&str],
+        env: &[(&str, &str)],
+        stdin: Option<&str>,
+    ) -> Run {
         let mut command = Command::new(env!("CARGO_BIN_EXE_gbcli"));
         command
             .args(args)
-            .current_dir(&self.dir)
+            .current_dir(cwd)
             .env_remove("GBCLI_DIR")
             .env_remove("GBCLI_SESSION")
             .env_remove("GBCLI_AS")

@@ -63,8 +63,8 @@ impl Handler {
         // save_head writes back whatever the machine holds.
         // A power cycle starts the ROM on disk afresh, as `run --from` does,
         // so those set by a symbol follow it into a rebuild.
-        *machine.debugger_config_mut() = meta.debugger.clone();
-        warnings.extend(machine.rebase_debugger().iter().map(|r| r.to_string()));
+        let rebased = machine.attach_debugger(meta.debugger.clone());
+        warnings.extend(rebased.iter().map(|r| r.to_string()));
         let head = store.read_head(meta.rev).map_err(stored)?;
         let rom_rebuilt = head
             .as_ref()

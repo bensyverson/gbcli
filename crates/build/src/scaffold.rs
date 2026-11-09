@@ -125,22 +125,20 @@ pub fn new_project(dir: &Path, display_base: &Path) -> Result<NewMade, NewError>
     fs::create_dir_all(&bundle).map_err(io(&bundle))?;
     files.push(format!("{}/", display(&bundle, &base)));
     let shown = display(&dir, &base);
-    let (build, rom) = if shown == "." {
-        ("gbcli build".to_string(), format!("build/{name}.gb"))
-    } else {
-        (
-            format!("gbcli build {}", quote(&shown)),
-            format!("{shown}/build/{name}.gb"),
-        )
-    };
+    // Into the project first: the bundle is found from the working
+    // directory, so a run from here would put its session in a `.gbcli/`
+    // here (or make one), not in the project's, where everything run from
+    // inside the project (and the help's loop) looks.
+    let mut next = Vec::new();
+    if shown != "." {
+        next.push(format!("cd {}", quote(&shown)));
+    }
+    next.push("gbcli build".to_string());
+    next.push(format!(
+        "gbcli run build/{name}.gb --session {name} --frames 120 --shot first.png"
+    ));
     Ok(NewMade {
-        next: vec![
-            build,
-            format!(
-                "gbcli run {} --session {name} --frames 120 --shot first.png",
-                quote(&rom)
-            ),
-        ],
+        next,
         name,
         dir: shown,
         files,

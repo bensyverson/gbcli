@@ -158,10 +158,11 @@ Checkpointing — saved machine states, in the session.
   gbcli undo                       step the head back one change
 
 A checkpoint records the ROM's hash and patches. Loaded under a rebuilt ROM,
-it is checked by symbol: if PC's routine, a RAM variable, a return address or
-a breakpoint moved, the load is refused (exit 3) and the message lists what
-moved; --allow-rom-change loads anyway. Breakpoints and watches belong to the
-session, not the checkpoint, so restoring never changes what you watch.
+it is checked by symbol: if PC's routine, a RAM variable or a return address
+moved, the load is refused (exit 3) and the message lists what moved;
+--allow-rom-change loads anyway. Breakpoints and watches belong to the
+session, not the checkpoint, so restoring never changes what you watch; one
+set by a symbol follows it into a rebuild, with a warning when it moves.
 `sessions prune` never removes a session that holds named checkpoints.
 ";
 

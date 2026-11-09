@@ -1,11 +1,11 @@
-//! Breakpoints and watches on a restart: a location is resolved when it is
-//! set (design §7), so one set by a symbol would keep the old build's
-//! address after a rebuild. A restart resolves each symbol again against the
-//! machine's own symbols, so the location follows its label.
+//! Breakpoints and watches across a rebuild: a location is resolved when it
+//! is set, and again whenever the session's debugger meets a machine (design
+//! §7), so one set by a symbol follows its label into the ROM on disk rather
+//! than keeping the old build's address. One set by an address never moves.
 
 use std::fmt;
 
-use gbcli_protocol::Location;
+use gbcli_protocol::{DebuggerConfig, Location};
 
 use super::Machine;
 use crate::addr::{self, AddrError, RegionSizes};
@@ -40,6 +40,18 @@ pub enum Rebased {
 }
 
 impl Machine {
+    /// Gives this machine a session's breakpoints and watches, each set by a
+    /// symbol resolved again against this machine's symbols, and reports
+    /// each that moved or no longer resolves. Resolving is idempotent, so
+    /// this holds on every load: the session's addresses may have been
+    /// resolved against another build (a head or checkpoint that loads
+    /// across a rebuild, a restart, a power cycle), and only the symbols on
+    /// disk say where each label is now.
+    pub fn attach_debugger(&mut self, config: DebuggerConfig) -> Vec<Rebased> {
+        self.debugger = config;
+        self.rebase_debugger()
+    }
+
     /// Resolves every breakpoint and watch set by a symbol again, against
     /// this machine's symbols and sizes, and reports each that changed. One
     /// whose symbol is gone keeps its address. Without sizes (a core that

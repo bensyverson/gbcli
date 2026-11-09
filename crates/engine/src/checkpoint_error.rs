@@ -28,8 +28,6 @@ pub enum MovedRole {
     Ram,
     /// The ROM symbol containing a possible return address on the stack.
     Stack,
-    /// A breakpoint's symbol.
-    Breakpoint,
 }
 
 /// A symbol whose address differs between the saved and the current `.sym`.
@@ -48,7 +46,6 @@ impl fmt::Display for Moved {
             MovedRole::Pc => "PC is in",
             MovedRole::Ram => "RAM symbol",
             MovedRole::Stack => "return address on the stack is in",
-            MovedRole::Breakpoint => "breakpoint on",
         };
         match self.new {
             Some(new) => write!(f, "{role} {}: {} -> {new}", self.name, self.old),

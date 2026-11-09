@@ -78,40 +78,73 @@ fn new_then_build_then_a_screenshot_works_with_only_the_pinned_rgbds() {
         "{}",
         made.stdout
     );
-    assert!(
-        made.stdout.contains("next command=\"gbcli build game\"\n"),
-        "{}",
-        made.stdout
-    );
 
-    let built = p.rgbds(&["build", "game"]);
-    assert_eq!(built.code, 0, "{}", built.stderr);
+    // The commands `new` said to run next, as it said them, from where it ran.
+    let next: Vec<&str> = made
+        .stdout
+        .lines()
+        .filter_map(|l| l.strip_prefix("next command=\""))
+        .map(|l| l.trim_end_matches('"'))
+        .collect();
+    assert_eq!(next.len(), 3, "{}", made.stdout);
+    let mut cwd = p.path("");
+    let mut runs = Vec::new();
+    for command in &next {
+        let words: Vec<&str> = command.split(' ').collect();
+        match words[..] {
+            ["cd", dir] => cwd = cwd.join(dir),
+            ["gbcli", ..] => {
+                let run = p.gbcli_in(&cwd, &words[1..], &[("PATH", &rgbds_dir())]);
+                assert_eq!(run.code, 0, "{command}: {}{}", run.stdout, run.stderr);
+                assert!(run.stderr.is_empty(), "{command}: {}", run.stderr);
+                runs.push(run);
+            }
+            _ => panic!("not a command this test follows: {command}"),
+        }
+    }
+    let [built, shot] = &runs[..] else {
+        panic!("{next:?}")
+    };
     assert!(
         built
             .stdout
-            .contains("output kind=rom path=game/build/game.gb bytes=32768\n"),
+            .contains("output kind=rom path=build/game.gb bytes=32768\n"),
         "{}",
         built.stdout
     );
-    assert!(built.stderr.is_empty(), "{}", built.stderr);
-
-    // The command `new` said to run next, as it said it.
-    let next = "gbcli run game/build/game.gb --session game --frames 120 --shot first.png";
-    assert!(made.stdout.contains(next), "{}", made.stdout);
-    let args: Vec<&str> = next.split(' ').skip(1).collect();
-    let shot = p.rgbds(&args);
-    assert_eq!(shot.code, 0, "{}", shot.stderr);
     assert!(
         shot.stdout.contains("vblank normal"),
         "a normal frame: {}",
         shot.stdout
     );
+    // The session is in the project's own bundle, and no other was made.
+    assert!(p.path("game/.gbcli/sessions/game").is_dir());
+    assert!(
+        !p.path(".gbcli").exists(),
+        "a second bundle beside the project"
+    );
     // The row of faces across the middle (tile row 8, from x = 32) is on
     // screen at 4x: the face's outline is dark at its top-middle.
-    let (count, top_of_face) = colors(&p.path("first.png"), (32 + 3) * 4, 8 * 8 * 4);
+    let first = p.path("game/first.png");
+    let (count, top_of_face) = colors(&first, (32 + 3) * 4, 8 * 8 * 4);
     assert!(count >= 2, "the screen isn't blank: {count} color(s)");
-    let (_, background) = colors(&p.path("first.png"), 0, 0);
+    let (_, background) = colors(&first, 0, 0);
     assert_ne!(top_of_face, background);
+
+    // The loop the help gives, from inside game/, finds that session
+    // (review-run14's probe: the old lines put it in the parent's bundle).
+    let saved = p.gbcli_in(
+        &cwd,
+        &["checkpoint", "start", "--session", "game"],
+        &[("PATH", &rgbds_dir())],
+    );
+    assert_eq!(saved.code, 0, "{}", saved.stderr);
+    let restored = p.gbcli_in(
+        &cwd,
+        &["build", "--session", "game", "--restore", "start"],
+        &[("PATH", &rgbds_dir())],
+    );
+    assert_eq!(restored.code, 0, "{}{}", restored.stdout, restored.stderr);
 }
 
 #[test]

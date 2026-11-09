@@ -2,7 +2,7 @@
 //! hardware vector it was entered at when no label is there, or the label
 //! it is inside, as `Label+$n`.
 
-use crate::sym::Symbols;
+use crate::sym::{Symbols, is_end_marker};
 
 use super::Entry;
 
@@ -10,6 +10,9 @@ use super::Entry;
 pub(super) fn routine_name(symbols: Option<&Symbols>, entry: Entry) -> Option<String> {
     let s = symbols.and_then(|s| s.containing(entry.bank, entry.addr));
     match (s, vector(entry)) {
+        // An end marker is the end of what came before: on a vector, the
+        // vector names the code there better.
+        (Some(s), Some(v)) if s.addr == entry.addr && is_end_marker(&s.name) => Some(v.to_string()),
         (Some(s), _) if s.addr == entry.addr => Some(s.name.clone()),
         // An unlabeled vector's nearest label is whatever came before it
         // (`VBlankVector+$8` for the STAT vector), which names the wrong code.
@@ -95,5 +98,20 @@ mod tests {
         let name = routine_name(Some(&syms), entry).unwrap();
         assert_ne!(name, "end_zero");
         assert!(name == "VLoop" || name == "RoadLoops", "{name}");
+    }
+
+    /// From review-run14's probe: the label at a vector is the end of what
+    /// came before it, not the name of the code there.
+    #[test]
+    fn an_end_marker_alone_on_a_vector_does_not_name_it() {
+        let syms = Symbols::parse("00:0038 Rst38\n00:0040 Rst38_end\n00:0150 Main\n").unwrap();
+        let name = |addr| routine_name(Some(&syms), at(addr));
+        assert_eq!(name(0x0040).as_deref(), Some("VBlank_vector"));
+        // Off a vector, an end marker at the entry is still the best name.
+        let syms = Symbols::parse("00:0150 Main\n00:0160 Main_end\n").unwrap();
+        assert_eq!(
+            routine_name(Some(&syms), at(0x0160)).as_deref(),
+            Some("Main_end")
+        );
     }
 }

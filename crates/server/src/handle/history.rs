@@ -39,7 +39,8 @@ impl Handler {
         let cp = store
             .checkpoint(&args.name)
             .map_err(|e| Failure::from_store(&e))?;
-        let (mut machine, _) = self.machine_for(store, meta, Need::Replace, None)?;
+        let (mut machine, loaded) = self.machine_for(store, meta, Need::Replace, None)?;
+        warnings.extend(loaded);
         warnings.extend(
             store
                 .restore(meta, &mut machine, &cp, &load)
@@ -75,7 +76,8 @@ impl Handler {
             .undo_target(meta)
             .map_err(|e| Failure::from_store(&e))?;
         let load = self.load.clone();
-        let (mut machine, _) = self.machine_for(store, meta, Need::Replace, None)?;
+        let (mut machine, loaded) = self.machine_for(store, meta, Need::Replace, None)?;
+        warnings.extend(loaded);
         let frame = checkpoint_frame(&cp);
         warnings.extend(
             store

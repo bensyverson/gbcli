@@ -117,7 +117,8 @@ pub struct DebuggerConfig {
     pub watches: Vec<WatchSpec>,
 }
 
-/// Where a breakpoint or watch applies: resolved when set (design §7).
+/// Where a breakpoint or watch applies: resolved when set, and one set by a
+/// symbol again when the ROM changes (design §7).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Location {
     pub addr: u16,

@@ -305,7 +305,8 @@ pub struct NewMade {
     /// The files written, then the project's `.gbcli/` (a directory, so it
     /// ends in `/`).
     pub files: Vec<String>,
-    /// The commands to run next, in order.
+    /// The commands to run next, in order, from where `new` ran: the first is
+    /// a `cd` into the project unless it is that directory.
     pub next: Vec<String>,
 }
 

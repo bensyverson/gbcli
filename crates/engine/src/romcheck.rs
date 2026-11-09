@@ -2,7 +2,7 @@
 //! loads under a changed ROM only if nothing the state depends on moved.
 
 use gbcli_core::Core;
-use gbcli_protocol::{BreakpointSpec, CheckpointHeader, LiveSymbol, SymbolRole};
+use gbcli_protocol::{CheckpointHeader, LiveSymbol, SymbolRole};
 
 use crate::checkpoint_error::{CheckpointError, Moved, MovedRole, SymbolAt, SymbolSide};
 use crate::mem;
@@ -89,17 +89,17 @@ fn stack_words(core: &dyn Core, syms: &Symbols) -> Vec<u16> {
 /// What a passing check compared.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RomCheck {
-    /// Live symbols and breakpoint symbols compared.
+    /// Live symbols compared.
     pub checked: usize,
 }
 
-/// Compares the saved state's live symbols, and the session's breakpoint
-/// symbols, against the current ROM's `.sym`. Refuses if any moved or
-/// there's nothing to compare by.
+/// Compares the saved state's live symbols against the current ROM's `.sym`.
+/// Refuses if any moved or there's nothing to compare by. A breakpoint's
+/// symbol is not checked: one set by a symbol follows it into the new build
+/// ([`Machine::attach_debugger`](crate::Machine::attach_debugger)).
 pub fn check(
     header: &CheckpointHeader,
     current: Option<&Symbols>,
-    breakpoints: &[BreakpointSpec],
 ) -> Result<RomCheck, CheckpointError> {
     let current = match (header.sym_sha256.is_some(), current) {
         (true, Some(syms)) => syms,
@@ -131,27 +131,6 @@ pub fn check(
             moved.push(Moved {
                 name: live.name.clone(),
                 role,
-                old,
-                new,
-            });
-        }
-    }
-    for bp in breakpoints {
-        let Some(symbol) = &bp.at.symbol else {
-            continue;
-        };
-        checked += 1;
-        let (name, delta) = crate::addr::split_label(symbol);
-        let old = SymbolAt {
-            bank: bp.at.bank.unwrap_or(0),
-            // The grammar refused any offset that leaves $0000-$FFFF.
-            addr: (i64::from(bp.at.addr) - delta) as u16,
-        };
-        let new = at(name);
-        if new != Some(old) {
-            moved.push(Moved {
-                name: name.to_string(),
-                role: MovedRole::Breakpoint,
                 old,
                 new,
             });

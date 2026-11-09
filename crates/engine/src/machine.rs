@@ -363,7 +363,7 @@ impl Machine {
         // 5. ROM.
         let rom_changed = h.rom_sha256 != self.rom_sha256;
         if rom_changed {
-            match romcheck::check(h, self.symbols(), &self.debugger.breakpoints) {
+            match romcheck::check(h, self.symbols()) {
                 Ok(check) => warnings.push(LoadWarning::RomChanged {
                     moved: Vec::new(),
                     checked: check.checked,

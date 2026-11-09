@@ -6,10 +6,10 @@ use crate::common;
 use common::*;
 use gbcli_core::{Budget, Model, Region, RunRequest};
 use gbcli_engine::{
-    Backend, Checkpoint, CheckpointError, LoadOptions, LoadWarning, Machine, MovedRole, SaveMeta,
-    Session, sha256,
+    Backend, Checkpoint, CheckpointError, LoadOptions, LoadWarning, Machine, MovedRole, Rebased,
+    SaveMeta, Session, sha256,
 };
-use gbcli_protocol::{BreakpointSpec, Location, Sha256};
+use gbcli_protocol::{BreakpointSpec, DebuggerConfig, Location, Sha256, WatchAccess, WatchSpec};
 
 fn meta() -> SaveMeta {
     SaveMeta {
@@ -284,8 +284,23 @@ fn a_rebuilt_rom_whose_ram_moved_is_refused() {
     );
 }
 
+fn breakpoint(id: u32, addr: u16, symbol: Option<&str>) -> BreakpointSpec {
+    BreakpointSpec {
+        id,
+        at: Location {
+            addr,
+            bank: Some(0),
+            symbol: symbol.map(str::to_string),
+        },
+        condition: None,
+    }
+}
+
+/// Ben's ruling (2026-11-08): a breakpoint set by a symbol follows it into a
+/// rebuild, so its symbol moving is no reason to refuse the state. Design §6
+/// listed it as one until then.
 #[test]
-fn a_moved_breakpoint_symbol_is_refused() {
+fn a_moved_breakpoint_symbol_does_not_refuse_the_load() {
     let mut m = machine(V1, Some(V1_SYM));
     step_to(&mut m, 0x0150); // Main: nothing live has moved in v2
     let saved = m.capture(meta());
@@ -293,45 +308,7 @@ fn a_moved_breakpoint_symbol_is_refused() {
     rebuilt
         .debugger_config_mut()
         .breakpoints
-        .push(BreakpointSpec {
-            id: 1,
-            at: Location {
-                addr: 0x0163,
-                bank: Some(0),
-                symbol: Some("Work".into()),
-            },
-            condition: None,
-        });
-    let err = rebuilt
-        .restore(&saved, &LoadOptions::default())
-        .unwrap_err();
-    let CheckpointError::RomChanged { moved } = &err else {
-        panic!("{err:?}")
-    };
-    assert_eq!(moved.len(), 1, "{moved:?}");
-    assert_eq!(
-        (moved[0].role, moved[0].name.as_str()),
-        (MovedRole::Breakpoint, "Work")
-    );
-}
-
-#[test]
-fn a_breakpoint_at_a_symbol_plus_or_minus_an_offset_that_did_not_move_loads() {
-    let mut m = machine(V1, Some(V1_SYM));
-    step_to(&mut m, 0x0150);
-    let saved = m.capture(meta());
-    let mut rebuilt = machine(V3, Some(V3_SYM));
-    for (id, text) in [(1, "Work-1"), (2, "Work+$10"), (3, "Main.loop+2")] {
-        let at = gbcli_engine::addr::parse(text, rebuilt.symbols()).unwrap();
-        rebuilt
-            .debugger_config_mut()
-            .breakpoints
-            .push(BreakpointSpec {
-                id,
-                at,
-                condition: None,
-            });
-    }
+        .push(breakpoint(1, 0x0163, Some("Work")));
     let warnings = rebuilt.restore(&saved, &LoadOptions::default()).unwrap();
     assert!(
         warnings
@@ -339,6 +316,48 @@ fn a_breakpoint_at_a_symbol_plus_or_minus_an_offset_that_did_not_move_loads() {
             .any(|w| matches!(w, LoadWarning::RomChanged { moved, .. } if moved.is_empty())),
         "{warnings:?}"
     );
+}
+
+#[test]
+fn attaching_a_debugger_moves_each_label_with_its_symbol_and_no_address() {
+    let mut rebuilt = machine(V2, Some(V2_SYM));
+    let v1 = machine(V1, Some(V1_SYM));
+    let label = |text: &str| gbcli_engine::addr::parse(text, v1.symbols()).unwrap();
+    let mut config = DebuggerConfig::default();
+    for (id, text) in [(1, "Work"), (2, "Work+$10"), (3, "Main")] {
+        config.breakpoints.push(BreakpointSpec {
+            id,
+            at: label(text),
+            condition: None,
+        });
+    }
+    // V1's Work, by address: no symbol to follow.
+    config.breakpoints.push(breakpoint(4, 0x0163, None));
+    config.watches.push(WatchSpec {
+        id: 5,
+        access: WatchAccess::Write,
+        at: label("Work.done"),
+        condition: None,
+        once: false,
+    });
+
+    let report = rebuilt.attach_debugger(config);
+    let at: Vec<u16> = rebuilt
+        .debugger_config()
+        .breakpoints
+        .iter()
+        .map(|b| b.at.addr)
+        .collect();
+    assert_eq!(at, [0x0165, 0x0175, 0x0150, 0x0163]);
+    assert_eq!(rebuilt.debugger_config().watches[0].at.addr, 0x0172);
+    let moved: Vec<u32> = report
+        .iter()
+        .map(|r| match r {
+            Rebased::Moved { id, .. } => *id,
+            Rebased::Lost { .. } => panic!("{r:?}"),
+        })
+        .collect();
+    assert_eq!(moved, [1, 2, 5], "one report per move, none for Main");
 }
 
 #[test]

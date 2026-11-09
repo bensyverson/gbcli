@@ -4,10 +4,14 @@ Original Game Boy games built entirely by AI agents with gbcli, as a test of the
 
 | Folder | Game | What it shows |
 |---|---|---|
-| `racer/` | Switchback: a pseudo-3D road race against the clock | Curves and hills drawn by changing the scroll registers on every scanline, in HBlank |
-| `shooter/` | Vesper Swarm, a bullet-heavy shooter | 30+ sprites at once by multiplexing, and parallax from mid-frame scroll splits |
+| `racer/` | Switchback: a pseudo-3D road race against the clock ([play: `switchback.gb`](racer/switchback.gb)) | Curves and hills drawn by changing the scroll registers on every scanline, in HBlank |
+| `shooter/` | Vesper Swarm, a bullet-heavy shooter ([play: `vesper-swarm.gb`](shooter/vesper-swarm.gb)) | 30+ sprites at once by multiplexing, and parallax from mid-frame scroll splits |
 
-## Build and play one
+## Play one
+
+Each game folder has a ready-to-play ROM (linked above): one file that runs in color on a Game Boy Color and in four shades on the original Game Boy. Open it in any Game Boy emulator. `scripts/examples/build-roms.sh` rebuilds both.
+
+## Build one
 
 You need gbcli and RGBDS (see the [README](../README.md)).
 

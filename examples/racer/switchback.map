@@ -1,0 +1,722 @@
+SUMMARY:
+	ROM0: 13906 bytes used / 2478 free
+	ROMX: 12436 bytes used / 3948 free in 1 bank
+	WRAM0: 1428 bytes used / 2668 free
+	HRAM: 16 bytes used / 111 free
+
+ROM0 bank #0:
+	SECTION: $0000-$0028 ($0029 bytes) ["Timer handler"]
+	         $0000 = TimerHandler
+	         $0002 = TimerHandler.wait
+	SECTION: $0029-$003e ($0016 bytes) ["OAM DMA routine"]
+	         $0029 = CopyOAMDMA
+	         $0030 = CopyOAMDMA.copy
+	         $0037 = OAMDMARoutine
+	         $003b = OAMDMARoutine.wait
+	         $003f = OAMDMARoutine.end
+	EMPTY: $003f-$003f ($0001 byte)
+	SECTION: $0040-$0042 ($0003 bytes) ["VBlank vector"]
+	         $0040 = VBlankVector
+	EMPTY: $0043-$0047 ($0005 bytes)
+	SECTION: $0048-$004a ($0003 bytes) ["STAT vector"]
+	EMPTY: $004b-$004f ($0005 bytes)
+	SECTION: $0050-$0052 ($0003 bytes) ["Timer vector"]
+	SECTION: $0053-$0072 ($0020 bytes) ["Music"]
+	         $0053 = MusicPlayTitle
+	         $0058 = MusicPlayRace
+	         $005b = MusicPlay
+	         $006b = MusicVBlank
+	EMPTY: $0073-$00ff ($008d bytes)
+	SECTION: $0100-$014f ($0050 bytes) ["Header"]
+	EMPTY: $0150-$017f ($0030 bytes)
+	SECTION: $0180-$117f ($1000 bytes) ["Hill profiles"]
+	         $0180 = HillProfiles
+	SECTION: $1180-$19ff ($0880 bytes) ["Curve profiles"]
+	         $1180 = CurveProfiles
+	SECTION: $1a00-$1aef ($00f0 bytes) ["Stripe rows 27"]
+	         $1a00 = StripeRows27
+	         $1a50 = StripeRows28
+	         $1aa0 = StripeRows29
+	EMPTY: $1af0-$1aff ($0010 bytes)
+	SECTION: $1b00-$1bef ($00f0 bytes) ["Stripe rows 24"]
+	         $1b00 = StripeRows24
+	         $1b50 = StripeRows25
+	         $1ba0 = StripeRows26
+	EMPTY: $1bf0-$1bff ($0010 bytes)
+	SECTION: $1c00-$1cef ($00f0 bytes) ["Stripe rows 21"]
+	         $1c00 = StripeRows21
+	         $1c50 = StripeRows22
+	         $1ca0 = StripeRows23
+	EMPTY: $1cf0-$1cff ($0010 bytes)
+	SECTION: $1d00-$1def ($00f0 bytes) ["Stripe rows 18"]
+	         $1d00 = StripeRows18
+	         $1d50 = StripeRows19
+	         $1da0 = StripeRows20
+	EMPTY: $1df0-$1dff ($0010 bytes)
+	SECTION: $1e00-$1eef ($00f0 bytes) ["Stripe rows 15"]
+	         $1e00 = StripeRows15
+	         $1e50 = StripeRows16
+	         $1ea0 = StripeRows17
+	EMPTY: $1ef0-$1eff ($0010 bytes)
+	SECTION: $1f00-$1fef ($00f0 bytes) ["Stripe rows 12"]
+	         $1f00 = StripeRows12
+	         $1f50 = StripeRows13
+	         $1fa0 = StripeRows14
+	EMPTY: $1ff0-$1fff ($0010 bytes)
+	SECTION: $2000-$20ef ($00f0 bytes) ["Stripe rows 9"]
+	         $2000 = StripeRows9
+	         $2050 = StripeRows10
+	         $20a0 = StripeRows11
+	EMPTY: $20f0-$20ff ($0010 bytes)
+	SECTION: $2100-$21ef ($00f0 bytes) ["Stripe rows 6"]
+	         $2100 = StripeRows6
+	         $2150 = StripeRows7
+	         $21a0 = StripeRows8
+	EMPTY: $21f0-$21ff ($0010 bytes)
+	SECTION: $2200-$22ef ($00f0 bytes) ["Stripe rows 3"]
+	         $2200 = StripeRows3
+	         $2250 = StripeRows4
+	         $22a0 = StripeRows5
+	EMPTY: $22f0-$22ff ($0010 bytes)
+	SECTION: $2300-$23ef ($00f0 bytes) ["Stripe rows 0"]
+	         $2300 = StripeRows0
+	         $2350 = StripeRows1
+	         $23a0 = StripeRows2
+	EMPTY: $23f0-$23ff ($0010 bytes)
+	SECTION: $2400-$249f ($00a0 bytes) ["Stripe rows 30"]
+	         $2400 = StripeRows30
+	         $2450 = StripeRows31
+	SECTION: $24a0-$2c34 ($0795 bytes) ["Sound Driver"]
+	         $24a0 = hUGE_init
+	         $24b1 = hUGE_init.copy_song_descriptor_loop
+	         $24bd = hUGE_init.fill_loop
+	         $24d0 = load_patterns
+	         $24e8 = load_patterns.load_pattern
+	         $24f6 = hUGE_mute_channel
+	         $24fc = hUGE_mute_channel.enable_loop
+	         $2503 = hUGE_mute_channel.enable_cut
+	         $2510 = get_current_row
+	         $2513 = get_current_row.row_in_a
+	         $251f = get_current_note
+	         $252c = get_note_period
+	         $2539 = get_note_poly
+	         $254f = ptr_to_channel_member
+	         $255b = update_channel_freq
+	         $255d = update_channel_freq.nonzero_highmask
+	         $256a = update_channel_freq.update_channel1
+	         $257b = update_channel_freq.update_channel2
+	         $258c = update_channel_freq.update_channel3
+	         $259d = update_channel_freq.update_channel4
+	         $25af = play_note_routines
+	         $25b7 = play_ch1_note
+	         $25ca = play_ch2_note
+	         $25dd = play_ch3_note
+	         $2600 = play_ch4_note
+	         $2611 = do_table
+	         $2625 = do_table.no_steal
+	         $262b = do_table.no_jump
+	         $2649 = do_table.is_ch4
+	         $2650 = do_table.no_note
+	         $2651 = do_table.no_note2
+	         $2656 = do_effect
+	         $2658 = do_effect.no_set_offset
+	         $2670 = do_effect.no_offset
+	         $2676 = do_effect.jump
+	         $2696 = fx_set_master_volume
+	         $269b = fx_call_routine
+	         $26b5 = fx_set_pan
+	         $26ba = fx_set_duty
+	         $26c7 = fx_set_duty.chan1
+	         $26ce = fx_set_duty.chan2
+	         $26d5 = fx_set_duty.chan4
+	         $26e0 = fx_set_duty.chan3
+	         $26ef = update_ch3_waveform
+	         $273e = fx_set_speed
+	         $2744 = fx_pos_jump
+	         $2744 = hUGE_set_position
+	         $274d = fx_pos_jump.already_broken
+	         $2750 = fx_pattern_break
+	         $2756 = fx_note_cut
+	         $2767 = note_cut
+	         $277a = fx_set_volume
+	         $2789 = fx_set_volume.set_chn_1_vol
+	         $2796 = fx_set_volume.set_chn_2_vol
+	         $27a3 = fx_set_volume.set_chn_3_vol
+	         $27b2 = fx_set_volume.three
+	         $27b6 = fx_set_volume.two
+	         $27ba = fx_set_volume.one
+	         $27bc = fx_set_volume.done
+	         $27bf = fx_set_volume.set_chn_4_vol
+	         $27c8 = fx_vibrato
+	         $27db = fx_vibrato.restore
+	         $27e2 = fx_vibrato.go_up
+	         $27ed = fx_vibrato.finish_vibrato
+	         $27f0 = fx_arpeggio
+	         $27fd = fx_arpeggio.greater_than_two
+	         $27ff = fx_arpeggio.test_greater_than_two
+	         $280c = fx_arpeggio.arp_options
+	         $2810 = fx_arpeggio.reset_arp
+	         $2813 = fx_arpeggio.set_arp2
+	         $2817 = fx_arpeggio.set_arp1
+	         $2818 = fx_arpeggio.finish_arp
+	         $281b = fx_arpeggio.finish_skip_add
+	         $2823 = fx_porta_up
+	         $2832 = fx_porta_down
+	         $2841 = fx_toneporta
+	         $2856 = fx_toneporta.high_byte_same
+	         $285c = fx_toneporta.add
+	         $286e = fx_toneporta.subtract
+	         $2884 = fx_toneporta.set_exact
+	         $2886 = fx_toneporta.done
+	         $2898 = fx_toneporta.setup
+	         $28a8 = ret_dont_play_note
+	         $28ad = fx_vol_slide
+	         $28d7 = fx_vol_slide.cont1
+	         $28de = fx_vol_slide.cont2
+	         $28e9 = fx_note_delay
+	         $28ed = play_note
+	         $28f7 = setup_instrument_pointer
+	         $28fe = setup_instrument_pointer.finish
+	         $2909 = hUGE_dosound
+	         $2909 = _hUGE_dosound
+	         $292b = hUGE_dosound.toneporta
+	         $2958 = hUGE_dosound.write_mask1
+	         $295b = hUGE_dosound.do_setvol1
+	         $2975 = process_ch2
+	         $2990 = process_ch2.toneporta
+	         $29bb = process_ch2.write_mask2
+	         $29be = process_ch2.do_setvol2
+	         $29d8 = process_ch3
+	         $29f4 = process_ch3.toneporta
+	         $2a1c = process_ch3.no_wave_copy
+	         $2a2a = process_ch3.write_mask3
+	         $2a2d = process_ch3.do_setvol3
+	         $2a47 = process_ch4
+	         $2a9e = process_ch4.write_mask4
+	         $2aa1 = process_ch4.do_setvol4
+	         $2abe = process_effects
+	         $2ad7 = process_effects.after_effect1
+	         $2ae8 = process_effects.process_ch2
+	         $2b01 = process_effects.after_effect2
+	         $2b12 = process_effects.process_ch3
+	         $2b2b = process_effects.after_effect3
+	         $2b3c = process_effects.process_ch4
+	         $2b55 = process_effects.after_effect4
+	         $2b66 = tick_time
+	         $2b82 = tick_time.no_break
+	         $2b8c = tick_time.neworder
+	         $2b99 = tick_time.update_current_order
+	         $2ba1 = tick_time.noreset
+	         $2ba5 = note_table
+	SECTION: $2c35-$2f0b ($02d7 bytes) ["Objects"]
+	         $2c35 = InitObjects
+	         $2c46 = UpdateObjects
+	         $2c7d = UpdateObjects.clear
+	         $2c88 = DrawRivals
+	         $2c9d = DrawRivals.moved
+	         $2cc3 = DrawRivals.skip
+	         $2cd8 = DrawRivals.passed
+	         $2cde = DrawRivals.draw
+	         $2cf0 = RivalZ
+	         $2d16 = RivalStarts
+	         $2d2a = DrawTrees
+	         $2d2a = DrawTrees.skip
+	         $2d3a = DrawTrees.passed
+	         $2d44 = DrawTrees.draw
+	         $2d55 = DrawTrees.tree
+	         $2d69 = DrawTrees.lane
+	         $2d7d = DrawTrees.counted
+	         $2d84 = TreeZ
+	         $2d87 = TreeZAt
+	         $2da6 = DrawObject
+	         $2dde = DrawObject.bisect
+	         $2df4 = DrawObject.atOrPast
+	         $2df7 = DrawObject.found
+	         $2e2d = DrawObject.xDone
+	         $2e5c = DrawObject.kindKnown
+	         $2e85 = DrawObject.obj
+	         $2ea9 = DrawObject.full
+	         $2eae = Collide
+	         $2ec0 = Collide.abs
+	         $2edb = Collide.tree
+	         $2efe = Collide.fromRight
+	         $2f04 = LevelOffsetObj
+	SECTION: $2f0c-$3165 ($025a bytes) ["Start"]
+	         $2f0c = Start
+	         $2f1b = Start.gbcKnown
+	         $2f20 = ScreenOff
+	         $2f24 = ScreenOff.waitVBlank
+	         $2f3d = Title
+	         $2f57 = Title.row
+	         $2f59 = Title.tile
+	         $2f66 = Title.rowDone
+	         $2f8c = Title.loop
+	         $2f98 = RaceStart
+	         $2fed = RaceStart.hudRow
+	         $3037 = MainLoop
+	         $304e = WaitFrame
+	         $3052 = WaitFrame.wait
+	         $305b = VBlank
+	         $306f = VBlank.title
+	         $3077 = VBlank.counted
+	         $3080 = ReadPad
+	         $30ad = ColorTitle
+	         $30b6 = ColorTitle.bg
+	         $30c8 = ColorTitle.row
+	         $30ca = ColorTitle.tile
+	         $30d7 = ColorTitle.rowDone
+	         $30de = ColorGbc
+	         $30e7 = ColorGbc.bg
+	         $30f2 = ColorGbc.font
+	         $3101 = ColorGbc.obj
+	         $311e = ColorGbc.hud
+	         $3155 = ClearMem
+	         $315d = CopyMem
+	SECTION: $3166-$3370 ($020b bytes) ["Road"]
+	         $3166 = RoadVBlank
+	         $3178 = RoadVBlank.noSwap
+	         $3190 = TimerStart
+	         $3220 = InitRoad
+	         $322d = InitRoad.copy
+	         $324a = SetLineZero
+	         $3257 = ComputeRoad
+	         $32b1 = ComputeRoad.skyY
+	         $32ca = ComputeRoad.skyX
+	         $32fa = ComputeRoad.right
+	         $3328 = LevelOffset
+	         $3330 = RoadLoopsRom
+	         $3371 = RoadLoopsRomEnd
+	SECTION: $3371-$3550 ($01e0 bytes) ["Drive"]
+	         $3371 = InitDrive
+	         $3395 = UpdateDrive
+	         $33b2 = UpdateSpeed
+	         $33c2 = UpdateSpeed.notStunned
+	         $33da = UpdateSpeed.noGas
+	         $33e0 = UpdateSpeed.brake
+	         $33e8 = UpdateSpeed.coast
+	         $33f4 = UpdateSpeed.limit
+	         $33fe = UpdateSpeed.positive
+	         $3409 = UpdateSpeed.store
+	         $3417 = UpdateTrack
+	         $3431 = UpdateTrack.ease
+	         $3446 = EaseToward
+	         $344c = EaseToward.down
+	         $344e = LoadSegment
+	         $345b = LoadSegment.load
+	         $3474 = UpdateSteering
+	         $3487 = UpdateSteering.notLeft
+	         $3491 = UpdateSteering.notRight
+	         $34b1 = UpdateSteering.negative
+	         $34b7 = UpdateSteering.store
+	         $34bb = UpdateSky
+	         $34d5 = LoadCurveSpeed
+	         $34de = CurveTimesSpeed
+	         $34ef = CurveTimesSpeed.right
+	         $34f4 = CurveTimesSpeed.left
+	         $34f5 = CurveTimesSpeed.leftLoop
+	         $34ff = PlaceCar
+	         $3507 = PlaceCar.obj
+	         $351d = Track
+	         $354e = RunOut
+	SECTION: $3551-$3694 ($0144 bytes) ["Race"]
+	         $3551 = InitRace
+	         $3565 = UpdateRace
+	         $3579 = UpdateRace.ready
+	         $3586 = UpdateRace.race
+	         $3593 = UpdateRace.clock
+	         $359d = UpdateRace.borrow
+	         $35ad = UpdateRace.timeUp
+	         $35b2 = FormatHud
+	         $35c5 = FormatHud.copy
+	         $35d7 = FormatHud.count
+	         $35e3 = FormatHud.digit
+	         $35e7 = FormatHud.notReady
+	         $35f4 = FormatHud.seconds
+	         $3609 = FormatHud.hundreds
+	         $3614 = FormatHud.tens
+	         $361f = PutBcd
+	         $362e = CopyHud
+	         $3636 = CopyHud.copy
+	         $363d = HudTemplates
+	         $3645 = HudReady
+	         $3659 = HudRace
+	         $366d = HudWon
+	         $3681 = HudLost
+	SECTION: $3695-$37b9 ($0125 bytes) ["Sfx"]
+	         $3695 = SfxInit
+	         $36b4 = SfxUpdate
+	         $36ce = SfxPlay
+	         $36d2 = PlayStep
+	         $36ea = EngineStart
+	         $3702 = Engine
+	         $370c = EngineFrequency
+	         $3717 = EngineFrequency.mul
+	         $371c = SfxTriggers
+	         $3732 = SfxTriggers.beep
+	         $3738 = SfxTriggers.notReady
+	         $3759 = SfxTriggers.changes
+	         $3769 = SfxTriggers.noCrash
+	         $3778 = SfxBeep
+	         $377d = SfxGo
+	         $3782 = SfxBump
+	         $378b = SfxCrash
+	         $379c = SfxFinish
+	         $37ad = SfxTimeUp
+	EMPTY: $37ba-$3fff ($0846 bytes)
+	TOTAL EMPTY: $09ae bytes
+
+ROMX bank #1:
+	SECTION: $4000-$4b3f ($0b40 bytes) ["image Road"]
+	         $4000 = RoadTiles
+	         $4740 = RoadTilemap
+	         $4740 = RoadTilesEnd
+	         $4b40 = RoadTilemapEnd
+	SECTION: $4b40-$5427 ($08e8 bytes) ["image Title"]
+	         $4b40 = TitleTiles
+	         $52c0 = TitleTilemap
+	         $52c0 = TitleTilesEnd
+	         $5428 = TitleTilemapEnd
+	SECTION: $5428-$59fb ($05d4 bytes) ["song_race Song Data"]
+	         $5428 = song_race
+	         $543d = song_race.order_cnt
+	         $543e = song_race.order1
+	         $5446 = song_race.order2
+	         $544e = song_race.order3
+	         $5456 = song_race.order4
+	         $545e = song_race.P0
+	         $551e = song_race.P1
+	         $55de = song_race.P2
+	         $569e = song_race.P3
+	         $575e = song_race.P4
+	         $581e = song_race.P5
+	         $58de = song_race.P6
+	         $599e = song_race.duty_instruments
+	         $599e = song_race.itSquareinst1
+	         $59a4 = song_race.wave_instruments
+	         $59a4 = song_race.itWaveinst1
+	         $59aa = song_race.noise_instruments
+	         $59aa = song_race.itNoiseinst1
+	         $59b0 = song_race.itNoiseinst2
+	         $59b6 = song_race.itNoiseinst3
+	         $59bc = song_race__hUGE_Routine_0
+	         $59bc = song_race__end_hUGE_Routine_0
+	         $59bd = song_race__hUGE_Routine_1
+	         $59bd = song_race__end_hUGE_Routine_1
+	         $59be = song_race__hUGE_Routine_2
+	         $59be = song_race__end_hUGE_Routine_2
+	         $59bf = song_race__hUGE_Routine_3
+	         $59bf = song_race__end_hUGE_Routine_3
+	         $59c0 = song_race__hUGE_Routine_4
+	         $59c0 = song_race__end_hUGE_Routine_4
+	         $59c1 = song_race__hUGE_Routine_5
+	         $59c1 = song_race__end_hUGE_Routine_5
+	         $59c2 = song_race__hUGE_Routine_6
+	         $59c2 = song_race__end_hUGE_Routine_6
+	         $59c3 = song_race__hUGE_Routine_7
+	         $59c3 = song_race__end_hUGE_Routine_7
+	         $59c4 = song_race__hUGE_Routine_8
+	         $59c4 = song_race__end_hUGE_Routine_8
+	         $59c5 = song_race__hUGE_Routine_9
+	         $59c5 = song_race__end_hUGE_Routine_9
+	         $59c6 = song_race__hUGE_Routine_10
+	         $59c6 = song_race__end_hUGE_Routine_10
+	         $59c7 = song_race__hUGE_Routine_11
+	         $59c7 = song_race__end_hUGE_Routine_11
+	         $59c8 = song_race__hUGE_Routine_12
+	         $59c8 = song_race__end_hUGE_Routine_12
+	         $59c9 = song_race__hUGE_Routine_13
+	         $59c9 = song_race__end_hUGE_Routine_13
+	         $59ca = song_race__hUGE_Routine_14
+	         $59ca = song_race__end_hUGE_Routine_14
+	         $59cb = song_race__hUGE_Routine_15
+	         $59cb = song_race__end_hUGE_Routine_15
+	         $59cc = song_race.routines
+	         $59ec = song_race.waves
+	         $59ec = song_race.wave0
+	SECTION: $59fc-$5e4b ($0450 bytes) ["song_title Song Data"]
+	         $59fc = song_title
+	         $5a11 = song_title.order_cnt
+	         $5a12 = song_title.order1
+	         $5a16 = song_title.order2
+	         $5a1a = song_title.order3
+	         $5a1e = song_title.order4
+	         $5a22 = song_title.P0
+	         $5ae2 = song_title.P1
+	         $5ba2 = song_title.P2
+	         $5c62 = song_title.P3
+	         $5d22 = song_title.P4
+	         $5de2 = song_title.duty_instruments
+	         $5de2 = song_title.itSquareinst1
+	         $5de8 = song_title.itSquareinst2
+	         $5dee = song_title.itSquareinst3
+	         $5df4 = song_title.wave_instruments
+	         $5df4 = song_title.itWaveinst1
+	         $5dfa = song_title.noise_instruments
+	         $5dfa = song_title.itNoiseinst1
+	         $5e00 = song_title.itNoiseinst2
+	         $5e06 = song_title.itNoiseinst3
+	         $5e0c = song_title__hUGE_Routine_0
+	         $5e0c = song_title__end_hUGE_Routine_0
+	         $5e0d = song_title__hUGE_Routine_1
+	         $5e0d = song_title__end_hUGE_Routine_1
+	         $5e0e = song_title__hUGE_Routine_2
+	         $5e0e = song_title__end_hUGE_Routine_2
+	         $5e0f = song_title__hUGE_Routine_3
+	         $5e0f = song_title__end_hUGE_Routine_3
+	         $5e10 = song_title__hUGE_Routine_4
+	         $5e10 = song_title__end_hUGE_Routine_4
+	         $5e11 = song_title__hUGE_Routine_5
+	         $5e11 = song_title__end_hUGE_Routine_5
+	         $5e12 = song_title__hUGE_Routine_6
+	         $5e12 = song_title__end_hUGE_Routine_6
+	         $5e13 = song_title__hUGE_Routine_7
+	         $5e13 = song_title__end_hUGE_Routine_7
+	         $5e14 = song_title__hUGE_Routine_8
+	         $5e14 = song_title__end_hUGE_Routine_8
+	         $5e15 = song_title__hUGE_Routine_9
+	         $5e15 = song_title__end_hUGE_Routine_9
+	         $5e16 = song_title__hUGE_Routine_10
+	         $5e16 = song_title__end_hUGE_Routine_10
+	         $5e17 = song_title__hUGE_Routine_11
+	         $5e17 = song_title__end_hUGE_Routine_11
+	         $5e18 = song_title__hUGE_Routine_12
+	         $5e18 = song_title__end_hUGE_Routine_12
+	         $5e19 = song_title__hUGE_Routine_13
+	         $5e19 = song_title__end_hUGE_Routine_13
+	         $5e1a = song_title__hUGE_Routine_14
+	         $5e1a = song_title__end_hUGE_Routine_14
+	         $5e1b = song_title__hUGE_Routine_15
+	         $5e1b = song_title__end_hUGE_Routine_15
+	         $5e1c = song_title.routines
+	         $5e3c = song_title.waves
+	         $5e3c = song_title.wave0
+	SECTION: $5e4c-$6253 ($0408 bytes) ["image Road GBC"]
+	         $5e4c = RoadAttrmap
+	         $624c = RoadPalettes
+	         $624c = RoadAttrmapEnd
+	         $6254 = RoadPalettesEnd
+	SECTION: $6254-$6514 ($02c1 bytes) ["image Font GBC"]
+	         $6254 = FontTilesGbc
+	         $64e4 = FontTilesGbcEnd
+	         $64e4 = FontAttrs
+	         $650d = FontPalettes
+	         $650d = FontAttrsEnd
+	         $6515 = FontPalettesEnd
+	SECTION: $6515-$67a4 ($0290 bytes) ["image Font"]
+	         $6515 = FontTiles
+	         $67a5 = FontTilesEnd
+	SECTION: $67a5-$6a34 ($0290 bytes) ["Object tables"]
+	         $67a5 = DepthStrip
+	         $68a5 = StripSize
+	         $68f5 = LaneX
+	SECTION: $6a35-$6ba4 ($0170 bytes) ["image Title GBC"]
+	         $6a35 = TitleAttrmap
+	         $6b9d = TitlePalettes
+	         $6b9d = TitleAttrmapEnd
+	         $6ba5 = TitlePalettesEnd
+	SECTION: $6ba5-$6cd8 ($0134 bytes) ["image Rival"]
+	         $6ba5 = RivalTiles
+	         $6ca5 = RivalFrames
+	         $6ca5 = RivalTilesEnd
+	         $6cad = RivalFrame0
+	         $6cb2 = RivalFrame1
+	         $6cbf = RivalFrame2
+	         $6ccc = RivalFrame3
+	SECTION: $6cd9-$6dd8 ($0100 bytes) ["image Rival GBC"]
+	         $6cd9 = RivalTilesGbc
+	         $6dd9 = RivalTilesGbcEnd
+	SECTION: $6dd9-$6ebc ($00e4 bytes) ["image Tree"]
+	         $6dd9 = TreeTiles
+	         $6e99 = TreeFrames
+	         $6e99 = TreeTilesEnd
+	         $6ea1 = TreeFrame0
+	         $6ea6 = TreeFrame1
+	         $6eab = TreeFrame2
+	         $6eb4 = TreeFrame3
+	SECTION: $6ebd-$6f7c ($00c0 bytes) ["image Tree GBC"]
+	         $6ebd = TreeTilesGbc
+	         $6f7d = TreeTilesGbcEnd
+	SECTION: $6f7d-$6fcb ($004f bytes) ["image Car"]
+	         $6f7d = CarTiles
+	         $6fbd = CarFrames
+	         $6fbd = CarTilesEnd
+	         $6fbf = CarFrame0
+	SECTION: $6fcc-$700b ($0040 bytes) ["image Car GBC"]
+	         $6fcc = CarTilesGbc
+	         $700c = CarTilesGbcEnd
+	SECTION: $700c-$704b ($0040 bytes) ["Stripe pointers"]
+	         $700c = StripePtrs
+	SECTION: $704c-$706b ($0020 bytes) ["Hill horizons"]
+	         $704c = HillHorizon
+	SECTION: $706c-$7083 ($0018 bytes) ["images GBC OBJ palettes"]
+	         $706c = ObjPalettesGbc
+	         $7084 = ObjPalettesGbcEnd
+	SECTION: $7084-$7093 ($0010 bytes) ["images named palettes"]
+	         $7084 = PaletteRoad
+	         $708c = PaletteTitle
+	         $708c = PaletteRoadEnd
+	         $7094 = PaletteTitleEnd
+	EMPTY: $7094-$7fff ($0f6c bytes)
+	TOTAL EMPTY: $0f6c bytes
+
+WRAM0 bank #0:
+	SECTION: $c000-$c3ff ($0400 bytes) ["Scroll tables"]
+	         $c000 = wScrollTables
+	SECTION: $c400-$c49f ($00a0 bytes) ["Shadow OAM"]
+	         $c400 = wShadowOAM
+	SECTION: $c4a0-$c503 ($0064 bytes) ["Playback variables"]
+	         $c4a0 = order_cnt
+	         $c4a1 = order1
+	         $c4a1 = _start_song_descriptor_pointers
+	         $c4a3 = order2
+	         $c4a5 = order3
+	         $c4a7 = order4
+	         $c4a9 = duty_instruments
+	         $c4ab = wave_instruments
+	         $c4ad = noise_instruments
+	         $c4af = routines
+	         $c4b1 = waves
+	         $c4b3 = pattern1
+	         $c4b3 = _end_song_descriptor_pointers
+	         $c4b5 = pattern2
+	         $c4b7 = pattern3
+	         $c4b9 = pattern4
+	         $c4bb = ticks_per_row
+	         $c4bc = current_wave
+	         $c4bc = hUGE_current_wave
+	         $c4bc = _hUGE_current_wave
+	         $c4bd = start_zero
+	         $c4bd = mute_channels
+	         $c4bd = _hUGE_mute_mask
+	         $c4be = counter
+	         $c4bf = tick
+	         $c4c0 = row_break
+	         $c4c1 = next_order
+	         $c4c2 = row
+	         $c4c3 = current_order
+	         $c4c4 = channels
+	         $c4c4 = channel_period1
+	         $c4c4 = channel1
+	         $c4c6 = toneporta_target1
+	         $c4c8 = channel_note1
+	         $c4c9 = highmask1
+	         $c4ca = vibrato_tremolo_phase1
+	         $c4cb = envelope1
+	         $c4cc = table1
+	         $c4ce = table_row1
+	         $c4d4 = channel_period2
+	         $c4d4 = channel2
+	         $c4d6 = toneporta_target2
+	         $c4d8 = channel_note2
+	         $c4d9 = highmask2
+	         $c4da = vibrato_tremolo_phase2
+	         $c4db = envelope2
+	         $c4dc = table2
+	         $c4de = table_row2
+	         $c4e4 = channel_period3
+	         $c4e4 = channel3
+	         $c4e6 = toneporta_target3
+	         $c4e8 = channel_note3
+	         $c4e9 = highmask3
+	         $c4ea = vibrato_tremolo_phase3
+	         $c4eb = envelope3
+	         $c4ec = table3
+	         $c4ee = table_row3
+	         $c4f4 = channel_period4
+	         $c4f4 = channel4
+	         $c4f6 = toneporta_target4
+	         $c4f8 = channel_note4
+	         $c4f9 = highmask4
+	         $c4fa = step_width4
+	         $c4fb = vibrato_tremolo_phase4
+	         $c4fc = envelope4
+	         $c4fd = table4
+	         $c4ff = table_row4
+	         $c504 = end_zero
+	SECTION: $c504-$c544 ($0041 bytes) ["Road loops"]
+	         $c504 = StatHandler
+	         $c504 = RoadLoops
+	         $c505 = StatScx
+	         $c507 = StatScxWrite
+	         $c509 = StatScy
+	         $c50b = StatScyWrite
+	         $c521 = VLoop
+	         $c523 = VPatchBase
+	         $c52f = HLoop
+	         $c531 = HPatchMirror
+	         $c534 = HPatchK
+	         $c538 = HPatchDpLo
+	         $c53c = HPatchDpHi
+	         $c540 = HPatchStop
+	SECTION: $c545-$c55d ($0019 bytes) ["Object variables"]
+	         $c545 = wRivalTravel
+	         $c548 = wRivalOffset
+	         $c54a = wRivalK
+	         $c54b = wTreeK
+	         $c54d = wTreeJ
+	         $c54f = wTreeCount
+	         $c550 = wD
+	         $c552 = wOamCursor
+	         $c553 = wObjZ
+	         $c554 = wObjLane
+	         $c555 = wObjKind
+	         $c556 = wObjStrip
+	         $c557 = wObjSize
+	         $c558 = wObjY
+	         $c559 = wObjX
+	         $c55a = wObjTile
+	         $c55b = wObjAttr
+	         $c55c = wBumps
+	         $c55d = wCrashes
+	SECTION: $c55e-$c575 ($0018 bytes) ["Race variables"]
+	         $c55e = wState
+	         $c55f = wReadyTimer
+	         $c560 = wTimeSec
+	         $c561 = wTimeSub
+	         $c562 = wHud
+	SECTION: $c576-$c581 ($000c bytes) ["Drive variables"]
+	         $c576 = wSpeed
+	         $c577 = wSegLeft
+	         $c579 = wSegPtr
+	         $c57b = wCurveTarget
+	         $c57c = wHillTarget
+	         $c57d = wDrift
+	         $c57e = wCurveSpeed
+	         $c580 = wFinished
+	         $c581 = wStunned
+	SECTION: $c582-$c58b ($000a bytes) ["Road variables"]
+	         $c582 = wBack
+	         $c583 = wHorizon
+	         $c584 = wHill
+	         $c585 = wCurve
+	         $c586 = wPlayerX
+	         $c587 = wPos
+	         $c58a = wSkyX
+	SECTION: $c58c-$c591 ($0006 bytes) ["Sfx variables"]
+	         $c58c = wSfxLeft
+	         $c58d = wSfxPtr
+	         $c58f = wSfxCrashes
+	         $c590 = wSfxBumps
+	         $c591 = wSfxState
+	SECTION: $c592-$c593 ($0002 bytes) ["Variables"]
+	         $c592 = wFrame
+	EMPTY: $c594-$cfff ($0a6c bytes)
+	TOTAL EMPTY: $0a6c bytes
+
+HRAM bank #0:
+	SECTION: $ff80-$ff87 ($0008 bytes) ["OAM DMA"]
+	         $ff80 = hOAMDMA
+	SECTION: $ff88-$ff8b ($0004 bytes) ["Road HRAM"]
+	         $ff88 = hShow
+	         $ff89 = hReady
+	         $ff8a = hBackHorizon
+	         $ff8b = hFrontHorizon
+	SECTION: $ff8c-$ff8d ($0002 bytes) ["Pad"]
+	         $ff8c = hPad
+	         $ff8d = hPadNew
+	SECTION: $ff8e-$ff8e ($0001 byte) ["GBC mode"]
+	         $ff8e = hGbc
+	SECTION: $ff8f-$ff8f ($0001 byte) ["Mode"]
+	         $ff8f = hInRace
+	EMPTY: $ff90-$fffe ($006f bytes)
+	TOTAL EMPTY: $006f bytes

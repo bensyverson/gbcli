@@ -11,6 +11,8 @@ color on a Game Boy Color.
 
 ## Build and play
 
+**Just want to play?** Download [`vesper-swarm.gb`](vesper-swarm.gb) and open it in any Game Boy emulator. It's one ROM for both machines: in color on a Game Boy Color, in four shades on the original Game Boy. Rebuild it with `scripts/examples/build-roms.sh`.
+
 You need gbcli and RGBDS (`gbcli doctor` checks them). From this folder:
 
 ```sh
@@ -135,8 +137,7 @@ gbcli run --session hb --frames 7000 --keys-file keys/win.keys --until '[wState]
 #  mode 0 on its line, through the whole winning run
 ```
 
-`--raster` gives each write's line but not the PPU mode, so the breakpoint
-reads STAT at the write instruction.
+The game was built with gbcli at `4381e6a`, whose `--raster` gave each write's line but not the PPU mode, so the breakpoint reads STAT at the write instruction. Since `7595c6a`, each `raster_write` also carries `mode=`, and every split write reads `mode=hblank`.
 
 **The effects own channel 4 during play.**
 
@@ -153,11 +154,7 @@ gbcli run build/shooter.gb --session audio --frames 640 --audio-log --piano buil
 
 ## Warnings, explained
 
-Both builds print four `shared_shade` warnings, one per DMG shade: colors
-from different images that fall to the same gray. That is the design: each
-image has its own palette for the GBC, and on the DMG each palette's
-lightest color is white, its darkest black, and so on. No image puts two
-of its own colors in one shade.
+None, in either build. With gbcli at `4381e6a`, both builds printed four `shared_shade` warnings, one per DMG shade: colors from different images falling to the same gray, which is by design (each image has its own GBC palette, and on the DMG every palette's lightest color is white). Since `372d772`, gbcli compares shared shades only among images of one named palette, so those warnings are gone. No image puts two of its own colors in one shade.
 
 ## Files
 

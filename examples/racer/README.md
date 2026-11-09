@@ -6,6 +6,8 @@ Switchback is a pseudo-3D racer for the original Game Boy, also in color on a Ga
 
 ## Play
 
+**Just want to play?** Download [`switchback.gb`](switchback.gb) and open it in any Game Boy emulator. It's one ROM for both machines: in color on a Game Boy Color, in four shades on the original Game Boy. Rebuild it with `scripts/examples/build-roms.sh`.
+
 ```sh
 cd examples/racer
 gbcli build                                  # or gbcli build --gbc, for color
@@ -81,14 +83,7 @@ gbcli run build/racer.gb --session gbc-on-dmg --keys-file tools/win.keys --until
 
 ## Build warnings
 
-`gbcli build --gbc` has no warnings. Plain `gbcli build` has four, all `shared_shade`, and all expected. The sprites are drawn in color for the GBC. On the DMG each color takes the shade of its nearest entry on the dmg line of `assets/palettes.txt`, and with four shades some colors in different images must share one:
-
-- the rival's pale blue window and white paint (shade 0);
-- the tree's light leaves and the grass (shade 1);
-- the car's red, the rival's blue, the tree's green and the road's gray (shade 2);
-- the outlines, the tree trunk and the HUD text (shade 3).
-
-No single image holds two colors of one shade, so nothing inside a sprite or tile merges. The car stays readable against the road by its dark outline and white lights.
+None, in either build. The game was built with gbcli at `4381e6a`, where plain `gbcli build` printed four `shared_shade` warnings for sprite colors sharing a DMG shade with other images' colors. Since `372d772`, gbcli compares shared shades only among images of one named palette, so those warnings are gone. No single image holds two colors of one shade, so nothing inside a sprite or tile merges.
 
 ## Layout
 

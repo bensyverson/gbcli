@@ -98,7 +98,8 @@ pub fn frame_budget(b: &FrameBudgetMade) -> String {
 }
 
 /// `raster frames= lines= written=`, then each line with writes and its
-/// writes under it. A line with the LCD off reads `line=off`; a line with no
+/// writes under it, both capped: an LCD-off stretch is one line holding
+/// every write made while the LCD was off. A line with the LCD off reads `line=off`; a line with no
 /// reported start has no `start=` and its writes no `into=`; a write whose
 /// mode the core can't know has no `mode=`. Before the lines, a
 /// `raster_writer reg= pc= writes=` row per register and writer PC counts
@@ -131,15 +132,15 @@ pub fn raster(t: &RasterMade) -> String {
             .field("line", line)
             .opt("start", r.start)
             .line();
-        for w in &r.writes {
-            rows += &Row::new("raster_write")
+        rows += &capped("raster_write", &r.writes, |w| {
+            Row::new("raster_write")
                 .field("reg", &w.reg)
                 .field("value", byte(w.value))
                 .field("pc", addr(w.pc))
                 .opt("into", w.ticks_into_line)
                 .opt("mode", w.mode.map(PpuModeView::name))
-                .line();
-        }
+                .line()
+        });
         rows
     });
     for feature in &t.unsupported {

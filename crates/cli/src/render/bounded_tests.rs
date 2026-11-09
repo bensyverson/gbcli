@@ -88,6 +88,39 @@ fn raster() -> Case {
     }
 }
 
+/// An LCD-off stretch is one `line=off` row holding every IO write made
+/// while the LCD was off (joypad polls, sound), so its writes need a cap of
+/// their own (the rev-cli review's probe).
+fn raster_one_line() -> Case {
+    let writes = (0..N)
+        .map(|i| RasterWriteRow {
+            reg: if i % 2 == 0 { "rP1" } else { "rNR12" }.into(),
+            value: 0x20,
+            pc: 0x200 + (i % 2) as u16,
+            ticks_into_line: None,
+            mode: None,
+        })
+        .collect();
+    Case {
+        name: "run --raster (one LCD-off line)",
+        result: ResultBody {
+            raster: Some(RasterMade {
+                frames: 1,
+                lines: 1,
+                rows: vec![RasterLineRow {
+                    frame: 0,
+                    line: None,
+                    start: None,
+                    writes,
+                }],
+                unsupported: Vec::new(),
+            }),
+            ..ResultBody::default()
+        },
+        json_list: "/raster/rows/0/writes",
+    }
+}
+
 fn oam_log() -> Case {
     let frames = (0..N)
         .map(|i| OamFrameView {
@@ -194,6 +227,7 @@ fn bounded() -> Vec<Case> {
     vec![
         frame_budget(),
         raster(),
+        raster_one_line(),
         oam_log(),
         audio_log(),
         keys_unapplied(),
@@ -234,6 +268,11 @@ fn per_frame_and_per_event_lists_are_bounded_in_text_and_whole_in_json() {
             c.name
         );
         let lines = text_lines(&c);
+        assert!(
+            lines > 0,
+            "{}: printed nothing, so it tests nothing",
+            c.name
+        );
         if lines > MAX_TEXT_LINES {
             flooded.push(format!("{} printed {lines} lines for {N} items", c.name));
         }

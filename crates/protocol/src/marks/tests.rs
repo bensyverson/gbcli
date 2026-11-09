@@ -83,10 +83,30 @@ fn every_row_round_trips_and_names_one_letter() {
     }
     let letters: BTreeSet<char> = DECOMPOSITIONS.iter().map(|d| d.precomposed).collect();
     assert_eq!(letters.len(), DECOMPOSITIONS.len());
+    let bases: BTreeSet<char> = DECOMPOSITIONS.iter().map(|d| d.base).collect();
     for s in SINGLETONS {
-        assert!(letters.contains(&s.canonical), "{s:?}");
+        let target = s.canonical;
+        assert!(
+            letters.contains(&target) || bases.contains(&target) || is_combining_mark(target),
+            "{s:?}"
+        );
         assert!(!letters.contains(&s.singleton), "{s:?}");
+        assert!(!bases.contains(&s.singleton), "{s:?}");
     }
+}
+
+/// From the rev-cli review's probe: NFC maps these singletons onto a mark
+/// or a base the table composes with, so composing a string first maps
+/// them (K, U+212A KELVIN SIGN, then U+0327 is Ķ under NFC).
+#[test]
+fn singletons_onto_a_mark_or_a_base_are_in_the_table() {
+    assert_eq!(singleton('\u{0340}'), Some('\u{0300}'));
+    assert_eq!(singleton('\u{0341}'), Some('\u{0301}'));
+    assert_eq!(singleton('\u{0343}'), Some('\u{0313}'));
+    assert_eq!(singleton('\u{212A}'), Some('K'));
+    assert_eq!(compose('K', '\u{0327}'), Some('\u{0136}'));
+    assert_eq!(singleton('\u{0300}'), None);
+    assert_eq!(singleton('K'), None);
 }
 
 #[test]

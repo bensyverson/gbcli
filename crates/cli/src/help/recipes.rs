@@ -69,7 +69,8 @@ Play the game from a script (a closed-loop bot), then replay what it did
   first run (RIGHT@8 -RIGHT@12), then gbcli run --at start --frames 3000
   --keys-file bot.keys replays the whole game in one run, frame for frame
 What does my music do?
-  gbcli run --frames 120 --audio-log (every sound write, decoded into notes), then
+  gbcli run --frames 120 --audio-log (the sound writes decoded into notes, at most
+  20 rows; --audio-summary counts them all, --json lists them all), then
   --wav music.wav to hear it, --channels each for one file per channel, --piano
   roll.png or --spectrogram spec.png to see it (--scale 4 enlarges a short clip)
 Look at tiles, the background map, sprites or the palettes
@@ -79,7 +80,7 @@ Is every sprite drawn in some frame? (a multiplexer, the 10-per-line limit)
   dropped in every frame it was on screen; then a row per frame, at most 20)
 Which code writes one sound channel?
   gbcli run --frames 600 --audio-summary --audio-channel 4 (writes per register
-  and per writer PC; add --audio-log for every write)
+  and per writer PC; --audio-log --json for every write)
 Find a symbol's address
   gbcli sym 'Player*'
 Read variables, registers or IO

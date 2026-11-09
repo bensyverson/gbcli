@@ -13,10 +13,14 @@ pub(super) fn routine_name(symbols: Option<&Symbols>, entry: Entry) -> Option<St
 }
 
 /// What an address is called, as `Name` or `Name+$n`: the `.sym` label at or
-/// before it, except inside a hardware vector or the cartridge header, where
-/// a label from before the region names the wrong code and the region's own
-/// name (`STAT_vector`, `Header`) does. Stop rows and profile rows both use
-/// this, so one address has one name.
+/// before it, except inside an interrupt vector or the cartridge header,
+/// where a label from before the region names the wrong code and the
+/// region's own name (`STAT_vector`, `Header`) does. The hardware enters
+/// those whatever the game's labels say. An RST slot is entered only by the
+/// game's own `rst`, so a game label running over it (Tetris's `rst $28`
+/// jump table reaches $0033) names the code there; the slot's name (`RST_30`)
+/// is used only when no label, or an end marker, comes before. Stop rows and
+/// profile rows both use this, so one address has one name.
 pub(crate) fn name_at(symbols: Option<&Symbols>, bank: u16, addr: u16) -> Option<String> {
     let found = symbols.and_then(|s| s.containing(bank, addr));
     let region = (bank == 0).then(|| region(addr)).flatten();
@@ -26,6 +30,9 @@ pub(crate) fn name_at(symbols: Option<&Symbols>, bank: u16, addr: u16) -> Option
         {
             Some(label(&s.name, i64::from(addr - s.addr)))
         }
+        (Some(s), Some((start, _))) if start < RST_END && !is_end_marker(&s.name) => {
+            Some(label(&s.name, i64::from(addr - s.addr)))
+        }
         // An end marker is the end of what came before: on a vector, the
         // vector names the code there better.
         (_, Some((start, name))) => Some(label(name, i64::from(addr - start))),
@@ -33,6 +40,9 @@ pub(crate) fn name_at(symbols: Option<&Symbols>, bank: u16, addr: u16) -> Option
         (None, None) => None,
     }
 }
+
+/// Where the RST slots end and the interrupt vectors begin.
+const RST_END: u16 = 0x0040;
 
 /// The fixed region at `addr` in ROM bank 0, with its start and name: the
 /// eight RSTs and five interrupt vectors (eight bytes each), and the header.
@@ -149,6 +159,29 @@ mod tests {
         // Only ROM bank 0: the same address elsewhere is not the header.
         assert_eq!(name_at(Some(&syms), 0, 0xC101), None);
         assert_eq!(routine_name(None, at(0x0100)).as_deref(), Some("Header"));
+    }
+
+    /// From the rev-cli review's probe: Tetris's `rst $28` jump table is 12
+    /// bytes, $0028-$0033, so its tail lies in the RST $30 slot, which the
+    /// game never enters by `rst $30`.
+    #[test]
+    fn a_routine_running_over_an_rst_slot_keeps_its_own_label() {
+        let syms = Symbols::parse("00:0028 JumpTable\n00:0150 Main\n").unwrap();
+        let name = |addr| name_at(Some(&syms), 0, addr);
+        assert_eq!(name(0x0031).as_deref(), Some("JumpTable+$9"));
+        assert_eq!(name(0x0038).as_deref(), Some("JumpTable+$10"));
+        // The interrupt vectors past the RSTs are still the hardware's.
+        assert_eq!(name(0x0041).as_deref(), Some("VBlank_vector+$1"));
+    }
+
+    /// An end marker says the code before it has ended, so it names no RST
+    /// slot after it.
+    #[test]
+    fn an_end_marker_before_an_rst_slot_does_not_name_it() {
+        let syms = Symbols::parse("00:0000 Rst00\n00:0003 Rst00_end\n").unwrap();
+        let name = |addr| name_at(Some(&syms), 0, addr);
+        assert_eq!(name(0x0009).as_deref(), Some("RST_08+$1"));
+        assert_eq!(name(0x0001).as_deref(), Some("Rst00+$1"));
     }
 
     #[test]

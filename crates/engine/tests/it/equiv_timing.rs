@@ -18,6 +18,7 @@ const A: &[u8] = include_bytes!("../roms/equiv_a.gb");
 const A_SYM: &str = include_str!("../roms/equiv_a.sym");
 const SLOW: &[u8] = include_bytes!("../roms/equiv_slow_start.gb");
 const SLOW_SYM: &str = include_str!("../roms/equiv_slow_start.sym");
+const HALT: &[u8] = include_bytes!("../roms/halt.gb");
 
 /// The slow build's extra start-up: `ld bc` (12 T), then 3,750 passes of a
 /// 28 T loop whose last `jr` falls through (8 T, not 12).
@@ -122,6 +123,26 @@ fn identical_builds_diverge_with_no_frame_offset() {
         Verdict::Diverged(d) => d,
         other => panic!("expected a divergence, got {other:?}"),
     };
+    assert_eq!(d.frame_offset, None::<FrameOffset>);
+}
+
+/// From the rev-cli review's probe: side B halts forever mid-frame, so its
+/// frame never ended and no frame offset (nor the start-up-timing remedy
+/// built on it) describes the divergence; the stop does.
+#[test]
+fn a_side_that_stopped_mid_frame_has_no_frame_offset() {
+    let (mut a, mut b) = (machine(A, Some(A_SYM)), machine(HALT, None));
+    let d = match compare(&mut a, &mut b, &EquivSpec::new(10)).unwrap() {
+        Verdict::Diverged(d) => d,
+        other => panic!("expected a divergence, got {other:?}"),
+    };
+    assert!(matches!(d.differences[0], Difference::Stop { .. }));
+    // The pixels differ too, which is when the remedy would be offered.
+    assert!(
+        d.differences
+            .iter()
+            .any(|x| matches!(x, Difference::Pixels { .. }))
+    );
     assert_eq!(d.frame_offset, None::<FrameOffset>);
 }
 

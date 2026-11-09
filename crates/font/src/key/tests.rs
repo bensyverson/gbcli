@@ -31,6 +31,12 @@ fn a_decomposed_key_the_mark_table_knows_is_refused_naming_its_precomposed_form(
     }
     let e = refused("u+212B");
     assert!(e.remedy.contains("'Å'"), "{}", e.remedy);
+    // A singleton onto a base or a mark: a mark's key is written u+, as a
+    // quote would hide it.
+    let e = refused("u+212A");
+    assert!(e.remedy.contains("'K'"), "{}", e.remedy);
+    let e = refused("u+0341");
+    assert!(e.remedy.contains("key it by u+0301:"), "{}", e.remedy);
     // A cluster the table doesn't know is refused as several characters.
     assert!(refused("'ff'").message.contains("several characters"));
     assert!(

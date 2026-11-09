@@ -5,8 +5,14 @@
 //! It is generated from Unicode's data by `scripts/fonts/gen_marks.py`, so
 //! neither gbcli nor a consumer needs a normalization dependency: the font
 //! reader refuses a decomposed key the table knows, font composition builds
-//! a missing letter from it, and LoadHigh composes string literals to NFC
-//! with it. Data and lookups only: no I/O, no allocation.
+//! a missing letter from it, and LoadHigh composes string literals with it.
+//!
+//! What it composes, precisely: a base followed by one mark from its scope,
+//! left to right, once each singleton is mapped to what it is canonically
+//! ([`singleton`]). It holds no combining classes, so it does no canonical
+//! reordering: that is NFC for those sequences, not for every string (a base
+//! with two marks, or marks out of canonical order, is not composed as NFC
+//! would). Data and lookups only: no I/O, no allocation.
 
 mod table;
 
@@ -21,8 +27,10 @@ pub struct Decomposition {
     pub precomposed: char,
 }
 
-/// A character that is canonically, by itself, one of the table's letters
-/// (U+212B ANGSTROM SIGN is canonically Å).
+/// A character that is canonically, by itself, another one that the table
+/// composes with: one of its letters (U+212B ANGSTROM SIGN is Å), a row's
+/// base (U+212A KELVIN SIGN is K) or a mark in its class (U+0341 is
+/// U+0301). NFC replaces it before composing, so a composer maps it first.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Singleton {
     pub singleton: char,
@@ -60,8 +68,9 @@ pub fn decompose(c: char) -> Option<(char, char)> {
         .map(|d| (d.base, d.mark))
 }
 
-/// The table's letter that `c` is canonically, when `c` is a singleton
-/// such as U+212B ANGSTROM SIGN.
+/// What `c` is canonically, when `c` is a singleton: a table letter
+/// (U+212B ANGSTROM SIGN is Å), a row's base (U+212A KELVIN SIGN is K) or a
+/// mark (U+0341 is U+0301).
 pub fn singleton(c: char) -> Option<char> {
     SINGLETONS
         .iter()

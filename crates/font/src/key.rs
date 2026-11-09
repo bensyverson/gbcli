@@ -132,14 +132,24 @@ impl Key {
                  newline and $FF for the end of a string",
             ));
         }
-        if let Some(letter) = marks::singleton(c) {
+        if let Some(canonical) = marks::singleton(c) {
+            // A singleton onto a mark (U+0341 is U+0301) names a key a quote
+            // would hide.
+            let (said_as, key_by) = if quotable(canonical) {
+                (
+                    format!("'{canonical}' (u+{:04X})", u32::from(canonical)),
+                    format!("'{canonical}': (u+{:04X})", u32::from(canonical)),
+                )
+            } else {
+                let code = format!("u+{:04X}", u32::from(canonical));
+                (code.clone(), format!("{code}:"))
+            };
             return Err(bad(
                 format!(
-                    "u+{:04X} is not NFC: it is canonically '{letter}' (u+{:04X})",
-                    u32::from(c),
-                    u32::from(letter)
+                    "u+{:04X} is not NFC: it is canonically {said_as}",
+                    u32::from(c)
                 ),
-                format!("key it by '{letter}': (u+{:04X})", u32::from(letter)),
+                format!("key it by {key_by}"),
             ));
         }
         Ok(Key::Char(c))

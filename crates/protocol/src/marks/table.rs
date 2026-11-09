@@ -226,8 +226,15 @@ pub const DECOMPOSITIONS: &[Decomposition] = &[
     row('\u{30FD}', '\u{3099}', '\u{30FE}'),
 ];
 
-/// Every singleton and the table's letter it is canonically.
-pub const SINGLETONS: &[Singleton] = &[alias('\u{212B}', '\u{00C5}')];
+/// Every singleton and what it is canonically: a table letter, a row's
+/// base, or a mark in the table's class.
+pub const SINGLETONS: &[Singleton] = &[
+    alias('\u{0340}', '\u{0300}'),
+    alias('\u{0341}', '\u{0301}'),
+    alias('\u{0343}', '\u{0313}'),
+    alias('\u{212A}', '\u{004B}'),
+    alias('\u{212B}', '\u{00C5}'),
+];
 
 /// Every combining mark the table's rows use, in code point order.
 #[rustfmt::skip]

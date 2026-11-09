@@ -119,7 +119,8 @@ pub struct DivergenceMade {
     /// Set when this frame ended at a different time on each side, counted
     /// from each side's start: the frames are offset, so the screens were
     /// drawn at different moments (a start-up of another length, or the LCD
-    /// switched on at another time).
+    /// switched on at another time). Absent when a side stopped mid-frame
+    /// (a halt, a crash): that frame never ended.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub frame_offset: Option<FrameOffsetMade>,
     pub a: SideMade,

@@ -115,7 +115,8 @@ pub struct Divergence {
     /// Set when the divergent frame ended at a different time since the
     /// start on each side: their frames are offset, so the screens are drawn
     /// at different moments (a start-up of another length, or the LCD turned
-    /// off and on at another time).
+    /// off and on at another time). `None` unless both sides' frames ended:
+    /// a side that halted or crashed mid-frame has no frame end to offset.
     pub frame_offset: Option<FrameOffset>,
     pub a: SideState,
     pub b: SideState,
@@ -276,7 +277,11 @@ pub fn compare(
             return Ok(Verdict::Diverged(Box::new(Divergence {
                 frame,
                 ticks: a.elapsed(),
-                frame_offset: frame_offset(&a, &b),
+                frame_offset: if stop_a.reason == FRAME_DONE && stop_b.reason == FRAME_DONE {
+                    frame_offset(&a, &b)
+                } else {
+                    None
+                },
                 differences,
                 a: a.state(stop_a),
                 b: b.state(stop_b),

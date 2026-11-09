@@ -250,15 +250,48 @@ fn instruments_are_written_up_to_the_highest_each_bank_plays() {
 }
 
 #[test]
-fn a_pattern_two_channels_share_counts_only_for_the_first_that_plays_it() {
+fn a_pattern_a_square_and_the_wave_channel_share_counts_for_each() {
     // hUGETracker's FindUsedStuff visits each pattern once, for the first
-    // channel whose orders name it, so instrument 4 in P0 counts as a square
-    // instrument (channel 1) and never as a wave one (channel 3).
+    // channel whose orders name it, so it would count instrument 4 in P0 as
+    // a square instrument (channel 1) and never as a wave one (channel 3),
+    // and hUGEDriver would play channel 3 from past the wave table. The
+    // port counts a shared pattern once per channel kind.
     let mut s = song([0, 1, 0, 3]);
     set(&mut s, 0, 0, cell(24, 4, 0, 0));
+    set(&mut s, 0, 1, cell(NO_NOTE, 0, 9, 5));
+    s.instruments[15 + 3].waveform = 2;
     let all = lines(&s);
     assert!(all.contains(&"song_t.itSquareinst4:".to_string()));
+    assert!(all.contains(&"song_t.itWaveinst4:".to_string()));
+    assert!(!all.contains(&"song_t.itWaveinst5:".to_string()));
+    // Wave 5 from the 9xx the wave channel plays (wave 2 from the
+    // instrument is below it).
+    assert!(all.iter().any(|l| l.starts_with("song_t.wave5: db ")));
+    assert!(!all.iter().any(|l| l.starts_with("song_t.wave6:")));
+    assert!(!all.iter().any(|l| l.starts_with("song_t.itNoiseinst")));
+}
+
+#[test]
+fn a_pattern_a_square_and_the_noise_channel_share_counts_for_each() {
+    let mut s = song([0, 1, 2, 0]);
+    set(&mut s, 0, 0, cell(24, 2, 0, 0));
+    let all = lines(&s);
+    assert!(all.contains(&"song_t.itSquareinst2:".to_string()));
+    assert!(all.contains(&"song_t.itNoiseinst2:".to_string()));
     assert!(!all.iter().any(|l| l.starts_with("song_t.itWaveinst")));
+}
+
+#[test]
+fn a_pattern_both_squares_share_counts_once_as_in_hugetracker() {
+    // Pattern 0 on the squares only, so its 9xx names no wave: only the
+    // wave channel's 9xx count.
+    let mut s = song([0, 0, 2, 3]);
+    set(&mut s, 0, 0, cell(24, 3, 9, 4));
+    let all = lines(&s);
+    assert!(all.contains(&"song_t.itSquareinst3:".to_string()));
+    assert!(!all.contains(&"song_t.itSquareinst4:".to_string()));
+    assert!(!all.iter().any(|l| l.starts_with("song_t.itWaveinst")));
+    assert!(!all.iter().any(|l| l.starts_with("song_t.wave0:")));
 }
 
 #[test]

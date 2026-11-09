@@ -33,6 +33,10 @@ The data's labels are the song's: song_NAME.P0 for a pattern, and for
 routine N song_NAME__hUGE_Routine_N and song_NAME__end_hUGE_Routine_N, not
 hUGETracker's __hUGE_Routine_N and __end_hUGE_Routine_N. Routine code that
 names hUGETracker's labels fails at link; name the song's instead.
+Channels playing equal cells share one stored pattern, and the data keeps
+the instruments and waves of each channel kind that plays it; hUGETracker's
+own export keeps only the first channel's, so there a wave or noise channel
+sharing a square's pattern plays garbage.
 
 A song with `timer on` ticks the driver from the timer interrupt, about
 2,500-5,900 T a tick, and a tick that fires just before VBlank holds the

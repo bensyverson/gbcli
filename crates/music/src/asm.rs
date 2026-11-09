@@ -10,8 +10,8 @@
 //!
 //! - an order names the first pattern, in storage order, whose 64 cells
 //!   (the unused volume included) equal its own;
-//! - instruments are written up to the highest each bank plays, counted
-//!   per pattern for the first channel whose orders name it;
+//! - instruments are written up to the highest each bank plays (but see
+//!   the departures: a shared pattern counts for each channel kind);
 //! - waves up to the highest any wave instrument, a wave-channel 9xx or a
 //!   wave instrument's subpattern 9xx names;
 //! - subpatterns are their first 32 rows, the last jumping to row 1 when it
@@ -19,6 +19,14 @@
 //!
 //! Departures from the export:
 //!
+//! - A pattern several channels play counts its instruments, waves and
+//!   wave 9xx once per channel kind (square, wave, noise) that plays it.
+//!   hUGETracker counts a pattern only for the first channel whose orders
+//!   name it, so when a square and the wave (or noise) channel play equal
+//!   cells, stored once, its export leaves out the wave's instruments and
+//!   waves, and hUGEDriver plays that channel from past the tables
+//!   (Ben's ruling, 2026-11-09). A song where no two channel kinds share a
+//!   pattern exports as hUGETracker's does.
 //! - Every data label is scoped to the descriptor (`song_theme.P0`, where
 //!   hUGETracker writes `P0`), so the `.sym` has no name twice:
 //!   hUGETracker's `order1` and `waves` are also hUGEDriver's own WRAM
@@ -247,10 +255,15 @@ impl Used {
                 }
             }
         }
+        // hUGETracker visits a pattern once, for the first channel that
+        // plays it; counting it once per channel kind keeps a wave or noise
+        // channel's instruments when a square plays the same cells first.
+        let mut counted: HashSet<(i32, Bank)> = HashSet::new();
         for (channel, order) in song.orders.iter().enumerate() {
             let b = Bank::of_channel(channel);
             for key in order {
-                if !used.patterns.insert(*key) {
+                used.patterns.insert(*key);
+                if !counted.insert((*key, b)) {
                     continue;
                 }
                 let Some(p) = song.pattern(*key) else {

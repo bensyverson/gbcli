@@ -91,11 +91,11 @@ fn the_test_songs_piano_roll_and_spectrogram_are_pinned() {
     }
 }
 
-/// One note, A-3, on square 1 and, a row later, on the wave channel. Not
-/// on the same row: two patterns with equal cells are stored once, and the
-/// export counts a pattern's instruments for the first channel that plays
-/// it (hUGETracker's quirk, `gbcli_music::asm`), so the wave instrument
-/// would be left out.
+/// One note, A-3, on square 1 and the wave channel on the same row. Their
+/// patterns have equal cells, so the export stores them once; it counts a
+/// shared pattern's instruments for each channel kind that plays it, where
+/// hUGETracker's export counts them only for the first (`gbcli_music::asm`)
+/// and would leave the wave instrument out.
 const OCTAVE_PROBE: &str = r#"format gbcli-song 1
 name "Octave probe"
 ticks_per_row 6
@@ -114,8 +114,7 @@ orders
 00 P0 P1 P2 P3
 
 pattern P0 P1 P2 P3
-00 A-3 01 ... ... | ... .. ... ... | ... .. ... ... | ... .. ... ...
-01 ... .. ... ... | ... .. ... ... | A-3 01 ... ... | ... .. ... ...
+00 A-3 01 ... ... | ... .. ... ... | A-3 01 ... ... | ... .. ... ...
 "#;
 
 /// The fundamental of a 16-bit stereo WAV this gbcli wrote, from the left

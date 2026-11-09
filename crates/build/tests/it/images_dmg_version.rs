@@ -1,8 +1,9 @@
 //! Color art's DMG version (the GBC images plan, questions 2, 3 and 9;
 //! leaf tzEhz3): derived from the color image, each color taking the shade
 //! the project's rule gives it (`shades::choose`), unless a `name.dmg.png`
-//! beside it overrides it. Two colors in one tile or object that fall to
-//! one shade warn, naming it; across tiles they don't. A plain build
+//! beside it overrides it. Under --gbc, two colors in one tile or object
+//! that fall to one shade warn, naming it, and across tiles they don't; a
+//! plain build warns for the whole image (leaf Vho2Gc). A plain build
 //! derives it exactly as `--gbc` does (Ben's ruling, 2026-11-08,
 //! superseding question 9; leaf GQFHVi), so one project builds both ways.
 
@@ -56,6 +57,21 @@ fn cell_shades(temp: &Temp, stem: &str) -> Vec<Option<u8>> {
             solid.then_some(first)
         })
         .collect()
+}
+
+/// Color art whose colors share shades only across tiles or objects: a
+/// plain build warns `shared_shade` image-wide, `rows` warnings (one a
+/// shared shade) and nothing else; --gbc, which keeps the colors apart,
+/// says nothing (Ben's ruling, 2026-11-08, leaf Vho2Gc).
+fn shares_only_when_plain(target: BuildTarget, images: &gbcli_protocol::ImagesMade, rows: usize) {
+    let (shared, rest): (Vec<_>, Vec<_>) = images
+        .problems
+        .iter()
+        .partition(|p| p.limit == ImageLimit::SharedShade);
+    assert!(rest.is_empty(), "{target:?}: {rest:#?}");
+    let want = if target == BuildTarget::Dmg { rows } else { 0 };
+    assert_eq!(shared.len(), want, "{target:?}: {shared:#?}");
+    assert!(shared.iter().all(|p| p.severity == Severity::Warning));
 }
 
 fn layout_error(result: Result<gbcli_protocol::BuildMade, BuildError>) -> (String, String) {
@@ -249,11 +265,9 @@ fn a_color_background_over_four_colors_builds_clean_both_ways() {
         });
         let made = build(&rgbds(), &options).unwrap();
         let images = made.images.unwrap();
-        assert!(
-            images.problems.is_empty(),
-            "{target:?}: {:#?}",
-            images.problems
-        );
+        // White and yellow, blue and black share shades: a plain build warns
+        // image-wide, one row a shade; --gbc keeps them apart.
+        shares_only_when_plain(target, &images, 2);
         assert_eq!(
             cell_shades(&temp, "town"),
             [0, 0, 1, 2, 3, 3].map(Some),
@@ -286,17 +300,51 @@ fn a_color_sheet_whose_colors_fall_to_three_shades_builds_both_ways() {
         );
         let made = build(&rgbds(), &options).unwrap();
         let images = made.images.unwrap();
-        assert!(
-            images.problems.is_empty(),
-            "{target:?}: {:#?}",
-            images.problems
-        );
+        shares_only_when_plain(target, &images, 1);
         let inc = String::from_utf8(read(&temp, "images.inc")).unwrap();
         // Index 1 white, 2 light gray, 3 black.
         assert_eq!(
             binary_constant(&inc, "BAT_OBP"),
             0b11_01_00_00,
             "{target:?}"
+        );
+    }
+}
+
+/// A DMG-only project (a plain build, no palettes.txt) drawn in grays and
+/// one near-black (review-img14 of 372d772): the near-black falls to black
+/// in another tile, and a plain build still warns `shared_shade` for the
+/// image, naming both colors and the hand-drawn DMG version, as before
+/// 372d772 (Ben's ruling, 2026-11-08). Under --gbc the color version keeps
+/// them apart, so only a share within one tile would warn.
+#[test]
+fn a_plain_builds_near_black_across_tiles_still_warns() {
+    const NEAR_BLACK: Rgba = [0x10, 0x10, 0x10, 0xFF];
+    for target in BOTH {
+        let (temp, options) = for_target("dmg-near-black", target);
+        write_png(&temp.path("demo/assets/bg/cave.png"), 24, 8, |x, _| {
+            [WHITE, BLACK, NEAR_BLACK][(x / 8) as usize]
+        });
+        let made = build(&rgbds(), &options).unwrap();
+        let shared = problems(&made, ImageLimit::SharedShade);
+        if target == BuildTarget::Gbc {
+            assert!(shared.is_empty(), "{shared:#?}");
+            continue;
+        }
+        let [p] = &shared[..] else {
+            panic!("one shared_shade: {:#?}", made.images.unwrap().problems)
+        };
+        assert_eq!(p.severity, Severity::Warning);
+        assert_eq!(p.image.as_deref(), Some("demo/assets/bg/cave.png"));
+        // The less used of the two is listed: the near-black's tile.
+        assert_eq!(p.tiles, [TileAt { x: 2, y: 0 }]);
+        for part in ["#000000", "#101010", "shade 3"] {
+            assert!(p.message.contains(part), "{part:?} in {}", p.message);
+        }
+        assert!(
+            p.remedy.contains("demo/assets/bg/cave.dmg.png"),
+            "{}",
+            p.remedy
         );
     }
 }

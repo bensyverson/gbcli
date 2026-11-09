@@ -89,6 +89,7 @@ Each question gives the recommended answer first and names the leaf that waits o
 
 1. **Tile data.** Separate data per target behind a joint map (recommended), or GB Studio's single shared data: half the image ROM, but it breaks the nearest-shade ruling inside a tile. Leaf `joint`.
 2. **The shared-shade warning with color art.** Warn only within a tile or object (recommended), give one summary per image, or stay silent. Leaf `derive`.
+   > **Narrowed (Ben, 2026-11-08; built 2026-11-09, leaf Vho2Gc): the tile-or-object scope holds under `--gbc` only.** A plain build has only the DMG version, so its color art warns image-wide, as DMG art does; a DMG-only project drawn in near-grays would otherwise merge them silently. Design §12, update of 2026-11-09.
 3. **The override's name.** `.dmg.png` (recommended, matching gbcli's "DMG" naming), GB Studio's `.mono.png`, or both. Leaf `derive`.
 
    > **Ruling (Ben, 2026-11-07, thirteenth session): an override's colors join the project-wide shade cascade.** Adding a `name.dmg.png` can change the shade rule chosen for the whole project; that follows "one color, one shade, everywhere", and it stays. Leaf tzEhz3.

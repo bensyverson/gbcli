@@ -27,7 +27,7 @@ const FOREST: Rgba = [0x08, 0x20, 0x08, 0xFF];
 const NAVY: Rgba = [0x08, 0x10, 0x50, 0xFF];
 
 /// Pins the shades to the DMG grays with a dmg line.
-fn pinned(temp: &Temp) {
+pub(crate) fn pinned(temp: &Temp) {
     let path = temp.path("demo/assets/palettes.txt");
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(path, "dmg: #ffffff #aaaaaa #555555 #000000\n").unwrap();
@@ -36,7 +36,7 @@ fn pinned(temp: &Temp) {
 /// A 16x16 sheet of four 8x8 frames, each object in its own three colors
 /// (so the packer needs several OBJ palettes), shaped so no two objects are
 /// alike or flips of one another.
-fn quad(x: u32, y: u32) -> Rgba {
+pub(crate) fn quad(x: u32, y: u32) -> Rgba {
     let sets = [
         [PINK, RED, MAROON],
         [MINT, GREEN, FOREST],
@@ -63,7 +63,7 @@ fn index(tile: &[u8], x: u32, y: u32) -> u8 {
 /// Every pixel the GBC data draws, through the tile map, its flips, its
 /// slots and the OBJ palettes, is the color image's (RGB555), and every
 /// transparent one is transparent.
-fn gbc_draws_the_color_image(
+pub(crate) fn gbc_draws_the_color_image(
     made: &ImagesMade,
     image: &ImageAsset,
     gbc: &[u8],
@@ -114,7 +114,7 @@ fn gbc_draws_the_color_image(
 }
 
 /// Each frame list's 4-byte objects, attributes as written.
-fn frame_objects(asm: &str, label: &str) -> Vec<Vec<(u32, u32, u32, u8)>> {
+pub(crate) fn frame_objects(asm: &str, label: &str) -> Vec<Vec<(u32, u32, u32, u8)>> {
     let mut frames = Vec::new();
     let mut current: Option<Vec<(u32, u32, u32, u8)>> = None;
     for line in asm.lines() {
@@ -282,7 +282,8 @@ fn an_indexed_8x8_sheet_in_slot_1_says_slot_1_in_every_object() {
 
 /// One project, built plain and with --gbc: the DMG data (tiles, maps,
 /// OBP/BGP and every constant both define, frame lists without the GBC
-/// palette bits) and the non-GBC problems are the same.
+/// palette bits) and the non-GBC problems, shared_shade aside, are the
+/// same.
 /// What a build says about the DMG side: tile and map files, include
 /// constants, frame lists (palette bits masked) and problems.
 type DmgSide = (
@@ -364,10 +365,14 @@ fn plain_and_gbc_builds_agree_on_the_dmg_data() {
                     .collect()
             })
             .collect();
+        // shared_shade's scope differs by ruling (Ben, 2026-11-08, leaf
+        // Vho2Gc): image-wide in a plain build, per tile or object under
+        // --gbc; images_dmg_version pins each.
         let gbc_only = [
             ImageLimit::ShadesUnpinned,
             ImageLimit::GbcPalettes,
             ImageLimit::GbcTileColors,
+            ImageLimit::SharedShade,
         ];
         let problems = made
             .problems

@@ -99,3 +99,22 @@ fn the_result_reads_back_and_an_image_may_name_no_preview() {
     assert_eq!(made.images.images[0].preview, "");
     assert_eq!(serde_json::to_string(&made).unwrap(), json);
 }
+
+/// A manifest sets every sheet's object size as `assets/palettes.txt`'s
+/// `objects` line does (leaf mjBkTn): `"8x8"` or `"8x16"`, and absent
+/// (sent and read back without it) when not set.
+#[test]
+fn a_manifest_may_set_the_object_size_of_every_sheet() {
+    let set = manifest(
+        r#"{"images":[{"image":"sprites/hero.16x16.png","file":"a.png"}],"objects":"8x8"}"#,
+    )
+    .unwrap();
+    assert_eq!(set.objects, Some(crate::ObjectSize::Square));
+    let back = serde_json::to_string(&set).unwrap();
+    assert!(back.contains(r#""objects":"8x8""#), "{back}");
+    let unset = manifest(r#"{"images":[{"image":"sprites/hero.png","file":"a.png"}]}"#).unwrap();
+    assert_eq!(unset.objects, None);
+    assert!(!serde_json::to_string(&unset).unwrap().contains("objects"));
+    let bad = manifest(r#"{"images":[],"objects":"16x16"}"#).unwrap_err();
+    assert!(bad.contains("unknown variant"), "{bad}");
+}

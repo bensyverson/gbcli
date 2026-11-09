@@ -21,6 +21,9 @@ pub(crate) struct Shared<'a> {
     pub gbc: Option<&'a GbcImagesMade>,
     /// `assets/palettes.txt`'s palettes, in file order.
     pub named: &'a [NamedPalette],
+    /// Every sheet's object size, when the project sets one, and the
+    /// setting that does.
+    pub objects: Option<(ObjectSize, &'a str)>,
 }
 
 /// One converted image, as the generated files name it.
@@ -266,6 +269,17 @@ pub(crate) fn inc(entries: &[Entry], shared: &Shared) -> String {
             ; every source (rgbasm -D GBCLI_GBC=1), so anything else assembling these\n\
             ; files defines it itself.\n\
             \nIF !DEF(GBCLI_IMAGES_INC)\nDEF GBCLI_IMAGES_INC EQU 1\n";
+    if let Some((size, setting)) = shared.objects {
+        let lcdc = match size {
+            ObjectSize::Square => "clear LCDC_OBJ_16",
+            ObjectSize::Tall => "set LCDC_OBJ_16",
+        };
+        let _ = write!(
+            out,
+            "\n; Objects: {} for every sheet, as {setting} sets: {lcdc} (LCDC bit 2).\n",
+            size.name()
+        );
+    }
     for e in entries {
         match e {
             Entry::Bg {

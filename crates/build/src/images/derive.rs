@@ -7,15 +7,21 @@
 //! goes on to make the GBC version.
 //!
 //! The derived version is drawn in the four DMG grays, one gray a shade, so
-//! the DMG checks and rgbgfx see a 4-shade image. Color art maps many
-//! colors to one shade by design, so the shared-shade warning is scoped to
-//! what loses detail: two colors in one background tile, or one object,
-//! that fall to one shade. A sheet whose derived version needs all four
-//! shades can't be one object palette (3 plus transparent): `dmg_palette`.
+//! the DMG checks and rgbgfx see a 4-shade image. Under `--gbc`, color art
+//! maps many colors to one shade by design, so the shared-shade warning is
+//! scoped to what loses detail: two colors in one background tile, or one
+//! object, that fall to one shade. A plain build has only the DMG version,
+//! so colors of the image that share a shade anywhere in it warn, as DMG
+//! art's do (Ben's ruling, 2026-11-08, leaf Vho2Gc): a DMG-only project
+//! drawn in near-grays would otherwise merge them silently. A sheet whose
+//! derived version needs all four shades can't be one object palette (3
+//! plus transparent): `dmg_palette`.
 
 use std::path::Path;
 
-use gbcli_protocol::{ImageKind, ImageLimit, ImageProblem, ObjectSize, Severity, TileAt};
+use gbcli_protocol::{
+    BuildTarget, ImageKind, ImageLimit, ImageProblem, ObjectSize, Severity, TileAt,
+};
 
 use super::census::{Key, error, key, tiles_where};
 use super::find::Source;
@@ -94,8 +100,9 @@ pub(crate) fn version(
 }
 
 /// The DMG version of the color image `image` (a `kind`; a sheet of
-/// `object`s), its colors shaded by the project's `shading`; `dmg` names
-/// the override that would replace it, for remedies.
+/// `object`s), its colors shaded by the project's `shading`, for a build
+/// for `target`; `dmg` names the override that would replace it, for
+/// remedies.
 pub(crate) fn derive(
     image: &str,
     dmg: &str,
@@ -103,6 +110,7 @@ pub(crate) fn derive(
     object: ObjectSize,
     pixels: &Pixels,
     shading: &Shading,
+    target: BuildTarget,
 ) -> Result<Derived, ImageProblem> {
     let shade = |p: Rgba| shading.shade(p);
     let rgba: Vec<Rgba> = pixels
@@ -131,10 +139,13 @@ pub(crate) fn derive(
         ImageKind::Sprites => object.height(),
         ImageKind::Bg | ImageKind::Tiles => 8,
     };
-    let mut warnings: Vec<ImageProblem> = shared_in_units(image, dmg, pixels, unit_height, &shade)
-        .into_iter()
-        .collect();
     let colors = super::census::colors(pixels);
+    let mut warnings: Vec<ImageProblem> = match target {
+        BuildTarget::Gbc => shared_in_units(image, dmg, pixels, unit_height, &shade)
+            .into_iter()
+            .collect(),
+        BuildTarget::Dmg => shared_in_image(image, dmg, pixels, &colors, shading),
+    };
     warnings.extend(shared::stretched(image, pixels, &colors, shading));
     Ok(Derived {
         pixels: derived,
@@ -184,6 +195,35 @@ fn four_shades(
             &remedy,
         )
     })
+}
+
+/// A plain build's `shared_shade` warnings: one a shade that two or more
+/// of `colors` (as `census::colors` gives them) fall to anywhere in the
+/// image, as DMG art's (`shared::find`), the remedy offering the DMG
+/// version `dmg` drawn by hand too.
+fn shared_in_image(
+    image: &str,
+    dmg: &str,
+    pixels: &Pixels,
+    colors: &[(Rgba, u32)],
+    shading: &Shading,
+) -> Vec<ImageProblem> {
+    let list: Vec<Rgba> = colors.iter().map(|&(c, _)| c).collect();
+    let shades = shading.shades(&list);
+    let remedy = format!(
+        "make them distinct if the difference matters: recolor one, declare each shade's color \
+         in {}, or draw the DMG version yourself as {dmg}, the same size, in 4 shades (gbcli \
+         help images); if it doesn't, draw them in one color",
+        shading.source.dmg()
+    );
+    shared::find(image, pixels, colors, &shades, shading)
+        .warnings
+        .into_iter()
+        .map(|p| ImageProblem {
+            remedy: remedy.clone(),
+            ..p
+        })
+        .collect()
 }
 
 /// One `shared_shade` warning when any 8x`unit_height` unit (a background
@@ -389,6 +429,7 @@ mod tests {
             ObjectSize::Tall,
             &p,
             &shading(&colors),
+            BuildTarget::Gbc,
         );
         let d = d.unwrap();
         assert_eq!(

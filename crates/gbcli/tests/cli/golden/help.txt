@@ -243,6 +243,11 @@ one form of an image; both is a layout error.
                                multiple of 8 but not 16 (shot.16x8.png too)
   assets/tiles/font.png        a tileset: a background's unique tiles, no
                                map (build your own from --json's tile_map)
+The hardware has one object size for the whole screen (LCDC bit 2), so a
+project may set it for every sheet: `objects: 8x8` (or `objects: 8x16`) in
+assets/palettes.txt cuts every frame into that size, a 16x16 frame into
+four 8x8 objects; a frame that doesn't cut is an error naming the line.
+images.inc then says to clear (or set) LCDC_OBJ_16 for all of them.
 An image is color art (any colors) unless assets/palettes.txt assigns it a
 palette, which makes it indexed art (up to 4 colors; sprites: 3 +
 transparent, alpha 0); both are described under GBC below. Every build
@@ -261,8 +266,10 @@ first rule that applies:
                 one lightness only, so nothing to stretch)
 The images row says which: shades=declared|known|stretched|nearest, and
 palette= for a known one. Colors in one shade draw alike, with a
-shared_shade warning. Color art's warns for two colors in one tile (a
-sheet: one object). Indexed art (and a .dmg.png) warns once per image for
+shared_shade warning. Color art's, in a plain build, warns once per image
+for colors that share a shade anywhere in the image; under --gbc, whose
+color version keeps them apart, only for two in one tile (a sheet: one
+object). Indexed art (and a .dmg.png) warns once per image for
 colors that image holds together, and once a shade for the project (no
 image=) for colors that share it only across images of one palette:
 colors one image holds, or chained through one, are a group (a/b); it
@@ -278,6 +285,7 @@ DMG's lightest) first, and assigns them to images by path under assets/:
   dmg:    #e0f8d0 #88c070 #346856 #081820   # reserved: the shades above
   forest: #fff #8c4 #363 #021               # #rgb is #rrggbb (#88cc44)
   ember:  #ffe #f80 #a20 #200
+  objects: 8x8                              # reserved: every sheet's objects
   bg/town.png = forest                      # pixel text: bg/town.pixels
 Colors are #rrggbb or #rgb, kept as RGB555. Names are a lowercase letter,
 then lowercase letters, digits or _. '#' then a space or tab (or '#' last
@@ -294,7 +302,7 @@ the image's 8x8 grid; --json lists them all), message and remedy.
   dmg_palette         4 shades for the background; 3 + transparent per sheet
   size_multiple_8     width and height a multiple of 8
   obj_pair_8x16       sheet and frame heights a multiple of 16 (of 8 for
-                      8x8 objects)
+                      8x8 objects; under objects: 8x8, size_multiple_8)
   obj_per_line        10 objects side by side in a frame
   obj_total           40 objects in a frame
   frame_grid          a sheet's width and height whole frames
@@ -357,10 +365,15 @@ one of two kinds of art:
                 does, so one project builds clean in both builds. --gbc
                 also packs its GBC palettes; its GBC tiles are their own
                 data, behind the same map and frame lists, so --gbc
-                roughly doubles color art's image ROM. shared_shade
-                warns only for two colors in one tile (a sheet: one
-                object) that fall to one shade; a derived sheet in all 4
-                shades is dmg_palette.
+                roughly doubles color art's image ROM. Under --gbc,
+                shared_shade warns only for two colors in one tile (a
+                sheet: one object) that fall to one shade; a derived sheet
+                in all 4 shades is dmg_palette. Plain and --gbc builds'
+                tile data may differ: a plain build dedups tiles on the
+                DMG version alone, so it may keep fewer than --gbc, which
+                keeps tiles apart that differ in color. The DMG picture
+                is the same, and each build's images.inc matches its own
+                data.
   indexed art   assigned a palette in assets/palettes.txt: drawn in 4
                 shades as DMG art; one set of tiles serves both machines,
                 colored on the GBC by its palette, which the program can
@@ -445,8 +458,9 @@ project: each as its path under assets/ (it sets kind, labels and frame
 size), the file to read, and a dmg version, with the palettes
 palettes.txt would hold (`gbcli schema`): palettes.dmg is the dmg line
 (four RGB555 colors, shades 0-3), palettes.assignments the `path = name`
-lines. The CLI reads a relative file or dmg path from the manifest's
-folder.
+lines, and a manifest's objects ("8x8" or "8x16") the objects line.
+A manifest reads a dmg version only from an image's dmg field. The CLI
+reads a relative file or dmg path from the manifest's folder.
 $ gbcli build --help
 exit 0
 gbcli build — assemble, link and fix a project with RGBDS; errors with file and line

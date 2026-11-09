@@ -44,6 +44,7 @@ pub(crate) fn convert(
         sources,
         named: named_palettes,
         palettes,
+        objects,
         problems,
     } = input;
     let mut made = ImagesMade {
@@ -146,7 +147,8 @@ pub(crate) fn convert(
     let shading = shades::choose(&palettes, named_palettes.dmg.as_ref(), &colors);
     made.shades = Some(shading.choice);
     // Colors shared across images are named only among DMG art: a derived
-    // version's shares are scoped to its tiles and objects (plan question 2).
+    // version's shares are its own image's (a plain build) or its tiles'
+    // and objects' (--gbc, plan question 2), in `derive`.
     let dmg_art: Vec<(String, &Pixels, Option<&str>)> = versioned
         .iter()
         .filter_map(|(s, image, p, v, _)| {
@@ -169,14 +171,30 @@ pub(crate) fn convert(
         .collect();
     let across = shared::across(&held, &dmg_colors, &shading);
     let grays = derive::gray_shading(&palettes);
+    // Every sheet's object size, when the project sets one, and the
+    // setting as a problem names it.
+    let objects_setting = palettes.objects();
+    let objects = objects.map(|size| (size, objects_setting.as_str()));
 
     let mut plans: Vec<Checked> = Vec::new();
     // Each plan's DMG version, for rgbgfx: its pixels, and the file that
     // holds them, if any (a derived version is written out first).
     let mut read: Vec<(Pixels, Option<PathBuf>)> = Vec::new();
     for (s, image, pixels, version, (text, over_text)) in versioned {
-        // A manifest's `dmg` is any file; name the one given.
-        let dmg_shown = shown(&s.dmg.clone().unwrap_or_else(|| find::dmg_path(&s.path)));
+        // A manifest's `dmg` is any file; name the one given. Without one, a
+        // manifest reads none beside `file`, so its remedies name the field.
+        let dmg_shown = match (&s.dmg, origin) {
+            (Some(d), _) => shown(d),
+            (None, Origin::Project) => shown(&find::dmg_path(&s.path)),
+            (None, Origin::Manifest) => format!(
+                "a PNG named by the `dmg` field of {} in the manifest",
+                s.name
+            ),
+        };
+        let frames = sheet::Frames {
+            named: s.frame,
+            objects,
+        };
         // The DMG version the checks read, under the name they give it,
         // and color art's color image, whose tiles pair with it under
         // --gbc.
@@ -196,8 +214,11 @@ pub(crate) fn convert(
                 (dmg_shown, o, file, &shading, Some(pixels))
             }
             Version::Derived => {
-                let object = sheet::object_size(s.frame);
-                match derive::derive(&image, &dmg_shown, s.kind, object, &pixels, &shading) {
+                let object = frames.object();
+                let derived = derive::derive(
+                    &image, &dmg_shown, s.kind, object, &pixels, &shading, target,
+                );
+                match derived {
                     Ok(d) => {
                         made.problems.extend(d.warnings);
                         (image.clone(), d.pixels, None, &grays, Some(pixels))
@@ -221,7 +242,7 @@ pub(crate) fn convert(
             }
             ImageKind::Sprites => {
                 let name = &checked_name;
-                sheet::check(name, &s.stem, &dmg, s.frame, shading, drawn, joint).map(Plan::Sheet)
+                sheet::check(name, &s.stem, &dmg, frames, shading, drawn, joint).map(Plan::Sheet)
             }
         };
         let color = color.filter(|_| gbc);
@@ -329,6 +350,7 @@ pub(crate) fn convert(
             let shared = emit::Shared {
                 gbc: gbc_made.as_ref(),
                 named: &named_palettes.palettes,
+                objects,
             };
             let (asm, inc) = (place.dir.join("images.asm"), place.dir.join("images.inc"));
             let data: Vec<String> = plans

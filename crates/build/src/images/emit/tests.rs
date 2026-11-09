@@ -79,6 +79,7 @@ fn symbols_lists_what_each_kind_defines_but_frame_labels() {
     let shared = Shared {
         gbc: None,
         named: &[],
+        objects: None,
     };
     let mut listed: Vec<String> = symbols(ImageKind::Bg, "Town", "TOWN")
         .into_iter()
@@ -139,6 +140,7 @@ fn an_indexed_sheet_defines_its_swap_symbols() {
     let shared = Shared {
         gbc: None,
         named: &named,
+        objects: None,
     };
     let asm = asm(&entries, &shared);
     let swaps = swap_symbols("Hero", "ice_2");

@@ -100,7 +100,11 @@ impl Case {
                 .map(|a| (a.to_string(), "ember".to_string()))
                 .collect(),
         };
-        let manifest = AssetManifest { images, palettes };
+        let manifest = AssetManifest {
+            images,
+            palettes,
+            objects: None,
+        };
         AssetsOptions {
             target: self.target,
             ..AssetsOptions::new(AssetsInput::Manifest(manifest), temp.0.clone())
@@ -265,4 +269,69 @@ fn the_override_beside_indexed_art_error_names_each_sources_assignment() {
         !manifest.contains("assets/palettes.txt"),
         "manifest: {manifest}"
     );
+}
+
+/// A manifest reads a DMG version only from an image's `dmg` field, never
+/// from a file beside its `file` (review-img14 of 372d772): a derived
+/// version's remedies name that field, not `art/hero.dmg.png`. Both
+/// remedies that offer a hand-drawn DMG version: a sheet's four shades,
+/// and (under --gbc) colors sharing a shade in one object.
+#[test]
+fn a_manifests_derived_remedy_names_its_dmg_field_not_a_file_beside_it() {
+    let temp = Temp::new("remedy-manifest-dmg-field");
+    write_png(&temp.path("art/hero.png"), 8, 16, |x, _| {
+        [WHITE, LIGHT, DARK, BLACK, CLEAR, CLEAR, CLEAR, CLEAR][x as usize]
+    });
+    // One object, near-black beside black.
+    write_png(&temp.path("art/bat.png"), 8, 16, |x, _| {
+        [WHITE, BLACK, NEAR_BLACK, CLEAR, CLEAR, CLEAR, CLEAR, CLEAR][x as usize]
+    });
+    for (image, file, limit, target) in [
+        (
+            "sprites/hero.png",
+            "art/hero.png",
+            ImageLimit::DmgPalette,
+            BuildTarget::Dmg,
+        ),
+        (
+            "sprites/bat.png",
+            "art/bat.png",
+            ImageLimit::SharedShade,
+            BuildTarget::Gbc,
+        ),
+    ] {
+        let manifest = AssetManifest {
+            images: vec![ManifestImage {
+                image: image.into(),
+                file: file.into(),
+                dmg: None,
+            }],
+            palettes: NamedPalettes::default(),
+            objects: None,
+        };
+        let options = AssetsOptions {
+            target,
+            ..AssetsOptions::new(AssetsInput::Manifest(manifest), temp.0.clone())
+        };
+        let made = match assets(rgbds().images(), &options) {
+            Ok(m) => m.images,
+            Err(AssetsError::Failed(m)) => m.images,
+            Err(e) => panic!("{:?}", e.body()),
+        };
+        let p = made
+            .problems
+            .iter()
+            .find(|p| p.limit == limit)
+            .unwrap_or_else(|| panic!("{image}: {:#?}", made.problems));
+        assert!(
+            !p.remedy.contains(".dmg.png"),
+            "{image}: names a file a manifest never reads: {}",
+            p.remedy
+        );
+        assert!(
+            p.remedy.contains(&format!("the `dmg` field of {image}")),
+            "{image}: {}",
+            p.remedy
+        );
+    }
 }

@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 
-use crate::images::ImagesMade;
+use crate::images::{ImagesMade, ObjectSize};
 use crate::palettes::{NamedPalettes, is_image_path};
 use crate::toolchain::{BuildTarget, Diagnostic};
 
@@ -33,15 +33,21 @@ pub struct AssetsArgs {
     pub keep: Option<String>,
 }
 
-/// Images to convert without a project, and the palettes a project would
-/// hold in `assets/palettes.txt`. On read, each image is named once, as a
-/// project names it, and every assignment names one of them.
+/// Images to convert without a project, and the palettes and object size
+/// a project would hold in `assets/palettes.txt`. On read, each image is
+/// named once, as a project names it, and every assignment names one of
+/// them.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, try_from = "UncheckedManifest")]
 pub struct AssetManifest {
     pub images: Vec<ManifestImage>,
     #[serde(default, skip_serializing_if = "is_default")]
     pub palettes: NamedPalettes,
+    /// Every sheet's object size, as the `objects` line of a project's
+    /// `assets/palettes.txt` sets it (LCDC bit 2 is one size for the whole
+    /// screen); unset, each sheet's frame height decides (`ObjectSize`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub objects: Option<ObjectSize>,
 }
 
 /// One image of a manifest.
@@ -56,7 +62,8 @@ pub struct ManifestImage {
     /// The PNG to read.
     pub file: String,
     /// Its DMG version, which a project keeps beside it as
-    /// `<name>.dmg.png`: read for the GBC target only.
+    /// `<name>.dmg.png`: read for both targets. A manifest reads one only
+    /// from here, never from a file beside `file`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dmg: Option<String>,
 }
@@ -81,6 +88,8 @@ struct UncheckedManifest {
     images: Vec<ManifestImage>,
     #[serde(default)]
     palettes: NamedPalettes,
+    #[serde(default)]
+    objects: Option<ObjectSize>,
 }
 
 impl TryFrom<UncheckedManifest> for AssetManifest {
@@ -90,6 +99,7 @@ impl TryFrom<UncheckedManifest> for AssetManifest {
         let manifest = AssetManifest {
             images: u.images,
             palettes: u.palettes,
+            objects: u.objects,
         };
         manifest.check()?;
         Ok(manifest)

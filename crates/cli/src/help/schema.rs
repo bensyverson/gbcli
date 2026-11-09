@@ -63,8 +63,10 @@ assets  dir?: PATH | manifest?: MANIFEST  target?: "dmg"|"gbc"  keep?: PATH
         keeps the data and previews, else nothing is written; result.assets:
         {target, images: as result.build.images, diagnostics})
         MANIFEST = {images: [{image: IMAGE, file: PATH, dmg?: PATH}],
-                    palettes?: NAMED}  (IMAGE as in assets/, each once;
-                    NAMED as below, assigning only listed images)
+                    palettes?: NAMED, objects?: "8x8"|"8x16"}  (IMAGE as
+                    in assets/, each once; NAMED as below, assigning only
+                    listed images; objects: every sheet's object size, as
+                    palettes.txt's objects line)
 doctor  —
 new     dir: PATH
 opcode  query: TEXT  ("$20", "$CB37", "jr nz, .loop", "ld a, [hl+]")

@@ -24,6 +24,7 @@ fn manifest_of(file: &str, image: &str, dmg: Option<&str>) -> AssetManifest {
             dmg: dmg.map(str::to_string),
         }],
         palettes: NamedPalettes::default(),
+        objects: None,
     }
 }
 

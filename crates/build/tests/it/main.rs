@@ -18,6 +18,7 @@ mod images_joint;
 mod images_joint_edges;
 mod images_key_green;
 mod images_named_palettes;
+mod images_object_size;
 mod images_palette;
 mod images_palette_rules;
 mod images_pixels;

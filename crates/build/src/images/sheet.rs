@@ -1,8 +1,10 @@
 //! A sprite sheet of 8x16 objects, or of 8x8 objects when its frames are
-//! a multiple of 8 high but not 16 (`shot.8x8.png`, leaf GQFHVi), on the
-//! DMG: three shades plus transparent per object palette, ten objects a
-//! line, forty in all, and whole objects (units) deduplicated with flips
-//! (rgbgfx has no 8x16 mode, and its `-u` would split a unit's pair).
+//! a multiple of 8 high but not 16 (`shot.8x8.png`, leaf GQFHVi), or of
+//! the size the project sets for every sheet (`Frames::objects`, leaf
+//! mjBkTn), on the DMG: three shades plus transparent per object palette,
+//! ten objects a line, forty in all, and whole objects (units)
+//! deduplicated with flips (rgbgfx has no 8x16 mode, and its `-u` would
+//! split a unit's pair).
 
 use std::collections::HashMap;
 
@@ -93,23 +95,43 @@ impl SheetPlan {
     }
 }
 
+/// How a sheet is cut: the frame size its name gives, and the object size
+/// the project sets for every sheet, if it sets one.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Frames<'a> {
+    /// The frame size from `<name>.WxH.png`; the whole sheet without one.
+    pub named: Option<(u32, u32)>,
+    /// The project's object size, and the setting that sets it as a
+    /// problem names it ("the objects line of assets/palettes.txt").
+    pub objects: Option<(ObjectSize, &'a str)>,
+}
+
+impl Frames<'_> {
+    /// The size of the sheet's objects (`object_size`).
+    pub fn object(&self) -> ObjectSize {
+        object_size(self.named, self.objects.map(|(size, _)| size))
+    }
+}
+
 /// The size of the objects a sheet whose frames its name gives as `frame`
-/// is drawn in: 8x8 for a frame a multiple of 8 high but not 16, else
-/// 8x16 (a sheet with no frame size included).
-pub(crate) fn object_size(frame: Option<(u32, u32)>) -> ObjectSize {
-    match frame {
-        Some((_, h)) if h.is_multiple_of(8) && !h.is_multiple_of(16) => ObjectSize::Square,
+/// is drawn in: the project's `set` size when it sets one (LCDC bit 2 is
+/// one size for the whole screen); else 8x8 for a frame a multiple of 8
+/// high but not 16, and 8x16 otherwise (a sheet with no frame size
+/// included).
+pub(crate) fn object_size(frame: Option<(u32, u32)>, set: Option<ObjectSize>) -> ObjectSize {
+    match (set, frame) {
+        (Some(size), _) => size,
+        (None, Some((_, h))) if h.is_multiple_of(8) && !h.is_multiple_of(16) => ObjectSize::Square,
         _ => ObjectSize::Tall,
     }
 }
 
-/// Checks a sheet whose frames are `frame` pixels (the whole sheet when
-/// `None`; its name, `<name>.WxH.png`, may give another), in the objects
-/// `object_size` gives it; the plan when it fits, else every problem
-/// found. `shading` is the project's
-/// (`shades::choose`). `drawn` is the image as drawn, whose colors the
-/// hints name: the color image of color art, else `pixels`. `color` is
-/// the color image whose DMG version
+/// Checks a sheet cut as `frames` says (its frames the whole sheet when
+/// its name, `<name>.WxH.png`, gives none), in the objects `object_size`
+/// gives it; the plan when it fits, else every problem found. `shading`
+/// is the project's (`shades::choose`). `drawn` is the image as drawn,
+/// whose colors the hints name: the color image of color art, else
+/// `pixels`. `color` is the color image whose DMG version
 /// `pixels` is, under `--gbc`, transparent where it is (`derive`): units
 /// are then one only when they match in both, flipped alike, so one frame
 /// list serves both machines (plan question 1).
@@ -117,24 +139,33 @@ pub(crate) fn check(
     image: &str,
     stem: &str,
     pixels: &Pixels,
-    frame: Option<(u32, u32)>,
+    frames: Frames,
     shading: &Shading,
     drawn: &Pixels,
     color: Option<Color>,
 ) -> Result<SheetPlan, Vec<ImageProblem>> {
-    let object = object_size(frame);
+    let object = frames.object();
     let oh = object.height();
     if let Some(mut p) = census::size(image, pixels, oh) {
         if p.limit == ImageLimit::ObjPair8x16 && pixels.height.is_multiple_of(8) {
-            p.remedy += &format!(
-                "; or, for 8x8 objects, name a frame size a multiple of 8 high but not 16, e.g. \
-                 {stem}.8x8.png"
-            );
+            match frames.objects {
+                Some((_, setting)) => {
+                    p.message += &format!(" ({setting} makes every sheet's objects 8x16)");
+                    p.remedy += &format!("; or, for 8x8 objects, set {setting} to 8x8");
+                }
+                None => {
+                    p.remedy += &format!(
+                        "; or, for 8x8 objects, name a frame size a multiple of 8 high but not \
+                         16, e.g. {stem}.8x8.png"
+                    );
+                }
+            }
         }
         return Err(vec![p]);
     }
+    let frame = frames.named;
     let (fw, fh) = frame.unwrap_or((pixels.width, pixels.height));
-    if let Some(p) = frame_shape(image, stem, pixels, frame, object) {
+    if let Some(p) = frame_shape(image, stem, pixels, frames, object) {
         return Err(vec![p]);
     }
     if let Some(p) = census::alpha(image, pixels, true) {
@@ -395,9 +426,10 @@ fn frame_shape(
     image: &str,
     stem: &str,
     pixels: &Pixels,
-    named: Option<(u32, u32)>,
+    frames: Frames,
     object: ObjectSize,
 ) -> Option<ImageProblem> {
+    let named = frames.named;
     let (w, h) = (pixels.width, pixels.height);
     let (fw, fh) = named.unwrap_or((w, h));
     let named = named.is_some();
@@ -414,26 +446,51 @@ fn frame_shape(
     let oh = object.height();
     let offer = format!("{stem}.{}x{}.png", tiling(fw, 8, w), tiling(fh, oh, h));
     let whole = |n: u32, unit: u32| (n / unit).max(1) * unit;
-    let frames = format!("{image}'s frames are {fw}x{fh}");
+    let shape = format!("{image}'s frames are {fw}x{fh}");
     let (limit, count, max, message, remedy) = if fw == 0 || !fw.is_multiple_of(8) {
         (
             ImageLimit::SizeMultiple8,
             fw,
             whole(fw, 8),
-            format!("{frames}; a frame is whole 8x16 objects, so its width is a multiple of 8"),
-            format!("rename it {offer}"),
-        )
-    } else if fh == 0 || !fh.is_multiple_of(oh) {
-        (
-            ImageLimit::ObjPair8x16,
-            fh,
-            whole(fh, oh),
             format!(
-                "{frames}; 8x16 objects pair two tiles top over bottom, so a frame's height is \
-                 a multiple of 16 (or of 8 but not 16, which makes 8x8 objects)"
+                "{shape}; a frame is whole {} objects, so its width is a multiple of 8",
+                object.name()
             ),
             format!("rename it {offer}"),
         )
+    } else if fh == 0 || !fh.is_multiple_of(oh) {
+        match (frames.objects, object) {
+            (None, _) => (
+                ImageLimit::ObjPair8x16,
+                fh,
+                whole(fh, oh),
+                format!(
+                    "{shape}; 8x16 objects pair two tiles top over bottom, so a frame's height \
+                     is a multiple of 16 (or of 8 but not 16, which makes 8x8 objects)"
+                ),
+                format!("rename it {offer}"),
+            ),
+            (Some((_, setting)), ObjectSize::Tall) => (
+                ImageLimit::ObjPair8x16,
+                fh,
+                whole(fh, oh),
+                format!(
+                    "{shape}; {setting} makes every sheet's objects 8x16, which pair two tiles \
+                     top over bottom, so a frame's height is a multiple of 16"
+                ),
+                format!("rename it {offer}; or, for 8x8 objects, set {setting} to 8x8"),
+            ),
+            (Some((_, setting)), ObjectSize::Square) => (
+                ImageLimit::SizeMultiple8,
+                fh,
+                whole(fh, oh),
+                format!(
+                    "{shape}; {setting} makes every sheet's objects 8x8, so a frame's height is \
+                     a multiple of 8"
+                ),
+                format!("rename it {offer}"),
+            ),
+        }
     } else if !w.is_multiple_of(fw) || !h.is_multiple_of(fh) {
         let (count, frame) = if w.is_multiple_of(fw) {
             (h, fh)
@@ -446,7 +503,7 @@ fn frame_shape(
             count,
             count / frame * frame,
             format!(
-                "{frames}, which don't tile the {w}x{h} sheet; frames run left to right, then \
+                "{shape}, which don't tile the {w}x{h} sheet; frames run left to right, then \
                  down, so its width and height are whole frames"
             ),
             format!(
@@ -466,7 +523,7 @@ fn frame_shape(
             fw.max(fh),
             FRAME_SPAN,
             format!(
-                "{frames}; OAM positions are bytes, so one frame's objects span at most \
+                "{shape}; OAM positions are bytes, so one frame's objects span at most \
                  {FRAME_SPAN} pixels each way"
             ),
             format!("{named}, e.g. {offer}, or split the image into frames that move together"),

@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use gbcli_protocol::{AssetManifest, ImageProblem, NamedPalettes};
+use gbcli_protocol::{AssetManifest, ImageProblem, NamedPalettes, ObjectSize};
 
 use super::find::{self, KINDS, Source};
 use super::palettes;
@@ -66,6 +66,15 @@ impl PaletteSource {
         }
     }
 
+    /// The setting that sizes every sheet's objects: "the objects line of
+    /// assets/palettes.txt".
+    pub fn objects(&self) -> String {
+        match self {
+            PaletteSource::File(shown) => format!("the objects line of {shown}"),
+            PaletteSource::Manifest => "the manifest's objects".into(),
+        }
+    }
+
     /// The words saying where an image is assigned `palette`.
     pub fn assigns(&self, palette: &str) -> String {
         match self {
@@ -82,8 +91,11 @@ pub(crate) struct Input {
     pub origin: Origin,
     pub sources: Vec<Source>,
     pub named: NamedPalettes,
-    /// Where the palettes came from.
+    /// Where the palettes came from, and the object size with them.
     pub palettes: PaletteSource,
+    /// Every sheet's object size, when the project sets one; else each
+    /// sheet's frame height decides (`sheet::object_size`).
+    pub objects: Option<ObjectSize>,
     /// What was found before any image was read: the old palette file's
     /// warning, or a bad palette file, an error that stops the conversion.
     pub problems: Vec<ImageProblem>,
@@ -98,18 +110,19 @@ pub(crate) fn project(
     let palette_shown = shown(&project.join(palettes::PATH));
     let mut problems: Vec<ImageProblem> = palettes::old_file(project, shown).into_iter().collect();
     let names: Vec<String> = sources.iter().map(|s| s.name.clone()).collect();
-    let named = match palettes::read(project, &palette_shown, &names) {
-        Ok(named) => named.unwrap_or_default(),
+    let settings = match palettes::read(project, &palette_shown, &names) {
+        Ok(settings) => settings.unwrap_or_default(),
         Err(p) => {
             problems.push(p);
-            NamedPalettes::default()
+            palettes::Settings::default()
         }
     };
     Ok(Input {
         origin: Origin::Project,
         sources,
-        named,
+        named: settings.named,
         palettes: PaletteSource::File(palette_shown),
+        objects: settings.objects,
         problems,
     })
 }
@@ -153,6 +166,7 @@ pub(crate) fn manifest(
         sources,
         named: m.palettes.clone(),
         palettes: PaletteSource::Manifest,
+        objects: m.objects,
         problems: Vec::new(),
     })
 }

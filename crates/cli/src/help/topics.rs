@@ -447,6 +447,27 @@ mod tests {
         assert!(text.lines().all(|l| l.chars().count() <= 80), "{text}");
     }
 
+    /// Ben's later rulings of 2026-11-08 (leaves mjBkTn, Vho2Gc): the
+    /// project-wide object size and where a manifest sets it, the plain
+    /// build's image-wide shared shades, and that plain and --gbc tile data
+    /// may differ.
+    #[test]
+    fn the_images_topic_says_the_object_size_and_the_plain_builds_shares() {
+        let text = Topic::from_name("images").expect("an images topic").text();
+        for needle in [
+            "objects: 8x8",
+            "LCDC_OBJ_16",
+            "a manifest's objects",
+            "anywhere in the image",
+            "tile data may differ",
+        ] {
+            assert!(text.contains(needle), "{needle} missing:\n{text}");
+        }
+        assert!(text.lines().all(|l| l.chars().count() <= 80), "{text}");
+        let schema = super::super::schema::SCHEMA;
+        assert!(schema.contains("objects?: \"8x8\"|\"8x16\""), "{schema}");
+    }
+
     /// "GBC" is the user-facing name (Ben, 2026-11-07); the topic maps it to
     /// Pan Docs' CGB and to rgbfix's -c (dual mode) and -C (GBC only).
     #[test]

@@ -4,7 +4,9 @@
 //! DMG's lightest) first, each color `#rrggbb` or CSS's shorthand `#rgb`;
 //! one assignment a line, `bg/town.png = forest`, the image by its path
 //! under `assets/`. The reserved name `dmg` lists the colors that mean
-//! shades 0-3, the first rule of the shade cascade (`shades::choose`).
+//! shades 0-3, the first rule of the shade cascade (`shades::choose`); the
+//! reserved `objects: 8x8` (or `8x16`) sets every sheet's object size, as
+//! LCDC bit 2 sets one for the whole screen (leaf mjBkTn).
 //!
 //! `#` then whitespace (or `#` at the end of a line) starts a comment,
 //! anywhere a word could start; any other word starting `#` is a color, so
@@ -17,8 +19,8 @@ use std::fs;
 use std::path::Path;
 
 use gbcli_protocol::{
-    FaultAt, GbcPalette, ImageLimit, ImageProblem, NamedPalette, NamedPalettes, PaletteFault,
-    Rgb555, Severity,
+    FaultAt, GbcPalette, ImageLimit, ImageProblem, NamedPalette, NamedPalettes, ObjectSize,
+    PaletteFault, Rgb555, Severity,
 };
 
 use super::census::error;
@@ -31,8 +33,12 @@ pub(crate) const PATH: &str = "assets/palettes.txt";
 /// The reserved name: the DMG shades, not a GBC palette.
 pub(crate) const DMG: &str = "dmg";
 
+/// The reserved name: every sheet's object size, not a palette.
+pub(crate) const OBJECTS: &str = "objects";
+
 pub(crate) const REMEDY: &str = "one palette a line, `name: c0 c1 c2 c3` (#rrggbb or #rgb, index 0 \
-                      lightest first; `dmg:` for the colors of DMG shades 0-3), or one image a \
+                      lightest first; `dmg:` for the colors of DMG shades 0-3; `objects: 8x8` \
+                      or `objects: 8x16` for every sheet's object size), or one image a \
                       line, `bg/town.png = name`; '#' and a space or tab starts a comment \
                       (gbcli help images)";
 
@@ -74,6 +80,17 @@ pub(crate) struct Parsed {
     /// The `dmg` line's, and its colors as written.
     pub dmg_line: Option<u32>,
     pub dmg_words: Vec<String>,
+    /// The `objects` line's size, and its line.
+    pub objects: Option<ObjectSize>,
+    pub objects_line: Option<u32>,
+}
+
+/// What a palette file sets for the conversion.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(crate) struct Settings {
+    pub named: NamedPalettes,
+    /// Every sheet's object size, from the `objects` line.
+    pub objects: Option<ObjectSize>,
 }
 
 /// The project's palettes: none without the file, else what it says or
@@ -84,7 +101,7 @@ pub(crate) fn read(
     project: &Path,
     shown: &str,
     images: &[String],
-) -> Result<Option<NamedPalettes>, ImageProblem> {
+) -> Result<Option<Settings>, ImageProblem> {
     let path = project.join(PATH);
     let whole = |message: &str| {
         problem(
@@ -129,7 +146,10 @@ pub(crate) fn read(
         }
         None => {
             check_images(&parsed, images).map_err(|bad| problem(shown, bad))?;
-            Ok(Some(parsed.named))
+            Ok(Some(Settings {
+                named: parsed.named,
+                objects: parsed.objects,
+            }))
         }
     }
 }
@@ -204,6 +224,18 @@ pub(crate) fn parse(text: &str) -> Result<Parsed, Bad> {
                 return Err(Bad::at(line, format!("{fault} (first on line {first})")));
             }
             parsed.lines.insert(image.to_string(), line);
+        } else if let Some((name, size)) = joined
+            .split_once(':')
+            .filter(|(name, _)| name.trim() == OBJECTS)
+        {
+            if let Some(first) = parsed.objects_line {
+                return Err(Bad::at(
+                    line,
+                    format!("objects is set again (first on line {first})"),
+                ));
+            }
+            parsed.objects = Some(object_size(name.trim(), size.trim(), line)?);
+            parsed.objects_line = Some(line);
         } else if let Some((name, colors)) = joined.split_once(':') {
             let (name, colors_text) = (name.trim(), colors);
             let colors = palette(name, colors_text, line)?;
@@ -309,6 +341,19 @@ fn assignment(image: &str, name: &str, line: u32) -> Result<(), Bad> {
         ));
     }
     Ok(())
+}
+
+/// The size after `objects:`.
+fn object_size(name: &str, size: &str, line: u32) -> Result<ObjectSize, Bad> {
+    [ObjectSize::Square, ObjectSize::Tall]
+        .into_iter()
+        .find(|s| s.name() == size)
+        .ok_or_else(|| {
+            Bad::at(
+                line,
+                format!("{name} takes 8x8 or 8x16, every sheet's object size, not {size:?}"),
+            )
+        })
 }
 
 /// The four colors after `name:`.
@@ -468,6 +513,35 @@ mod tests {
         assert_eq!(parsed.named.assignments["sprites/hero.png"], "ember");
         assert_eq!(parsed.lines["sprites/hero.png"], 5);
         assert!(parsed.named.dmg.is_some());
+    }
+
+    /// The reserved `objects` line sets every sheet's object size (leaf
+    /// mjBkTn); without it, none is set.
+    #[test]
+    fn the_objects_line_sets_every_sheets_object_size() {
+        let parsed = parse(&format!("{GRAYS}objects: 8x8   # sprite mode\n")).unwrap();
+        assert_eq!(parsed.objects, Some(ObjectSize::Square));
+        assert_eq!(parsed.objects_line, Some(2));
+        assert_eq!(parsed.named.palettes, []);
+        let tall = parse("objects:8x16\n").unwrap();
+        assert_eq!(tall.objects, Some(ObjectSize::Tall));
+        assert_eq!(parse(GRAYS).unwrap().objects, None);
+    }
+
+    /// An `objects` line of any other size, or a second one, is refused at
+    /// its line, saying what it takes.
+    #[test]
+    fn a_bad_or_second_objects_line_is_refused_at_its_line() {
+        for (text, line, said) in [
+            ("objects: 16x16\n", 1, "8x8 or 8x16"),
+            ("objects: #fff #8c4 #363 #021\n", 1, "8x8 or 8x16"),
+            ("objects:\n", 1, "8x8 or 8x16"),
+            ("objects: 8x8\nobjects: 8x8\n", 2, "first on line 1"),
+        ] {
+            let bad = parse(text).unwrap_err();
+            assert_eq!(bad.line, Some(line), "{text:?}: {bad:?}");
+            assert!(bad.message.contains(said), "{text:?}: {}", bad.message);
+        }
     }
 
     /// No `dmg` line: no declared shades, and the cascade moves on.

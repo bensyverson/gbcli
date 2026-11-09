@@ -119,7 +119,7 @@ Defaults, not laws. When we break one, we do it consciously and say so in the re
 - **The head of `AGENTS.md` lists where the documentation lives; keep that list current with formal documentation, but exclude project/ docs such as plans and research.** AGENTS.md is read by every agent, even subagents, so keep it focused and intentional.
 <!-- agents:end docs -->
 
-<!-- agents:begin index@114667 -->
+<!-- agents:begin index@7d7bbe -->
 ## Situational instructions
 
 These files carry instructions for specific situations. When one applies, read the file before acting and follow it.
@@ -133,4 +133,5 @@ These files carry instructions for specific situations. When one applies, read t
 | The first time a tool call is refused or denied, and before briefing a subagent | `project/agents/harness.md` |
 | Before building or extending a command-line tool | `project/agents/cli-design.md` |
 | Before handoff, when a job container closes, and before building on unreviewed code | `project/agents/review.md` |
+| When running as a subagent, before your first tool call | `project/agents/subagent.md` |
 <!-- agents:end index -->

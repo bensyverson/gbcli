@@ -119,6 +119,11 @@ pub fn new_project(dir: &Path, display_base: &Path) -> Result<NewMade, NewError>
         fs::write(&path, text.replace("{{name}}", &name)).map_err(io(&path))?;
         files.push(display(&path, &base));
     }
+    // The project's own bundle: sessions run inside it are found here first,
+    // never in a `.gbcli/` above it (the starter's .gitignore lists it).
+    let bundle = dir.join(".gbcli");
+    fs::create_dir_all(&bundle).map_err(io(&bundle))?;
+    files.push(format!("{}/", display(&bundle, &base)));
     let shown = display(&dir, &base);
     let (build, rom) = if shown == "." {
         ("gbcli build".to_string(), format!("build/{name}.gb"))

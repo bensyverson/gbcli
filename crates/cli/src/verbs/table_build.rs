@@ -88,7 +88,8 @@ pub const BUILD_VERB: VerbSpec = VerbSpec {
             with lines= and count=); any error fails with build_failed (exit 4) and leaves \
             the last good ROM in place. With --session and --restore, a good build is \
             reloaded: the checkpoint is restored into the rebuilt ROM, which loads only if \
-            nothing it was running moved (rom_changed, exit 3, says what did).",
+            nothing it was running moved (rom_changed, exit 3, says what did; `gbcli run \
+            --from boot` then starts the session over on the new ROM).",
     example: (
         "gbcli build --session game --restore start",
         "rebuilds the project here, then restores checkpoint start of session game into the \

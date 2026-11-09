@@ -26,6 +26,9 @@ Why won't it build?
 Rebuild after an edit and carry on where you were
   gbcli build --session dx --restore start (the checkpoint, in the new ROM;
   refused with what moved if its routine or variables moved; gbcli help rgbds)
+Start over on the rebuilt ROM (rom_changed: the head or checkpoint can't load)
+  gbcli run --session dx --from boot --frames 60 (keeps breakpoints and watches,
+  moved with their labels; the old head stays in history, checkpoints stay)
 Does the save survive turning the Game Boy off? (or a rebuild?)
   gbcli power-cycle (keeps battery RAM and clock; --rtc-advance 8h for time
   off), then gbcli run --frames 300 --shot loaded.png

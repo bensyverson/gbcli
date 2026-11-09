@@ -169,8 +169,9 @@ pub struct RunArgs {
     /// A named checkpoint, or `~N` for a history entry.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub at: Option<String>,
-    /// Where to start from when there is no head: the boot handoff (the
-    /// default), or power-on, which also skips the head.
+    /// Where to start instead of the head, which either value skips: the
+    /// boot handoff (how a session restarts on a rebuilt ROM), or power-on.
+    /// Absent, a run starts from the head, else the boot handoff.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub from: Option<Start>,
     /// What `frame` and `t` count from (design §9).

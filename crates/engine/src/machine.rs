@@ -19,7 +19,9 @@ use crate::sha256::sha256;
 use crate::sym::{SymError, Symbols};
 
 mod power;
+mod rebase;
 pub use power::{Battery, Flash, PowerCycled};
+pub use rebase::{DebugEntry, Rebased};
 
 /// How to build cores of one backend.
 #[derive(Clone, Copy)]

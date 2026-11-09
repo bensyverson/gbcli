@@ -4,7 +4,7 @@
 
 use std::time::Duration;
 
-use gbcli_bundle::{SessionStore, Start};
+use gbcli_bundle::SessionStore;
 use gbcli_core::Budget;
 use gbcli_engine::profile::{CpuSpeed, Leg, MeasureError, MeasureSpec, Measurement};
 use gbcli_engine::{Machine, unapplied_keys};
@@ -30,7 +30,7 @@ impl Handler {
             return Err(failure(&MeasureError::NoIterations, self.wall_guard));
         }
         let (mut machine, loaded) =
-            self.machine_for(store, meta, Need::Start(Start::Boot), args.at.as_deref())?;
+            self.machine_for(store, meta, Need::Start(None), args.at.as_deref())?;
         warnings.extend(loaded);
         let (budget, _, _) = budget_from(args.frames, args.instructions, args.ticks);
         let interrupt = self.interrupt.clone();

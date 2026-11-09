@@ -22,6 +22,9 @@ pub const V2_SYM: &[u8] = include_bytes!("../../engine/tests/roms/rebuild_v2.sym
 /// V1 with a routine appended, so no live symbol moves.
 pub const V3: &[u8] = include_bytes!("../../engine/tests/roms/rebuild_v3.gb");
 pub const V3_SYM: &[u8] = include_bytes!("../../engine/tests/roms/rebuild_v3.sym");
+/// V1 with a byte of WRAM inserted first, so every RAM symbol moves.
+pub const V4: &[u8] = include_bytes!("../../engine/tests/roms/rebuild_v4.gb");
+pub const V4_SYM: &[u8] = include_bytes!("../../engine/tests/roms/rebuild_v4.sym");
 /// Logs the held buttons at every vblank (`joypad.asm`).
 pub const JOYPAD: &[u8] = include_bytes!("../../engine/tests/roms/joypad.gb");
 /// Writes SCX and BGP on known lines every frame, and four registers on line

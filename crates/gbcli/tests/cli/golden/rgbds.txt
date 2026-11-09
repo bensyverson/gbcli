@@ -10,6 +10,7 @@ created path=game/include/hUGE_note_table.inc
 created path=game/src/hUGEDriver.asm
 created path=game/src/music.asm
 created path=game/assets/music/theme.song
+created path=game/.gbcli/
 new name=game dir=game
 next command="gbcli build game"
 next command="gbcli run game/build/game.gb --session game --frames 120 --shot first.png"

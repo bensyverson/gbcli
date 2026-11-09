@@ -302,6 +302,8 @@ pub struct DoctorMade {
 pub struct NewMade {
     pub name: String,
     pub dir: String,
+    /// The files written, then the project's `.gbcli/` (a directory, so it
+    /// ends in `/`).
     pub files: Vec<String>,
     /// The commands to run next, in order.
     pub next: Vec<String>,

@@ -159,8 +159,10 @@ pub const RUN: &[FlagSpec] = &[
     value(
         "from",
         "boot|power-on",
-        "start at the boot handoff when there is no head (default), or at power-on, which \
-         also skips the head; not with --at",
+        "start at the boot handoff (the default with no head) or at power-on; given, either \
+         skips the head, so --from boot restarts the session on a rebuilt ROM, keeping its \
+         breakpoints and watches (moved with their labels); the old head stays in history; \
+         not with --at",
     ),
     SINCE,
     value("until", "EXPR", "stop when this condition holds"),

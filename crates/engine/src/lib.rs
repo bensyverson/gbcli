@@ -27,7 +27,7 @@ pub use debug::{
     core_code, eval_code, expr_code, unapplied_keys,
 };
 pub use flash::{FlashReport, flash_image_path, flash_note_rows, flash_warnings};
-pub use machine::{Backend, Battery, Flash, Machine, PowerCycled, SetupError};
+pub use machine::{Backend, Battery, DebugEntry, Flash, Machine, PowerCycled, Rebased, SetupError};
 pub use session::{MachineId, Session};
 pub use sha256::sha256;
 pub use sym::{Area, MappedSymbols, SymError, Symbol, Symbols};

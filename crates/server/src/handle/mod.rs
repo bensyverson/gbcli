@@ -89,9 +89,10 @@ enum Need {
     /// Inspect or configure: the head, or power-on when there is none; never
     /// the boot run.
     Head,
-    /// Advance or change the state: from `at`, else the head, else the boot
-    /// handoff, or power-on for `--from power-on`. Where `run` would start.
-    Start(Start),
+    /// Advance or change the state: from `at`, else from the `--from` start
+    /// when given (skipping the head), else the head, else the boot handoff.
+    /// Where `run` would start.
+    Start(Option<Start>),
     /// The request replaces the whole state (`restore`, `undo`): any machine
     /// over the session's ROM. The head isn't loaded, so a head the ROM
     /// rebuild made unloadable doesn't block the restore that fixes it.
@@ -273,7 +274,8 @@ impl Handler {
     ) -> Result<(Machine, Vec<String>), Failure> {
         let load = &self.load;
         self.loaded = None;
-        let cold = matches!(need, Need::Start(Start::PowerOn));
+        // An explicit start skips the head, and so the warm head too.
+        let cold = matches!(need, Need::Start(Some(_)));
         let warm = self.warm.take().filter(|w| {
             at.is_none()
                 && !cold
@@ -306,8 +308,13 @@ impl Handler {
             exact: warnings.is_empty(),
         });
         *machine.debugger_config_mut() = meta.debugger.clone();
-        // On every request, warm or cold: the ROM is the same file either way.
         let mut warnings = warnings;
+        // A restart is where a rebuild meets the session's breakpoints: those
+        // set by a symbol follow it, and the head the run saves keeps them.
+        if cold {
+            warnings.extend(machine.rebase_debugger().iter().map(|r| r.to_string()));
+        }
+        // On every request, warm or cold: the ROM is the same file either way.
         warnings.extend(battery::header_warnings(&machine));
         Ok((machine, warnings))
     }
@@ -361,6 +368,9 @@ mod warm_tests;
 
 #[cfg(test)]
 mod review_tests;
+
+#[cfg(test)]
+mod restart_tests;
 
 #[cfg(test)]
 mod rom_change_tests;

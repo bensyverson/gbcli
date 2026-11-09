@@ -1,4 +1,4 @@
-use gbcli_bundle::{SessionStore, Start};
+use gbcli_bundle::SessionStore;
 use gbcli_core::Region;
 use gbcli_engine::addr::{self, RegionSizes, WriteTarget};
 use gbcli_engine::{Machine, mem};
@@ -20,7 +20,7 @@ impl Handler {
         actor: &Option<String>,
         warnings: &mut Vec<String>,
     ) -> Result<ResultBody, Failure> {
-        let need = Need::Start(Start::Boot);
+        let need = Need::Start(None);
         let (mut machine, loaded) = self.machine_for(store, meta, need, None)?;
         warnings.extend(loaded);
         let writes = apply_writes(&mut machine, &args.writes)?;

@@ -1,0 +1,36 @@
+$ gbcli break Work.done --session demo
+exit 0
+breakpoint id=1 addr=$0170 symbol=Work.done
+rev s0
+$ gbcli run --session demo --frames 1
+exit 0
+stop breakpoint id=1 pc=$0170 bank=0 symbol=Work.done frame=0 t=172 since=boot ticks=11762560 ly=144 shown=0 vblank=normal
+budget frames=0/1 instructions=15 ticks=344
+rev s1
+$ gbcli checkpoint a --session demo
+exit 0
+checkpoint name=a path=.gbcli/sessions/demo/checkpoints/a.gbck frame=0 rev=s1
+rev s1
+$ gbcli run --session demo --frames 1
+exit 3
+--- stderr
+gbcli: rom_changed: the ROM changed under the saved state: PC is in Work.done: 00:0170 -> 00:0172; return address on the stack is in Main.loop: 00:015E -> 00:0160
+remedy: restart the session on the ROM on disk with `gbcli run --from boot`, which keeps its breakpoints and watches (the old head stays in history, and checkpoints stay named), or pass --allow-rom-change to load the old state anyway
+$ gbcli run --session demo --from boot --frames 10
+exit 0
+stop breakpoint id=1 pc=$0172 bank=0 symbol=Work.done frame=0 t=180 since=boot ticks=11762576 ly=144 shown=0 vblank=normal
+budget frames=0/10 instructions=16 ticks=360
+rev s2
+--- stderr
+warning: breakpoint #1 follows Work.done into the ROM on disk: $0170 -> $0172
+$ gbcli run --session demo --frames 1
+exit 0
+stop breakpoint id=1 pc=$0172 bank=0 symbol=Work.done frame=0 t=292 since=boot ticks=11762800 ly=145 shown=0 vblank=normal
+budget frames=0/1 instructions=9 ticks=224
+rev s3
+$ gbcli checkpoints --session demo
+exit 0
+saved at=a rev=s1 frame=0 rom_matches=0
+saved at=~1 rev=s2 frame=0 rom_matches=1
+saved at=~2 rev=s1 frame=0 rom_matches=0
+rev s3

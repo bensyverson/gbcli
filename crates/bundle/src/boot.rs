@@ -20,19 +20,21 @@ const BOOT_FRAMES: u64 = 600;
 /// The address a normal boot hands over to.
 const HANDOFF_PC: u16 = 0x0100;
 
-/// Where a machine starts from when there is no head: the protocol's own
-/// `--from`, so the request and the store share one type.
+/// Where a machine starts instead of the head: the protocol's own `--from`,
+/// so the request and the store share one type.
 pub use gbcli_protocol::Start;
 
 impl SessionStore {
     /// A machine at the start state a request asks for: a named checkpoint or
-    /// history entry when `at` is given, else the head, else the boot handoff.
-    /// `interrupt` ends a boot run early, as the caller's wall guard.
+    /// history entry when `at` is given, else `from` when given (skipping the
+    /// head: how a session restarts on a rebuilt ROM), else the head, else
+    /// the boot handoff. `interrupt` ends a boot run early, as the caller's
+    /// wall guard.
     pub fn start_machine(
         &self,
         meta: &SessionFile,
         at: Option<&str>,
-        from: Start,
+        from: Option<Start>,
         load: &LoadOptions,
         interrupt: Option<&AtomicBool>,
     ) -> Result<(Machine, Vec<String>), StoreError> {
@@ -41,8 +43,10 @@ impl SessionStore {
         if let Some(at) = at {
             let cp = self.checkpoint_or_history(meta.rev, at)?;
             warnings.extend(self.restore(meta, &mut machine, &cp, load)?);
-        } else if from == Start::PowerOn {
+        } else if from == Some(Start::PowerOn) {
             // Cold: the head and the boot cache are both skipped (design §9).
+        } else if from == Some(Start::Boot) {
+            warnings.extend(self.to_handoff(meta, &mut machine, load, interrupt)?);
         } else if let Some(head) = self.read_head(meta.rev)? {
             warnings.extend(self.restore(meta, &mut machine, &head, load)?);
         } else {

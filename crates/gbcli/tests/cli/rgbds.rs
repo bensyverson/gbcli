@@ -348,7 +348,7 @@ fn doctor_asks_git_about_the_projects_repository_not_the_environments() {
 
 #[test]
 fn build_restore_reloads_a_checkpoint_unless_what_it_ran_moved() {
-    let p = Project::game("rgbds-restore");
+    let p = game_in_outer_bundle("rgbds-restore");
     let run = p.rgbds(&[
         "run",
         "game/build/game.gb",
@@ -430,7 +430,7 @@ fn build_dir_finds_the_session_in_dir() {
 
 #[test]
 fn build_restore_needs_a_session_over_the_rom_it_built() {
-    let p = Project::game("rgbds-restore-errors");
+    let p = game_in_outer_bundle("rgbds-restore-errors");
     // A project bundle, so the server (not a missing `.gbcli/`) answers.
     let other = p.rgbds(&["show", "--session", "demo", "--rom", "demo.gb"]);
     assert_eq!(other.code, 0, "{}", other.stderr);
@@ -601,8 +601,18 @@ fn same_refusal(p: &Project, args: &[&str], line: &str, code: &str) {
 
 /// A project with a session `game` on its build, and a source change that
 /// a build would pick up.
-fn game_with_session(name: &str) -> Project {
+/// A starter project without its own `.gbcli/`, so its sessions live in the
+/// outer bundle that the CLI (searching from `game/`) and a `serve` started
+/// outside it both find. `gbcli new` makes the project's own bundle; these
+/// tests are about restoring, not about which bundle a session lives in.
+fn game_in_outer_bundle(name: &str) -> Project {
     let p = Project::game(name);
+    fs::remove_dir_all(p.path("game/.gbcli")).unwrap();
+    p
+}
+
+fn game_with_session(name: &str) -> Project {
+    let p = game_in_outer_bundle(name);
     let run = p.rgbds(&["show", "--rom", "game/build/game.gb", "--session", "game"]);
     assert_eq!(run.code, 0, "{}", run.stderr);
     let main = p.path("game/src/main.asm");

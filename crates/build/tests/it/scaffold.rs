@@ -84,9 +84,14 @@ fn new_writes_the_starter_and_says_what_to_run_next() {
             "demo/src/hUGEDriver.asm",
             "demo/src/music.asm",
             "demo/assets/music/theme.song",
+            "demo/.gbcli/",
         ]
     );
-    for file in &made.files {
+    assert!(
+        temp.path("demo/.gbcli").is_dir(),
+        "the project's own bundle"
+    );
+    for file in made.files.iter().filter(|f| !f.ends_with('/')) {
         let bytes = fs::read(temp.path(file)).unwrap();
         assert!(!bytes.is_empty(), "{file}");
     }

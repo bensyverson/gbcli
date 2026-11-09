@@ -1,4 +1,4 @@
-use gbcli_bundle::{SessionStore, Start};
+use gbcli_bundle::SessionStore;
 use gbcli_engine::{Machine, SaveMeta};
 use gbcli_protocol::{
     CheckpointArgs, CheckpointMade, RestoreArgs, Restored, ResultBody, Rev, SessionFile,
@@ -16,7 +16,7 @@ impl Handler {
         actor: &Option<String>,
         warnings: &mut Vec<String>,
     ) -> Result<ResultBody, Failure> {
-        let need = Need::Start(Start::Boot);
+        let need = Need::Start(None);
         let (mut machine, loaded) = self.machine_for(store, meta, need, None)?;
         warnings.extend(loaded);
         let made = write_checkpoint(store, &mut machine, &args.name, actor, meta.rev)?;

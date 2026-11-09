@@ -108,7 +108,7 @@ impl Handler {
         let interrupt = Some(&*self.interrupt);
         let (mut machine, loaded) = match &args.at {
             Some(at) if is_b && args.b.rom.is_some() => store.start_side_b_at(meta, at, &self.load),
-            Some(at) => store.start_machine(meta, Some(at), from, &self.load, interrupt),
+            Some(at) => store.start_machine(meta, Some(at), args.from, &self.load, interrupt),
             None => store.machine(meta).and_then(|mut m| {
                 let loaded = match from {
                     Start::Boot => store.to_handoff(meta, &mut m, &self.load, interrupt)?,

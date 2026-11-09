@@ -143,6 +143,8 @@ Time — every frame and cycle count says what it counts from.
 --since BASE changes the base for run and read; stop rows print since=.
 The first run of a ROM runs the real boot ROM once and caches the handoff in
 .gbcli/cache/; later runs start there. --from power-on starts cold instead.
+Either --from skips the head: --from boot is how a session starts over on a
+rebuilt ROM, keeping its breakpoints and watches.
 ";
 
 const CHECKPOINTING: &str = "\
@@ -256,7 +258,9 @@ same or the next line, back to back, is one row with lines=FIRST-LAST and
 count=N, even when that is two typos; errors= counts rows. build_failed
 exits 4 and leaves the last good ROM in place. --restore loads the checkpoint
 into the rebuilt ROM only if nothing it was running moved; rom_changed (exit
-3) lists what did, and --allow-rom-change loads it anyway.
+3) lists what did, and --allow-rom-change loads it anyway. To start over on
+the new ROM instead, `gbcli run --session game --from boot` (breakpoints and
+watches kept, following their labels).
 ";
 
 #[cfg(test)]

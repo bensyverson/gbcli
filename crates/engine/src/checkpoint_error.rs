@@ -158,15 +158,12 @@ impl CheckpointError {
                      {sha256}); load it with the gbcli that saved it, or re-create it from the ROM"
                 )
             }
-            CheckpointError::SymbolsMissing { .. } => {
+            CheckpointError::SymbolsMissing { .. } => format!(
                 "the ROM changed and can't be checked without symbols: rebuild with \
-                 `rgblink -n game.sym`, or pass --allow-rom-change"
-                    .into()
-            }
+                 `rgblink -n game.sym`, {RESTART}, or pass --allow-rom-change"
+            ),
             CheckpointError::RomChanged { .. } => {
-                "re-create the state on the new ROM (run from boot or an older checkpoint), \
-                 or pass --allow-rom-change to load it anyway"
-                    .into()
+                format!("{RESTART}, or pass --allow-rom-change to load the old state anyway")
             }
             CheckpointError::PatchConflict { offset, .. } => format!(
                 "the ROM bytes under the patch at rom:{offset:#x} changed; pass \
@@ -257,6 +254,11 @@ impl fmt::Display for CheckpointError {
 }
 
 impl std::error::Error for CheckpointError {}
+
+/// How a session gets past a rebuild that its saved states can't cross.
+const RESTART: &str = "restart the session on the ROM on disk with `gbcli run --from boot`, which \
+                       keeps its breakpoints and watches (the old head stays in history, and \
+                       checkpoints stay named)";
 
 /// Something a successful load wants the caller to know.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -379,6 +381,19 @@ mod tests {
             }],
         };
         assert_code(e, ErrorCode::RomChanged, 3);
+    }
+
+    #[test]
+    fn a_rebuild_the_state_cant_cross_names_the_restart() {
+        let refusals = [
+            CheckpointError::SymbolsMissing {
+                side: SymbolSide::Both,
+            },
+            CheckpointError::RomChanged { moved: Vec::new() },
+        ];
+        for e in refusals {
+            assert!(e.remedy().contains("gbcli run --from boot"), "{e:?}");
+        }
     }
 
     #[test]

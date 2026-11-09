@@ -11,7 +11,7 @@ mod oam_log;
 mod probes;
 mod raster;
 
-use gbcli_bundle::{SessionStore, Start, validate_checkpoint_name};
+use gbcli_bundle::{SessionStore, validate_checkpoint_name};
 use gbcli_core::Budget;
 use gbcli_engine::{DebugError, EventTap, FrameSink, Machine, Outcome, RunOptions, unapplied_keys};
 use gbcli_protocol::{
@@ -96,7 +96,6 @@ impl Handler {
                 "drop one of them: --at names the state to start from",
             )));
         }
-        let from = args.from.unwrap_or(Start::Boot);
         let since = self.since(store, args.since.as_ref())?;
         if let Some(name) = &args.checkpoint {
             validate_checkpoint_name(name).map_err(|e| Failure::from_store(&e))?;
@@ -114,12 +113,12 @@ impl Handler {
         // What needs the machine's symbols and sizes. A refusal here hands
         // the machine back untouched.
         let (mut machine, loaded) =
-            self.machine_for(store, meta, Need::Start(from), args.at.as_deref())?;
+            self.machine_for(store, meta, Need::Start(args.from), args.at.as_deref())?;
         warnings.extend(loaded);
         let plan = match plan_of(&machine, args) {
             Ok(plan) => plan,
             Err(failure) => {
-                if args.at.is_none() && from == Start::Boot {
+                if args.at.is_none() && args.from.is_none() {
                     self.keep_warm(store, meta, machine);
                 }
                 return Err(failure);
@@ -369,7 +368,7 @@ impl Handler {
                 "use `run --to <address>`",
             )));
         }
-        let need = Need::Start(Start::Boot);
+        let need = Need::Start(None);
         let (mut machine, loaded) = self.machine_for(store, meta, need, None)?;
         warnings.extend(loaded);
         let budget = match args.unit {

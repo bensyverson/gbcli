@@ -23,6 +23,7 @@ mod opcode;
 mod profile;
 mod raster;
 mod recipes;
+mod restart;
 mod rgbds;
 mod serve;
 mod serve_bare;

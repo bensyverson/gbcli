@@ -236,40 +236,11 @@ fn is_executable(path: &Path) -> bool {
     path.is_file()
 }
 
-/// rgbasm, rgblink and rgbfix, each found at an accepted version, and
-/// rgbgfx when it is there: only a project with images needs it.
+/// rgbasm, rgblink and rgbfix, each found at an accepted version. Images
+/// need no tool: gbcli encodes them itself (Ben's ruling, 2026-11-09).
 #[derive(Clone, Debug)]
 pub struct Toolchain {
     found: Vec<ToolFound>,
-    rgbgfx: ImageTool,
-}
-
-/// rgbgfx alone, or why it can't be used: all `assets` runs, since it
-/// converts images without assembling, so the other three aren't looked
-/// for.
-#[derive(Clone, Debug)]
-pub struct ImageTool(Result<ToolFound, ToolProblem>);
-
-impl ImageTool {
-    /// Finds rgbgfx on `path_var`; a relative entry is relative to `cwd`.
-    pub fn discover(path_var: Option<&OsStr>, cwd: &Path) -> ImageTool {
-        ImageTool(probe(Tool::Rgbgfx, path_var, cwd))
-    }
-
-    /// rgbgfx, or why it can't be used.
-    pub fn path(&self) -> Result<&Path, ToolchainError> {
-        match &self.0 {
-            Ok(found) => Ok(&found.path),
-            Err(problem) => Err(ToolchainError {
-                problems: vec![problem.clone()],
-            }),
-        }
-    }
-
-    /// A warning when rgbgfx is at an unpinned version.
-    pub fn warnings(&self) -> Vec<String> {
-        self.0.iter().filter_map(ToolFound::warning).collect()
-    }
 }
 
 /// Every tool that can't be used, so one message names them all.
@@ -290,8 +261,7 @@ impl Toolchain {
             }
         }
         if problems.is_empty() {
-            let rgbgfx = ImageTool::discover(path_var, cwd);
-            Ok(Toolchain { found, rgbgfx })
+            Ok(Toolchain { found })
         } else {
             Err(ToolchainError { problems })
         }
@@ -306,16 +276,6 @@ impl Toolchain {
 
     pub fn path(&self, tool: Tool) -> &Path {
         &self.get(tool).path
-    }
-
-    /// rgbgfx, or why it can't be used.
-    pub fn rgbgfx(&self) -> Result<&Path, ToolchainError> {
-        self.rgbgfx.path()
-    }
-
-    /// rgbgfx, as `assets` takes it.
-    pub fn images(&self) -> &ImageTool {
-        &self.rgbgfx
     }
 
     /// rgbasm's version: the one a build reports.

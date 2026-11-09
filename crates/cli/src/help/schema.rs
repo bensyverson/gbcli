@@ -75,7 +75,7 @@ build   dir?: PATH  src?: [PATH]  include?: [PATH]  out?: PATH
         restore?: CHECKPOINT  (into session, whose ROM must be the build's)
 assets  dir?: PATH | manifest?: MANIFEST  target?: "dmg"|"gbc"  keep?: PATH
         glyphs?: {FONT: [KEY]}
-        (images converted as build converts them, with rgbgfx alone; keep
+        (images converted as build converts them, encoded by gbcli itself; keep
         keeps the data and previews, else nothing is written; result.assets:
         {target, images: as result.build.images, diagnostics}; glyphs: the
         glyphs wanted from each font, FONT its path under assets/

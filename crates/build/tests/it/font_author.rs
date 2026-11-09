@@ -235,7 +235,7 @@ fn a_requested_letter_is_composed_from_its_base_and_mark_and_reported_as_compose
         "fonts/talk.yaff".into(),
         vec!["é".into(), "e".into(), "É".into()],
     );
-    let made = assets(rgbds().images(), &options).expect("converts");
+    let made = assets(&options).expect("converts");
     // The starter's own font (main.yaff) sorts first.
     let font = talk(&made.images.fonts);
     let got: Vec<(&str, GlyphOrigin, u8)> = font
@@ -266,7 +266,7 @@ fn a_requested_letter_is_composed_from_its_base_and_mark_and_reported_as_compose
     options
         .glyphs
         .insert("fonts/talk.yaff".into(), vec!["ë".into()]);
-    let e = assets(rgbds().images(), &options).expect_err("missing");
+    let e = assets(&options).expect_err("missing");
     assert!(
         e.body().message.contains("'ë' (u+00EB)"),
         "{}",

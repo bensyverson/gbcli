@@ -22,7 +22,7 @@ There is no build file: the layout is the build.
   byte no section holds is `$FF`, as erased flash is.
 - rgbfix fixes the header: logo, checksums, padding with `$FF`.
 - PNGs in `assets/bg/` and `assets/sprites/` are checked against the
-  hardware's limits and converted by rgbgfx into `build/images/`, with
+  hardware's limits and encoded by gbcli into `build/images/`, with
   labels for the program in `images.inc`: `gbcli help images`.
 - Every song in `assets/music/` (gbcli song text `.song`, or a hUGETracker
   `.uge`) becomes `build/music/<name>.asm`, hUGEDriver data with the label

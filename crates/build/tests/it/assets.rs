@@ -90,7 +90,7 @@ fn the_ops_results_equal_the_ones_build_records_for_the_same_project() {
         assert!(kinds.contains(&ImageKind::Tiles), "{kinds:?}");
         let mut op = project_options(&temp, target);
         op.keep = Some(temp.path("demo/build/images"));
-        let made = assets(rgbds().images(), &op).unwrap();
+        let made = assets(&op).unwrap();
         assert_eq!(made.target, target);
         assert_eq!(made.images.include, None);
         let expected = ImagesMade {
@@ -103,7 +103,7 @@ fn the_ops_results_equal_the_ones_build_records_for_the_same_project() {
         // written to the project.
         fs::remove_dir_all(temp.path("demo/build")).unwrap();
         let before = files(&temp.path("demo"));
-        let made = assets(rgbds().images(), &project_options(&temp, target)).unwrap();
+        let made = assets(&project_options(&temp, target)).unwrap();
         assert_eq!(files(&temp.path("demo")), before, "nothing written");
         let mut unkept = expected.clone();
         for i in &mut unkept.images {
@@ -158,7 +158,7 @@ fn a_manifest_with_named_palettes_and_a_tileset_converts_without_a_project() {
     manifest.check().unwrap();
     let mut options = AssetsOptions::new(AssetsInput::Manifest(manifest), temp.0.clone());
     options.target = BuildTarget::Gbc;
-    let made = assets(rgbds().images(), &options).unwrap();
+    let made = assets(&options).unwrap();
     assert!(
         made.images.first_error().is_none(),
         "{:#?}",
@@ -195,7 +195,7 @@ fn a_manifest_with_named_palettes_and_a_tileset_converts_without_a_project() {
 
     // With `keep`, the data and previews are kept there, and named.
     options.keep = Some(temp.path("kept"));
-    let made = assets(rgbds().images(), &options).unwrap();
+    let made = assets(&options).unwrap();
     let font = &made.images.images[0];
     assert_eq!(font.preview, "kept/tiles/font.preview.png");
     assert_eq!(
@@ -233,7 +233,7 @@ fn a_manifest_image_that_breaks_a_limit_fails_with_its_problem() {
         fonts: Vec::new(),
     };
     let options = AssetsOptions::new(AssetsInput::Manifest(manifest), temp.0.clone());
-    let body = assets(rgbds().images(), &options).unwrap_err().body();
+    let body = assets(&options).unwrap_err().body();
     assert_eq!(body.code, ErrorCode::BuildFailed);
     assert!(body.message.contains("odd.png"), "{}", body.message);
     assert!(!body.remedy.is_empty());
@@ -259,7 +259,7 @@ fn a_manifest_file_that_isnt_there_is_a_bad_request_naming_it() {
         fonts: Vec::new(),
     };
     let options = AssetsOptions::new(AssetsInput::Manifest(manifest), temp.0.clone());
-    let body = assets(rgbds().images(), &options).unwrap_err().body();
+    let body = assets(&options).unwrap_err().body();
     assert_eq!(body.code, ErrorCode::BadRequest);
     assert!(
         body.message.contains("nowhere/town.png"),

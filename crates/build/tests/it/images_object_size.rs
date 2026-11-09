@@ -243,7 +243,7 @@ fn mixed_object_sizes_from_a_manifest_offer_its_objects_field() {
         dmg: None,
     });
     let options = AssetsOptions::new(AssetsInput::Manifest(m), temp.0.clone());
-    let made = assets(rgbds().images(), &options).unwrap().images;
+    let made = assets(&options).unwrap().images;
     let p = made
         .problems
         .iter()
@@ -366,19 +366,19 @@ fn the_setting_works_from_a_manifest() {
     write_png(&temp.path("art/quad.png"), 16, 16, quad);
     let m = manifest(Some(ObjectSize::Square), "sprites/quad.16x16.png");
     let options = AssetsOptions::new(AssetsInput::Manifest(m), temp.0.clone());
-    let made = assets(rgbds().images(), &options).unwrap().images;
+    let made = assets(&options).unwrap().images;
     assert!(made.first_error().is_none(), "{:#?}", made.problems);
     assert_eq!(made.images[0].object_size, Some(ObjectSize::Square));
     assert_eq!(made.images[0].objects, Some(4));
     // Unset, the height rule: 8x16.
     let m = manifest(None, "sprites/quad.16x16.png");
     let options = AssetsOptions::new(AssetsInput::Manifest(m), temp.0.clone());
-    let made = assets(rgbds().images(), &options).unwrap().images;
+    let made = assets(&options).unwrap().images;
     assert_eq!(made.images[0].object_size, Some(ObjectSize::Tall));
     // 8x16 can't cut an 8-high frame.
     let m = manifest(Some(ObjectSize::Tall), "sprites/quad.16x8.png");
     let options = AssetsOptions::new(AssetsInput::Manifest(m), temp.0.clone());
-    let made = match assets(rgbds().images(), &options) {
+    let made = match assets(&options) {
         Err(AssetsError::Failed(m)) => m.images,
         other => panic!("expected a refusal, got {other:?}"),
     };

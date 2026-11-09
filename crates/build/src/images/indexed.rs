@@ -243,7 +243,7 @@ pub(crate) fn by_obp(GbcPalette(colors): GbcPalette, obp: u8) -> GbcPalette {
 }
 
 /// An indexed background's GBC version and tile map: its tilemap `map`
-/// (rgbgfx's, one tile index a byte), every entry in BG slot 0.
+/// (one tile index a byte), every entry in BG slot 0.
 pub(crate) fn background(palette: &NamedPalette, map: &[u8]) -> (GbcImage, Vec<Option<TileEntry>>) {
     let slot = PaletteSlot::new(0);
     let entries = map

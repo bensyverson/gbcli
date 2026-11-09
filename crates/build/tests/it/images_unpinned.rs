@@ -13,7 +13,7 @@ use std::fs;
 use gbcli_build::{AssetsInput, AssetsOptions, assets};
 use gbcli_protocol::{BuildTarget, GbcPalette, ImageLimit, ImageProblem, ImagesMade, Severity};
 
-use common::{Temp, rgbds, starter};
+use common::{Temp, starter};
 use pngs::*;
 
 const EMBER: &str = "ember: #ffe #f80 #a20 #200\n";
@@ -79,7 +79,7 @@ fn convert_into(temp: &Temp, target: BuildTarget, keep: Option<&str>) -> ImagesM
         keep: keep.map(|k| temp.path(k)),
         ..AssetsOptions::new(AssetsInput::Project(temp.path("demo")), temp.0.clone())
     };
-    let made = assets(rgbds().images(), &options).unwrap().images;
+    let made = assets(&options).unwrap().images;
     assert!(made.first_error().is_none(), "{:#?}", made.problems);
     made
 }

@@ -14,7 +14,7 @@ use std::fs;
 use gbcli_build::{AssetsInput, AssetsOptions, assets};
 use gbcli_protocol::{BuildTarget, ImageLimit, ImageProblem, ImagesMade};
 
-use common::{Temp, rgbds};
+use common::Temp;
 use pngs::*;
 
 const BOTH: [BuildTarget; 2] = [BuildTarget::Dmg, BuildTarget::Gbc];
@@ -47,7 +47,7 @@ fn convert(temp: &Temp, target: BuildTarget, assignments: &str) -> ImagesMade {
         target,
         ..AssetsOptions::new(AssetsInput::Project(temp.path("demo")), temp.0.clone())
     };
-    let made = assets(rgbds().images(), &options).unwrap().images;
+    let made = assets(&options).unwrap().images;
     assert!(made.first_error().is_none(), "{:#?}", made.problems);
     made
 }

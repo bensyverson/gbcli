@@ -7,7 +7,7 @@
 //! goes on to make the GBC version.
 //!
 //! The derived version is drawn in the four DMG grays, one gray a shade, so
-//! the DMG checks and rgbgfx see a 4-shade image. Under `--gbc`, color art
+//! the DMG checks see a 4-shade image. Under `--gbc`, color art
 //! maps many colors to one shade by design, so the shared-shade warning is
 //! scoped to what loses detail: two colors in one background tile, or one
 //! object, that fall to one shade. A plain build has only the DMG version,

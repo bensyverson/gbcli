@@ -1,13 +1,12 @@
 //! Edges of the joint conversion under `build --gbc` (leaf mAlE2F, from
-//! the review of 8cfa480, 20729c8 and 793da0d): the re-index path, where
-//! rgbgfx draws a tile from another palette than gbcli gave its unit, and
-//! the messages of the limits that count joint tiles.
+//! the review of 8cfa480, 20729c8 and 793da0d): each tile indexed into the
+//! palette gbcli gave its unit, and the messages of the limits that count
+//! joint tiles.
 
 use crate::common;
 use crate::pngs;
 
 use std::fs;
-use std::process::Command;
 
 use gbcli_build::BuildOptions;
 use gbcli_protocol::{BuildTarget, ImageAsset, ImageLimit, ImageProblem, ImagesMade, Rgb555};
@@ -55,8 +54,8 @@ fn gray3(c: Rgba) -> Rgba {
 }
 
 /// Unit A holds red, green and blue; unit B red on top and yellow, cyan
-/// below. B's top 8x8 tile fits A's palette too, so rgbgfx, choosing per
-/// tile, draws it from A's while gbcli gives B's unit B's palette.
+/// below. B's top 8x8 tile fits A's palette too, so which palette draws it
+/// is a choice; gbcli gives B's unit B's palette.
 fn split(x: u32, y: u32) -> Rgba {
     match (x / 8, x % 8, y) {
         (_, 4.., _) => CLEAR,
@@ -70,53 +69,12 @@ fn split(x: u32, y: u32) -> Rgba {
     }
 }
 
-/// rgbgfx's own palette choice for each 8x8 tile of `png`, column-major
-/// within each 8x16 unit as gbcli runs it (`-Z`), from the spec gbcli
-/// passes (`pack::spec`: an OBJ palette's color 0 is `#none`).
-fn rgbgfx_slots(temp: &Temp, made: &ImagesMade, png: &str) -> Vec<u8> {
-    let spec: Vec<String> = made
-        .gbc
-        .as_ref()
-        .unwrap()
-        .obj_palettes
-        .iter()
-        .map(|p| {
-            let mut colors: Vec<String> =
-                p.0.iter()
-                    .map(|c| {
-                        let [r, g, b] = c.to_rgb888();
-                        format!("#{r:02x}{g:02x}{b:02x}")
-                    })
-                    .collect();
-            colors[0] = "#none".into();
-            colors.join(",")
-        })
-        .collect();
-    let (attrs, tiles) = (temp.path("own.attrmap"), temp.path("own.2bpp"));
-    let out = Command::new(rgbds().rgbgfx().unwrap())
-        .arg("-Z")
-        .arg("-c")
-        .arg(spec.join(";"))
-        .arg("-o")
-        .arg(&tiles)
-        .arg("-a")
-        .arg(&attrs)
-        .arg(temp.path(png))
-        .output()
-        .unwrap();
-    assert!(
-        out.status.success(),
-        "{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-    fs::read(&attrs).unwrap().iter().map(|a| a & 7).collect()
-}
-
-/// Where rgbgfx draws a unit's tile from another palette than the unit's,
-/// gbcli indexes that tile into the unit's palette: every pixel of the GBC
-/// data, through the unit's slot, is the color drawn.
+/// Both units fit more than one palette (B's top 8x8 tile fits A's too),
+/// and gbcli indexes every tile into the unit's own slot: every pixel of
+/// the GBC data, through that slot, is the color drawn. rgbgfx chose per
+/// 8x8 tile and could pick another; gbcli does not.
 #[test]
-fn a_tile_rgbgfx_draws_from_another_palette_is_reindexed_into_its_units() {
+fn a_tiles_colors_are_indexed_into_its_units_slot() {
     let (temp, options) = gbc("joint-reindex");
     write_png(&temp.path("demo/assets/sprites/bat.png"), 16, 16, split);
     write_png(
@@ -133,10 +91,6 @@ fn a_tile_rgbgfx_draws_from_another_palette_is_reindexed_into_its_units() {
         .map(|e| e.unwrap().palette.unwrap().get())
         .collect();
     assert_ne!(slots[0], slots[1], "two palettes: {slots:?}");
-    // The path under test ran: rgbgfx drew unit B's top tile (index 2,
-    // column-major) from A's palette.
-    let own = rgbgfx_slots(&temp, &made, "demo/assets/sprites/bat.png");
-    assert_ne!(own[2], slots[1], "rgbgfx {own:?}, gbcli {slots:?}");
 
     let obj = &made.gbc.as_ref().unwrap().obj_palettes;
     let data = fs::read(temp.path("demo/build/images/sprites/bat.gbc.2bpp")).unwrap();

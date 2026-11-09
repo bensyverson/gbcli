@@ -6,15 +6,9 @@
 //! gets one project-level warning too, listing each group with the images
 //! holding it (`across`).
 //!
-//! rgbgfx's `-c` gives each palette slot one color, so two colors can't be
-//! asked to share an index. An image with a shared shade therefore reaches
-//! rgbgfx with its pixels merged: each color drawn as the most used color of
-//! its shade, written to a PNG beside the data (`write`), converted, then
-//! removed. gbcli's plan already gives them one index, and `agree` still
-//! compares what rgbgfx wrote with that plan.
-
-use std::fs;
-use std::path::Path;
+//! One index a shade (`bg::check`, `sheet::check`), so an image's tiles
+//! draw them alike; rgbgfx had to be shown the merged colors as a PNG, and
+//! the encoder needs nothing (`encode`).
 
 use gbcli_protocol::{ImageLimit, ImageProblem, Severity, ShadeRule};
 
@@ -35,9 +29,6 @@ fn remedy(source: &PaletteSource) -> String {
 /// What sharing means for one image.
 #[derive(Debug, Default)]
 pub(crate) struct Shared {
-    /// Each color that shares a shade but isn't its most used, by RGB555
-    /// key, and the color rgbgfx is to see instead.
-    pub merges: Vec<(Key, Rgba)>,
     /// One `shared_shade` warning a shared shade, lightest first.
     pub warnings: Vec<ImageProblem>,
 }
@@ -73,15 +64,12 @@ pub(crate) fn find(
             .filter(|&(_, &s)| s == shade)
             .map(|(&c, _)| c)
             .collect();
-        let [(most, _), rest @ ..] = &group[..] else {
+        let [_, rest @ ..] = &group[..] else {
             continue;
         };
         if rest.is_empty() {
             continue;
         }
-        shared
-            .merges
-            .extend(rest.iter().map(|&(c, _)| (key(c), *most)));
         let tiles = tiles_where(pixels, |p| {
             p[3] != 0 && rest.iter().any(|&(c, _)| key(c) == key(p))
         });
@@ -292,26 +280,6 @@ pub(crate) fn and(items: &[String]) -> String {
     }
 }
 
-/// Writes `pixels` to `path` as an 8-bit RGBA PNG, each color in `merges`
-/// drawn as the color it merges into, alpha kept.
-pub(crate) fn write(pixels: &Pixels, merges: &[(Key, Rgba)], path: &Path) -> std::io::Result<()> {
-    let mut data = Vec::with_capacity(pixels.rgba.len() * 4);
-    for &p in &pixels.rgba {
-        let into = merges.iter().find(|(k, _)| p[3] != 0 && *k == key(p));
-        let p = into.map_or(p, |&(_, c)| [c[0], c[1], c[2], p[3]]);
-        data.extend_from_slice(&p);
-    }
-    let file = fs::File::create(path)?;
-    let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), pixels.width, pixels.height);
-    encoder.set_color(png::ColorType::Rgba);
-    encoder.set_depth(png::BitDepth::Eight);
-    let mut writer = encoder.write_header().map_err(std::io::Error::other)?;
-    writer
-        .write_image_data(&data)
-        .map_err(std::io::Error::other)?;
-    writer.finish().map_err(std::io::Error::other)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -350,7 +318,7 @@ mod tests {
     fn a_lone_color_per_shade_shares_nothing() {
         let p = pixels(vec![W; 64], 8);
         let s = find("a.png", &p, &[(W, 60), (B, 4)], &[0, 3], &stretched());
-        assert!(s.merges.is_empty() && s.warnings.is_empty(), "{s:?}");
+        assert!(s.warnings.is_empty(), "{s:?}");
     }
 
     #[test]
@@ -361,7 +329,6 @@ mod tests {
             .collect();
         let p = pixels(rgba, 16);
         let s = find("a.png", &p, &[(B, 64), (NEAR_B, 64)], &[3, 3], &stretched());
-        assert_eq!(s.merges, [(key(NEAR_B), B)]);
         let [w] = &s.warnings[..] else {
             panic!("{s:?}")
         };

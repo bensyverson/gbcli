@@ -1,11 +1,11 @@
 //! One conversion, from what `input` read to the results: every image's
 //! DMG version, the project's shades, each image's checks, the GBC
-//! palettes, rgbgfx, and each image's result. `build` and `assets` both
-//! convert here; only a build writes the generated files (`emit`).
+//! palettes, the encoded data, and each image's result. `build` and
+//! `assets` both convert here; only a build writes the generated files
+//! (`emit`). No tool is run: the encode is gbcli's own (`encode`).
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use gbcli_protocol::{BuildTarget, ImageKind, ImageLimit, ImageProblem, ImagesMade};
 
@@ -15,15 +15,13 @@ use super::find::{self, KINDS, Source};
 use super::fonts::{self, Select};
 use super::input::{Input, Origin};
 use super::pixels::{Color, Pixels, Read, Unread};
-use super::{Checked, Converted, Generated, Plan, bg, census, indexed, output, run, shades};
+use super::{Checked, Converted, Generated, Plan, bg, census, indexed, output, shades};
 use super::{shared, sheet, vram};
 use crate::project::BuildError;
-use crate::toolchain::ImageTool;
 
 /// Where a conversion writes.
 pub(crate) struct Place<'a> {
-    /// The data and previews, laid out by kind (`bg/town.2bpp`); rgbgfx
-    /// runs here.
+    /// The data and previews, laid out by kind (`bg/town.2bpp`).
     pub dir: &'a Path,
     /// For a build, `dir` as `images.asm` INCBINs from it, relative to the
     /// project (`build/images`); the generated files are written only then.
@@ -33,12 +31,10 @@ pub(crate) struct Place<'a> {
 /// Converts `input`'s images for `target`; `None` when there are none and
 /// nothing to say about them.
 pub(crate) fn convert(
-    tools: &ImageTool,
     input: Input,
     place: &Place,
     shown: &dyn Fn(&Path) -> String,
     target: BuildTarget,
-    timeout: Duration,
 ) -> Result<Option<Converted>, BuildError> {
     let Input {
         origin,
@@ -177,16 +173,14 @@ pub(crate) fn convert(
     // cascade and the named palettes are checked.
     let gbc = target == BuildTarget::Gbc;
     let mut versioned = Vec::with_capacity(all.len());
-    for (s, image, (pixels, text), over) in all {
+    for (s, image, (pixels, _text), over) in all {
         let assigned = named_palettes.assignments.get(&s.name);
-        // rgbgfx reads files: pixel text is written out as a PNG first.
-        let over_text = over.as_ref().is_some_and(|o| o.1);
         let over = over.map(|o| o.0);
         let version = derive::version(assigned, &palettes, over, s, &image, shown)?;
-        versioned.push((s, image, pixels, version, (text, over_text)));
+        versioned.push((s, image, pixels, version));
     }
     // One color, one shade, in every image, overrides included.
-    let colors = project_colors(versioned.iter().flat_map(|(_, _, p, v, _)| match v {
+    let colors = project_colors(versioned.iter().flat_map(|(_, _, p, v)| match v {
         Version::Override(o) => vec![p, o],
         _ => vec![p],
     }));
@@ -197,7 +191,7 @@ pub(crate) fn convert(
     // and objects' (--gbc, plan question 2), in `derive`.
     let dmg_art: Vec<(String, &Pixels, Option<&str>)> = versioned
         .iter()
-        .filter_map(|(s, image, p, v, _)| {
+        .filter_map(|(s, image, p, v)| {
             let palette = named_palettes.assignments.get(&s.name).map(String::as_str);
             match v {
                 Version::Art => Some((image.clone(), p, palette)),
@@ -223,10 +217,7 @@ pub(crate) fn convert(
     let objects = objects.map(|size| (size, objects_setting.as_str()));
 
     let mut plans: Vec<Checked> = Vec::new();
-    // Each plan's DMG version, for rgbgfx: its pixels, and the file that
-    // holds them, if any (a derived version is written out first).
-    let mut read: Vec<(Pixels, Option<PathBuf>)> = Vec::new();
-    for (s, image, pixels, version, (text, over_text)) in versioned {
+    for (s, image, pixels, version) in versioned {
         // A manifest's `dmg` is any file; name the one given. Without one, a
         // manifest reads none beside `file`, so its remedies name the field.
         let dmg_shown = match (&s.dmg, origin) {
@@ -244,11 +235,8 @@ pub(crate) fn convert(
         // The DMG version the checks read, under the name they give it,
         // and color art's color image, whose tiles pair with it under
         // --gbc.
-        let (checked_name, dmg, file, shading, color) = match version {
-            Version::Art => {
-                let file = (!text).then(|| s.path.clone());
-                (image.clone(), pixels, file, &shading, None)
-            }
+        let (checked_name, dmg, shading, color) = match version {
+            Version::Art => (image.clone(), pixels, &shading, None),
             Version::Override(o) => {
                 let wrong = derive::override_size(&image, &dmg_shown, &pixels, &o)
                     .or_else(|| derive::override_alpha(&image, &dmg_shown, s.kind, &pixels, &o));
@@ -256,8 +244,7 @@ pub(crate) fn convert(
                     made.problems.push(p);
                     continue;
                 }
-                let file = s.dmg.clone().filter(|_| !over_text);
-                (dmg_shown, o, file, &shading, Some(pixels))
+                (dmg_shown, o, &shading, Some(pixels))
             }
             Version::Derived => {
                 let object = frames.object();
@@ -267,7 +254,7 @@ pub(crate) fn convert(
                 match derived {
                     Ok(d) => {
                         made.problems.extend(d.warnings);
-                        (image.clone(), d.pixels, None, &grays, Some(pixels))
+                        (image.clone(), d.pixels, &grays, Some(pixels))
                     }
                     Err(p) => {
                         made.problems.push(p);
@@ -300,9 +287,7 @@ pub(crate) fn convert(
                     image,
                     plan,
                     color,
-                    color_text: text,
                 });
-                read.push((dmg, file));
             }
             Err(problems) => made.problems.extend(problems),
         }
@@ -352,13 +337,6 @@ pub(crate) fn convert(
         }
     };
 
-    let rgbgfx = run::Rgbgfx {
-        path: tools.path().map_err(BuildError::Toolchain)?,
-        root: place.dir,
-        timeout,
-        diagnostics: Vec::new(),
-        problems: Vec::new(),
-    };
     let io = |path: PathBuf| move |error| BuildError::Io { path, error };
     for kind in KINDS.into_iter().filter(|&k| has_kind(&sources, k)) {
         let dir = place.dir.join(kind.dir());
@@ -372,29 +350,16 @@ pub(crate) fn convert(
         gbc
     });
     let mut out = output::Output {
-        rgbgfx,
         root: place.dir,
         shown,
         indexed: indexed.as_ref(),
         packed: &packed,
         obj_palettes: gbc_made.as_ref().map_or(&[], |g| &g.obj_palettes),
     };
-    let mut ok = true;
-    for (i, (c, (pixels, file))) in plans.iter().zip(&read).enumerate() {
-        match out.image(i, c, pixels, file.as_ref())? {
-            Some(asset) => made.images.push(asset),
-            None => ok = false,
+    for (i, c) in plans.iter().enumerate() {
+        if let Some(asset) = out.image(i, c)? {
+            made.images.push(asset);
         }
-    }
-    let diagnostics = std::mem::take(&mut out.rgbgfx.diagnostics);
-    made.problems.append(&mut out.rgbgfx.problems);
-    if !ok {
-        made.images.clear();
-        return Ok(Some(Converted {
-            made,
-            diagnostics,
-            ..stopped
-        }));
     }
     let generated = match place.generated {
         Some(from_project) => {
@@ -424,7 +389,7 @@ pub(crate) fn convert(
     made.gbc = gbc_made;
     Ok(Some(Converted {
         made,
-        diagnostics,
+        diagnostics: Vec::new(),
         generated,
         stopped: false,
     }))

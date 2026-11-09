@@ -30,6 +30,6 @@ pub use pixels::pixels;
 pub use project::{BuildError, BuildOptions, TOOL_TIMEOUT, build, default_rom, default_target_of};
 pub use scaffold::{HARDWARE_INC, HUGEDRIVER, NewError, new_project};
 pub use toolchain::{
-    INSTALL_COMMAND, ImageTool, PinMatch, RGBDS_PIN, ToolFound, ToolProblem, Toolchain,
-    ToolchainError, Version, install_remedy, probe, release_url,
+    INSTALL_COMMAND, PinMatch, RGBDS_PIN, ToolFound, ToolProblem, Toolchain, ToolchainError,
+    Version, install_remedy, probe, release_url,
 };

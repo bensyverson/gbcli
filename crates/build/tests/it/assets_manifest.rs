@@ -36,7 +36,6 @@ fn a_manifest_dmg_versions_problem_names_the_file_given() {
     let temp = Temp::new("manifest-dmgname");
     write_png(&temp.path("art/glyphs.png"), 16, 8, |_, _| RED);
     write_png(&temp.path("dmg/mono.png"), 8, 8, |_, _| WHITE);
-    let tool = common::rgbds().images().clone();
     let mut options = AssetsOptions::new(
         AssetsInput::Manifest(manifest_of(
             "art/glyphs.png",
@@ -46,7 +45,7 @@ fn a_manifest_dmg_versions_problem_names_the_file_given() {
         temp.0.clone(),
     );
     options.target = BuildTarget::Gbc;
-    let body = assets(&tool, &options).unwrap_err().body();
+    let body = assets(&options).unwrap_err().body();
     let made = body.result.and_then(|r| r.assets).expect("a report");
     let p = &made.images.problems[0];
     assert_eq!(
@@ -76,8 +75,7 @@ fn a_rust_manifest_assigning_an_unknown_palette_is_refused() {
     );
     let mut options = AssetsOptions::new(AssetsInput::Manifest(m), temp.0.clone());
     options.target = BuildTarget::Gbc;
-    let tool = common::rgbds().images().clone();
-    let body = assets(&tool, &options).unwrap_err().body();
+    let body = assets(&options).unwrap_err().body();
     assert!(body.message.contains("nope"), "{}", body.message);
 }
 
@@ -86,12 +84,11 @@ fn a_rust_manifest_assigning_an_unknown_palette_is_refused() {
 #[test]
 fn a_manifests_missing_file_is_named_with_a_remedy_about_the_manifest() {
     let temp = Temp::new("manifest-missing");
-    let tool = common::rgbds().images().clone();
     let options = AssetsOptions::new(
         AssetsInput::Manifest(manifest_of("art/gone.png", "bg/a.png", None)),
         temp.0.clone(),
     );
-    let body = assets(&tool, &options).unwrap_err().body();
+    let body = assets(&options).unwrap_err().body();
     assert!(body.message.contains("art/gone.png"), "{}", body.message);
     assert!(
         !body.remedy.contains("save it as a PNG"),
@@ -107,8 +104,7 @@ fn a_projects_unreadable_image_keeps_the_save_as_png_remedy() {
     let temp = Temp::new("project-unreadable");
     fs::create_dir_all(temp.path("demo/assets/bg")).unwrap();
     fs::write(temp.path("demo/assets/bg/a.png"), b"not a png").unwrap();
-    let tool = common::rgbds().images().clone();
     let options = AssetsOptions::new(AssetsInput::Project(temp.path("demo")), temp.0.clone());
-    let body = assets(&tool, &options).unwrap_err().body();
+    let body = assets(&options).unwrap_err().body();
     assert!(body.remedy.contains("save it as a PNG"), "{}", body.remedy);
 }

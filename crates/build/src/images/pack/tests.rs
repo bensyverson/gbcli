@@ -6,7 +6,7 @@ use gbcli_protocol::{
     GbcPalette, ImageArt, ImageLimit, ImageProblem, PaletteSlot, Rgb555, Severity, TileAt,
 };
 
-use super::{Layer, Packing, Source, census, pack, spec};
+use super::{Layer, Packing, Source, census, pack};
 use crate::images::pixels::{Pixels, Rgba};
 
 /// The `n`th of 1024 distinct colors (red, then green), as RGB555.
@@ -344,22 +344,6 @@ fn the_census_truncates_to_rgb555_and_skips_empty_objects() {
         vec![Some(BTreeSet::from([c(1)])), None]
     );
     assert_eq!(census(&pixels, 8).len(), 4);
-}
-
-/// rgbgfx's `-c` form: a BG palette as its four colors; an OBJ palette's
-/// slot 0 as `#none`, since rgbgfx 1.0.4 refuses an opaque color there for
-/// an image with transparent pixels. Each color is written so that it
-/// truncates back to itself.
-#[test]
-fn the_rgbgfx_spec_writes_an_obj_palettes_slot_0_as_none() {
-    let red = Rgb555::new(31, 0, 0).unwrap();
-    let dim = Rgb555::new(1, 2, 3).unwrap();
-    let p = GbcPalette([Rgb555::WHITE, red, dim, Rgb555::BLACK]);
-    assert_eq!(
-        spec(&[p, p], Layer::Bg),
-        "#ffffff,#ff0000,#081018,#000000;#ffffff,#ff0000,#081018,#000000"
-    );
-    assert_eq!(spec(&[p], Layer::Obj), "#none,#ff0000,#081018,#000000");
 }
 
 /// A message names at most a few cells past the budget; `tiles` keeps

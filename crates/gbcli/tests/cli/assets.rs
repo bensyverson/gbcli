@@ -1,12 +1,11 @@
 //! `gbcli assets` and the `assets` op (leaf 7gGMeZ): images converted as
-//! `build` converts them, with rgbgfx alone, from a project or a manifest,
-//! by a `serve` that has no bundle as by the CLI.
+//! `build` converts them, with no tool at all (gbcli encodes them), from a
+//! project or a manifest, by a `serve` that has no bundle as by the CLI.
 
 use std::fs;
 
 use crate::common::{Project, golden};
 use crate::images::write_png;
-use crate::rgbds::rgbds_dir;
 
 const WHITE: [u8; 3] = [0xFF; 3];
 const BLACK: [u8; 3] = [0; 3];
@@ -23,25 +22,22 @@ fn glyphs(p: &Project, rel: &str) {
     });
 }
 
-/// A `PATH` holding rgbgfx and nothing else, so a conversion that ran
-/// rgbasm or rgblink would fail.
-fn only_rgbgfx(p: &Project) -> String {
-    let dir = p.path("only-rgbgfx");
+/// A `PATH` holding nothing, so a conversion that ran any tool would fail.
+fn no_tools(p: &Project) -> String {
+    let dir = p.path("no-tools");
     fs::create_dir_all(&dir).unwrap();
-    let rgbgfx = std::path::Path::new(&rgbds_dir()).join("rgbgfx");
-    std::os::unix::fs::symlink(rgbgfx, dir.join("rgbgfx")).unwrap();
     dir.display().to_string()
 }
 
 const MANIFEST: &str = r#"{"images":[{"image":"tiles/font.png","file":"art/glyphs.png"}],"palettes":{"palettes":[{"name":"forest","colors":[32767,9009,6534,2176]}],"assignments":{"tiles/font.png":"forest"}}}"#;
 
 /// A `serve` with no `.gbcli/` answers `assets` (the bare responder), and
-/// with only rgbgfx on `PATH`.
+/// with no tools on `PATH`.
 #[test]
-fn a_serve_with_no_bundle_converts_a_manifest_with_rgbgfx_alone() {
+fn a_serve_with_no_bundle_converts_a_manifest_with_no_tools() {
     let p = Project::new("assets-serve");
     glyphs(&p, "art/glyphs.png");
-    let path = only_rgbgfx(&p);
+    let path = no_tools(&p);
     let line =
         format!(r#"{{"id":"a","op":"assets","args":{{"manifest":{MANIFEST},"target":"gbc"}}}}"#);
     let run = p.gbcli_with(&["serve"], &[("PATH", &path)], Some(&format!("{line}\n")));
@@ -64,7 +60,7 @@ fn the_clis_assets_is_the_serve_op_and_prints_its_rows() {
     let p = Project::new("assets-cli");
     glyphs(&p, "art/glyphs.png");
     fs::write(p.path("font.json"), MANIFEST).unwrap();
-    let path = only_rgbgfx(&p);
+    let path = no_tools(&p);
     let env = [("PATH", path.as_str())];
     let args = [
         "assets",
@@ -134,7 +130,7 @@ fn a_manifests_relative_paths_resolve_against_its_folder() {
     glyphs(&p, "sets/glyphs.png");
     fs::create_dir_all(p.path("sets")).unwrap();
     fs::write(p.path("sets/m.json"), manifest_naming("glyphs.png")).unwrap();
-    let path = only_rgbgfx(&p);
+    let path = no_tools(&p);
     let env = [("PATH", path.as_str())];
     let run = p.gbcli_with(&["assets", "--manifest", "sets/m.json"], &env, None);
     assert_eq!(run.code, 0, "{}", run.stderr);
@@ -153,7 +149,7 @@ fn a_manifests_missing_image_names_the_resolved_path() {
     let p = Project::new("assets-manifest-missing");
     fs::create_dir_all(p.path("sets")).unwrap();
     fs::write(p.path("sets/m.json"), manifest_naming("gone.png")).unwrap();
-    let path = only_rgbgfx(&p);
+    let path = no_tools(&p);
     let env = [("PATH", path.as_str())];
     let run = p.gbcli_with(&["assets", "--manifest", "sets/m.json"], &env, None);
     assert_ne!(run.code, 0);

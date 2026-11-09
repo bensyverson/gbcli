@@ -1,11 +1,13 @@
-//! The GBC agreement check and the joint tiles, on data written by hand.
+//! The GBC encoder, on images and palettes written by hand.
 
-use gbcli_protocol::{GbcPalette, ImageLimit, PaletteSlot, Rgb555, TileAt};
+use gbcli_protocol::{GbcPalette, ObjectSize, PaletteSlot, Rgb555};
 
-use super::{Grid, Palettes, Raw, check, tile};
-use crate::images::agree;
+use super::{Palettes, background, sheet};
+use crate::images::bg::BgPlan;
+use crate::images::encode;
 use crate::images::pack::Layer;
 use crate::images::pixels::{Pixels, Rgba};
+use crate::images::sheet::SheetPlan;
 
 fn red() -> Rgb555 {
     Rgb555::new(31, 0, 0).unwrap()
@@ -20,11 +22,15 @@ fn rgba(c: Rgb555) -> Rgba {
     [r, g, b, 0xFF]
 }
 
-/// Two BG palettes that both hold red, at different indices.
+fn slot(n: u8) -> PaletteSlot {
+    PaletteSlot::new(n).unwrap()
+}
+
+/// Two BG palettes that hold red and blue, in the other order the second.
 fn palettes() -> [GbcPalette; 2] {
     [
         GbcPalette([Rgb555::WHITE, red(), blue(), Rgb555::BLACK]),
-        GbcPalette([red(), Rgb555::BLACK, Rgb555::BLACK, Rgb555::BLACK]),
+        GbcPalette([blue(), red(), Rgb555::BLACK, Rgb555::BLACK]),
     ]
 }
 
@@ -41,75 +47,59 @@ fn town() -> Pixels {
 }
 
 fn solid(index: u8) -> Vec<u8> {
-    agree::encode(&[index; 64])
+    encode::encode(&[index; 64])
 }
 
-const GRID: Grid = Grid {
-    width: 2,
-    height: 1,
-};
+fn plan() -> BgPlan {
+    BgPlan {
+        warnings: Vec::new(),
+        width: 2,
+        height: 1,
+        tiles: 2,
+        unique: vec![vec![0; 64], vec![0; 64]],
+        cells: vec![0, 1],
+    }
+}
 
-/// rgbgfx drew red from palette 1 and blue from palette 0: other choices
-/// than gbcli's packing, but the same colors, so they agree.
+/// Each pixel takes its color's index in the slot the packing gave its
+/// cell: red is index 1 of palette 0, blue index 2.
 #[test]
-fn a_conversion_drawing_each_color_agrees_whatever_its_palette() {
+fn a_background_tile_is_indexed_into_its_cells_palette() {
     let pal = palettes();
     let p = Palettes {
         palettes: &pal,
         first_slot: 0,
         layer: Layer::Bg,
     };
-    let raw = Raw {
-        tiles: [solid(0), solid(2)].concat(),
-        attrs: vec![1, 0],
-    };
-    assert!(check("town.png", &town(), &p, GRID, &raw).is_ok());
-    // Red kept in gbcli's slot 0, where it is index 1: re-indexed.
-    let slot = PaletteSlot::new(0).unwrap();
-    let at = TileAt { x: 0, y: 0 };
-    assert_eq!(tile(&town(), &p, GRID, &raw, at, slot), Ok(solid(1)));
-    // Blue was drawn from slot 0: rgbgfx's bytes as written.
-    let at = TileAt { x: 1, y: 0 };
-    assert_eq!(tile(&town(), &p, GRID, &raw, at, slot), Ok(solid(2)));
+    let joint = background(&plan(), &town(), &p, &[Some(slot(0)), Some(slot(0))]);
+    assert_eq!(joint.slots, [slot(0), slot(0)]);
+    assert_eq!(joint.tiles, [solid(1), solid(2)].concat());
 }
 
-/// A conversion that draws another color than the image fails the check,
-/// naming the tile: here blue drawn as black.
+/// The same colors in the other palette's order: the indices follow the
+/// palette, so the bytes do too.
 #[test]
-fn a_conversion_drawing_another_color_fails_naming_the_tile() {
+fn another_slot_orders_the_same_colors_differently() {
     let pal = palettes();
     let p = Palettes {
         palettes: &pal,
         first_slot: 0,
         layer: Layer::Bg,
     };
-    let raw = Raw {
-        tiles: [solid(1), solid(3)].concat(),
-        attrs: vec![0, 0],
-    };
-    let problem = check("town.png", &town(), &p, GRID, &raw).unwrap_err();
-    assert_eq!(problem.limit, ImageLimit::RgbgfxAgrees);
-    assert_eq!(problem.tiles, [TileAt { x: 1, y: 0 }]);
-    // A palette number past the ones given is a disagreement too.
-    let raw = Raw {
-        tiles: [solid(1), solid(2)].concat(),
-        attrs: vec![0, 5],
-    };
-    let problem = check("town.png", &town(), &p, GRID, &raw).unwrap_err();
-    assert_eq!(problem.tiles, [TileAt { x: 1, y: 0 }]);
+    let joint = background(&plan(), &town(), &p, &[Some(slot(1)), Some(slot(1))]);
+    assert_eq!(joint.tiles, [solid(1), solid(0)].concat());
 }
 
-/// An object's index 0 is transparent: drawn opaque, or an opaque pixel
-/// drawn as index 0, disagrees.
+/// An 8x16 unit: its transparency is index 0 of an object palette, and its
+/// red the index red holds there; both tiles take the unit's slot.
 #[test]
-fn an_objects_index_0_is_transparent() {
-    let pal = [GbcPalette([Rgb555::WHITE, red(), blue(), Rgb555::BLACK])];
+fn an_objects_transparency_is_index_zero_and_both_tiles_take_the_units_slot() {
+    let pal = palettes();
     let p = Palettes {
         palettes: &pal,
         first_slot: 3,
         layer: Layer::Obj,
     };
-    // One 8x16 unit: the top tile transparent, the bottom red.
     let rgba = (0..128)
         .map(|i| if i < 64 { [0; 4] } else { rgba(red()) })
         .collect();
@@ -118,22 +108,21 @@ fn an_objects_index_0_is_transparent() {
         height: 16,
         rgba,
     };
-    let grid = Grid {
+    let s = SheetPlan {
+        object: ObjectSize::Tall,
+        obp: 0,
         width: 1,
         height: 2,
+        frame: (8, 16),
+        kept: vec![(0, 0)],
+        uses: vec![1],
+        frames: Vec::new(),
+        units: vec![Some((0, Default::default()))],
+        warnings: Vec::new(),
+        drawn: vec![vec![1; 128]],
     };
-    let good = Raw {
-        tiles: [solid(0), solid(1)].concat(),
-        attrs: vec![0, 0],
-    };
-    assert!(check("bat.png", &bat, &p, grid, &good).is_ok());
-    let slot = PaletteSlot::new(3).unwrap();
-    let bottom = TileAt { x: 0, y: 1 };
-    assert_eq!(tile(&bat, &p, grid, &good, bottom, slot), Ok(solid(1)));
-    let bad = Raw {
-        tiles: [solid(0), solid(0)].concat(),
-        attrs: vec![0, 0],
-    };
-    let problem = check("bat.png", &bat, &p, grid, &bad).unwrap_err();
-    assert_eq!(problem.tiles, [bottom]);
+    let joint = sheet(&s, &bat, &p, &[Some(slot(3))]);
+    assert_eq!(joint.slots, [slot(3)]);
+    // Palette 0 (slot 3): red at index 1, so the top's transparency is 0.
+    assert_eq!(joint.tiles, [solid(0), solid(1)].concat());
 }

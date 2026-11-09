@@ -1,14 +1,13 @@
 //! `assets` (design §12, leaf 7gGMeZ): a project's or a manifest's images
-//! converted exactly as `build` converts them, with rgbgfx alone: no
-//! rgbasm, no rgblink, and nothing written to the project. What it would
-//! write goes to a scratch directory, removed after, unless the caller
-//! names one to keep it in.
+//! converted exactly as `build` converts them, encoding them in Rust: no
+//! RGBDS, no toolchain, and nothing written to the project (Ben's ruling,
+//! 2026-11-09). What it would write goes to a scratch directory, removed
+//! after, unless the caller names one to keep it in.
 
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::time::Duration;
 
 use gbcli_protocol::{
     AssetManifest, AssetsArgs, AssetsMade, BuildTarget, Diagnostic, ErrorBody, ErrorCode,
@@ -17,8 +16,7 @@ use gbcli_protocol::{
 
 use crate::images::{input, pipeline};
 use crate::paths::display;
-use crate::project::{BuildError, TOOL_TIMEOUT};
-use crate::toolchain::ImageTool;
+use crate::project::BuildError;
 
 /// The images to convert.
 #[derive(Clone, Debug)]
@@ -40,8 +38,6 @@ pub struct AssetsOptions {
     /// Where to keep the data and previews (`build/images/`'s layout);
     /// none keeps nothing.
     pub keep: Option<PathBuf>,
-    /// How long one rgbgfx run may take; default [`TOOL_TIMEOUT`].
-    pub tool_timeout: Duration,
     /// The glyphs to return from each font, by its path under `assets/`
     /// (`fonts/talk.yaff`); a font not named returns every glyph.
     pub glyphs: BTreeMap<String, Vec<String>>,
@@ -80,7 +76,6 @@ impl AssetsOptions {
             base,
             target: BuildTarget::Dmg,
             keep: None,
-            tool_timeout: TOOL_TIMEOUT,
             glyphs: BTreeMap::new(),
         }
     }
@@ -89,9 +84,9 @@ impl AssetsOptions {
 /// Why the images didn't convert.
 #[derive(Debug)]
 pub enum AssetsError {
-    /// The input, a file or rgbgfx couldn't be used, as for a build.
+    /// The input or a file couldn't be used, as for a build.
     Build(BuildError),
-    /// An image broke a limit, or rgbgfx failed: the result says which.
+    /// An image broke a limit: the result says which.
     Failed(Box<AssetsMade>),
 }
 
@@ -132,7 +127,7 @@ impl AssetsError {
                     .map_or_else(|| "no diagnostic".to_string(), said);
                 (
                     format!("the images didn't convert: {first}"),
-                    "fix the image rgbgfx names, then convert again".to_string(),
+                    "fix the image it names, then convert again".to_string(),
                 )
             }
         };
@@ -154,7 +149,7 @@ fn said(d: &Diagnostic) -> String {
 }
 
 /// Converts the images `options` names. Warnings ride in the result.
-pub fn assets(tool: &ImageTool, options: &AssetsOptions) -> Result<AssetsMade, AssetsError> {
+pub fn assets(options: &AssetsOptions) -> Result<AssetsMade, AssetsError> {
     let base = fs::canonicalize(&options.base).unwrap_or(options.base.clone());
     let shown = |p: &Path| display(p, &base);
     let input = match &options.input {
@@ -192,14 +187,7 @@ pub fn assets(tool: &ImageTool, options: &AssetsOptions) -> Result<AssetsMade, A
         dir: &dir,
         generated: None,
     };
-    let converted = pipeline::convert(
-        tool,
-        input,
-        &place,
-        &shown,
-        options.target,
-        options.tool_timeout,
-    )?;
+    let converted = pipeline::convert(input, &place, &shown, options.target)?;
     let Some(converted) = converted else {
         return Ok(AssetsMade {
             target: options.target,

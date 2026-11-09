@@ -1,6 +1,6 @@
 //! The edges of the project-wide DMG shades (Ben's rulings, 2026-11-07):
-//! shared shades across images, the merged copy rgbgfx reads, a colorless
-//! project, and `assets/palettes.txt`'s encodings and comments. From the
+//! shared shades across images, no transient image, a colorless project,
+//! and `assets/palettes.txt`'s encodings and comments. From the
 //! review of the shade choice (leaf GTXXyr); the palette cases moved from
 //! `assets/palette.txt` to its `dmg` line (leaf WmNCxc).
 
@@ -34,20 +34,6 @@ fn merged_files(dir: &Path) -> Vec<String> {
     found
 }
 
-/// Fake rgbasm/rgblink/rgbfix running the real ones, and an rgbgfx running `body`.
-fn tools_with(temp: &common::Temp, rgbgfx: &str) -> gbcli_build::Toolchain {
-    use gbcli_protocol::Tool;
-    let scripts = [
-        ("rgbasm", common::real(Tool::Rgbasm, "")),
-        ("rgblink", common::real(Tool::Rgblink, "")),
-        ("rgbfix", common::real(Tool::Rgbfix, "")),
-        ("rgbgfx", rgbgfx.to_string()),
-    ];
-    let scripts: Vec<(&str, &str)> = scripts.iter().map(|(n, b)| (*n, b.as_str())).collect();
-    let path = common::fake_tools(temp, &scripts);
-    gbcli_build::Toolchain::discover(Some(&path), &temp.0).unwrap()
-}
-
 /// Indexed art (`indexed`), so it is its own DMG version and its colors
 /// sharing a shade warn for the whole image, as DMG art's do.
 fn shared_bg(temp: &common::Temp) {
@@ -58,69 +44,39 @@ fn shared_bg(temp: &common::Temp) {
     indexed(&temp.path("demo"), &["bg/cave.png"]);
 }
 
+/// A background whose colors share a shade: they draw one index, and no
+/// transient image is written beside the data (rgbgfx's merged copy is gone
+/// with the tool).
 #[test]
-fn the_merged_copy_is_removed_after_a_build() {
-    let (temp, options) = starter("edge-merged-ok");
+fn a_shared_shade_draws_one_index_and_writes_no_copy() {
+    let (temp, options) = starter("edge-shared-index");
     shared_bg(&temp);
     let made = build(&rgbds(), &options).unwrap();
     assert!(
         !problems(&made, ImageLimit::SharedShade).is_empty(),
         "the image must share a shade for this test"
     );
+    // Black and near-black share shade 3, so one index and one tile; white
+    // is the other. The map draws the shared tile in both cells.
+    let data = fs::read(temp.path("demo/build/images/bg/cave.2bpp")).unwrap();
+    assert_eq!(data.len(), 32, "two unique tiles");
+    let map = fs::read(temp.path("demo/build/images/bg/cave.tilemap")).unwrap();
+    assert_eq!(map, [0, 1, 1]);
+    let white = index_at(&data[0..16], 0, 0);
+    let black = index_at(&data[16..32], 0, 0);
+    assert_eq!(white, 0);
+    assert_eq!(black, 3);
     assert_eq!(
         merged_files(&temp.path("demo/build/images")),
         Vec::<String>::new()
     );
 }
 
+/// A sheet's shared shade merges in the tile data too, and transparency
+/// stays index 0.
 #[test]
-fn the_merged_copy_is_removed_when_rgbgfx_fails() {
-    let (temp, options) = starter("edge-merged-fail");
-    shared_bg(&temp);
-    let tools = tools_with(&temp, "echo 'FATAL: out of cheese' >&2; exit 1");
-    match build(&tools, &options) {
-        Err(BuildError::Failed { .. }) => {}
-        other => panic!("expected failure, got {other:?}"),
-    }
-    assert_eq!(
-        merged_files(&temp.path("demo/build/images")),
-        Vec::<String>::new()
-    );
-}
-
-/// rgbgfx reads the merged copy, but the user drew the source: a
-/// diagnostic naming its input names the source.
-#[test]
-fn an_rgbgfx_diagnostic_names_the_source_not_the_merged_copy() {
-    let (temp, options) = starter("edge-merged-diag");
-    shared_bg(&temp);
-    let tools = tools_with(
-        &temp,
-        "for a; do last=$a; done; echo \"error: Failed to open input image (\\\"$last\\\")\" >&2; exit 1",
-    );
-    let made = match build(&tools, &options) {
-        Err(BuildError::Failed { made, .. }) => *made,
-        other => panic!("expected failure, got {other:?}"),
-    };
-    let d = &made.diagnostics[0];
-    assert_eq!(d.file.as_deref(), Some("demo/assets/bg/cave.png"));
-    assert!(
-        !d.message.contains("merged"),
-        "the transient file reaches the user: {}",
-        d.message
-    );
-    assert!(
-        d.message.contains("demo/assets/bg/cave.png"),
-        "the source is named instead: {}",
-        d.message
-    );
-}
-
-/// The merged copy rgbgfx reads keeps transparency, and merges only the
-/// shared color.
-#[test]
-fn the_merged_sheet_copy_keeps_alpha_and_merges_only_the_shared_color() {
-    let (temp, options) = starter("edge-merged-alpha");
+fn a_shared_sheet_shade_draws_one_index_and_keeps_alpha() {
+    let (temp, options) = starter("edge-shared-sheet");
     // Background spans white..black so the stretch is the identity.
     write_png(&temp.path("demo/assets/bg/sky.png"), 16, 8, |x, _| {
         if x < 8 { WHITE } else { BLACK }
@@ -139,33 +95,8 @@ fn the_merged_sheet_copy_keeps_alpha_and_merges_only_the_shared_color() {
             _ => [0x12, 0x34, 0x56, 0x00],
         },
     );
-    let seen = temp.path("seen");
-    fs::create_dir_all(&seen).unwrap();
-    let real = rgbds().rgbgfx().unwrap().display().to_string();
-    let body = format!(
-        "for a; do last=$a; done; cp \"$last\" '{}/'\"$(basename \"$last\")\"; exec '{real}' \"$@\"",
-        seen.display()
-    );
-    let tools = tools_with(&temp, &body);
-    let made = build(&tools, &options).unwrap();
+    let made = build(&rgbds(), &options).unwrap();
     assert!(!problems(&made, ImageLimit::SharedShade).is_empty());
-    let copy = seen.join("bug.merged.png");
-    assert!(copy.exists(), "rgbgfx read a merged copy");
-    // Read it as RGBA.
-    let mut decoder = png::Decoder::new(fs::File::open(&copy).unwrap());
-    decoder.set_transformations(png::Transformations::EXPAND);
-    let mut reader = decoder.read_info().unwrap();
-    let mut buf = vec![0; reader.output_buffer_size()];
-    let info = reader.next_frame(&mut buf).unwrap();
-    assert_eq!(info.color_type, png::ColorType::Rgba);
-    let px = |x: usize, y: usize| -> [u8; 4] {
-        let i = (y * 8 + x) * 4;
-        [buf[i], buf[i + 1], buf[i + 2], buf[i + 3]]
-    };
-    assert_eq!(px(1, 12), BLACK, "near-black merged into black");
-    assert_eq!(px(2, 3), WHITE);
-    assert_eq!(px(5, 5), [0x12, 0x34, 0x56, 0x00], "transparent kept as is");
-    // And the ROM data: near-black's pixel is black's index.
     let data = fs::read(temp.path("demo/build/images/sprites/bug.2bpp")).unwrap();
     let bottom = &data[16..32];
     assert_eq!(index_at(bottom, 4, 0), index_at(bottom, 4, 1));

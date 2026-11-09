@@ -1,22 +1,21 @@
-//! One checked image converted: its DMG data by rgbgfx, under `--gbc` its
+//! One checked image encoded: its DMG data (`encode`), under `--gbc` its
 //! GBC data (`gbc`, for color art; indexed art shares its DMG tiles), its
 //! preview, and its result. Color art's palettes are packed for every
 //! image first (`packed`), since the sheets share the OBJ palettes.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use gbcli_protocol::{
     GbcImage, GbcPalette, ImageArt, ImageAsset, ImageKind, ImageProblem, PaletteSlot, TileEntry,
 };
 
+use super::encode;
 use super::gbc::{self, Joint, Palettes};
 use super::indexed::Indexed;
 use super::pack::{self, Layer, Packing};
-use super::pixels::Pixels;
 use super::preview::{self, Look};
-use super::run::Rgbgfx;
-use super::{Checked, Plan, Removed, shared};
+use super::{Checked, Plan};
 use crate::project::BuildError;
 
 /// Color art's packed palettes: each color background's own, and the OBJ
@@ -96,7 +95,6 @@ pub(super) fn packed(checked: &[Checked], reserved: usize) -> Result<Packed, Vec
 
 /// What every image's conversion shares.
 pub(super) struct Output<'a> {
-    pub rgbgfx: Rgbgfx<'a>,
     /// Where the data and previews go, by kind (`pipeline::Place::dir`).
     pub root: &'a Path,
     pub shown: &'a dyn Fn(&Path) -> String,
@@ -107,63 +105,22 @@ pub(super) struct Output<'a> {
 }
 
 impl Output<'_> {
-    /// Converts checked image `i`, whose DMG version is `pixels` (in the
-    /// file `file`, if any); its result, or `None` when rgbgfx failed or
-    /// disagreed (`rgbgfx`'s diagnostics and problems say why).
-    pub fn image(
-        &mut self,
-        i: usize,
-        c: &Checked,
-        pixels: &Pixels,
-        file: Option<&PathBuf>,
-    ) -> Result<Option<ImageAsset>, BuildError> {
+    /// Encodes checked image `i`: its tiles, map, palettes and preview, and
+    /// nothing that can fail but a write.
+    pub fn image(&mut self, i: usize, c: &Checked) -> Result<Option<ImageAsset>, BuildError> {
         let (s, image, root) = (c.s, c.image.as_str(), self.root);
         let under_assets = s.name.as_str();
-        // Relative to `root`, rgbgfx's working directory; the images it
-        // reads are named whole, wherever they are.
+        // The data's path under `root`, without extension.
         let data = format!("{}/{}", s.kind.dir(), s.stem);
-        // rgbgfx reads the DMG version's file, or, when colors share a
-        // shade or the version was derived, a copy (with them merged),
-        // removed once converted.
-        let merged = PathBuf::from(format!("{data}.merged.png"));
-        let transient = if c.plan.merges().is_empty() && file.is_some() {
-            None
-        } else {
-            // Guarded before it is written, so a failed write leaves no
-            // partial file behind.
-            let removed = Removed(root.join(&merged));
-            shared::write(pixels, c.plan.merges(), &removed.0).map_err(io(&removed.0))?;
-            Some(removed)
-        };
-        let rel = match (&transient, file) {
-            (None, Some(file)) => file.as_path(),
-            _ => merged.as_path(),
-        };
-        // rgbgfx reads files: a color image in pixel text is written out
-        // as a PNG first, removed once converted.
-        let color_png = PathBuf::from(format!("{data}.color.png"));
-        let _color_written = match &c.color {
-            Some(color) if c.color_text => {
-                let removed = Removed(root.join(&color_png));
-                shared::write(color, &[], &removed.0).map_err(io(&removed.0))?;
-                Some(removed)
-            }
-            _ => None,
-        };
-        let color_file = if c.color_text {
-            color_png.as_path()
-        } else {
-            s.path.as_path()
-        };
         let preview_path = root.join(format!("{data}.preview.png"));
         // A tileset is a background's tiles without its map: the program
         // builds its own maps, from the result's tile map.
         let has_map = s.kind == ImageKind::Bg;
         let (mut asset, picture, gbc_picture) = match &c.plan {
             Plan::Bg(p) => {
-                let Some(d) = self.rgbgfx.background(image, rel, p, &data)? else {
-                    return Ok(None);
-                };
+                let d = encode::background(p);
+                let path = root.join(format!("{data}.2bpp"));
+                fs::write(&path, &d.tiles).map_err(io(&path))?;
                 if has_map {
                     let path = root.join(format!("{data}.tilemap"));
                     fs::write(&path, &d.map).map_err(io(&path))?;
@@ -178,11 +135,7 @@ impl Output<'_> {
                         layer: Layer::Bg,
                     };
                     let cells = &packing.cell_palettes[0];
-                    let rgbgfx = &mut self.rgbgfx;
-                    let made = gbc::background(
-                        rgbgfx, image, color_file, p, color, &palettes, cells, &data,
-                    )?;
-                    let Some(joint) = made else { return Ok(None) };
+                    let joint = gbc::background(p, color, &palettes, cells);
                     self.write_gbc(&data, &joint)?;
                     slots = joint.slots.into_iter().map(Some).collect();
                     gbc_tiles = Some(joint.tiles);
@@ -228,9 +181,7 @@ impl Output<'_> {
                 (asset, picture, gbc_picture)
             }
             Plan::Sheet(p) => {
-                let Some(units) = self.rgbgfx.sheet(image, rel, p, &data)? else {
-                    return Ok(None);
-                };
+                let units = encode::sheet(p);
                 if !units.is_empty() {
                     let path = root.join(format!("{data}.2bpp"));
                     fs::write(&path, &units).map_err(io(&path))?;
@@ -248,10 +199,7 @@ impl Output<'_> {
                         layer: Layer::Obj,
                     };
                     let cells = &packing.cell_palettes[at];
-                    let rgbgfx = &mut self.rgbgfx;
-                    let made =
-                        gbc::sheet(rgbgfx, image, color_file, p, color, &palettes, cells, &data)?;
-                    let Some(joint) = made else { return Ok(None) };
+                    let joint = gbc::sheet(p, color, &palettes, cells);
                     self.write_gbc(&data, &joint)?;
                     slots = joint.slots.into_iter().map(Some).collect();
                     gbc_units = Some(joint.tiles);

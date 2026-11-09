@@ -6,17 +6,17 @@ USAGE
   gbcli assets [DIR] [--manifest FILE] [--gbc] [--keep DIR] [--json]
 
 Converts the PNGs under DIR's assets/ (default: here), or the images a
-manifest names, exactly as `gbcli build` would, with rgbgfx alone: no rgbasm,
-no rgblink, no session. Prints the `image`, `problem` and `images` rows a
-build prints; --json gives each image's tile_map (tile, flip and GBC palette
-per source tile) and palettes. Nothing is written unless --keep names a
-directory; images.asm and images.inc are a build's. A problem fails with
-build_failed (exit 4), its rows printed. A manifest names each image as its
-path under assets/ in a project (`tiles/font.png`), the file to read, and the
-palettes palettes.txt would hold.
+manifest names, exactly as `gbcli build` would, encoded by gbcli itself: no
+RGBDS, no session. Prints the `image`, `problem` and `images` rows a build
+prints; --json gives each image's tile_map (tile, flip and GBC palette per
+source tile) and palettes. Nothing is written unless --keep names a directory;
+images.asm and images.inc are a build's. A problem fails with build_failed
+(exit 4), its rows printed. A manifest names each image as its path under
+assets/ in a project (`tiles/font.png`), the file to read, and the palettes
+palettes.txt would hold.
 
 CLASS
-  build: runs RGBDS from PATH, checked against the pinned version (`gbcli doctor`); a session only to reload the build into; `new`, `song`, `pixels` and the `font` verbs need neither, and `assets` only rgbgfx.
+  build: runs RGBDS from PATH, checked against the pinned version (`gbcli doctor`); a session only to reload the build into; `new`, `song`, `pixels`, the `font` verbs and `assets` need none of it (gbcli encodes images itself).
 
 FLAGS
   --manifest FILE         convert the images a JSON file names (`gbcli schema`, manifest) instead of a project's assets/; its relative `file` and `dmg` paths are read from the manifest's folder (a `serve` client's, from the server's working directory)

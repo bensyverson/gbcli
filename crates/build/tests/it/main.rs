@@ -14,6 +14,7 @@ mod font_author_safety;
 mod font_edges;
 mod fonts;
 mod images_bg;
+mod images_differential;
 mod images_dmg_version;
 mod images_edges;
 mod images_include;

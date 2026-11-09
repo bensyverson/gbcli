@@ -15,7 +15,7 @@ use gbcli_protocol::{
     NamedPalette, NamedPalettes, Rgb555,
 };
 
-use common::{Temp, rgbds};
+use common::Temp;
 use pngs::*;
 
 const NEAR_BLACK: Rgba = [0x10, 0x10, 0x10, 0xFF];
@@ -113,7 +113,7 @@ impl Case {
     }
 
     fn converted(&self, options: &AssetsOptions) -> ImagesMade {
-        let made = assets(rgbds().images(), options).unwrap().images;
+        let made = assets(options).unwrap().images;
         assert!(made.first_error().is_none(), "{:#?}", made.problems);
         made
     }
@@ -249,7 +249,7 @@ fn the_override_beside_indexed_art_error_names_each_sources_assignment() {
         target: BuildTarget::Gbc,
     };
     let temp = Temp::new("remedy-override");
-    let layout = |options: AssetsOptions| match assets(rgbds().images(), &options) {
+    let layout = |options: AssetsOptions| match assets(&options) {
         Err(AssetsError::Build(BuildError::Layout { message, remedy })) => {
             format!("{message} {remedy}")
         }
@@ -315,7 +315,7 @@ fn a_manifests_derived_remedy_names_its_dmg_field_not_a_file_beside_it() {
             target,
             ..AssetsOptions::new(AssetsInput::Manifest(manifest), temp.0.clone())
         };
-        let made = match assets(rgbds().images(), &options) {
+        let made = match assets(&options) {
             Ok(m) => m.images,
             Err(AssetsError::Failed(m)) => m.images,
             Err(e) => panic!("{:?}", e.body()),

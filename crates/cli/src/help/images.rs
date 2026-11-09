@@ -3,7 +3,7 @@
 //! the GBC.
 
 pub const IMAGES: &str = "\
-Images — PNGs under assets/, converted by `gbcli build` with rgbgfx (RGBDS).
+Images — PNGs under assets/, encoded by `gbcli build` itself (no RGBDS).
 Which kind? Indexed art (a palette from assets/palettes.txt, 4 colors) is one
 tile set for both machines; color art gets a derived DMG version. A sheet
 (sprites/) is object frames; a tileset (tiles/) is tiles with no map.
@@ -107,8 +107,6 @@ the image's 8x8 grid; --json lists them all), message and remedy.
   dmg_override_size   town.dmg.png isn't town.png's size
   shades_unpinned     build --gbc, a warning once for the project: indexed
                       art and no dmg line, so other art can recolor it
-  rgbgfx_agrees       not a limit: rgbgfx drew other indices than gbcli
-                      planned (a gbcli bug; re-save the PNG as 8-bit)
   pixels_text         a .pixels image doesn't read (line=N column=N); the
                       other images are still checked. On a .pixels image,
                       a limit naming tiles also gives line=, the block (or
@@ -236,8 +234,8 @@ model), so one session each. From inside game/, after gbcli build --gbc:
 Compare d.png with the .preview.png files, g.png with the .gbc.preview.png.
 
 Without a build: gbcli assets game --json converts the same images the
-same way, with rgbgfx alone, and writes nothing (--keep DIR keeps the data
-and previews; --gbc as for build). --manifest FILE names images without a
+same way, encoded by gbcli itself, and writes nothing (--keep DIR keeps the
+data and previews; --gbc as for build). --manifest FILE names images without a
 project: each as its path under assets/ (it sets kind, labels and frame
 size), the file to read, and a dmg version, with the palettes
 palettes.txt would hold (`gbcli schema`): palettes.dmg is the dmg line

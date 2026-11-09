@@ -16,7 +16,7 @@ the sample is wider. A font that doesn't read is font_unreadable (exit 4) with
 its line and column in a `problem` row. Needs no session and no RGBDS.
 
 CLASS
-  build: runs RGBDS from PATH, checked against the pinned version (`gbcli doctor`); a session only to reload the build into; `new`, `song`, `pixels` and the `font` verbs need neither, and `assets` only rgbgfx.
+  build: runs RGBDS from PATH, checked against the pinned version (`gbcli doctor`); a session only to reload the build into; `new`, `song`, `pixels`, the `font` verbs and `assets` need none of it (gbcli encodes images itself).
 
 FLAGS
   --sample TEXT           set TEXT by the layout rules (`gbcli help fonts`) and print its width and tiles; a named glyph is written <name>

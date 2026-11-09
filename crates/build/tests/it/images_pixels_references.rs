@@ -211,8 +211,7 @@ fn named_palette_references_convert_like_the_literal_png() {
                 keep: Some(keep.clone()),
                 ..AssetsOptions::new(AssetsInput::Project(temp.path("demo")), temp.0.clone())
             };
-            let made = assets(rgbds().images(), &options)
-                .unwrap_or_else(|e| panic!("{form} {target:?}: {e:?}"));
+            let made = assets(&options).unwrap_or_else(|e| panic!("{form} {target:?}: {e:?}"));
             let mut t = Vec::new();
             tree(&keep, &keep, &mut t);
             trees.push((t, made.images.problems.len()));

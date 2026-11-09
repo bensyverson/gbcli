@@ -68,8 +68,8 @@ impl Class {
             }
             Class::Build => {
                 "runs RGBDS from PATH, checked against the pinned version (`gbcli doctor`); \
-                 a session only to reload the build into; `new`, `song`, `pixels` and the \
-                 `font` verbs need neither, and `assets` only rgbgfx"
+                 a session only to reload the build into; `new`, `song`, `pixels`, the `font` \
+                 verbs and `assets` need none of it (gbcli encodes images itself)"
             }
             Class::Server => "speaks the JSON Lines protocol; a session is optional",
             Class::Help => "no preconditions: works with no session, no ROM and no network",

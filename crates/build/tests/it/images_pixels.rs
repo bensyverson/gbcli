@@ -101,7 +101,7 @@ fn demo_assets(temp: &Temp, target: BuildTarget) -> Result<ImagesMade, gbcli_bui
         target,
         ..AssetsOptions::new(AssetsInput::Project(temp.path("demo")), temp.0.clone())
     };
-    assets(rgbds().images(), &options).map(|m| m.images)
+    assets(&options).map(|m| m.images)
 }
 
 #[test]

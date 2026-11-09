@@ -20,7 +20,7 @@ pub(crate) fn key(c: Rgba) -> Key {
 
 /// An image's colors (fully transparent pixels excluded) as rgbgfx counts
 /// them, most used first. Each is its key's most used RGB value, which
-/// stands for the rest in messages, in rgbgfx's spec and for its shade.
+/// stands for the rest in messages and for its shade.
 pub(crate) fn colors(pixels: &Pixels) -> Vec<(Rgba, u32)> {
     let mut count: BTreeMap<Rgba, u32> = BTreeMap::new();
     for &p in pixels.rgba.iter().filter(|p| p[3] != 0) {

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use gbcli_protocol::{ImageKind, ImageLimit, ImageProblem, TileAt};
 
 use super::census::{self, Key, error, gbc_word, key};
-use super::pixels::{Color, Pixels, Rgba, hex};
+use super::pixels::{Color, Pixels, Rgba};
 use super::shades::Shading;
 use super::shared;
 
@@ -19,29 +19,21 @@ const BG_SHADES: usize = 4;
 /// (`census::gbc_word`, none without a GBC version).
 type Tile = (Vec<u8>, Vec<u16>);
 
-/// A background that fits, ready for rgbgfx.
+/// A background that fits, ready to encode.
 #[derive(Debug)]
 pub(crate) struct BgPlan {
-    /// rgbgfx's `-c`: each color at the index of its shade, so BGP $E4
-    /// shows it as drawn. Colors that share a shade are one color to
-    /// rgbgfx, the most used of them (`merges`).
-    pub spec: String,
-    /// The colors rgbgfx must see as another (`shared`): none unless two
-    /// colors share a shade.
-    pub merges: Vec<(Key, Rgba)>,
     /// Problems that don't stop the build.
     pub warnings: Vec<ImageProblem>,
     /// Size in tiles.
     pub width: u32,
     pub height: u32,
-    /// Unique tiles: on the DMG alone, what rgbgfx's dedup would keep;
+    /// Unique tiles: on the DMG alone, what gbcli's dedup would keep;
     /// with a GBC version, the pairs (DMG tile, GBC tile).
     pub tiles: u32,
     /// Each unique tile's DMG color indices, 8 a row, in order of first
     /// use (a DMG tile may repeat, beside two GBC tiles).
     pub unique: Vec<Vec<u8>>,
-    /// Each map cell's unique tile, row by row: what rgbgfx's data must
-    /// draw there (`agree`).
+    /// Each map cell's unique tile, row by row: the tile its cell draws.
     pub cells: Vec<usize>,
 }
 
@@ -78,12 +70,6 @@ pub(crate) fn check(
         )]);
     }
     let list: Vec<Rgba> = colors.iter().map(|(c, _)| *c).collect();
-    let mut slots = [
-        "#none".to_string(),
-        "#none".into(),
-        "#none".into(),
-        "#none".into(),
-    ];
     let shade_of = shading.shades(&list);
     let mut shared = shared::find(image, pixels, &colors, &shade_of, shading);
     shared
@@ -91,9 +77,6 @@ pub(crate) fn check(
         .extend(shared::stretched(image, pixels, &colors, shading));
     let mut shade: HashMap<Key, u8> = HashMap::new();
     for (c, &s) in list.iter().zip(&shade_of) {
-        if !shared.merges.iter().any(|(k, _)| *k == key(*c)) {
-            slots[usize::from(s)] = hex(*c);
-        }
         shade.insert(key(*c), s);
     }
     let warned = |p: ImageProblem| {
@@ -218,8 +201,6 @@ pub(crate) fn check(
         return Err(warned(p));
     }
     Ok(BgPlan {
-        spec: slots.join(","),
-        merges: shared.merges,
         warnings: shared.warnings,
         width,
         height,

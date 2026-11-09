@@ -225,144 +225,27 @@ fn an_image_name_that_cant_be_a_label_is_refused_with_the_name_to_use() {
     assert!(body.remedy.contains("town.png"), "{}", body.remedy);
 }
 
-/// Fake rgbasm, rgblink and rgbfix that run the real ones, and an `rgbgfx`
-/// running `body` (or none).
-fn tools_with(temp: &common::Temp, rgbgfx: Option<&str>) -> gbcli_build::Toolchain {
+/// Fake rgbasm, rgblink and rgbfix that run the real ones, and no rgbgfx at
+/// all: a build needs none, since gbcli encodes images itself (Ben's
+/// ruling, 2026-11-09).
+fn tools_without_rgbgfx(temp: &common::Temp) -> gbcli_build::Toolchain {
     use gbcli_protocol::Tool;
-    let mut scripts = vec![
+    let scripts = [
         ("rgbasm", common::real(Tool::Rgbasm, "")),
         ("rgblink", common::real(Tool::Rgblink, "")),
         ("rgbfix", common::real(Tool::Rgbfix, "")),
     ];
-    if let Some(body) = rgbgfx {
-        scripts.push(("rgbgfx", body.to_string()));
-    }
     let scripts: Vec<(&str, &str)> = scripts.iter().map(|(n, b)| (*n, b.as_str())).collect();
     let path = common::fake_tools(temp, &scripts);
     gbcli_build::Toolchain::discover(Some(&path), &temp.0).unwrap()
 }
 
 #[test]
-fn without_rgbgfx_a_project_with_images_is_toolchain_missing_and_one_without_builds() {
+fn a_project_with_images_builds_with_no_rgbgfx_on_path() {
     let (temp, options) = starter("bg-no-rgbgfx");
-    let tools = tools_with(&temp, None);
-    build(&tools, &options).expect("no images, no rgbgfx needed");
-    write_png(&temp.path("demo/assets/bg/sign.png"), 8, 8, |_, _| WHITE);
-    let body = build(&tools, &options).unwrap_err().body();
-    assert_eq!(body.code, ErrorCode::ToolchainMissing);
-    assert!(
-        body.message.contains("rgbgfx is not on PATH"),
-        "{}",
-        body.message
-    );
-    assert!(
-        body.remedy.contains("releases/tag/v1.0.4"),
-        "{}",
-        body.remedy
-    );
-}
-
-#[test]
-fn an_rgbgfx_failure_is_its_diagnostic_on_the_image_and_stops_the_build() {
-    let (temp, options) = starter("bg-rgbgfx-fails");
-    let tools = tools_with(&temp, Some("echo 'FATAL: out of cheese' >&2; exit 1"));
-    write_png(&temp.path("demo/assets/bg/sign.png"), 8, 8, |_, _| WHITE);
-    let made = match build(&tools, &options) {
-        Err(BuildError::Failed { made, .. }) => *made,
-        other => panic!("expected rgbgfx to stop the build, got {other:?}"),
-    };
-    let d = &made.diagnostics[0];
-    assert_eq!(d.tool, gbcli_protocol::Tool::Rgbgfx);
-    assert_eq!(d.severity, Severity::Error);
-    assert_eq!(d.file.as_deref(), Some("demo/assets/bg/sign.png"));
-    assert_eq!(d.message, "out of cheese");
-    assert!(made.images.unwrap().images.is_empty());
-    assert!(!temp.path("demo/build/demo.gb").exists());
-}
-
-/// An rgbgfx that runs the real one, then sets the first byte of the tile
-/// data it wrote (`-o`) to $FF: row 0's low plane, every pixel's bit 0.
-fn tools_whose_rgbgfx_misdraws(temp: &common::Temp) -> gbcli_build::Toolchain {
-    let real = rgbds().rgbgfx().unwrap().display().to_string();
-    let body = format!(
-        "'{real}' \"$@\" || exit $?\n\
-         out=; prev=\n\
-         for a in \"$@\"; do [ \"$prev\" = -o ] && out=$a; prev=$a; done\n\
-         printf '\\377' | dd of=\"$out\" bs=1 count=1 conv=notrunc 2>/dev/null"
-    );
-    tools_with(temp, Some(&body))
-}
-
-#[test]
-fn a_background_rgbgfx_draws_otherwise_than_planned_stops_the_build() {
-    let (temp, options) = starter("bg-rgbgfx-disagrees");
-    write_png(&temp.path("demo/assets/bg/plain.png"), 16, 8, |_, _| WHITE);
-    let tools = tools_whose_rgbgfx_misdraws(&temp);
-    let made = match build(&tools, &options) {
-        Err(BuildError::Failed { made, .. }) => *made,
-        other => panic!("expected the disagreement to stop the build, got {other:?}"),
-    };
-    let p = problem(&made, ImageLimit::RgbgfxAgrees);
-    assert_eq!(p.image.as_deref(), Some("demo/assets/bg/plain.png"));
-    assert_eq!(p.severity, Severity::Error);
-    // rgbgfx draws every cell (gbcli keeps the unique tiles), so the cell
-    // whose tile it misdrew is the first.
-    assert_eq!(p.tiles, [TileAt { x: 0, y: 0 }]);
-    assert!(
-        p.message
-            .contains("pixel (0, 0), gbcli planned color index 0 and rgbgfx wrote index 1"),
-        "{}",
-        p.message
-    );
-    assert!(made.images.unwrap().images.is_empty());
-    assert!(!temp.path("demo/build/demo.gb").exists());
-}
-
-/// Colors that share a shade reach rgbgfx as one color, and its output is
-/// still checked: a misdrawn tile stops the build.
-#[test]
-fn a_background_with_a_shared_shade_rgbgfx_misdraws_stops_the_build() {
-    let (temp, options) = starter("bg-shared-disagrees");
-    let near_white: Rgba = [0xF0, 0xF0, 0xF0, 0xFF];
-    // Black too, so the stretch keeps #f0f0f0 beside white, in shade 0.
-    write_png(&temp.path("demo/assets/bg/haze.png"), 24, 8, |x, _| {
-        [WHITE, near_white, BLACK][(x / 8) as usize]
-    });
-    // Indexed, so the shade shared across tiles warns and merges.
-    indexed(&temp.path("demo"), &["bg/haze.png"]);
-    let tools = tools_whose_rgbgfx_misdraws(&temp);
-    let made = match build(&tools, &options) {
-        Err(BuildError::Failed { made, .. }) => *made,
-        other => panic!("expected the disagreement to stop the build, got {other:?}"),
-    };
-    let p = problem(&made, ImageLimit::RgbgfxAgrees);
-    assert_eq!(p.tiles, [TileAt { x: 0, y: 0 }]);
-    assert!(
-        p.message
-            .contains("planned color index 0 and rgbgfx wrote index 1"),
-        "{}",
-        p.message
-    );
-    assert_eq!(
-        problem(&made, ImageLimit::SharedShade).severity,
-        Severity::Warning
-    );
-}
-
-#[test]
-fn a_sheet_rgbgfx_draws_otherwise_than_planned_stops_the_build() {
-    let (temp, options) = starter("sheet-rgbgfx-disagrees");
-    write_png(&temp.path("demo/assets/sprites/dot.png"), 8, 16, |x, y| {
-        if (x, y) == (0, 8) { BLACK } else { CLEAR }
-    });
-    let tools = tools_whose_rgbgfx_misdraws(&temp);
-    let made = match build(&tools, &options) {
-        Err(BuildError::Failed { made, .. }) => *made,
-        other => panic!("expected the disagreement to stop the build, got {other:?}"),
-    };
-    let p = problem(&made, ImageLimit::RgbgfxAgrees);
-    assert_eq!(p.image.as_deref(), Some("demo/assets/sprites/dot.png"));
-    assert_eq!(p.tiles, [TileAt { x: 0, y: 0 }]);
-    assert!(p.message.contains("planned color index 0"), "{}", p.message);
-    assert!(made.images.unwrap().images.is_empty());
+    let tools = tools_without_rgbgfx(&temp);
+    write_png(&temp.path("demo/assets/bg/sign.png"), 24, 16, sign);
+    let made = build(&tools, &options).expect("images need no rgbgfx");
+    assert_eq!(made.images.unwrap().images.len(), 1);
+    assert!(temp.path("demo/build/demo.gb").exists());
 }

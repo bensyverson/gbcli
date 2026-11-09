@@ -135,8 +135,8 @@ pub const ASSETS_VERB: VerbSpec = VerbSpec {
     flags: ASSETS,
     groups: &[JSON_ONLY],
     about: "Converts the PNGs under DIR's assets/ (default: here), or the images a manifest \
-            names, exactly as `gbcli build` would, with rgbgfx alone: no rgbasm, no rgblink, \
-            no session. Prints the `image`, `problem` and `images` rows a build prints; --json \
+            names, exactly as `gbcli build` would, encoded by gbcli itself: no RGBDS, no \
+            session. Prints the `image`, `problem` and `images` rows a build prints; --json \
             gives each image's tile_map (tile, flip and GBC palette per source tile) and \
             palettes. Nothing is written unless --keep names a directory; images.asm and \
             images.inc are a build's. A problem fails with build_failed (exit 4), its rows \

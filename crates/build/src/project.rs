@@ -26,7 +26,7 @@ use gbcli_protocol::{
 
 use crate::diagnostics;
 use crate::paths::{display, quote};
-use crate::toolchain::{Toolchain, ToolchainError};
+use crate::toolchain::Toolchain;
 use layout::Layout;
 pub use layout::{default_rom, default_target_of};
 use staging::Staging;
@@ -85,8 +85,6 @@ pub enum BuildError {
         path: PathBuf,
         error: std::io::Error,
     },
-    /// The project has images and rgbgfx can't be used.
-    Toolchain(ToolchainError),
     /// A song under `assets/music` doesn't read (`crate::music`).
     Song {
         path: String,
@@ -190,7 +188,6 @@ impl BuildError {
             BuildError::Io { path, error } => {
                 ErrorBody::plain(ErrorCode::IoFailed, format!("{}: {error}", path.display()))
             }
-            BuildError::Toolchain(e) => e.body(),
             BuildError::Song { path, error } => crate::music::song_problem(path, error),
         }
     }
@@ -206,13 +203,7 @@ pub fn build(tools: &Toolchain, options: &BuildOptions) -> Result<BuildMade, Bui
     })?;
     let mut layout = Layout::of(&project, options, &shown)?;
     // Images first: the program includes what they become.
-    let images = crate::images::convert(
-        tools,
-        &project,
-        &shown,
-        options.target,
-        options.tool_timeout,
-    )?;
+    let images = crate::images::convert(&project, &shown, options.target)?;
     if let Some(generated) = images.as_ref().and_then(|i| i.generated.as_ref()) {
         layout.sources.push(generated.source.clone());
         layout.include.push(generated.include_dir.clone());

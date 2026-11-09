@@ -13,7 +13,7 @@ use gbcli_protocol::{
 };
 
 use super::census::{self, Key, error, gbc_word, key};
-use super::pixels::{Color, Pixels, Rgba, hex};
+use super::pixels::{Color, Pixels, Rgba};
 use super::shades::Shading;
 use super::shared;
 
@@ -37,15 +37,11 @@ pub(crate) struct Object {
     pub flip: Flip,
 }
 
-/// A sheet that fits, ready for rgbgfx and the dedup.
+/// A sheet that fits, ready to encode and use.
 #[derive(Debug)]
 pub(crate) struct SheetPlan {
     /// Its objects' size, which every unit is.
     pub object: ObjectSize,
-    pub spec: String,
-    /// The colors rgbgfx must see as another (`shared`): none unless two
-    /// colors share a shade.
-    pub merges: Vec<(Key, Rgba)>,
     /// OBP: index 0 transparent, 1-3 the sheet's shades, lightest first.
     pub obp: u8,
     /// Size in tiles.
@@ -58,7 +54,7 @@ pub(crate) struct SheetPlan {
     /// data; with a GBC version, alike in both.
     pub kept: Vec<(u32, u32)>,
     /// Each kept unit's color indices, 8 a row, a row a pixel of the
-    /// object's height: what rgbgfx's data must draw (`agree`).
+    /// object's height: the tile data its unit draws.
     pub drawn: Vec<Vec<u8>>,
     pub uses: Vec<u32>,
     pub frames: Vec<Vec<Object>>,
@@ -229,23 +225,13 @@ pub(crate) fn check(
     used.sort();
     used.dedup();
     let mut index: HashMap<Key, u8> = HashMap::new();
-    let mut slots = vec!["#none".to_string()];
     let mut obp = 0u8;
     for (i, &s) in used.iter().enumerate() {
         let i = i as u8 + 1;
-        // The shade's most used color stands for it in rgbgfx's spec.
-        let mut first = true;
         for (&c, _) in list.iter().zip(&shade).filter(|&(_, &t)| t == s) {
             index.insert(key(c), i);
-            if first {
-                slots.push(hex(c));
-                first = false;
-            }
         }
         obp |= s << (2 * i);
-    }
-    while slots.len() < 4 {
-        slots.push("#none".into());
     }
     // A unit's pixels: 8 a row, `oh` rows.
     let unit_pixels = 8 * oh;
@@ -415,8 +401,6 @@ pub(crate) fn check(
     }
     Ok(SheetPlan {
         object,
-        spec: slots.join(","),
-        merges: shared.merges,
         obp,
         width: pixels.width / 8,
         height: pixels.height / 8,

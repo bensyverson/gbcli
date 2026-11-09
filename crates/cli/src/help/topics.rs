@@ -292,9 +292,9 @@ RGBDS — the loop: edit, build, restore, measure, with RGBDS from PATH.
                                unless made with --model gbc (a GBC in CGB
                                mode), so check a dual ROM in two sessions
   gbcli assets game --json     the images alone, converted as build would,
-                               with rgbgfx alone and nothing written: tile
-                               maps and palettes; --manifest FILE instead
-                               of a project (gbcli help images)
+                               encoded by gbcli itself and nothing written:
+                               tile maps and palettes; --manifest FILE
+                               instead of a project (gbcli help images)
   The loop, from inside game/:
     gbcli run build/game.gb --session game --frames 60 --checkpoint start
     (edit src/)
@@ -388,7 +388,9 @@ mod tests {
             FrameSpan,
             RomxBank,
             Alpha,
-            RgbgfxAgrees,
+            // RgbgfxAgrees stays in the protocol types but no build produces
+            // it since gbcli encodes images itself (leaf zkoPft), so the
+            // topic no longer names it.
             SharedShade,
             PaletteFile,
             ShadeStretched,

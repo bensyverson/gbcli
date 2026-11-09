@@ -1,9 +1,9 @@
-//! `assets` (design §12): images converted as a build converts them, with
-//! rgbgfx alone, through `gbcli-build`. It needs no session, so both the
+//! `assets` (design §12): images converted as a build converts them, through
+//! `gbcli-build`. It runs no tool and needs no session, so both the
 //! bundle-less [`super::build::Tooling`] and the [`super::Handler`] answer
 //! it.
 
-use gbcli_build::{AssetsOptions, ImageTool};
+use gbcli_build::AssetsOptions;
 use gbcli_protocol::{AssetsArgs, Response, ResultBody};
 
 use super::build::Host;
@@ -14,9 +14,7 @@ pub(super) fn assets(host: &Host, id: String, args: &AssetsArgs) -> Response {
         Ok(options) => options,
         Err(e) => return Response::failed(id, None, e.body()),
     };
-    let tool = ImageTool::discover(host.path.as_deref(), &host.cwd);
-    let warnings = tool.warnings();
-    match gbcli_build::assets(&tool, &options) {
+    match gbcli_build::assets(&options) {
         Ok(made) => Response::ok(
             id,
             None,
@@ -24,9 +22,8 @@ pub(super) fn assets(host: &Host, id: String, args: &AssetsArgs) -> Response {
                 assets: Some(made),
                 ..ResultBody::default()
             },
-        )
-        .with_warnings(warnings),
-        Err(e) => Response::failed(id, None, e.body()).with_warnings(warnings),
+        ),
+        Err(e) => Response::failed(id, None, e.body()),
     }
 }
 

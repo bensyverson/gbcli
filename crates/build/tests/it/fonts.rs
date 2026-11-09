@@ -255,7 +255,7 @@ fn the_assets_op_returns_a_font_asset_for_requested_characters_with_no_cap() {
     big_font(&temp, "kanji", 0x4E00, 300);
     let project = || AssetsOptions::new(AssetsInput::Project("demo".into()), temp.0.clone());
     // Asking for nothing returns every glyph: the op has no cap.
-    let made = assets(rgbds().images(), &project()).expect("converts");
+    let made = assets(&project()).expect("converts");
     assert_eq!(made.images.fonts[0].glyphs.len(), 300);
     // Asking for 260 returns exactly those, in the font's order.
     let wanted: Vec<String> = (0..260)
@@ -266,7 +266,7 @@ fn the_assets_op_returns_a_font_asset_for_requested_characters_with_no_cap() {
     options
         .glyphs
         .insert("fonts/kanji.yaff".into(), wanted.clone());
-    let made = assets(rgbds().images(), &options).expect("converts");
+    let made = assets(&options).expect("converts");
     let keys: Vec<String> = made.images.fonts[0]
         .glyphs
         .iter()
@@ -279,14 +279,14 @@ fn the_assets_op_returns_a_font_asset_for_requested_characters_with_no_cap() {
     options
         .glyphs
         .insert("fonts/kanji.yaff".into(), vec!["一".into(), "é".into()]);
-    let e = assets(rgbds().images(), &options).expect_err("missing");
+    let e = assets(&options).expect_err("missing");
     let body = e.body();
     assert_eq!(body.code, ErrorCode::BuildFailed);
     assert!(body.message.contains("'é' (u+00E9)"), "{}", body.message);
     // A request for a font the project hasn't got is refused.
     let mut options = project();
     options.glyphs.insert("fonts/none.yaff".into(), vec![]);
-    let e = assets(rgbds().images(), &options).expect_err("no font");
+    let e = assets(&options).expect_err("no font");
     assert!(
         e.body().message.contains("fonts/none.yaff"),
         "{}",
@@ -306,7 +306,7 @@ fn a_manifest_converts_a_font_without_a_project() {
         ..AssetManifest::default()
     };
     let options = AssetsOptions::new(AssetsInput::Manifest(manifest), temp.0.clone());
-    let made = assets(rgbds().images(), &options).expect("converts");
+    let made = assets(&options).expect("converts");
     let f = &made.images.fonts[0];
     assert_eq!((f.label.as_str(), f.glyphs.len()), ("Talk", 1));
     assert_eq!(f.glyphs[0].rows[0], 0x80);

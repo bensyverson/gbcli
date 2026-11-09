@@ -3,8 +3,8 @@
 //! saved.
 
 use gbcli_protocol::{
-    ApuWriteMade, AudioCompareName, DifferenceMade, EquivMade, Location, RamRangeArg, SideMade,
-    SideName, StopReason,
+    ApuWriteMade, AudioCompareName, DifferenceMade, EquivMade, FrameOffsetMade, Location,
+    RamRangeArg, SideMade, SideName, StopReason,
 };
 
 use super::row::{Row, addr, byte};
@@ -69,6 +69,9 @@ pub fn rows(e: &EquivMade) -> String {
         }
         .line();
     }
+    if let Some(o) = &d.frame_offset {
+        out += &frame_offset(d.frame, o);
+    }
     out += &side("a", &d.a);
     out += &side("b", &d.b);
     out
@@ -95,15 +98,27 @@ fn audio(mode: AudioCompareName) -> String {
         .to_string()
 }
 
+/// `frame_offset frame=11 earlier=b t=20356 ticks=40712`: the divergent
+/// frame ended sooner on one side, counted from each side's start.
+fn frame_offset(frame: u64, o: &FrameOffsetMade) -> String {
+    Row::new("frame_offset")
+        .field("frame", frame)
+        .field("earlier", side_word(o.earlier))
+        .field("t", o.t)
+        .field("ticks", o.ticks)
+        .line()
+}
+
+fn side_word(side: SideName) -> &'static str {
+    match side {
+        SideName::A => "a",
+        SideName::B => "b",
+    }
+}
+
 /// `a`, `b` or `a,b`; `None` for no side.
 fn sides(of: &[SideName]) -> Option<String> {
-    let names: Vec<&str> = of
-        .iter()
-        .map(|side| match side {
-            SideName::A => "a",
-            SideName::B => "b",
-        })
-        .collect();
+    let names: Vec<&str> = of.iter().map(|&side| side_word(side)).collect();
     (!names.is_empty()).then(|| names.join(","))
 }
 

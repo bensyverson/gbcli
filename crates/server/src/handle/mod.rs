@@ -413,6 +413,8 @@ mod memory_tests;
 #[cfg(test)]
 mod equiv_tests;
 #[cfg(test)]
+mod equiv_timing_tests;
+#[cfg(test)]
 mod listing_tests;
 #[cfg(test)]
 mod measure_tests;

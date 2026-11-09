@@ -1,0 +1,29 @@
+$ gbcli equiv slow.gb --frames 60 --ram wX --ram wY --rom a.gb --keys RIGHT@10 DOWN@20 --session offset
+exit 1
+equiv frames=2 diverged_at=3 ticks=356080 screen=1 ram="wX wY" audio=writes
+difference kind=pixels x=0 y=0 a=3 b=0 count=64
+frame_offset frame=3 earlier=b t=30896 ticks=61792
+side a checkpoint=equiv-a path=.gbcli/sessions/offset/checkpoints/equiv-a.gbck frame=3
+stop step_done unit=frame pc=$0040 bank=0 symbol=VBlank_vector frame=3 t=178040 since=boot ticks=12118296 ly=144 shown=3 vblank=normal
+budget frames=1 instructions=17382 ticks=140448
+side b checkpoint=equiv-b path=.gbcli/sessions/offset/checkpoints/equiv-b.gbck frame=3
+stop step_done unit=frame pc=$01BB bank=0 symbol=Init.delay+$9 frame=3 t=147144 since=boot ticks=12056504 ly=0 shown=3 vblank=artificial
+budget frames=1 instructions=981 ticks=13736
+--- stderr
+gbcli: predicate_false: the sides diverge at frame 3: 64 pixels, the first at (0, 0); side B's frame 3 ended 30896 T sooner; saved as equiv-a and equiv-b
+remedy: the sides' frames end at different times (their start-up or LCD timing differs), so their screens are drawn at different moments: turn the LCD on at the same point in both builds, or compare timing-free state with --ram ADDR[,LEN] and --screen off (`gbcli help optimize`)
+$ gbcli equiv slow.gb --frames 60 --ram wX --ram wY --json --keys RIGHT@10 DOWN@20 --session offset
+exit 1
+{"id":"cli","ok":false,"rev":"s0","error":{"code":"predicate_false","exit":1,"message":"the sides diverge at frame 3: 64 pixels, the first at (0, 0); side B's frame 3 ended 30896 T sooner; saved as equiv-a and equiv-b","remedy":"the sides' frames end at different times (their start-up or LCD timing differs), so their screens are drawn at different moments: turn the LCD on at the same point in both builds, or compare timing-free state with --ram ADDR[,LEN] and --screen off (`gbcli help optimize`)","result":{"equiv":{"frames":2,"compared":{"screen":true,"ram":[{"at":"wX","len":1},{"at":"wY","len":1}],"audio":"writes"},"divergence":{"frame":3,"ticks":356080,"differences":[{"kind":"pixels","x":0,"y":0,"a":3,"b":0,"count":64}],"frame_offset":{"earlier":"b","ticks":61792,"t":30896},"a":{"stop":{"reason":"step_done","unit":"frame","pc":64,"bank":0,"symbol":"VBlank_vector","time":{"ticks":12118296,"t":178040,"since":{"kind":"boot"},"frame":3,"ly":144,"dot":null},"frame_shown":{"n":3,"vblank":"normal"},"budget":{"ticks":140448,"instructions":17382,"frames":1,"limits":{},"defaulted":false}},"checkpoint":{"name":"equiv-a","path":".gbcli/sessions/offset/checkpoints/equiv-a.gbck","frame":3,"rev":"s0"}},"b":{"stop":{"reason":"step_done","unit":"frame","pc":443,"bank":0,"symbol":"Init.delay+$9","time":{"ticks":12056504,"t":147144,"since":{"kind":"boot"},"frame":3,"ly":0,"dot":null},"frame_shown":{"n":3,"vblank":"artificial"},"budget":{"ticks":13736,"instructions":981,"frames":1,"limits":{},"defaulted":false}},"checkpoint":{"name":"equiv-b","path":".gbcli/sessions/offset/checkpoints/equiv-b.gbck","frame":3,"rev":"s0"}}}}}},"warnings":[]}
+--- stderr
+gbcli: predicate_false: the sides diverge at frame 3: 64 pixels, the first at (0, 0); side B's frame 3 ended 30896 T sooner; saved as equiv-a and equiv-b
+remedy: the sides' frames end at different times (their start-up or LCD timing differs), so their screens are drawn at different moments: turn the LCD on at the same point in both builds, or compare timing-free state with --ram ADDR[,LEN] and --screen off (`gbcli help optimize`)
+$ gbcli equiv slow.gb --frames 60 --ram wX --ram wY --screen off --keys RIGHT@10 DOWN@20 --session offset
+exit 0
+equiv frames=60 screen=0 ram="wX wY" audio=writes
+rev s0
+$ gbcli equiv slow.gb --frames 60 --screen off --audio off --keys RIGHT@10 DOWN@20 --session offset
+exit 2
+--- stderr
+gbcli: bad_request: nothing to compare: --screen off, no --ram and --audio off
+remedy: name what must match: --ram ADDR[,LEN] (timing-free state, for builds whose timing differs), --audio writes, or drop --screen off

@@ -108,6 +108,24 @@ fn the_optimize_topic_keeps_the_baseline_and_builds_what_it_compares() {
     );
 }
 
+/// A faster renderer shows each frame sooner, so equiv's screen compare
+/// fails a correct change. The topic names the three checks that hold: a
+/// frame-locked test mode, timing-free state with the screen off, and a
+/// reference renderer (the raycaster review, C-1).
+#[test]
+fn the_optimize_topic_says_how_to_check_a_change_that_alters_timing() {
+    let text = Topic::from_name("optimize").unwrap().text();
+    for needle in [
+        "alters timing",
+        "frame_offset",
+        "test mode",
+        "--screen off --ram",
+        "reference",
+    ] {
+        assert!(text.contains(needle), "{needle} missing:\n{text}");
+    }
+}
+
 /// The recipes' optimize line builds the ROM it compares, too.
 #[test]
 fn the_recipes_compare_a_build_they_made() {

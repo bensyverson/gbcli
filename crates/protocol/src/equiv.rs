@@ -29,6 +29,9 @@ pub struct EquivArgs {
     /// The input both sides get, as `run --keys` applies it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keys: Vec<KeyEvent>,
+    /// Whether each frame's pixels are compared; `on` when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub screen: Option<ScreenCompareName>,
     /// RAM to compare after every frame; each side resolves `at` through its
     /// own `.sym`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -57,6 +60,16 @@ pub struct EquivSide {
 pub struct RamRangeArg {
     pub at: String,
     pub len: u16,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScreenCompareName {
+    #[default]
+    On,
+    /// Not compared, so a `ram` or `audio` compare stands alone: for builds
+    /// whose timing differs by design.
+    Off,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -103,8 +116,25 @@ pub struct DivergenceMade {
     /// Emulated ticks (2^23 Hz) since the start, at side A's stop.
     pub ticks: u64,
     pub differences: Vec<DifferenceMade>,
+    /// Set when this frame ended at a different time on each side, counted
+    /// from each side's start: the frames are offset, so the screens were
+    /// drawn at different moments (a start-up of another length, or the LCD
+    /// switched on at another time).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frame_offset: Option<FrameOffsetMade>,
     pub a: SideMade,
     pub b: SideMade,
+}
+
+/// How much sooner one side's divergent frame ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FrameOffsetMade {
+    /// The side whose frame ended first.
+    pub earlier: SideName,
+    /// In 2^23 Hz ticks.
+    pub ticks: u64,
+    /// In CPU T-cycles at side A's speed, as a stop's `t` counts.
+    pub t: u64,
 }
 
 /// One side where the check stopped, saved as a named checkpoint.

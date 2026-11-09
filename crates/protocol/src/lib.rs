@@ -49,7 +49,7 @@ pub use checkpoint::{
 };
 pub use equiv::{
     ApuWriteMade, AudioCompareName, ComparedMade, DifferenceMade, DivergenceMade, EquivArgs,
-    EquivMade, EquivSide, RamRangeArg, SideMade, SideName,
+    EquivMade, EquivSide, FrameOffsetMade, RamRangeArg, ScreenCompareName, SideMade, SideName,
 };
 pub use error::{ErrorBody, ErrorCode};
 pub use font::{

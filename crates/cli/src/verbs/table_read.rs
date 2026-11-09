@@ -155,7 +155,10 @@ pub const EQUIV_VERB: VerbSpec = VerbSpec {
             (screen=1 ram=… audio=…). Exit 0 when every frame \
             matches; exit 1 (predicate_false) at the first frame that differs, with every \
             difference, and both sides saved as checkpoints equiv-a and equiv-b (equiv-b \
-            restores only when side B ran the session's ROM, as with --patch). The head \
+            restores only when side B ran the session's ROM, as with --patch). A \
+            frame_offset row says when that frame ended at a different time on each side \
+            (a start-up of another length): then the screens can't match, and --screen \
+            off with --ram compares timing-free state (`gbcli help optimize`). The head \
             never moves.",
     example: (
         "gbcli equiv fast.gb --session dx --frames 600 --keys 'RIGHT@10' --ram wX",

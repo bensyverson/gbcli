@@ -8,13 +8,14 @@ use std::path::Path;
 use gbcli_bundle::{SessionStore, Start};
 use gbcli_engine::addr::AddrError;
 use gbcli_engine::equiv::{
-    self, AudioCompare, Difference, Divergence, EquivError, EquivSpec, RamRange, Side, SideState,
-    Verdict,
+    self, AudioCompare, Difference, Divergence, EquivError, EquivSpec, FrameOffset, RamRange,
+    ScreenCompare, Side, SideState, Verdict,
 };
 use gbcli_engine::{Checkpoint, Machine};
 use gbcli_protocol::{
     ApuWriteMade, AudioCompareName, CheckpointMade, ComparedMade, DifferenceMade, DivergenceMade,
-    EquivArgs, EquivMade, ErrorBody, ErrorCode, ResultBody, SessionFile, SideMade, SideName,
+    EquivArgs, EquivMade, ErrorBody, ErrorCode, FrameOffsetMade, ResultBody, ScreenCompareName,
+    SessionFile, SideMade, SideName,
 };
 
 use super::super::history::checkpoint_frame;
@@ -58,6 +59,10 @@ impl Handler {
         let spec = EquivSpec {
             frames: args.frames,
             keys: &args.keys,
+            screen: match args.screen.unwrap_or_default() {
+                ScreenCompareName::On => ScreenCompare::On,
+                ScreenCompareName::Off => ScreenCompare::Off,
+            },
             ram: &ram,
             audio: match args.audio.unwrap_or_default() {
                 AudioCompareName::Off => AudioCompare::Off,
@@ -74,9 +79,8 @@ impl Handler {
             )),
             other => equiv_failure(&other),
         })?;
-        // `equiv::compare` checks every frame's pixels, unconditionally.
         let compared = ComparedMade {
-            screen: true,
+            screen: spec.screen == ScreenCompare::On,
             ram: args.ram.clone(),
             audio: args.audio.unwrap_or_default(),
         };
@@ -145,6 +149,11 @@ fn side_b(store: &SessionStore, meta: &SessionFile, args: &EquivArgs) -> Session
 /// The check's refusals, as error bodies.
 pub(in crate::handle) fn equiv_failure(e: &EquivError) -> Failure {
     match e {
+        EquivError::NothingCompared => bad(
+            "nothing to compare: --screen off, no --ram and --audio off",
+            "name what must match: --ram ADDR[,LEN] (timing-free state, for builds whose \
+             timing differs), --audio writes, or drop --screen off",
+        ),
         EquivError::Start(m) => bad(
             &m.to_string(),
             "start both sides from their boot handoffs (--from boot), or from one \
@@ -192,11 +201,14 @@ fn diverged(
         Ok(sides) => sides,
         Err(failure) => return failure,
     };
-    let summary = d
+    let mut summary = d
         .differences
         .first()
         .map(describe)
         .unwrap_or_else(|| "something".into());
+    if let Some(offset) = d.frame_offset {
+        summary += &format!("; {}", offset_clause(d.frame, offset));
+    }
     let made = EquivMade {
         frames: d.frame - 1,
         compared,
@@ -205,6 +217,11 @@ fn diverged(
             frame: d.frame,
             ticks: d.ticks,
             differences: d.differences.into_iter().map(difference).collect(),
+            frame_offset: d.frame_offset.map(|o| FrameOffsetMade {
+                earlier: side_name(o.earlier),
+                ticks: o.ticks,
+                t: o.t,
+            }),
             a,
             b,
         })),
@@ -231,7 +248,37 @@ fn diverged(
 /// A byte that was never written comes first: until the program sets it,
 /// stepping either side through the divergence shows nothing to fix.
 fn next_step(d: &Divergence, b_rom: Option<&str>) -> String {
-    unwritten_cause(d).unwrap_or_else(|| restore_step(d, b_rom))
+    unwritten_cause(d)
+        .or_else(|| offset_cause(d))
+        .unwrap_or_else(|| restore_step(d, b_rom))
+}
+
+/// "side B's frame 11 ended 20356 T sooner".
+fn offset_clause(frame: u64, o: FrameOffset) -> String {
+    let side = match o.earlier {
+        Side::A => "A",
+        Side::B => "B",
+    };
+    format!("side {side}'s frame {frame} ended {} T sooner", o.t)
+}
+
+/// When the screens differ between frames that end at different times, the
+/// pixels were sampled at different moments: the builds' start-up (or LCD
+/// switching) takes another time, which no fix to the drawing explains.
+/// Only timing-free state can match frame for frame then.
+fn offset_cause(d: &Divergence) -> Option<String> {
+    d.frame_offset?;
+    let on_screen = d
+        .differences
+        .iter()
+        .any(|x| matches!(x, Difference::Pixels { .. }));
+    on_screen.then(|| {
+        "the sides' frames end at different times (their start-up or LCD timing \
+         differs), so their screens are drawn at different moments: turn the LCD on \
+         at the same point in both builds, or compare timing-free state with --ram \
+         ADDR[,LEN] and --screen off (`gbcli help optimize`)"
+            .to_string()
+    })
 }
 
 fn restore_step(d: &Divergence, b_rom: Option<&str>) -> String {
@@ -373,19 +420,20 @@ fn difference(d: Difference) -> DifferenceMade {
             a,
             b,
             count: count as u64,
-            never_written: never_written
-                .into_iter()
-                .map(|side| match side {
-                    Side::A => SideName::A,
-                    Side::B => SideName::B,
-                })
-                .collect(),
+            never_written: never_written.into_iter().map(side_name).collect(),
         },
         Difference::Apu { index, a, b } => DifferenceMade::Apu {
             index: index as u64,
             a: apu(a),
             b: apu(b),
         },
+    }
+}
+
+fn side_name(side: Side) -> SideName {
+    match side {
+        Side::A => SideName::A,
+        Side::B => SideName::B,
     }
 }
 

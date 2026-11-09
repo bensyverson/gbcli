@@ -367,6 +367,12 @@ pub const EQUIV: &[FlagSpec] = &[
          --ram '$C0A0,4' (4 bytes from $C0A0), --ram wPlayerX (1 byte), --ram wPos,2",
     ),
     value(
+        "screen",
+        "on|off",
+        "compare each frame's pixels (on, the default) or not: off lets --ram and the \
+         sound writes stand alone, for builds whose timing differs by design",
+    ),
+    value(
         "audio",
         "writes|timed|off",
         "compare each frame's sound writes in order (writes, the default), also their \

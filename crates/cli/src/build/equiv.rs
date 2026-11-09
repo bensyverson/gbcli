@@ -1,6 +1,8 @@
 //! `equiv [ROM_B] --frames N …` → the protocol's `EquivArgs`.
 
-use gbcli_protocol::{AudioCompareName, EquivArgs, EquivSide, RamRangeArg, WriteKind};
+use gbcli_protocol::{
+    AudioCompareName, EquivArgs, EquivSide, RamRangeArg, ScreenCompareName, WriteKind,
+};
 
 use crate::Env;
 use crate::argv::Invocation;
@@ -28,6 +30,7 @@ pub fn equiv(inv: &Invocation, env: &Env) -> Result<EquivArgs, Usage> {
         from: inv.one("from").map(values::start).transpose()?,
         frames: values::count("frames", frames)?,
         keys: super::video::keys(inv, env)?,
+        screen: inv.one("screen").map(screen).transpose()?,
         ram: inv.all("ram").map(ram).collect::<Result<_, _>>()?,
         audio: inv.one("audio").map(audio).transpose()?,
     })
@@ -52,6 +55,17 @@ fn ram(text: &str) -> Result<RamRangeArg, Usage> {
         at: at.to_string(),
         len,
     })
+}
+
+fn screen(text: &str) -> Result<ScreenCompareName, Usage> {
+    match text {
+        "on" => Ok(ScreenCompareName::On),
+        "off" => Ok(ScreenCompareName::Off),
+        _ => Err(Usage::new(
+            format!("--screen takes on or off, not `{text}`"),
+            "off compares only --ram and the sound writes, e.g. --screen off --ram wX",
+        )),
+    }
 }
 
 fn audio(text: &str) -> Result<AudioCompareName, Usage> {

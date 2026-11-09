@@ -35,5 +35,22 @@ music tick), then the frame's game logic, empty in the starter.
   6. Check it behaves as the baseline, frame for frame:
        gbcli equiv build/fast.gb --session base --frames 300 --keys 'RIGHT@0'
 
+A change that alters timing. equiv compares the screen at the end of every
+frame, so a correct change that draws sooner, or a start-up that takes
+longer, fails it: the screens differ only because they were drawn at
+different moments. A frame_offset row says when the divergent frame ended at
+a different time on each side. A renderer that reads the keys once a view
+also sees them at other frames when it gets faster, so its views differ, not
+only arrive earlier. Three checks hold:
+  - Lock the output in a test mode: a frame-locked bench mode in the ROM
+    (say, SELECT held at power-on draws a view only every 32 frames), so
+    both builds show each view in the same frame; equiv the builds in it.
+  - Compare timing-free state, with no screen: the positions and state the
+    game decides, not when it draws them. Hold no keys while views are
+    drawn, or the two builds read them at different frames:
+       gbcli equiv build/fast.gb --session base --frames 300 --screen off --ram wShadowOAM,160
+  - Check the output against a reference: a renderer on the host that draws
+    the same view, compared with `gbcli shot` at a set of poses.
+
 A frame is 70,224 T-cycles; `gbcli help budgets` if a run never arrives.
 ";

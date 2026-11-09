@@ -43,6 +43,16 @@ pub enum AudioCompare {
     Timed,
 }
 
+/// Whether the completed frame's pixels are compared.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ScreenCompare {
+    #[default]
+    On,
+    /// Not compared: for builds whose timing differs by design, where only
+    /// timing-free state (RAM, the sound writes) can match.
+    Off,
+}
+
 /// What to run and compare.
 #[derive(Clone, Debug)]
 pub struct EquivSpec<'a> {
@@ -50,6 +60,7 @@ pub struct EquivSpec<'a> {
     pub frames: u64,
     /// The input timeline both machines get, as `run --keys` applies it.
     pub keys: &'a [KeyEvent],
+    pub screen: ScreenCompare,
     pub ram: &'a [RamRange],
     pub audio: AudioCompare,
     /// Set from elsewhere to stop the check: a user break or wall guard.
@@ -61,6 +72,7 @@ impl EquivSpec<'_> {
         EquivSpec {
             frames,
             keys: &[],
+            screen: ScreenCompare::default(),
             ram: &[],
             audio: AudioCompare::default(),
             interrupt: None,
@@ -100,8 +112,25 @@ pub struct Divergence {
     /// Everything that differed in this frame: the stops, then the pixels,
     /// then each RAM range, then the sound-register writes.
     pub differences: Vec<Difference>,
+    /// Set when the divergent frame ended at a different time since the
+    /// start on each side: their frames are offset, so the screens are drawn
+    /// at different moments (a start-up of another length, or the LCD turned
+    /// off and on at another time).
+    pub frame_offset: Option<FrameOffset>,
     pub a: SideState,
     pub b: SideState,
+}
+
+/// How much sooner one side's divergent frame ended, counted from each
+/// side's start.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FrameOffset {
+    /// The side whose frame ended first.
+    pub earlier: Side,
+    /// In 2^23 Hz ticks.
+    pub ticks: u64,
+    /// In CPU T-cycles at side A's speed, as the stop rows' `t` counts.
+    pub t: u64,
 }
 
 /// One machine where the check stopped, with a checkpoint to restore it.
@@ -153,6 +182,8 @@ pub enum Difference {
 /// Why the check couldn't run to an answer.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EquivError {
+    /// The screen, RAM and sound compares are all off.
+    NothingCompared,
     /// The two machines don't start in equivalent states.
     Start(StartMismatch),
     /// A RAM range doesn't resolve, or can't be read, on one side.
@@ -178,6 +209,12 @@ pub enum EquivError {
 impl fmt::Display for EquivError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            EquivError::NothingCompared => {
+                write!(
+                    f,
+                    "nothing to compare: the screen, RAM and sound are all off"
+                )
+            }
             EquivError::Start(m) => write!(f, "{m}"),
             EquivError::Range { side, at, error } => write!(f, "{side:?}: range {at}: {error}"),
             EquivError::Run { side, error } => write!(f, "{side:?}: {error}"),
@@ -199,6 +236,9 @@ pub fn compare(
     b: &mut Machine,
     spec: &EquivSpec<'_>,
 ) -> Result<Verdict, EquivError> {
+    if spec.screen == ScreenCompare::Off && spec.ram.is_empty() && spec.audio == AudioCompare::Off {
+        return Err(EquivError::NothingCompared);
+    }
     start::check(a, b).map_err(EquivError::Start)?;
     let ranges = spec
         .ram
@@ -222,7 +262,9 @@ pub fn compare(
                 b: stop_b.reason.clone(),
             });
         }
-        differences.extend(diff::pixels(a.m.core(), b.m.core()));
+        if spec.screen == ScreenCompare::On {
+            differences.extend(diff::pixels(a.m.core(), b.m.core()));
+        }
         for range in &ranges {
             differences.extend(diff::ram(range, a.m.core(), b.m.core())?);
         }
@@ -233,7 +275,8 @@ pub fn compare(
         if !differences.is_empty() {
             return Ok(Verdict::Diverged(Box::new(Divergence {
                 frame,
-                ticks: a.m.core().now().0 - a.start,
+                ticks: a.elapsed(),
+                frame_offset: frame_offset(&a, &b),
                 differences,
                 a: a.state(stop_a),
                 b: b.state(stop_b),
@@ -251,6 +294,27 @@ pub fn compare(
     Ok(Verdict::Same {
         frames: spec.frames,
         ended: None,
+    })
+}
+
+/// How far apart the two sides' frames ended, counted from each side's start;
+/// `None` when they ended together.
+fn frame_offset(a: &Run, b: &Run) -> Option<FrameOffset> {
+    let (ta, tb) = (a.elapsed(), b.elapsed());
+    let (earlier, ticks) = match ta.cmp(&tb) {
+        std::cmp::Ordering::Equal => return None,
+        std::cmp::Ordering::Less => (Side::A, tb - ta),
+        std::cmp::Ordering::Greater => (Side::B, ta - tb),
+    };
+    let per_t = if a.m.core().registers().double_speed {
+        1
+    } else {
+        2
+    };
+    Some(FrameOffset {
+        earlier,
+        ticks,
+        t: ticks / per_t,
     })
 }
 
@@ -300,6 +364,11 @@ impl Run {
                 error,
             })?;
         Ok(outcome.stop)
+    }
+
+    /// Ticks since this side's start.
+    fn elapsed(&self) -> u64 {
+        self.m.core().now().0 - self.start
     }
 
     fn writes(&mut self) -> Result<Vec<ApuWrite>, EquivError> {

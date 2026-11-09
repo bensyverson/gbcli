@@ -60,6 +60,13 @@ pub const LATE_A: &[u8] = include_bytes!("../../engine/tests/roms/equiv_late_a.g
 pub const LATE_A_SYM: &[u8] = include_bytes!("../../engine/tests/roms/equiv_late_a.sym");
 pub const LATE_B: &[u8] = include_bytes!("../../engine/tests/roms/equiv_late_b.gb");
 pub const LATE_B_SYM: &[u8] = include_bytes!("../../engine/tests/roms/equiv_late_b.sym");
+/// A block moved by the d-pad (`equiv.inc`), and the same program with a
+/// start-up 105,008 T longer, so its LCD comes on later and its frames end
+/// at other times (`equiv_slow_start.asm`).
+pub const EQUIV_A: &[u8] = include_bytes!("../../engine/tests/roms/equiv_a.gb");
+pub const EQUIV_A_SYM: &[u8] = include_bytes!("../../engine/tests/roms/equiv_a.sym");
+pub const SLOW_START: &[u8] = include_bytes!("../../engine/tests/roms/equiv_slow_start.gb");
+pub const SLOW_START_SYM: &[u8] = include_bytes!("../../engine/tests/roms/equiv_slow_start.sym");
 
 /// Sets BG palette 0's color 0 to orange ($021F) on a CGB (`gbc_palette.asm`).
 pub const GBC_PALETTE: &[u8] = include_bytes!("../../engine/tests/roms/gbc_palette.gb");

@@ -6,7 +6,9 @@
 ;   equiv_fast.asm    an optimized rewrite (equiv_fast.inc): other code, other
 ;                     WRAM layout, other routine order, same behavior;
 ;   equiv_broken.asm  the same rewrite with an off-by-one in the right-edge
-;                     clamp, so the block can walk to column 20, off screen.
+;                     clamp, so the block can walk to column 20, off screen;
+;   equiv_slow_start.asm  the original with START_DELAY: a longer start-up,
+;                     so its LCD comes on later and every vblank is offset.
 ;
 ; The game: a solid block on the BG map at (wX, wY), columns 0-19 and rows
 ; 0-17. Each frame the main loop wakes from HALT on the vblank interrupt, reads
@@ -96,6 +98,14 @@ Init:
     ldh [rNR50], a
     ld a, $FF
     ldh [rNR51], a
+IF DEF(START_DELAY)
+    ld bc, START_DELAY  ; 28 T a pass: the LCD comes on that much later
+.delay:
+    dec bc
+    ld a, b
+    or c
+    jr nz, .delay
+ENDC
     ld a, $91       ; LCD and BG on, tiles at $8000, map at $9800
     ldh [rLCDC], a
     ld a, 1

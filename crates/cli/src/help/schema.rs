@@ -37,6 +37,8 @@ measure from: ADDR  to: ADDR  at?  start?: "boot"|"power-on"  iterations?: N  ma
         frames? instructions? ticks?: N  keys?
 equiv   frames: N  b?: {rom?: PATH, sym?: PATH, writes?: [WRITE]}  at?  from?
         keys?  ram?: [{at: ADDR, len: N}]  audio?: "writes"|"timed"|"off"
+        screen?: "on"|"off"  (result.equiv.divergence.frame_offset?:
+        {earlier: "a"|"b", ticks, t} when that frame ended sooner on one side)
 shot    shot: SHOT  since?
         SHOT = {path: PATH, scale?: 1-8, crop?: {x, y, width, height},
                 live?: bool, any_frame?: bool}

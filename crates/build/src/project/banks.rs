@@ -2,9 +2,12 @@
 //! type $00, $08 or $09) makes a cartridge that maps banks 0 and 1 only, so
 //! a section rgblink placed in bank 2 or later is unreachable, and the code
 //! that reads it reads bank 1's bytes. rgblink doesn't know the cartridge
-//! and says nothing; this reads the header byte and the `.map`.
+//! and says nothing; this reads the header byte and the `.map`. Such a
+//! cartridge maps 32 KB flat, so the build links it again as one bank
+//! (`rgblink --tiny`) when rgblink spreads it past bank 1, or can't fit
+//! bank 0.
 
-use gbcli_protocol::{BankOverflow, PlacedSection};
+use gbcli_protocol::{BankOverflow, Diagnostic, PlacedSection, Severity, Tool};
 
 /// Where the header keeps the cartridge type.
 const CART_TYPE: usize = 0x0147;
@@ -12,13 +15,28 @@ const CART_TYPE: usize = 0x0147;
 /// The cartridge types with no MBC: ROM only, ROM+RAM, ROM+RAM+battery.
 const NO_MBC: [u8; 3] = [0x00, 0x08, 0x09];
 
+/// rgblink's message for a ROM0 section that fits nowhere in bank 0
+/// (RGBDS 1.0.4: `Unable to place "NAME" (ROM0 section) anywhere`), as
+/// opposed to one that overlaps another at a fixed address.
+pub(super) fn bank_0_full(d: &Diagnostic) -> bool {
+    d.tool == Tool::Rgblink
+        && d.severity == Severity::Error
+        && d.message.starts_with("Unable to place ")
+        && d.message.ends_with(" (ROM0 section) anywhere")
+}
+
+/// Whether `rom`'s header names no MBC: a cartridge that maps 32 KB flat.
+pub(super) fn names_no_mbc(rom: &[u8]) -> bool {
+    rom.get(CART_TYPE).is_some_and(|t| NO_MBC.contains(t))
+}
+
 /// The overflow, when `rom`'s header names no MBC and `map` places
 /// sections past bank 1.
 pub(super) fn overflow(rom: &[u8], map: &str) -> Option<BankOverflow> {
-    let cart_type = *rom.get(CART_TYPE)?;
-    if !NO_MBC.contains(&cart_type) {
+    if !names_no_mbc(rom) {
         return None;
     }
+    let cart_type = rom[CART_TYPE];
     let sections = past_bank_1(map);
     (!sections.is_empty()).then_some(BankOverflow {
         cart_type,
@@ -105,5 +123,24 @@ mod tests {
         for kind in NO_MBC {
             assert!(overflow(&rom(kind), MAP).is_some());
         }
+    }
+
+    /// Only rgblink's "anywhere" for a ROM0 section is a full bank 0; an
+    /// overlap at a fixed address isn't, nor is the message from rgbasm.
+    #[test]
+    fn a_full_bank_0_is_rgblinks_rom0_section_placed_nowhere() {
+        let d = |tool, message: &str| Diagnostic::new(tool, Severity::Error, message);
+        let full = "Unable to place \"Sound Driver\" (ROM0 section) anywhere";
+        assert!(bank_0_full(&d(Tool::Rgblink, full)));
+        assert!(!bank_0_full(&d(Tool::Rgbasm, full)));
+        assert!(!bank_0_full(&d(
+            Tool::Rgblink,
+            "Unable to place \"A\" (ROM0 section) at address $0150: section overlaps with \"B\""
+        )));
+        assert!(!bank_0_full(&Diagnostic::new(
+            Tool::Rgblink,
+            Severity::Warning,
+            full
+        )));
     }
 }

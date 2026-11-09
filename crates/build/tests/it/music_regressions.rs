@@ -81,13 +81,32 @@ fn grown(extra: i32, salt: i32) -> String {
 /// The starter is ROM-only (no MBC) and each song is a ROMX section. Two
 /// songs that don't fit bank 1 together put one in bank 2, which a ROM-only
 /// cartridge can't map: hUGEDriver then read bank 1's bytes as the song,
-/// silently. The build now fails, naming the section past bank 1, and
-/// leaves no ROM.
+/// silently. The build now links such a ROM as one 32 KB bank, where the
+/// theme plays as it does alone (leaf Rf5UAe); past 32 KB it fails, naming
+/// the sections past bank 1, and leaves the last good ROM.
 #[test]
-fn songs_past_bank_1_of_a_rom_only_cart_fail_the_build() {
+fn songs_past_bank_1_of_a_rom_only_cart_link_as_one_bank_or_fail_past_32_kb() {
+    let (alone, options) = starter("regress-banks-alone");
+    fs::write(alone.path("demo/assets/music/theme.song"), grown(11, 0)).unwrap();
+    build(&rgbds(), &options).unwrap();
+    let theme = player::play(&fs::read(alone.path("demo/build/demo.gb")).unwrap(), 300);
+
     let (temp, options) = starter("regress-banks");
     fs::write(temp.path("demo/assets/music/theme.song"), grown(11, 0)).unwrap();
     fs::write(temp.path("demo/assets/music/big.song"), grown(16, 7)).unwrap();
+    let made = build(&rgbds(), &options).unwrap();
+    assert_eq!(made.diagnostics.len(), 1, "{:?}", made.diagnostics);
+    assert!(made.diagnostics[0].message.contains("one 32 KB bank"));
+    let rom = fs::read(temp.path("demo/build/demo.gb")).unwrap();
+    assert_eq!(rom.len(), 0x8000);
+    let both = player::play(&rom, 300);
+    assert!(theme.triggers.iter().any(|t| !t.is_empty()));
+    assert_eq!(
+        both.triggers, theme.triggers,
+        "the theme, as it plays alone"
+    );
+
+    fs::write(temp.path("demo/assets/music/more.song"), grown(16, 3)).unwrap();
     let err = build(&rgbds(), &options).unwrap_err();
     assert!(matches!(err, BuildError::Failed { .. }), "{err:?}");
     let body = err.body();
@@ -98,10 +117,19 @@ fn songs_past_bank_1_of_a_rom_only_cart_fail_the_build() {
         body.message
     );
     let overflow = body.result.unwrap().build.unwrap().overflow.unwrap();
-    let names: Vec<&str> = overflow.sections.iter().map(|s| s.name.as_str()).collect();
-    assert_eq!(names, ["song_theme Song Data"]);
-    assert_eq!(overflow.sections[0].bank, 2);
-    assert!(!temp.path("demo/build/demo.gb").exists());
+    let mut names: Vec<&str> = overflow.sections.iter().map(|s| s.name.as_str()).collect();
+    names.sort_unstable();
+    assert_eq!(names, ["song_big Song Data", "song_theme Song Data"]);
+    assert!(
+        overflow.sections.iter().all(|s| s.bank >= 2),
+        "{overflow:?}"
+    );
+    assert!(body.remedy.contains("MBC"), "{}", body.remedy);
+    assert_eq!(
+        fs::read(temp.path("demo/build/demo.gb")).unwrap(),
+        rom,
+        "the last good ROM stays"
+    );
 }
 
 /// Effect 600 calls routine 0. hUGEDriver's `fx_call_routine` reads a

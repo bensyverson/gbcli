@@ -1,10 +1,10 @@
 //! The register-write comparison that pins the emitter: two ROMs, each the
-//! starter (its player and hUGEDriver a3cbd0ce, without its text) with one
-//! song's data, run side by side by `equiv`, which compares every frame's
-//! sound-register writes. Our emitter's output is compared with hUGETracker
-//! 1.0.11's own RGBDS export (`scripts/music/export-reference.sh`): of every
-//! fetched sample over its whole song (the pre-release suite; three of them
-//! for 600 frames here too), and of the committed test song
+//! starter (its player and hUGEDriver a3cbd0ce) with one song's data, run
+//! side by side by `equiv`, which compares every frame's sound-register
+//! writes. Our emitter's output is compared with hUGETracker 1.0.11's own
+//! RGBDS export (`scripts/music/export-reference.sh`): of every fetched
+//! sample over its whole song (the pre-release suite; three of them for 600
+//! frames here too), and of the committed test song
 //! `data/every_effect_but_6xx.song` (CC0) over its whole length, against its
 //! committed export. Every comparison starts at the boot ROM's handover, so
 //! its frames are the song's. The harness is also checked on itself: storage
@@ -20,7 +20,7 @@ use gbcli_build::build;
 use gbcli_engine::equiv::{AudioCompare, Difference, EquivSpec, Verdict, compare};
 use gbcli_music::{Song, descriptor_for, parse_text, read_song, rgbds_asm};
 
-use common::{Temp, rgbds, starter, without_text};
+use common::{Temp, rgbds, starter};
 use player::booted;
 
 const TEST_SONG: &str = include_str!("../data/every_effect_but_6xx.song");
@@ -29,15 +29,11 @@ const TEST_SONG: &str = include_str!("../data/every_effect_but_6xx.song");
 const TEST_SONG_EXPORT: &str = "tests/data/every_effect_but_6xx.asm";
 
 /// The ROM the starter builds with `asm` as its only song data, assembled
-/// from `src/` and declaring `song_theme`. The starter's text is taken out:
-/// it writes no sound register, and its font would push a song near 16 KB
-/// past bank 1 of the starter's ROM-only cartridge (Chavez - Monkeys on
-/// Mars), which the build refuses.
+/// from `src/` and declaring `song_theme`.
 fn rom_with_asm(temp: &Temp, name: &str, asm: &[u8]) -> Vec<u8> {
     let (_keep, mut options) = starter(name);
     let project = options.project.clone();
     fs::remove_dir_all(project.join("assets/music")).unwrap();
-    without_text(&project);
     fs::write(project.join("src/song.asm"), asm).unwrap();
     options.display_base = temp.0.clone();
     build(&rgbds(), &options).unwrap();

@@ -39,5 +39,12 @@ into the rebuilt ROM only if nothing it was running moved; rom_changed (exit
 the new ROM instead, `gbcli run --session game --from boot` (breakpoints and
 watches kept, following their labels).
 
+Banks: a header with no MBC (the byte at $0147 is $00, $08 or $09, as the
+starter's is) maps 32 KB, banks 0 and 1, and nothing else. rgblink fills
+16 KB banks; when that puts a section past bank 1 or overflows bank 0, the
+build links again as one 32 KB bank (rgblink -t), and a warning row says
+so: any section may then sit anywhere in $0000-$7FFF. Past 32 KB it fails;
+name an MBC at $0147 (e.g. $01 for MBC1) and switch banks to grow.
+
 Constants other files assemble against (in ds, IF, REPT) belong in include/:
 an EXPORTed symbol is resolved only at link time, so it isn't constant there.

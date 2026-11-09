@@ -223,7 +223,9 @@ pub struct BuildMade {
 
 /// A link past 32 KB for a header that names no MBC (cartridge type $00,
 /// $08 or $09): such a cartridge maps banks 0 and 1 only, so whatever reads
-/// a section in bank 2 or later reads bank 1's bytes instead.
+/// a section in bank 2 or later reads bank 1's bytes instead. Set only when
+/// linking again as one 32 KB bank (`rgblink -t`) failed too; the sections
+/// are where the first link, in 16 KB banks, put them.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BankOverflow {
     /// The header's cartridge type byte ($0147).

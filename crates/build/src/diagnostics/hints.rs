@@ -35,6 +35,19 @@ const HINTS: &[Hint] = &[
                  one, replacing the fill up to its address and padding after it, e.g. \
                  `ds $08, $FF`, the routine, then `ds $40 - @, $FF`",
     },
+    Hint {
+        tool: Tool::Rgblink,
+        // `Unable to place "Sound Driver" (ROM0 section) anywhere`: bank 0
+        // is full or, for a header with no MBC, which the build then links
+        // as one bank (`project`), all 32 KB is.
+        fragment: "(ROM0 section) anywhere",
+        remedy: "the sections don't fit: bank 0 holds 16 KB ($0000-$3FFF), or 32 KB when the \
+                 header names no MBC and the build links it as one bank. Shrink them or move \
+                 what needn't be in bank 0 into ROMX (`SECTION \"Name\", ROMX`); past 32 KB, \
+                 name an MBC in the header (the byte at $0147, e.g. $01 for MBC1) and switch \
+                 banks (write the bank number to $2000) around the code that reads each \
+                 section past bank 1",
+    },
 ];
 
 /// What fixes `d`, ending with where, when its message has a hint.
@@ -120,6 +133,26 @@ mod tests {
             "Unable to place \"A\" (ROM0 section) at address $0150: section overlaps with \"B\"",
         );
         assert_eq!(remedy(&other), None);
+    }
+
+    /// rgblink can't place a ROM0 section anywhere when bank 0 (or, linked
+    /// as one bank, all 32 KB) is full: the hint names ROMX and an MBC.
+    #[test]
+    fn a_full_bank_0_names_romx_and_an_mbc() {
+        let d = Diagnostic::new(
+            Tool::Rgblink,
+            Severity::Error,
+            "Unable to place \"Sound Driver\" (ROM0 section) anywhere",
+        );
+        let text = remedy(&d).unwrap();
+        for needed in ["ROMX", "MBC", "$0147", "32 KB"] {
+            assert!(text.contains(needed), "{needed}: {text}");
+        }
+        let assembler = Diagnostic {
+            tool: Tool::Rgbasm,
+            ..d.clone()
+        };
+        assert_eq!(remedy(&assembler), None);
     }
 
     fn line(file: &str, line: u32, within: Option<&str>) -> gbcli_protocol::SourceLine {

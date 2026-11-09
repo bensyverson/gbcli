@@ -1,12 +1,14 @@
 //! `build`: a project built by convention, with no build file. Every `.asm`
 //! under the source directories is assembled with the include directories on
 //! rgbasm's include path, the objects are linked into one ROM with its `.sym`
-//! and `.map`, and rgbfix fixes the header. Each step's outputs are checked
-//! to exist and be non-empty (DX 10). The ROM, `.sym` and `.map` are written
-//! to a staging directory of this build's own beside the final ones and
-//! moved into place only when every step passed, the ROM last, so a failed
-//! build never leaves a stale or half-written ROM where a session would load
-//! it. Every tool runs with `--color never` and under a time limit.
+//! and `.map`, and rgbfix fixes the header. A header with no MBC that the
+//! link spills past bank 1, or past bank 0, is linked again as one 32 KB
+//! bank (`banks`). Each step's outputs are checked to exist and be
+//! non-empty (DX 10). The ROM, `.sym` and `.map` are written to a staging
+//! directory of this build's own beside the final ones and moved into place
+//! only when every step passed, the ROM last, so a failed build never leaves
+//! a stale or half-written ROM where a session would load it. Every tool
+//! runs with `--color never` and under a time limit.
 
 mod banks;
 mod layout;
@@ -277,41 +279,45 @@ pub fn build(tools: &Toolchain, options: &BuildOptions) -> Result<BuildMade, Bui
         .iter()
         .map(|(_, p)| staging.path().join(p.file_name().expect("a file name")))
         .collect();
-    // `-p 0xFF`: every byte no section holds (gaps, unused banks) is $FF,
-    // as erased flash is, not rgblink's $00; rgbfix pads the tail the same.
-    // A flash save carried across a rebuild relies on it: it is kept in a
-    // sector the build leaves all $FF (`FlashChip::revert_over_code`).
-    let mut args = ["-p", "0xFF"].map(String::from).to_vec();
-    for (flag, path) in ["-o", "-n", "-m"].iter().zip(&staged) {
-        args.extend([flag.to_string(), path.display().to_string()]);
-    }
-    args.extend(objects.iter().map(|o| o.display().to_string()));
-    let linked = run.step(
-        Tool::Rgblink,
-        &args,
-        None,
-        &staged.iter().collect::<Vec<_>>(),
-    )?;
-    let fixed = linked && {
-        let mut args = ["-v", "-p", "0xFF"].map(String::from).to_vec();
-        if options.target == BuildTarget::Gbc {
-            // Dual mode: $0143 = $80. `-C` (GBC only, $C0) isn't offered.
-            args.push("-c".into());
-        }
-        let rom = staged[0].display().to_string();
-        run.step(
-            Tool::Rgbfix,
-            &[args, vec![rom]].concat(),
-            None,
-            &[&staged[0]],
-        )?
+    let before_link = run.made.diagnostics.len();
+    let linked = run.link(&objects, &staged, options.target, Banks::Split)?;
+    let spill = if linked {
+        run.overflow(&staged[0], &staged[2])?.map(Spill::PastBank1)
+    } else {
+        run.made.diagnostics[before_link..]
+            .iter()
+            .any(banks::bank_0_full)
+            .then_some(Spill::Bank0Full)
     };
-    if !fixed {
-        return Err(run.failed());
-    }
-    run.check_banks(&staged[0], &staged[2])?;
-    if run.made.overflow.is_some() {
-        return Err(run.failed());
+    match spill {
+        None if !linked => return Err(run.failed()),
+        None => {}
+        Some(spill) => {
+            // A cartridge with no MBC maps one flat 32 KB, which is how
+            // `--tiny` links. Only a build that spilled pays this second
+            // link, so a build that fits is linked as it always was. A full
+            // bank 0 left no ROM to read the header from, so the one-bank
+            // ROM's header decides; under an MBC, the first link's error
+            // stands. Only the rows of the link that made the ROM are kept.
+            let first = run.made.diagnostics.split_off(before_link);
+            let tiny = run.link(&objects, &staged, options.target, Banks::Tiny)?
+                && (matches!(spill, Spill::PastBank1(_)) || run.names_no_mbc(&staged[0])?);
+            if tiny {
+                run.made.diagnostics.push(Diagnostic::new(
+                    Tool::Rgblink,
+                    Severity::Warning,
+                    tiny_message(&spill),
+                ));
+            } else {
+                run.made.diagnostics.truncate(before_link);
+                if let Spill::PastBank1(overflow) = spill {
+                    run.error(Tool::Rgblink, None, overflow_message(&overflow));
+                    run.made.overflow = Some(overflow);
+                }
+                run.made.diagnostics.extend(first);
+                return Err(run.failed());
+            }
+        }
     }
     // The `.sym` and `.map` first and the ROM last: the ROM's arrival marks
     // a complete build, so whatever loads it finds the `.sym` it was linked
@@ -333,6 +339,13 @@ pub fn build(tools: &Toolchain, options: &BuildOptions) -> Result<BuildMade, Bui
     outputs.rotate_right(1);
     run.made.outputs = outputs;
     Ok(run.made)
+}
+
+fn read(path: &Path) -> Result<Vec<u8>, BuildError> {
+    fs::read(path).map_err(|error| BuildError::Io {
+        path: path.to_path_buf(),
+        error,
+    })
 }
 
 fn create_dir(dir: &Path) -> Result<(), BuildError> {
@@ -425,21 +438,61 @@ impl Run<'_> {
         Ok(true)
     }
 
-    /// Records the overflow, with an error naming it, when the header names
-    /// no MBC and the link at `rom` (its map at `map`) went past bank 1.
-    fn check_banks(&mut self, rom: &Path, map: &Path) -> Result<(), BuildError> {
-        let read = |path: &Path| {
-            fs::read(path).map_err(|error| BuildError::Io {
-                path: path.to_path_buf(),
-                error,
-            })
-        };
-        let map_text = String::from_utf8_lossy(&read(map)?).into_owned();
-        if let Some(overflow) = banks::overflow(&read(rom)?, &map_text) {
-            self.error(Tool::Rgblink, None, overflow_message(&overflow));
-            self.made.overflow = Some(overflow);
+    /// Links `objects` into `staged` (the ROM, `.sym` and `.map`) and fixes
+    /// the ROM's header; whether both steps passed.
+    fn link(
+        &mut self,
+        objects: &[PathBuf],
+        staged: &[PathBuf],
+        target: BuildTarget,
+        banks: Banks,
+    ) -> Result<bool, BuildError> {
+        // `-p 0xFF`: every byte no section holds (gaps, unused banks) is $FF,
+        // as erased flash is, not rgblink's $00; rgbfix pads the tail the
+        // same. A flash save carried across a rebuild relies on it: it is
+        // kept in a sector the build leaves all $FF
+        // (`FlashChip::revert_over_code`).
+        let mut args = ["-p", "0xFF"].map(String::from).to_vec();
+        if banks == Banks::Tiny {
+            // rgblink's tiny mode: ROMX sections are placed as ROM0.
+            args.push("-t".into());
         }
-        Ok(())
+        for (flag, path) in ["-o", "-n", "-m"].iter().zip(staged) {
+            args.extend([flag.to_string(), path.display().to_string()]);
+        }
+        args.extend(objects.iter().map(|o| o.display().to_string()));
+        if !self.step(
+            Tool::Rgblink,
+            &args,
+            None,
+            &staged.iter().collect::<Vec<_>>(),
+        )? {
+            return Ok(false);
+        }
+        let mut args = ["-v", "-p", "0xFF"].map(String::from).to_vec();
+        if target == BuildTarget::Gbc {
+            // Dual mode: $0143 = $80. `-C` (GBC only, $C0) isn't offered.
+            args.push("-c".into());
+        }
+        let rom = staged[0].display().to_string();
+        self.step(
+            Tool::Rgbfix,
+            &[args, vec![rom]].concat(),
+            None,
+            &[&staged[0]],
+        )
+    }
+
+    /// The overflow, when the header names no MBC and the link at `rom`
+    /// (its map at `map`) went past bank 1.
+    fn overflow(&self, rom: &Path, map: &Path) -> Result<Option<BankOverflow>, BuildError> {
+        let map_text = String::from_utf8_lossy(&read(map)?).into_owned();
+        Ok(banks::overflow(&read(rom)?, &map_text))
+    }
+
+    /// Whether the header of the ROM at `rom` names no MBC.
+    fn names_no_mbc(&self, rom: &Path) -> Result<bool, BuildError> {
+        Ok(banks::names_no_mbc(&read(rom)?))
     }
 
     /// A file as a tool printed it (relative to the project, where it ran),
@@ -463,7 +516,16 @@ impl Run<'_> {
     }
 }
 
-fn overflow_message(o: &BankOverflow) -> String {
+/// How rgblink lays out ROMX: in 16 KB banks from bank 1 on, or with
+/// `--tiny`, as one flat 32 KB bank (ROMX sections placed as ROM0).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Banks {
+    Split,
+    Tiny,
+}
+
+/// The sections `o` places past bank 1, each with where and how big.
+fn past_bank_1(o: &BankOverflow) -> String {
     let sections: Vec<String> = o
         .sections
         .iter()
@@ -475,9 +537,7 @@ fn overflow_message(o: &BankOverflow) -> String {
         })
         .collect();
     format!(
-        "the header names no MBC (cartridge type ${:02X}), so the cartridge maps banks 0 and 1 \
-         only, but the link placed {} past bank 1: {}",
-        o.cart_type,
+        "{} past bank 1: {}",
         match sections.len() {
             1 => "a section".to_string(),
             n => format!("{n} sections"),
@@ -486,7 +546,46 @@ fn overflow_message(o: &BankOverflow) -> String {
     )
 }
 
-/// What to do about a link past bank 1 on a cartridge with no MBC.
+/// Why a build whose header names no MBC failed: it doesn't fit in 32 KB
+/// even linked as one bank.
+fn overflow_message(o: &BankOverflow) -> String {
+    format!(
+        "the header names no MBC (cartridge type ${:02X}), so the cartridge maps banks 0 and 1 \
+         (32 KB) only, and the code and data don't fit in 32 KB even linked as one bank; \
+         linked in 16 KB banks, they put {}",
+        o.cart_type,
+        past_bank_1(o)
+    )
+}
+
+/// Why the first link of a build whose header may name no MBC is linked
+/// again as one bank.
+enum Spill {
+    /// The header names no MBC and rgblink placed sections past bank 1.
+    PastBank1(BankOverflow),
+    /// rgblink couldn't fit the ROM0 sections in bank 0, so it wrote no ROM.
+    Bank0Full,
+}
+
+/// The warning row for a build linked again as one bank.
+fn tiny_message(spill: &Spill) -> String {
+    let why = match spill {
+        Spill::PastBank1(o) => format!(
+            "the header names no MBC (cartridge type ${:02X}) and in 16 KB banks the link put {}",
+            o.cart_type,
+            past_bank_1(o)
+        ),
+        Spill::Bank0Full => "the header names no MBC and in 16 KB banks the ROM0 sections \
+                             didn't fit in bank 0"
+            .to_string(),
+    };
+    format!(
+        "linked as one 32 KB bank (rgblink -t), since {why}; ROM0 and ROMX sections alike \
+         may sit anywhere in $0000-$7FFF"
+    )
+}
+
+/// What to do about a link past 32 KB on a cartridge with no MBC.
 const OVERFLOW_REMEDY: &str = "shrink the sections until everything fits in 32 KB (banks 0 and \
      1), or name an MBC in the header (the byte at $0147, e.g. $01 for MBC1) and switch banks \
      (write the bank number to $2000) around the code that reads each section past bank 1";

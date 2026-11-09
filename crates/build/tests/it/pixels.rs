@@ -300,3 +300,33 @@ fn an_output_that_cant_be_written_is_io_failed() {
         body.message
     );
 }
+
+/// With several outputs, one that can't be written leaves none written,
+/// as a file that doesn't read does, and no temporary file either.
+#[test]
+fn an_output_that_cant_be_written_leaves_the_others_unwritten() {
+    let temp = Temp::new("pixels-io-several");
+    fs::write(temp.path("hero.pixels"), EXAMPLE).unwrap();
+    let body = pixels(
+        &temp.0,
+        &PixelsArgs {
+            text: Some("out.pixels".into()),
+            png: Some("no/such/dir/x.png".into()),
+            preview: Some("big.png".into()),
+            ..args("hero.pixels")
+        },
+    )
+    .unwrap_err();
+    assert_eq!(body.code, ErrorCode::IoFailed);
+    assert!(
+        body.message.starts_with("writing no/such/dir/x.png: "),
+        "{}",
+        body.message
+    );
+    let mut left: Vec<String> = fs::read_dir(&temp.0)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    left.sort();
+    assert_eq!(left, ["hero.pixels"]);
+}

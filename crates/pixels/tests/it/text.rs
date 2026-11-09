@@ -1,7 +1,7 @@
 //! What pixel text paints: blocks in file order, fill, keep, tiles and
 //! maps, comments, and the counts an image reports.
 
-use gbcli_pixels::{EXAMPLE, Palettes, Value, frame_size};
+use gbcli_pixels::{EXAMPLE, Palettes, Value, extension_of, frame_size, is_text_name, size_word};
 
 use super::{draw, parse, raster};
 
@@ -186,6 +186,35 @@ fn frame_sizes_come_from_the_name_as_the_build_reads_them() {
     assert_eq!(frame_size("car.png"), None);
     assert_eq!(frame_size("town.dmg.pixels"), None);
     assert_eq!(frame_size("odd.16x.pixels"), None);
+}
+
+#[test]
+fn a_sheets_dmg_version_has_the_sheets_frame_size() {
+    assert_eq!(frame_size("hero.16x16.dmg.pixels"), Some((16, 16)));
+    assert_eq!(frame_size("hero.16x24.DMG.png"), Some((16, 24)));
+    assert_eq!(frame_size("hero.16x16.PIXELS"), Some((16, 16)));
+    assert_eq!(frame_size("hero.dmg.png"), None);
+}
+
+#[test]
+fn pixel_text_is_named_by_its_extension_in_any_case() {
+    for name in ["a.pixels", "a.PIXELS", "hero.16x16.Pixels"] {
+        assert!(is_text_name(name), "{name}");
+        assert_eq!(extension_of(name), "pixels", "{name}");
+    }
+    for name in ["a.png", "a.PNG", "pixels", "a.pixel"] {
+        assert!(!is_text_name(name), "{name}");
+        assert_eq!(extension_of(name), "png", "{name}");
+    }
+}
+
+#[test]
+fn a_frame_size_word_is_width_x_height_in_digits() {
+    assert_eq!(size_word("16x24"), Some((16, 24)));
+    assert_eq!(size_word("8x8"), Some((8, 8)));
+    for bad in ["16x", "x16", "16X16", "16x16x2", "-8x8", "a8x8", ""] {
+        assert_eq!(size_word(bad), None, "{bad}");
+    }
 }
 
 #[test]

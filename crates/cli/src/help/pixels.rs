@@ -46,11 +46,14 @@ a-z, A-Z and punctuation, lightest first, so four shades read as 0-3; from
 text, your legend is kept and dmg/palette entries stay unresolved. Rows come
 a block per frame when the name gives a frame size (hero.16x16.pixels),
 else a block per 8-row band. --tiles writes the distinct tiles keyed 00, 01,
-… in first use and a map 0 0, which reads as the image's tile numbers: use
-it for large backgrounds. Every block header is unique, so an edit can
-anchor on it. PALETTE N and dmg N resolve through the assets/palettes.txt
-of the project the file sits in, or --palettes FILE; with no dmg line,
-dmg N is refused (add `dmg: #ffffff #aaaaaa #555555 #000000`).
+… in first use and a map 0 0: use it for large backgrounds. Tiles differ by
+legend character, so the keys are the build's tile numbers (TownTilemap's
+bytes) until the build merges two: colors equal in RGB555 (#ffffff and
+#fefefe) are one color to it, and on the DMG, colors of one DMG shade draw
+alike. Every block header is unique, so an edit can anchor on it. PALETTE
+N and dmg N resolve through the assets/palettes.txt of the project the file
+sits in, or --palettes FILE; with no dmg line, dmg N is refused (add
+`dmg: #ffffff #aaaaaa #555555 #000000`).
 
 A file that doesn't read is pixels_unreadable (exit 4), with a problem row
 giving its line and column (a PNG: its pixel) and a remedy; nothing is

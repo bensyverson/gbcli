@@ -314,6 +314,13 @@ fn every_parse_error_is_located_and_says_what_to_do() {
             "this map block has no rows",
             "draw its rows under it, before a blank line",
         ),
+        case(
+            "an empty indented block, at its header word",
+            with("fill 0\n\n   rows\n\n"),
+            (6, 4),
+            "this rows block has no rows",
+            "draw its rows under it, before a blank line",
+        ),
         // Pixel rows.
         case(
             "a row of two words",
@@ -327,6 +334,27 @@ fn every_parse_error_is_located_and_says_what_to_do() {
             with(&format!("rows 0 0\n{row8}rows 0 1\n{row8}")),
             (6, 1),
             "`rows` starts a block, but the block above hasn't ended",
+            BLANK,
+        ),
+        case(
+            "a color line inside a block",
+            with(&format!("rows\n{row8}color 1 #000000\n{row8}")),
+            (6, 1),
+            "`color` is a line of its own, not a row, but the block above hasn't ended",
+            BLANK,
+        ),
+        case(
+            "a fill line inside a block",
+            with(&format!("rows\n{row8}fill 0\n{row8}")),
+            (6, 1),
+            "`fill` is a line of its own, not a row, but the block above hasn't ended",
+            BLANK,
+        ),
+        case(
+            "a size line inside a block",
+            with(&format!("rows\n{row8}size 8 8\n{row8}")),
+            (6, 1),
+            "`size` is a line of its own, not a row, but the block above hasn't ended",
             BLANK,
         ),
         case(
@@ -523,4 +551,79 @@ fn a_value_that_doesnt_resolve_is_located_to_it() {
         none.expect_err("no palettes").message,
         "no palette forest: the palettes define none"
     );
+}
+
+#[test]
+fn positions_count_characters_after_multibyte_text_and_a_bom() {
+    // `é` is a bad legend character at column 2 of the row: a byte count
+    // would say 3.
+    let text = format!("\u{FEFF}{H}rows\n0é000000\n00000000\n");
+    let e = parse_text(&text).unwrap_err();
+    assert_eq!((e.line, e.column), (5, 2), "{e}");
+    // A tab counts as one column, as the docs say.
+    let text = format!("{H}rows\n\t000x0000\n00000000\n");
+    let e = parse_text(&text).unwrap_err();
+    assert_eq!((e.line, e.column), (5, 5), "{e}");
+}
+
+/// Malformed input the table above doesn't pin word for word: each is
+/// refused, without a panic, at a real line and column.
+#[test]
+fn malformed_input_is_refused_at_a_position() {
+    let tile8 = "00000000\n".repeat(8);
+    let cases: &[(&str, String)] = &[
+        ("empty", String::new()),
+        ("only a BOM", "\u{FEFF}".into()),
+        ("ragged rows", with("rows\n00000000\n0000000\n")),
+        (
+            "ragged map",
+            with(&format!("tile a\n{tile8}\nmap\na\na a\n")),
+        ),
+        ("unknown glyph", with("rows\n0000z000\n00000000\n")),
+        ("duplicate glyph", with("color 0 #000\nfill 0\n")),
+        ("short image", with("rows\n00000000\n")),
+        ("too wide", with("rows\n000000000\n000000000\n")),
+        ("too tall", with("rows\n00000000\n00000000\n00000000\n")),
+        (
+            "huge size",
+            "format gbcli-pixels 1\nsize 99999999999999999999 1\n".into(),
+        ),
+        ("zero size", "format gbcli-pixels 1\nsize 0 1\n".into()),
+        ("lone CR line endings", H.replace('\n', "\r")),
+        ("NUL glyph", with("rows\n0000\u{0}000\n00000000\n")),
+        (
+            "space as glyph",
+            "format gbcli-pixels 1\nsize 1 1\ncolor   #fff\n".into(),
+        ),
+        ("format twice", with("format gbcli-pixels 1\n")),
+        ("format 2", "format gbcli-pixels 2\n".into()),
+        ("tile 9 rows", with(&format!("tile a\n{tile8}00000000\n"))),
+        (
+            "tile 7 rows",
+            with(&format!("tile a\n{}\nfill 0\n", "00000000\n".repeat(7))),
+        ),
+        (
+            "map off right",
+            with(&format!("tile a\n{tile8}\nmap 1 0\na\n")),
+        ),
+        (
+            "keep fill",
+            "format gbcli-pixels 1\nsize 1 1\ncolor k keep\nfill k\n".into(),
+        ),
+        (
+            "keep only",
+            "format gbcli-pixels 1\nsize 1 1\ncolor k keep\nrows\nk\n".into(),
+        ),
+        ("palette entry 4", with("color 1 dmg 4\n")),
+        ("color #12345", with("color 1 #12345\n")),
+    ];
+    for (name, text) in cases {
+        let r = std::panic::catch_unwind(|| parse_text(text));
+        let r = r.unwrap_or_else(|_| panic!("{name}: panicked"));
+        let e = match r {
+            Ok(p) => panic!("{name}: accepted: {p:?}"),
+            Err(e) => e,
+        };
+        assert!(e.line >= 1 && e.column >= 1, "{name}: {e}");
+    }
 }

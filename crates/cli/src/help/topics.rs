@@ -468,6 +468,43 @@ mod tests {
         assert!(schema.contains("objects?: \"8x8\"|\"8x16\""), "{schema}");
     }
 
+    /// Review pix15 and img15: without the objects line, sheets cut in
+    /// both sizes warn; a .pixels name is found in any case; a hardware
+    /// problem's line= is the block that drew the tile's colors.
+    #[test]
+    fn the_images_topic_says_mixed_object_sizes_warn_and_how_pixel_text_is_located() {
+        let text = Topic::from_name("images").expect("an images topic").text();
+        for needle in [
+            "sheets cut in both sizes warn",
+            "in any case, as .png",
+            "drew the most of the first tile's colors",
+        ] {
+            assert!(text.contains(needle), "{needle} missing:\n{text}");
+        }
+        // Review of 448a716: shared_shade warns once a shade in one image
+        // (shared::find), once an image only under --gbc (per tile).
+        let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        for needle in [
+            "in a plain build, warns once a shade",
+            "Indexed art (and a .dmg.png) warns once a shade",
+        ] {
+            assert!(flat.contains(needle), "{needle} missing:\n{text}");
+        }
+        assert!(text.lines().all(|l| l.chars().count() <= 80), "{text}");
+    }
+
+    /// Review pix15 item 9: --tiles keys are legend tiles, which the build
+    /// may merge (RGB555, one DMG shade), so the help doesn't call them the
+    /// build's tile numbers outright.
+    #[test]
+    fn the_pixels_topic_says_when_tile_keys_are_the_builds_tile_numbers() {
+        let text = Topic::from_name("pixels").expect("a pixels topic").text();
+        for needle in ["RGB555", "#fefefe", "one DMG shade"] {
+            assert!(text.contains(needle), "{needle} missing:\n{text}");
+        }
+        assert!(text.lines().all(|l| l.chars().count() <= 80), "{text}");
+    }
+
     /// "GBC" is the user-facing name (Ben, 2026-11-07); the topic maps it to
     /// Pan Docs' CGB and to rgbfix's -c (dual mode) and -C (GBC only).
     #[test]

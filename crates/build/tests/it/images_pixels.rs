@@ -220,3 +220,164 @@ fn a_dmg_version_and_an_assignment_may_name_pixel_text() {
     assert_eq!(p.limit, ImageLimit::PaletteFile);
     assert!(p.remedy.contains("bg/sky.pixels"), "{}", p.remedy);
 }
+
+const WHITE_TEXT: &str = "format gbcli-pixels 1\nsize 8 8\ncolor 0 #fff\nfill 0\n";
+
+fn layout_error(temp: &Temp) -> (String, String) {
+    match demo_assets(temp, BuildTarget::Dmg) {
+        Err(gbcli_build::AssetsError::Build(BuildError::Layout { message, remedy })) => {
+            (message, remedy)
+        }
+        other => panic!("expected a layout error, got {other:?}"),
+    }
+}
+
+/// A hardware problem names the line that drew the tile's colors: here
+/// the rows block on line 10 drew all five colors of tile 1,0, but not its
+/// top-left pixel, which `fill` (line 8) drew.
+#[test]
+fn a_hardware_problem_names_the_block_that_drew_the_colors_not_the_fill_under_its_corner() {
+    let temp = Temp::new("pixels-corner");
+    fs::create_dir_all(temp.path("demo/assets/bg")).unwrap();
+    let text = "\
+format gbcli-pixels 1
+size 16 8
+color 0 #ffffff
+color 1 #ff0000
+color 2 #00ff00
+color 3 #0000ff
+color 4 #000000
+fill 0
+
+rows 9 0
+1234000
+";
+    fs::write(temp.path("demo/assets/bg/five.pixels"), text).unwrap();
+    let made = match demo_assets(&temp, BuildTarget::Gbc) {
+        Err(gbcli_build::AssetsError::Failed(made)) => made.images,
+        other => panic!("expected problems, got {other:?}"),
+    };
+    let p = made
+        .problems
+        .iter()
+        .find(|p| p.limit == ImageLimit::GbcTileColors)
+        .unwrap_or_else(|| panic!("{:#?}", made.problems));
+    assert_eq!(p.tiles[0], gbcli_protocol::TileAt { x: 1, y: 0 });
+    assert_eq!(p.line, Some(10));
+}
+
+/// `.PIXELS` is found as `.PNG` is, in any case, and is still one of two
+/// forms beside a PNG of its name.
+#[test]
+fn an_upper_case_pixels_extension_is_found_like_an_upper_case_png() {
+    let temp = Temp::new("pixels-case");
+    fs::create_dir_all(temp.path("demo/assets/bg")).unwrap();
+    write_png(&temp.path("demo/assets/bg/a.PNG"), 8, 8, |_, _| WHITE);
+    fs::write(temp.path("demo/assets/bg/b.PIXELS"), WHITE_TEXT).unwrap();
+    let made = demo_assets(&temp, BuildTarget::Dmg).unwrap_or_else(|e| panic!("{e:?}"));
+    let names: Vec<&str> = made.images.iter().map(|i| i.source.as_str()).collect();
+    assert_eq!(names, ["demo/assets/bg/a.PNG", "demo/assets/bg/b.PIXELS"]);
+    fs::write(temp.path("demo/assets/bg/a.Pixels"), WHITE_TEXT).unwrap();
+    let (message, _) = layout_error(&temp);
+    assert_eq!(
+        message,
+        "demo/assets/bg/a.PNG and demo/assets/bg/a.Pixels are two forms of one image"
+    );
+}
+
+/// A `.DMG.PIXELS` beside its color image is its DMG version, as
+/// `.DMG.PNG` is, and an assignment may name `.PIXELS`.
+#[test]
+fn an_upper_case_dmg_version_and_assignment_of_pixel_text_are_read() {
+    let temp = Temp::new("pixels-case-dmg");
+    fs::create_dir_all(temp.path("demo/assets/bg")).unwrap();
+    fs::write(temp.path("demo/assets/bg/town.PIXELS"), WHITE_TEXT).unwrap();
+    fs::write(temp.path("demo/assets/bg/town.DMG.PIXELS"), WHITE_TEXT).unwrap();
+    fs::write(temp.path("demo/assets/bg/sky.PIXELS"), WHITE_TEXT).unwrap();
+    fs::write(
+        temp.path("demo/assets/palettes.txt"),
+        "sea: #fff #aaa #555 #000\nbg/sky.PIXELS = sea\n",
+    )
+    .unwrap();
+    let made = demo_assets(&temp, BuildTarget::Dmg).unwrap_or_else(|e| panic!("{e:?}"));
+    let names: Vec<&str> = made.images.iter().map(|i| i.source.as_str()).collect();
+    assert_eq!(
+        names,
+        ["demo/assets/bg/sky.PIXELS", "demo/assets/bg/town.PIXELS"]
+    );
+}
+
+/// An orphan DMG version in pixel text names the color image in both
+/// forms, since either serves.
+#[test]
+fn an_orphan_dmg_version_names_either_form_of_its_color_image() {
+    let temp = Temp::new("pixels-orphan");
+    fs::create_dir_all(temp.path("demo/assets/bg")).unwrap();
+    fs::write(temp.path("demo/assets/bg/town.dmg.pixels"), WHITE_TEXT).unwrap();
+    let (message, _) = layout_error(&temp);
+    assert_eq!(
+        message,
+        "demo/assets/bg/town.dmg.pixels is a DMG version, but there is no color image \
+         demo/assets/bg/town.png or demo/assets/bg/town.pixels beside it"
+    );
+}
+
+/// A rename a remedy offers keeps the form the file is in.
+#[test]
+fn a_name_remedy_for_pixel_text_offers_a_pixels_name() {
+    let temp = Temp::new("pixels-rename");
+    fs::create_dir_all(temp.path("demo/assets/sprites")).unwrap();
+    fs::write(temp.path("demo/assets/sprites/hero.big.pixels"), WHITE_TEXT).unwrap();
+    let (_, remedy) = layout_error(&temp);
+    assert_eq!(
+        remedy,
+        "rename it to hero.WxH.pixels, e.g. hero.16x16.pixels, or drop the size to make the \
+         whole sheet one frame"
+    );
+    fs::remove_file(temp.path("demo/assets/sprites/hero.big.pixels")).unwrap();
+    fs::write(temp.path("demo/assets/sprites/2hero.pixels"), WHITE_TEXT).unwrap();
+    let (_, remedy) = layout_error(&temp);
+    assert_eq!(remedy, "rename it, e.g. to hero.pixels");
+}
+
+/// A sheet's hardware remedies offer a rename in the sheet's own form.
+#[test]
+fn a_pixel_text_sheets_frame_remedy_offers_a_pixels_name() {
+    let temp = Temp::new("pixels-frame-rename");
+    fs::create_dir_all(temp.path("demo/assets/sprites")).unwrap();
+    // 24 wide is not whole 16-wide frames.
+    let text = "format gbcli-pixels 1\nsize 24 16\ncolor . clear\ncolor 0 #000\nfill .\n\n\
+                rows\n0\n";
+    fs::write(temp.path("demo/assets/sprites/hero.16x16.pixels"), text).unwrap();
+    let made = match demo_assets(&temp, BuildTarget::Dmg) {
+        Err(gbcli_build::AssetsError::Failed(made)) => made.images,
+        other => panic!("expected problems, got {other:?}"),
+    };
+    let p = made
+        .problems
+        .iter()
+        .find(|p| p.limit == ImageLimit::FrameGrid)
+        .unwrap_or_else(|| panic!("{:#?}", made.problems));
+    assert!(p.remedy.contains("hero.8x16.pixels"), "{}", p.remedy);
+    assert!(!p.remedy.contains(".png"), "{}", p.remedy);
+}
+
+/// A malformed palette file stops the conversion, but pixel text that
+/// doesn't parse is still reported beside it.
+#[test]
+fn a_bad_palette_file_keeps_the_pixel_text_problems() {
+    let temp = Temp::new("pixels-bad-palettes");
+    fs::create_dir_all(temp.path("demo/assets/bg")).unwrap();
+    fs::write(temp.path("demo/assets/bg/a.pixels"), TYPO).unwrap();
+    fs::write(
+        temp.path("demo/assets/palettes.txt"),
+        "this is not a palette\n",
+    )
+    .unwrap();
+    let made = match demo_assets(&temp, BuildTarget::Dmg) {
+        Err(gbcli_build::AssetsError::Failed(made)) => made.images,
+        other => panic!("expected problems, got {other:?}"),
+    };
+    let limits: Vec<ImageLimit> = made.problems.iter().map(|p| p.limit).collect();
+    assert_eq!(limits, [ImageLimit::PaletteFile, ImageLimit::PixelsText]);
+}

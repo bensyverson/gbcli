@@ -77,6 +77,7 @@ gbcli pixels FILE [--text PATH] [--tiles] [--png PATH] [--preview PATH]
   - colors are written `#rrggbb` at 8 bits, so nothing is lost.
 - **Canonical text from text** keeps the author's legend (characters, `dmg N` and palette references unresolved). It flattens `fill`, `keep` and overlaps.
 - **The canonical layout** is rows: one block per frame when the name gives a frame size, otherwise one block per 8-row band. Each block header is unique, so a block can be edited by its header. **`--tiles`** writes tiles and a map instead. The keys are hexadecimal in first-use order (`00`, `01`, …), so the map reads as the image's own tile numbers (`TownTilemap`'s bytes, as the build counts them).
+  > **Corrected (2026-11-09, leaf D2zD2P):** the keys count tiles by legend character, so they are the build's tile numbers only until the build merges two: colors equal in RGB555 (`#ffffff`, `#fefefe`) are one color to it, and on the DMG colors of one shade draw alike. Merging like the build would need the target and the project's shading, and would lose the text's 8 bits, so the claim was made honest instead (help pixels says so); `tiles=` counts the same way.
 - **`--png PATH`** writes the image at 1:1, the PNG the build would read. **`--preview PATH`** writes it four times larger with an 8x8 grid, for looking only; it never belongs in `assets/`.
 - **`--palettes FILE`** resolves `PALETTE N` and `dmg N`. The default is the `assets/palettes.txt` of the project the file sits in. When a reference can't be resolved, the verb refuses and names the flag.
 - **Round trip.** PNG to text to PNG is pixel for pixel. Text to PNG to text gives the canonical text with a made legend; it is the same picture, not the same bytes.
@@ -102,6 +103,8 @@ problem image=assets/bg/meadow.pixels limit=pixels_text severity=error line=52 c
 ```
 
 **Hardware problems on a text image** keep `tiles=x,y` and also give `line=`, pointing at the map cell or the row block that drew the first tile named. The field is already there, and it is the one thing a PNG can't offer (open question 5).
+
+> **Refined (2026-11-09, leaf D2zD2P):** "the block that drew the first tile" was read from the tile's top-left pixel, so a `fill` under that corner won over the block that drew the colors. `line=` is now the line that drew the most of the tile's legend characters, the later on a tie (`pipeline::drew`).
 
 ## Large images: a 256x256 background
 

@@ -103,7 +103,10 @@ pub enum ImageLimit {
     SizeMultiple8,
     /// 8x16 objects pair tiles vertically: a sheet's height is a multiple
     /// of 16, and so is a frame's unless it is 8x8 objects' (a multiple of
-    /// 8 but not 16; [`ObjectSize`]).
+    /// 8 but not 16; [`ObjectSize`]). Also a warning with no `image` when
+    /// the project sets no object size and its sheets are cut in both
+    /// (LCDC bit 2 shows one at a time); `count` 2, `max` 1, the message
+    /// naming the sheets of each size.
     #[serde(rename = "obj_pair_8x16")]
     ObjPair8x16,
     /// Color 0 of an object never draws; a sheet with no transparent pixel
@@ -238,8 +241,8 @@ pub struct ImageProblem {
     pub tiles: Vec<TileAt>,
     /// The line at fault, 1-based, when the problem is in a text file
     /// (`palette_file`, `pixels_text`); for a hardware limit a pixel text
-    /// image breaks, the line of the block (or map row) that drew the first
-    /// tile in `tiles`.
+    /// image breaks, the line of the block (or map row, or `fill`) that drew
+    /// the most of the first tile's legend characters, the later on a tie.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub line: Option<u32>,
     /// The column at fault, 1-based in characters (`pixels_text`); never 0,

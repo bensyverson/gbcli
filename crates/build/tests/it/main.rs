@@ -22,6 +22,7 @@ mod images_object_size;
 mod images_palette;
 mod images_palette_rules;
 mod images_pixels;
+mod images_pixels_references;
 mod images_png_encodings;
 mod images_remedies;
 mod images_review_8x8;

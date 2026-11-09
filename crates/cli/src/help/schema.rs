@@ -124,14 +124,19 @@ tile_map (no slot without --gbc); a --gbc build fills gbc for every image.
             sheets, palettes in file order, OBPs lowest first; each is the
             palette reordered by the OBP, entry i the color of the shade
             OBP gives index i, as the GBC has no OBP; then packed ones)
-  problems[].limit also: gbc_palettes, gbc_tile_colors, dmg_override_size
+  problems[].limit also: gbc_palettes, gbc_tile_colors, dmg_override_size,
+            pixels_text (gbcli help images lists them all)
+  problems[].line?: N, column?: N  (1-based; column in characters): where
+            palettes.txt or a .pixels image is at fault (column:
+            pixels_text only); on a hardware limit of a .pixels image, the
+            line of the block that drew the first tile in tiles
 ENTRY = {index: N, flip?: "x"|"y"|"xy", palette?: 0-7}: the tile in the
 image's own data (a sheet unit's top tile, even), how a sheet unit is
 flipped, and its GBC palette slot (on a GBC image, every entry has one).
 Named palettes (assets/palettes.txt reads into this; refused like the file:
 a name that can't be a label, a repeated name, "dmg" as a name or assigned,
 a dmg color repeated in RGB555, an unknown palette, an IMAGE assigned twice
-or not spelled bg/, sprites/ or tiles/ NAME.png):
+or not spelled bg/, sprites/ or tiles/ NAME.png or NAME.pixels):
   {dmg?: PALETTE, palettes: [{name: NAME, colors: PALETTE}],
    assignments?: {IMAGE: NAME}}   (IMAGE: its path under assets/)
 PALETTE = [RGB555 ×4], index 0 first. RGB555 = 0-32767, the word BCPD and
@@ -250,8 +255,18 @@ mod tests {
             ImageLimit::GbcPalettes,
             ImageLimit::GbcTileColors,
             ImageLimit::DmgOverrideSize,
+            ImageLimit::PixelsText,
         ] {
             assert!(SCHEMA.contains(limit.name()), "{}", limit.name());
+        }
+        // Review pix15: an assignment may name pixel text, and a problem's
+        // line and column are described.
+        for word in [
+            "NAME.png or NAME.pixels",
+            "problems[].line?: N",
+            "column?: N",
+        ] {
+            assert!(SCHEMA.contains(word), "{word}");
         }
         for word in [
             "tile_map",

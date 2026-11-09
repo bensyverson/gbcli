@@ -38,8 +38,8 @@ impl Pixels {
         // manifest's file may be named anything), is read as pixel text,
         // so its problems are located; anything else is a PNG.
         let named = path
-            .extension()
-            .is_some_and(|e| e == gbcli_pixels::EXTENSION);
+            .file_name()
+            .is_some_and(|n| gbcli_pixels::is_text_name(&n.to_string_lossy()));
         let text = bytes
             .strip_prefix("\u{FEFF}".as_bytes())
             .unwrap_or(&bytes)

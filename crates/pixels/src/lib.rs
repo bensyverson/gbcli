@@ -18,7 +18,7 @@ mod text;
 pub use error::{LayoutError, ParseError, PixelsError, PngError};
 pub use example::EXAMPLE;
 pub use model::{CLEAR, DMG, Palettes, Picture, Raster, Rgb, Rgba, Symbol, TILE, Value};
-pub use name::frame_size;
+pub use name::{DMG_SUFFIX, extension_of, frame_size, is_text_name, size_word};
 pub use png::{MADE_SYMBOLS, decode_png, encode_png, from_raster, is_png};
 pub use preview::{PREVIEW_SCALE, preview_png};
 pub use text::{EXTENSION, FORMAT_LINE, Layout, MAX_SIDE, parse_text, to_text};

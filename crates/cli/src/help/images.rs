@@ -5,8 +5,8 @@
 pub const IMAGES: &str = "\
 Images — PNGs under assets/, converted by `gbcli build` with rgbgfx (RGBDS).
 Each may be a PNG from any tool, or pixel text: the same name with .pixels
-(town.pixels, hero.16x16.pixels, town.dmg.pixels; gbcli help pixels). Keep
-one form of an image; both is a layout error.
+in any case, as .png (town.pixels, hero.16x16.pixels, town.dmg.pixels;
+gbcli help pixels). Keep one form of an image; both is a layout error.
 
   assets/bg/town.png           a background: unique tiles + a tilemap
   assets/sprites/hero.png      8x16 objects; the whole sheet is one frame
@@ -20,6 +20,9 @@ project may set it for every sheet: `objects: 8x8` (or `objects: 8x16`) in
 assets/palettes.txt cuts every frame into that size, a 16x16 frame into
 four 8x8 objects; a frame that doesn't cut is an error naming the line.
 images.inc then says to clear (or set) LCDC_OBJ_16 for all of them.
+Without the line, sheets cut in both sizes warn (obj_pair_8x16, no image=):
+one screen shows one size, so set the line, or switch LCDC bit 2 between
+scenes.
 An image is color art (any colors) unless assets/palettes.txt assigns it a
 palette, which makes it indexed art (up to 4 colors; sprites: 3 +
 transparent, alpha 0); both are described under GBC below. Every build
@@ -38,10 +41,10 @@ first rule that applies:
                 one lightness only, so nothing to stretch)
 The images row says which: shades=declared|known|stretched|nearest, and
 palette= for a known one. Colors in one shade draw alike, with a
-shared_shade warning. Color art's, in a plain build, warns once per image
-for colors that share a shade anywhere in the image; under --gbc, whose
-color version keeps them apart, only for two in one tile (a sheet: one
-object). Indexed art (and a .dmg.png) warns once per image for
+shared_shade warning. Color art's, in a plain build, warns once a shade
+for colors that share it anywhere in the image; under --gbc, whose color
+version keeps them apart, once per image, only for two in one tile (a
+sheet: one object). Indexed art (and a .dmg.png) warns once a shade for
 colors that image holds together, and once a shade for the project (no
 image=) for colors that share it only across images of one palette:
 colors one image holds, or chained through one, are a group (a/b); it
@@ -74,7 +77,8 @@ the image's 8x8 grid; --json lists them all), message and remedy.
   dmg_palette         4 shades for the background; 3 + transparent per sheet
   size_multiple_8     width and height a multiple of 8
   obj_pair_8x16       sheet and frame heights a multiple of 16 (of 8 for
-                      8x8 objects; under objects: 8x8, size_multiple_8)
+                      8x8 objects; under objects: 8x8, size_multiple_8);
+                      a warning when sheets mix sizes and no objects line
   obj_per_line        10 objects side by side in a frame
   obj_total           40 objects in a frame
   frame_grid          a sheet's width and height whole frames
@@ -102,7 +106,7 @@ the image's 8x8 grid; --json lists them all), message and remedy.
   pixels_text         a .pixels image doesn't read (line=N column=N); the
                       other images are still checked. On a .pixels image,
                       a limit naming tiles also gives line=, the block (or
-                      map row) that drew the first tile
+                      map row) that drew the most of the first tile's colors
 
 What the program gets (build/images/, rewritten by every build):
   INCLUDE \"images.inc\"   constants: TOWN_WIDTH, TOWN_HEIGHT (tiles),

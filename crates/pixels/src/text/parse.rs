@@ -80,6 +80,8 @@ enum Open {
 struct Block {
     open: Open,
     line: u32,
+    /// Where the header word starts.
+    column: u32,
     rows: u32,
     /// The first row's width: pixels, or a map's tiles.
     width: Option<usize>,

@@ -255,8 +255,8 @@ fn is_label(name: &str) -> bool {
         && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
 }
 
-/// `<kind dir>/<file>.png` (any case of `png`), or `.pixels` for pixel
-/// text, as the build names the images it finds: one directory of an
+/// `<kind dir>/<file>.png` (any case of `png`), or `.pixels` (any case)
+/// for pixel text, as the build names the images it finds: one directory of an
 /// [`ImageKind`], one file, `/` between, nothing that steps out or round
 /// about.
 pub(crate) fn is_image_path(path: &str) -> bool {
@@ -265,7 +265,7 @@ pub(crate) fn is_image_path(path: &str) -> bool {
     };
     let kinds = [ImageKind::Bg, ImageKind::Sprites, ImageKind::Tiles];
     let image = file.rsplit_once('.').is_some_and(|(stem, ext)| {
-        !stem.is_empty() && (ext.eq_ignore_ascii_case("png") || ext == "pixels")
+        !stem.is_empty() && (ext.eq_ignore_ascii_case("png") || ext.eq_ignore_ascii_case("pixels"))
     });
     kinds.iter().any(|k| k.dir() == dir) && image && !file.contains(['/', '\\'])
 }

@@ -74,21 +74,7 @@ pub fn pixels(cwd: &Path, args: &PixelsArgs) -> Result<PixelsMade, Box<ErrorBody
             gbcli_pixels::preview_png(&raster),
         ));
     }
-    let mut wrote = Vec::new();
-    for (kind, out, bytes) in files {
-        std::fs::write(cwd.join(out), &bytes).map_err(|e| {
-            Box::new(ErrorBody::new(
-                ErrorCode::IoFailed,
-                format!("writing {out}: {e}"),
-                ErrorCode::IoFailed.default_remedy(),
-            ))
-        })?;
-        wrote.push(PixelsOutput {
-            kind,
-            path: out.clone(),
-            bytes: bytes.len() as u64,
-        });
-    }
+    let wrote = write_all(cwd, files)?;
     Ok(PixelsMade {
         path: shown.clone(),
         form: match form {
@@ -103,6 +89,53 @@ pub fn pixels(cwd: &Path, args: &PixelsArgs) -> Result<PixelsMade, Box<ErrorBody
         tiles: picture.tiles(),
         wrote,
     })
+}
+
+/// Writes every output, or none: each goes to a temporary file beside it
+/// first, and only when all are written are they renamed into place, so
+/// an output that can't be written leaves the others unwritten.
+fn write_all(
+    cwd: &Path,
+    files: Vec<(PixelsOutputKind, &String, Vec<u8>)>,
+) -> Result<Vec<PixelsOutput>, Box<ErrorBody>> {
+    let failed = |out: &str, e: std::io::Error| {
+        Box::new(ErrorBody::new(
+            ErrorCode::IoFailed,
+            format!("writing {out}: {e}"),
+            ErrorCode::IoFailed.default_remedy(),
+        ))
+    };
+    let mut staged: Vec<(PathBuf, PathBuf)> = Vec::new();
+    let mut wrote = Vec::new();
+    for (kind, out, bytes) in &files {
+        let path = cwd.join(out);
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let temp = path.with_file_name(format!(".{name}.gbcli-tmp"));
+        if let Err(e) = std::fs::write(&temp, bytes) {
+            for (t, _) in &staged {
+                let _ = std::fs::remove_file(t);
+            }
+            return Err(failed(out, e));
+        }
+        staged.push((temp, path));
+        wrote.push(PixelsOutput {
+            kind: *kind,
+            path: (*out).clone(),
+            bytes: bytes.len() as u64,
+        });
+    }
+    for (i, (temp, path)) in staged.iter().enumerate() {
+        if let Err(e) = std::fs::rename(temp, path) {
+            for (t, _) in &staged[i..] {
+                let _ = std::fs::remove_file(t);
+            }
+            return Err(failed(&wrote[i].path, e));
+        }
+    }
+    Ok(wrote)
 }
 
 /// A sheet's frames, when its name gives a size it is whole frames of.

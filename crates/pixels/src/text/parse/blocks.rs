@@ -90,6 +90,7 @@ impl Parser {
         self.block = Some(Block {
             open,
             line,
+            column: head.column,
             rows: 0,
             width: None,
         });
@@ -107,14 +108,24 @@ impl Parser {
         result
     }
 
+    /// A directive inside a block that hasn't ended: a header, or a line of
+    /// its own (`color`, `fill`, `size`, `format`).
     pub(super) fn unended(line: u32, word: &Word) -> ParseError {
-        err(
-            line,
-            word.column,
+        let message = if matches!(word.text, "rows" | "tile" | "map") {
             format!(
                 "`{}` starts a block, but the block above hasn't ended",
                 word.text
-            ),
+            )
+        } else {
+            format!(
+                "`{}` is a line of its own, not a row, but the block above hasn't ended",
+                word.text
+            )
+        };
+        err(
+            line,
+            word.column,
+            message,
             "put a blank line before it: a block ends at a blank line",
         )
     }
@@ -334,7 +345,7 @@ impl Parser {
                 };
                 return Err(err(
                     block.line,
-                    1,
+                    block.column,
                     format!("this {kind} block has no rows"),
                     "draw its rows under it, before a blank line",
                 ));

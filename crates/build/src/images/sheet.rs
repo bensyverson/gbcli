@@ -156,7 +156,8 @@ pub(crate) fn check(
                 None => {
                     p.remedy += &format!(
                         "; or, for 8x8 objects, name a frame size a multiple of 8 high but not \
-                         16, e.g. {stem}.8x8.png"
+                         16, e.g. {stem}.8x8.{}",
+                        gbcli_pixels::extension_of(image)
                     );
                 }
             }
@@ -165,6 +166,15 @@ pub(crate) fn check(
     }
     let frame = frames.named;
     let (fw, fh) = frame.unwrap_or((pixels.width, pixels.height));
+    // Under a project-wide 8x8, a frame 8x16 objects could cut takes up to
+    // twice the objects: OAM's total remedy offers the setting. (Objects
+    // side by side on a line are as many in either size.)
+    let taller = match frames.objects {
+        Some((ObjectSize::Square, setting)) if fh.is_multiple_of(16) => {
+            format!("; or set {setting} to 8x16, two tiles an object")
+        }
+        _ => String::new(),
+    };
     if let Some(p) = frame_shape(image, stem, pixels, frames, object) {
         return Err(vec![p]);
     }
@@ -315,8 +325,10 @@ pub(crate) fn check(
             frames.push(objects);
         }
     }
+    let ext = gbcli_pixels::extension_of(image);
     let rename = format!(
-        "if the sheet holds several frames, name their size: {stem}.WxH.png (e.g. {stem}.16x16.png)"
+        "if the sheet holds several frames, name their size: {stem}.WxH.{ext} (e.g. \
+         {stem}.16x16.{ext})"
     );
     if worst_line.len() > PER_LINE {
         let n = worst_line.len();
@@ -348,7 +360,10 @@ pub(crate) fn check(
                 n,
                 TOTAL,
                 format!("a {fw}x{fh} frame of {image} needs {n} objects; OAM holds {TOTAL}"),
-                &format!("make the frame smaller, or draw part of it on the background; {rename}"),
+                &format!(
+                    "make the frame smaller, or draw part of it on the background; \
+                     {rename}{taller}"
+                ),
             )
         });
     }
@@ -444,7 +459,12 @@ fn frame_shape(
             .unwrap_or(unit)
     };
     let oh = object.height();
-    let offer = format!("{stem}.{}x{}.png", tiling(fw, 8, w), tiling(fh, oh, h));
+    let offer = format!(
+        "{stem}.{}x{}.{}",
+        tiling(fw, 8, w),
+        tiling(fh, oh, h),
+        gbcli_pixels::extension_of(image)
+    );
     let whole = |n: u32, unit: u32| (n / unit).max(1) * unit;
     let shape = format!("{image}'s frames are {fw}x{fh}");
     let (limit, count, max, message, remedy) = if fw == 0 || !fw.is_multiple_of(8) {

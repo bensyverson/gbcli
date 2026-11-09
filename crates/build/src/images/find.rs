@@ -1,6 +1,6 @@
 //! The images a project has, by convention: `assets/bg/*.png`,
 //! `assets/sprites/*.png` and `assets/tiles/*.png` (`.PNG` too, in any
-//! case), or pixel text in their place (`*.pixels`), each named after its
+//! case), or pixel text in their place (`*.pixels`, in any case), each named after its
 //! file so the program can address it (`town.png` is `TownTiles`,
 //! `TOWN_WIDTH`). A sprite sheet's name may carry its frame size:
 //! `hero.16x24.png` (8x8 objects when it is a multiple of 8 high but not
@@ -13,6 +13,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use gbcli_pixels::DMG_SUFFIX;
 use gbcli_protocol::{ImageKind, NamedPalettes};
 
 use super::emit;
@@ -65,7 +66,7 @@ pub(crate) fn sources(
                 .path();
             let image = path
                 .extension()
-                .is_some_and(|e| e.eq_ignore_ascii_case("png") || e == PIXELS);
+                .is_some_and(|e| e.eq_ignore_ascii_case("png") || e.eq_ignore_ascii_case(PIXELS));
             if path.is_file() && image {
                 paths.push(path);
             }
@@ -85,12 +86,15 @@ pub(crate) fn sources(
                 .iter_mut()
                 .find(|s| s.path.file_stem().is_some_and(|f| f == stem.as_str()))
             else {
-                let image = dir.join(format!("{stem}.png"));
+                // Either form serves as its color image.
+                let png = dir.join(format!("{stem}.png"));
+                let text = dir.join(format!("{stem}.{PIXELS}"));
                 return Err(BuildError::Layout {
                     message: format!(
-                        "{} is a DMG version, but there is no color image {} beside it",
+                        "{} is a DMG version, but there is no color image {} or {} beside it",
                         shown(&o),
-                        shown(&image)
+                        shown(&png),
+                        shown(&text)
                     ),
                     remedy: format!(
                         "add the color image, rename it to match one, or remove {}",
@@ -117,12 +121,11 @@ fn two_forms(paths: &[PathBuf], shown: &dyn Fn(&Path) -> String) -> Result<(), B
         let Some(stem) = path.file_stem() else {
             continue;
         };
-        let text = |p: &Path| p.extension().is_some_and(|e| e == PIXELS);
         // Two PNGs of one stem (`town.png`, `town.PNG`) are `collisions`'.
         if let Some(other) = by_stem.insert(stem, path)
-            && text(other) != text(path)
+            && is_text(other) != is_text(path)
         {
-            let (png, text) = if text(path) {
+            let (png, text) = if is_text(path) {
                 (other, path)
             } else {
                 (path, other)
@@ -279,8 +282,10 @@ pub(crate) fn source(
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_default();
+    // A rename a remedy offers keeps the file's form.
+    let ext = gbcli_pixels::extension_of(&file);
     let (stem, frame) = match name.split_once('.') {
-        Some((stem, size)) if kind == ImageKind::Sprites => match frame_size(size) {
+        Some((stem, size)) if kind == ImageKind::Sprites => match gbcli_pixels::size_word(size) {
             Some(frame) => (stem.to_string(), Some(frame)),
             None => {
                 // The size is checked first, so the stem may be no name either.
@@ -296,9 +301,8 @@ pub(crate) fn source(
                         shown(&path)
                     ),
                     remedy: format!(
-                        "rename it to {}.WxH.png, e.g. {}.16x16.png, or drop the size to make \
-                         the whole sheet one frame",
-                        stem, stem
+                        "rename it to {stem}.WxH.{ext}, e.g. {stem}.16x16.{ext}, or drop the size \
+                         to make the whole sheet one frame"
                     ),
                 });
             }
@@ -316,7 +320,7 @@ pub(crate) fn source(
             ),
             remedy: format!(
                 "rename it, e.g. to {}",
-                quote(&format!("{offer}{suffix}.png"))
+                quote(&format!("{offer}{suffix}.{ext}"))
             ),
         });
     }
@@ -356,8 +360,11 @@ fn color_stem(path: &Path) -> Option<String> {
         .then(|| color.to_string())
 }
 
-/// What a DMG version's name adds to its color image's, before `.png`.
-const DMG_SUFFIX: &str = "dmg";
+/// Whether `path` names pixel text, `.pixels` in any case.
+fn is_text(path: &Path) -> bool {
+    path.file_name()
+        .is_some_and(|n| gbcli_pixels::is_text_name(&n.to_string_lossy()))
+}
 
 /// Where `name.dmg.png` (or `name.dmg.pixels` for pixel text), the DMG
 /// version of the color image at `image`, would be.
@@ -366,21 +373,8 @@ pub(crate) fn dmg_path(image: &Path) -> PathBuf {
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let ext = match image.extension() {
-        Some(e) if e == PIXELS => PIXELS,
-        _ => "png",
-    };
+    let ext = if is_text(image) { PIXELS } else { "png" };
     image.with_file_name(format!("{stem}.{DMG_SUFFIX}.{ext}"))
-}
-
-/// `16x24` as (16, 24).
-fn frame_size(text: &str) -> Option<(u32, u32)> {
-    let (w, h) = text.split_once('x')?;
-    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
-    if !digits(w) || !digits(h) {
-        return None;
-    }
-    Some((w.parse().ok()?, h.parse().ok()?))
 }
 
 fn is_name(stem: &str) -> bool {

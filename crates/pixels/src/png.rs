@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::error::PngError;
 use crate::model::{Picture, Raster, Rgb, Symbol, Value};
+use crate::text::MAX_SIDE;
 
 /// The legend a PNG's opaque colors get, lightest first: digits, letters,
 /// then punctuation. `.` is clear's, and `#` and space are never legend
@@ -107,9 +108,23 @@ fn luminance([r, g, b]: Rgb) -> u32 {
 }
 
 /// A raster as a picture with a made legend: `.` for clear, then
-/// [`MADE_SYMBOLS`] lightest first, ties by hex. A partly transparent
-/// pixel, or more colors than the symbols, is an error at its pixel.
+/// [`MADE_SYMBOLS`] lightest first, ties by hex. An image past [`MAX_SIDE`],
+/// which the text can't hold, is an error; so is a partly transparent
+/// pixel, or more colors than the symbols, at its pixel.
 pub fn from_raster(raster: &Raster) -> Result<Picture, PngError> {
+    // Text past the parser's size would be written and then refused.
+    if raster.width > MAX_SIDE || raster.height > MAX_SIDE {
+        return Err(PngError {
+            pixel: None,
+            message: format!(
+                "the image is {}x{}, and pixel text holds 1 to {MAX_SIDE} pixels a side",
+                raster.width, raster.height
+            ),
+            remedy: format!(
+                "keep it a PNG, or split it into images of at most {MAX_SIDE} pixels a side"
+            ),
+        });
+    }
     let limit = MADE_SYMBOLS.chars().count();
     let mut colors: Vec<Rgb> = Vec::new();
     let mut seen: HashSet<Rgb> = HashSet::new();

@@ -4,6 +4,7 @@
 mod canonical;
 mod errors;
 mod examples;
+mod fuzz;
 mod png;
 mod preview;
 mod text;

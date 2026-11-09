@@ -119,11 +119,13 @@ pub(crate) fn convert(
         all.push((s, shown(&s.path), image, over));
     }
     // A bad palette file stops the conversion once the images are known to
-    // read: the shades are chosen from the palettes and every image.
-    if made.first_error().is_some() {
+    // read: the shades are chosen from the palettes and every image. Pixel
+    // text that doesn't parse is said beside it.
+    let bad_palettes = made.first_error().is_some();
+    made.problems.extend(unread);
+    if bad_palettes {
         return Ok(Some(Converted { made, ..stopped }));
     }
-    made.problems.extend(unread);
     find::palette_collision(&sources, &named_palettes, palettes.shown(), shown)?;
     // Each image's DMG version, the same in every build (Ben's ruling,
     // 2026-11-08): color art's derived or overridden, indexed art's its
@@ -263,6 +265,10 @@ pub(crate) fn convert(
     }
     made.problems.extend(across);
     made.problems.extend(vram::vram(&plans));
+    if objects.is_none() {
+        made.problems
+            .extend(vram::object_sizes(&plans, &palettes.add_objects()));
+    }
     // On the GBC, indexed art and the OBJ slots its sheets take.
     let indexed = (target == BuildTarget::Gbc).then(|| {
         let sheets: Vec<(&str, u8)> = plans
@@ -391,7 +397,8 @@ fn text_problem(image: &str, e: gbcli_pixels::ParseError) -> ImageProblem {
 }
 
 /// Gives each problem on a pixel text image's tiles the line that drew
-/// the first tile it names: a rows block's header, or a map's row.
+/// the first tile it names (`drew`): a rows block's header, a map's row,
+/// or `fill`.
 fn locate(problems: &mut [ImageProblem], texts: &[(String, gbcli_pixels::Picture)]) {
     for p in problems.iter_mut().filter(|p| p.line.is_none()) {
         let picture = texts
@@ -399,12 +406,33 @@ fn locate(problems: &mut [ImageProblem], texts: &[(String, gbcli_pixels::Picture
             .find(|(name, _)| p.image.as_deref() == Some(name.as_str()))
             .map(|(_, picture)| picture);
         if let (Some(picture), Some(t)) = (picture, p.tiles.first()) {
-            let (x, y) = (t.x * 8, t.y * 8);
-            if x < picture.width && y < picture.height {
-                p.line = picture.line_at(x, y);
+            p.line = drew(picture, t.x * 8, t.y * 8);
+        }
+    }
+}
+
+/// The line that drew the 8x8 tile at (`left`, `top`): of the lines that
+/// drew its pixels, the one that drew the most of its legend characters,
+/// the later on a tie. A hardware problem is about a tile's colors, so
+/// this is the block that drew them, not a `fill` (or earlier block) that
+/// shows only at the tile's corner.
+fn drew(picture: &gbcli_pixels::Picture, left: u32, top: u32) -> Option<u32> {
+    use std::collections::{BTreeMap, BTreeSet};
+    let mut by_line: BTreeMap<u32, BTreeSet<u16>> = BTreeMap::new();
+    let (right, bottom) = ((left + 8).min(picture.width), (top + 8).min(picture.height));
+    for y in top..bottom {
+        for x in left..right {
+            if let Some(line) = picture.line_at(x, y) {
+                let symbol = picture.pixels[(y * picture.width + x) as usize];
+                by_line.entry(line).or_default().insert(symbol);
             }
         }
     }
+    // Lines ascend, so `max_by_key` keeps the later of equals.
+    by_line
+        .into_iter()
+        .max_by_key(|(_, symbols)| symbols.len())
+        .map(|(line, _)| line)
 }
 
 fn has_kind(sources: &[Source], kind: ImageKind) -> bool {

@@ -1,9 +1,9 @@
 //! The limits the images break together, counted in joint tiles under
 //! `--gbc` (each tile one only when both versions match, plan question 1).
 
-use gbcli_protocol::{ImageLimit, ImageProblem};
+use gbcli_protocol::{ImageLimit, ImageProblem, ObjectSize, Severity};
 
-use super::{Checked, Plan, census, sheet};
+use super::{Checked, Plan, census, shared, sheet};
 
 /// VRAM's tiles on the DMG, shared by the background and objects.
 const VRAM_TILES: u32 = 384;
@@ -75,4 +75,39 @@ pub(super) fn vram(plans: &[Checked]) -> Vec<ImageProblem> {
         });
     }
     problems
+}
+
+/// With no project object size, sheets cut in both sizes: a warning, not
+/// an error, since LCDC bit 2 shows one size at a time but a game may
+/// switch it between scenes (main thread's ruling, 2026-11-09). `add` is
+/// the remedy's words for setting the size (`PaletteSource::add_objects`).
+pub(super) fn object_sizes(plans: &[Checked], add: &str) -> Option<ImageProblem> {
+    let of = |size: ObjectSize| -> Vec<String> {
+        plans
+            .iter()
+            .filter(|c| matches!(&c.plan, Plan::Sheet(p) if p.object == size))
+            .map(|c| c.image.clone())
+            .collect()
+    };
+    let (tall, square) = (of(ObjectSize::Tall), of(ObjectSize::Square));
+    if tall.is_empty() || square.is_empty() {
+        return None;
+    }
+    let message = format!(
+        "the sheets are cut in two object sizes, and the screen shows one at a time (LCDC bit \
+         2): {} objects in {}; {} objects in {}",
+        ObjectSize::Tall.name(),
+        shared::and(&tall),
+        ObjectSize::Square.name(),
+        shared::and(&square),
+    );
+    let remedy = format!(
+        "{add} to cut every sheet in one size; or keep both, and switch LCDC bit 2 between \
+         scenes that show only one"
+    );
+    Some(ImageProblem {
+        image: None,
+        severity: Severity::Warning,
+        ..census::error("", ImageLimit::ObjPair8x16, 2, 1, message, &remedy)
+    })
 }

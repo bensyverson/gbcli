@@ -147,6 +147,117 @@ fn without_the_objects_line_the_height_rule_stands() {
     assert!(!inc.contains("; Objects:"), "{inc}");
 }
 
+/// Without the setting, sheets cut in both sizes are a project warning
+/// (not an error: a game may switch LCDC bit 2 between scenes), naming the
+/// sheets of each size and offering the setting.
+#[test]
+fn without_the_setting_mixed_object_sizes_are_a_warning_naming_each_sheet() {
+    let (temp, options) = starter("objects-mixed");
+    pinned(&temp);
+    write_png(
+        &temp.path("demo/assets/sprites/quad.16x16.png"),
+        16,
+        16,
+        quad,
+    );
+    for name in ["shot.8x8.png", "spark.8x8.png"] {
+        write_png(
+            &temp.path(&format!("demo/assets/sprites/{name}")),
+            8,
+            8,
+            |x, _| if x < 2 { BLACK } else { CLEAR },
+        );
+    }
+    let made = built(&options);
+    let mixed: Vec<_> = made
+        .problems
+        .iter()
+        .filter(|p| p.limit == ImageLimit::ObjPair8x16)
+        .collect();
+    let [p] = &mixed[..] else {
+        panic!("{:#?}", made.problems)
+    };
+    assert_eq!(p.severity, gbcli_protocol::Severity::Warning);
+    assert_eq!(p.image, None);
+    assert_eq!((p.count, p.max), (2, 1));
+    assert_eq!(
+        p.message,
+        "the sheets are cut in two object sizes, and the screen shows one at a time (LCDC bit \
+         2): 8x16 objects in demo/assets/sprites/quad.16x16.png; 8x8 objects in \
+         demo/assets/sprites/shot.8x8.png and demo/assets/sprites/spark.8x8.png"
+    );
+    assert_eq!(
+        p.remedy,
+        "add `objects: 8x8` (or `objects: 8x16`) to demo/assets/palettes.txt to cut every \
+         sheet in one size; or keep both, and switch LCDC bit 2 between scenes that show only \
+         one"
+    );
+    // The setting silences it, and one size alone never raises it.
+    objects(&temp, "8x8");
+    let made = built(&options);
+    assert!(
+        made.problems
+            .iter()
+            .all(|p| p.limit != ImageLimit::ObjPair8x16),
+        "{:#?}",
+        made.problems
+    );
+}
+
+/// Under `objects: 8x8` a 48x64 frame needs 48 objects, past OAM's 40,
+/// where 8x16 objects would take 24: the remedy offers the setting.
+#[test]
+fn objects_8x8_past_oams_total_offers_8x16() {
+    let (temp, options) = starter("objects-8x8-total");
+    objects(&temp, "8x8");
+    write_png(
+        &temp.path("demo/assets/sprites/big.48x64.png"),
+        48,
+        64,
+        |x, y| if (x + y) % 2 == 0 { BLACK } else { CLEAR },
+    );
+    let made = refused(&options);
+    let p = problem(&made, ImageLimit::ObjTotal);
+    assert_eq!(p.count, 48);
+    assert!(
+        p.remedy.ends_with(
+            "; or set the objects line of demo/assets/palettes.txt to 8x16, two tiles an object"
+        ),
+        "{}",
+        p.remedy
+    );
+}
+
+/// From a manifest the remedy names the manifest's field.
+#[test]
+fn mixed_object_sizes_from_a_manifest_offer_its_objects_field() {
+    let temp = Temp::new("objects-mixed-manifest");
+    write_png(&temp.path("art/quad.png"), 16, 16, quad);
+    write_png(&temp.path("art/shot.png"), 8, 8, |x, _| {
+        if x < 2 { BLACK } else { CLEAR }
+    });
+    let mut m = manifest(None, "sprites/quad.16x16.png");
+    m.images.push(ManifestImage {
+        image: "sprites/shot.8x8.png".into(),
+        file: "art/shot.png".into(),
+        dmg: None,
+    });
+    let options = AssetsOptions::new(AssetsInput::Manifest(m), temp.0.clone());
+    let made = assets(rgbds().images(), &options).unwrap().images;
+    let p = made
+        .problems
+        .iter()
+        .find(|p| p.limit == ImageLimit::ObjPair8x16)
+        .unwrap_or_else(|| panic!("{:#?}", made.problems));
+    assert!(
+        p.remedy
+            .starts_with("set the manifest's objects to 8x8 (or 8x16)"),
+        "{}",
+        p.remedy
+    );
+    assert!(!p.remedy.contains("palettes.txt"), "{}", p.remedy);
+}
+
 /// `objects: 8x16` can't cut an 8-high frame: an error naming the line,
 /// and no remedy offering the 8x8 frame size the line overrides.
 #[test]

@@ -75,6 +75,16 @@ impl PaletteSource {
         }
     }
 
+    /// The remedy's words for setting every sheet's object size.
+    pub fn add_objects(&self) -> String {
+        match self {
+            PaletteSource::File(shown) => {
+                format!("add `objects: 8x8` (or `objects: 8x16`) to {shown}")
+            }
+            PaletteSource::Manifest => "set the manifest's objects to 8x8 (or 8x16)".into(),
+        }
+    }
+
     /// The words saying where an image is assigned `palette`.
     pub fn assigns(&self, palette: &str) -> String {
         match self {

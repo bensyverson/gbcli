@@ -12,7 +12,7 @@ use gbcli_protocol::{
 
 use super::Handler;
 use super::test_support::{handler, request};
-use crate::fixture::{Fixture, TUNE};
+use crate::fixture::{Fixture, TUNE, TUNE_SYM};
 
 /// Past the tune's last write.
 const TUNE_FRAMES: u64 = 40;
@@ -94,6 +94,46 @@ fn a_channel_filter_narrows_the_log_and_the_summary_counts_it() {
     ));
     assert_eq!(audio.log, None);
     assert_eq!(audio.summary.expect("a summary").writes, 43);
+}
+
+/// Writer rows name the code that wrote, as stop rows spell a PC (leaf
+/// jGOxRH); without a `.sym` they carry the PC alone.
+#[test]
+fn summary_writers_carry_their_symbol_as_label_plus_offset() {
+    // tune.sym: every label is in ROM0, so no bank is guessed.
+    let labels = [
+        (0x0150, "Main"),
+        (0x0174, "Main.wave"),
+        (0x01E1, "Main.end"),
+        (0x01E4, "WaitFrames"),
+        (0x01E9, "Wave"),
+    ];
+    let expected = |pc: u16| {
+        let (addr, name) = labels.iter().rev().find(|(a, _)| *a <= pc).unwrap();
+        match pc - addr {
+            0 => name.to_string(),
+            n => format!("{name}+${n:X}"),
+        }
+    };
+    let summary = |f: &Fixture| {
+        audio_of(run(
+            &mut handler(f),
+            tune_run(AudioArgs {
+                summary: true,
+                ..AudioArgs::default()
+            }),
+        ))
+        .summary
+        .expect("a summary")
+    };
+    let f = Fixture::with_rom_sym("audio-writer-symbols", TUNE, TUNE_SYM);
+    let writers = summary(&f).writers;
+    assert!(!writers.is_empty());
+    for w in &writers {
+        assert_eq!(w.symbol.as_deref(), Some(&*expected(w.pc)), "{w:?}");
+    }
+    let bare = Fixture::with_rom("audio-writer-bare", TUNE);
+    assert!(summary(&bare).writers.iter().all(|w| w.symbol.is_none()));
 }
 
 #[test]

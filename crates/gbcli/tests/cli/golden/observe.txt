@@ -28,9 +28,9 @@ audio_summary since=boot writes=3 channels=noise
 audio_register reg=NR42 addr=$FF21 writes=1
 audio_register reg=NR43 addr=$FF22 writes=1
 audio_register reg=NR44 addr=$FF23 writes=1
-audio_writer pc=$01C5 writes=1 registers=NR42
-audio_writer pc=$01C9 writes=1 registers=NR43
-audio_writer pc=$01CD writes=1 registers=NR44
+audio_writer pc=$01C5 symbol=Main.wave+$51 writes=1 registers=NR42
+audio_writer pc=$01C9 symbol=Main.wave+$55 writes=1 registers=NR43
+audio_writer pc=$01CD symbol=Main.wave+$59 writes=1 registers=NR44
 rev s1
 $ gbcli view palettes --session oam
 exit 0
@@ -38,6 +38,28 @@ dmg_palette reg=BGP value=$FC shades=0,3,3,3
 dmg_palette reg=OBP0 value=$FF shades=3,3,3,3
 dmg_palette reg=OBP1 value=$FF shades=3,3,3,3
 rev s3
+$ gbcli view memory $C000 3 --session oam
+exit 0
+memory expr=$C000 addr=$C000 len=3
+  $C000 ae 0e 00
+rev s3
+$ gbcli view memory $C000 3 --json --session oam
+exit 0
+{"id":"cli","ok":true,"rev":"s3","result":{"memory":{"expr":"$C000","addr":49152,"bytes":"ae0e00"}},"warnings":[]}
+$ gbcli view memory $C000 20 --session oam
+exit 3
+--- stderr
+gbcli: uninitialized_read: uninitialized read of $C003
+remedy: $C003: $C003 has never been written at this point; read it after the program writes it (run further), or pass --allow-uninit
+$ gbcli view memory $C000 20 --allow-uninit --out c000.bin --session oam
+exit 0
+memory expr=$C000 addr=$C000 len=20
+  $C000 ae 0e 00 7b b5 ff 2b 7d 7e e7 7a bb fb e6 ce fc
+  $C010 bf b5 3e ff
+out path=c000.bin bytes=20
+rev s3
+--- stderr
+warning: uninitialized read of 17 never-written bytes, the first $C003: their power-on values are random
 $ gbcli run palette.gb --model gbc --frames 30 --session gbc
 exit 0
 stop budget_exhausted kind=frames pc=$0180 bank=0 frame=30 t=2055624 since=boot ticks=30282696 ly=144 shown=30 vblank=normal

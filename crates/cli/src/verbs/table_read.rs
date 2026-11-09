@@ -30,12 +30,13 @@ pub const VIEW_VERB: VerbSpec = VerbSpec {
     verb: Verb::View,
     name: "view",
     class: Class::Read,
-    summary: "VRAM tiles, a tile map, OAM or the palettes, as text (and a PNG)",
-    usage: "tiles|map|oam|palettes [--map WHICH] [--png PATH [--scale N]] [flags]",
+    summary: "VRAM tiles, a tile map, OAM, the palettes or a block of memory, as text",
+    usage: "tiles|map|oam|palettes [--map WHICH] [--png PATH [--scale N]] | memory ADDR LEN \
+            [--out FILE] [--allow-uninit] [flags]",
     arity: Arity {
         min: 1,
-        max: Some(1),
-        name: "tiles|map|oam|palettes",
+        max: Some(3),
+        name: "tiles|map|oam|palettes|memory",
     },
     flags: VIEW,
     groups: &[SESSION, OUTPUT],
@@ -45,10 +46,16 @@ pub const VIEW_VERB: VerbSpec = VerbSpec {
             limit drops (run --oam-log gives it for every frame of a run). palettes: \
             BGP, OBP0 and OBP1 with the shade each color index gets, and on a GBC the 8 \
             background and 8 object palettes from palette RAM as RGB555 and #RRGGBB. --png \
-            saves the same view as an image (not for palettes).",
+            saves the same view as an image (not for palettes). memory ADDR LEN: LEN bytes \
+            from ADDR as a hexdump, lowercase hex, 16 bytes a row led by the row's address; ADDR is any \
+            address read takes (wMap, $C000, wMap+$10, a banked symbol or 03:4000 for that \
+            bank, wram:1A0), and in a switchable area otherwise the bank mapped at the head. \
+            Each byte is read as read reads it, without side effects; a byte the program \
+            never wrote is an error naming the first, unless --allow-uninit. --out FILE \
+            also writes the raw bytes.",
     example: (
-        "gbcli view oam --session dx",
-        "lists the sprites: position, tile, flags and whether each is on screen",
+        "gbcli view memory wMap 64 --session dx",
+        "prints the 64 bytes from wMap, 16 a row; --out map.bin also saves them",
     ),
 };
 

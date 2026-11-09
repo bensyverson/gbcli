@@ -196,13 +196,14 @@ pub const VERBS: &[VerbSpec] = &[
         verb: Verb::Show,
         name: "show",
         class: Class::Read,
-        summary: "registers, the PPU and the last stop",
+        summary: "the machine, registers, the PPU and the last stop",
         usage: "[flags]",
         arity: NONE,
         flags: &[],
         groups: READ_VERB,
-        about: "Print the head's CPU registers and flags, the PPU's line and mode, and the \
-                stop record of the last run.",
+        about: "Print the session's model and the loaded ROM's header CGB flag (cgb=dmg, \
+                dual or only, from $0143), the head's CPU registers and flags, the PPU's \
+                line and mode, and the stop record of the last run.",
         example: ("gbcli show --session dx", "prints where the machine is"),
     },
     VerbSpec {
@@ -217,7 +218,8 @@ pub const VERBS: &[VerbSpec] = &[
         about: "Each argument is an expression (`gbcli help expressions`): [wFrame], \
                 u16[$C000], rLY, frame, pc. A bare symbol is its address: wX prints \
                 where wX lives, [wX] (or u8[wX]) the byte it holds, u16[wX] two bytes. A \
-                byte the program never wrote is an error unless --allow-uninit.",
+                byte the program never wrote is an error unless --allow-uninit. For a \
+                block of bytes, `gbcli view memory ADDR LEN`.",
         example: (
             "gbcli read 'u16[wFrame]' rLY --session dx",
             "prints the frame counter and the current scanline",
@@ -268,7 +270,8 @@ pub const VERBS: &[VerbSpec] = &[
         arity: NONE,
         flags: &[],
         groups: &[OUTPUT],
-        about: "One row per session in .gbcli/: name, ROM, revision, head frame, size, \
+        about: "One row per session in .gbcli/: name, ROM, model, the ROM file's header CGB \
+                flag (cgb=dmg, dual or only, as the file is now), revision, head frame, size, \
                 named checkpoints and last use. `sessions prune` and `sessions rm` remove them.",
         example: ("gbcli sessions", "lists every session"),
     },

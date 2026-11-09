@@ -80,8 +80,8 @@ pub use response::{
 };
 pub use rev::Rev;
 pub use session::{
-    EventLogLine, GapCount, GapLine, SESSION_NAME_RULE, SessionFile, SessionRow, StopSummary,
-    UndoWalk, is_session_name,
+    CgbFlag, EventLogLine, GapCount, GapLine, MachineView, SESSION_NAME_RULE, SessionFile,
+    SessionRow, StopSummary, UndoWalk, is_session_name,
 };
 pub use shot::{Crop, FilmstripArgs, FilmstripMade, ShotArgs, ShotFrame, ShotMade, ShotReadArgs};
 pub use song::{SongFileFormat, SongMade, SongOutput, SongOutputKind, SongProblem};
@@ -97,6 +97,7 @@ pub use toolchain::{
 pub use version::{PROTOCOL_VERSION, VersionMade};
 pub use video::{
     AddressingView, CgbColorView, CgbPaletteView, DmgPaletteView, ImageMade, ImageOut, MapAreaView,
-    MapSel, OamFrameView, OamLogMade, OamView, TileView, VideoData, ViewArgs, ViewKind, ViewMade,
+    MapSel, MemoryMade, OamFrameView, OamLogMade, OamView, TileView, VideoData, ViewArgs, ViewKind,
+    ViewMade,
 };
 pub use views::{FlagsView, PpuModeView, PpuView, RegistersView};

@@ -26,6 +26,24 @@ pub fn parse(text: &str, syms: Option<&Symbols>) -> Result<Expr, ExprError> {
     Ok(expr)
 }
 
+/// Parses `text` as what `[text]` would read: a place (design §7).
+pub fn parse_place(text: &str, syms: Option<&Symbols>) -> Result<Place, ExprError> {
+    let mut p = Parser {
+        toks: lex(text)?,
+        pos: 0,
+        end: text.len(),
+        syms,
+    };
+    let place = p.place()?;
+    if let Some((at, tok)) = p.toks.get(p.pos) {
+        return Err(ExprError::syntax(
+            *at,
+            format!("unexpected {tok:?} after a complete address"),
+        ));
+    }
+    Ok(place)
+}
+
 struct Parser<'a> {
     toks: Vec<(usize, Tok)>,
     pos: usize,
@@ -209,6 +227,14 @@ impl Parser<'_> {
 
     /// After `[`: a place, then `]`.
     fn read(&mut self, width: Width) -> Result<Expr, ExprError> {
+        let place = self.place()?;
+        self.expect(Tok::RBracket)?;
+        Ok(Expr::Read { width, place })
+    }
+
+    /// What a read's brackets hold: `bank:addr`, `region:offset`, or an
+    /// expression (a banked symbol, alone or moved, reading its own bank).
+    fn place(&mut self) -> Result<Place, ExprError> {
         let colon_next = matches!(self.toks.get(self.pos + 1), Some((_, Tok::Colon)));
         let place = match (self.peek().cloned(), colon_next) {
             // A head that is hex is a bank, as in the address grammar, even
@@ -247,8 +273,7 @@ impl Parser<'_> {
                 }
             }
         };
-        self.expect(Tok::RBracket)?;
-        Ok(Expr::Read { width, place })
+        Ok(place)
     }
 }
 

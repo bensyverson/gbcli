@@ -83,8 +83,10 @@ Find a symbol's address
   gbcli sym 'Player*'
 Read variables, registers or IO
   gbcli read '[wSpeed]' 'u16[wFrame]' pc '[rLCDC]'
-Where is the machine, and why did it stop?
-  gbcli show
+Dump a block of memory (a map, a buffer)
+  gbcli view memory wMap 1024 (16 bytes a row; --out map.bin saves the bytes)
+Where is the machine, and why did it stop? Which model, which build?
+  gbcli show (machine model= cgb=: the session's model, the ROM's header)
 Find who writes a variable
   gbcli watch write wSpeed, then gbcli run (stops at the first write, or fails
   with budget_exhausted if none comes in 600 frames)

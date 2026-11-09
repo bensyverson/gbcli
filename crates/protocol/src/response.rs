@@ -173,6 +173,9 @@ pub struct ResultBody {
     pub oam_log: Option<crate::video::OamLogMade>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub view: Option<ViewMade>,
+    /// `view memory`: the block read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub memory: Option<crate::video::MemoryMade>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub symbols: Option<Vec<SymbolRow>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -192,6 +195,9 @@ pub struct ResultBody {
     pub watch: Option<WatchMade>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deleted: Option<Deleted>,
+    /// `show`: the session's model and its ROM's CGB flag.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub machine: Option<crate::session::MachineView>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub registers: Option<RegistersView>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

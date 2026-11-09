@@ -16,6 +16,9 @@ pub enum ViewKind {
     /// BGP, OBP0 and OBP1, and on a CGB its 8 background and 8 object
     /// palettes from palette RAM.
     Palettes,
+    /// `len` bytes from `addr`, as `read` reads each one; the result is
+    /// `ResultBody.memory`.
+    Memory,
 }
 
 /// Which tilemap: as LCDC selects it for the background (the default) or
@@ -71,6 +74,55 @@ pub struct ViewArgs {
     pub map: Option<MapSel>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub png: Option<ImageOut>,
+    /// For `memory` only: where the block starts, as `read` takes an
+    /// address (`wMap`, `$C000`, `wMap+$10`, `03:4000`, `wram:1A0`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub addr: Option<String>,
+    /// For `memory` only: how many bytes, 1 to 65536.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub len: Option<u32>,
+    /// For `memory` only: also write the raw bytes to this file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub out: Option<String>,
+    /// For `memory` only: read never-written bytes as their power-on values,
+    /// under one warning, instead of failing with `uninitialized_read`.
+    #[serde(default, skip_serializing_if = "crate::request::is_false")]
+    pub allow_uninit: bool,
+}
+
+impl ViewArgs {
+    /// A view of `what` with no options.
+    pub fn new(what: ViewKind) -> ViewArgs {
+        ViewArgs {
+            what,
+            map: None,
+            png: None,
+            addr: None,
+            len: None,
+            out: None,
+            allow_uninit: false,
+        }
+    }
+}
+
+/// `view memory`: the block read, from `addr` on.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MemoryMade {
+    /// The start as the request gave it.
+    pub expr: String,
+    /// The CPU address of the first byte; absent for `region:offset`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub addr: Option<u16>,
+    /// The bank read, when the start names one (`03:4000`, a banked
+    /// symbol); otherwise the banks mapped at the head.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bank: Option<u16>,
+    /// The bytes, as lowercase hex: `"0a02ff"`.
+    #[serde(with = "crate::hex::bytes")]
+    pub bytes: Vec<u8>,
+    /// The file the raw bytes were written to, with `out`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub out: Option<String>,
 }
 
 /// One tile that isn't blank: eight rows of eight color indices (0–3).

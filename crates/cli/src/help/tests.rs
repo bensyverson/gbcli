@@ -228,6 +228,29 @@ fn read_help_says_a_bare_symbol_is_its_address() {
     }
 }
 
+/// `view memory` (leaf zuYlzs) is documented where an agent looks: view's
+/// help, read's help (which pointed nowhere for a block), and the schema.
+#[test]
+fn view_memory_is_in_view_help_read_help_and_the_schema() {
+    let view = verb(crate::verbs::by_name("view").unwrap());
+    for word in ["memory ADDR LEN", "--out FILE", "--allow-uninit", "hexdump"] {
+        assert!(view.contains(word), "{word}: {view}");
+    }
+    let read = verb(crate::verbs::by_name("read").unwrap());
+    assert!(read.contains("view memory"), "{read}");
+    let schema = crate::help::schema::SCHEMA;
+    assert!(schema.contains(r#""memory""#), "the what value");
+    assert!(
+        schema.contains("addr?: ADDR  len?: N  out?: PATH"),
+        "the memory args"
+    );
+    assert!(schema.contains("result.memory"), "the memory result");
+    assert!(
+        schema.contains(r#""what":"memory","addr":"wMap","len":16"#),
+        "an example"
+    );
+}
+
 #[test]
 fn measure_help_offers_the_key_timeline() {
     let text = verb(crate::verbs::by_name("measure").unwrap());

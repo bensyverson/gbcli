@@ -48,6 +48,7 @@ gbcli: bad_request: "soon" is not a duration
 remedy: use a number and a unit (s, m, h or d): 30m, 12h or 7d
 $ gbcli show --session bad --rom bad.gb
 exit 0
+machine model=dmg-b cgb=dmg
 registers a=$00 f=$00 b=$00 c=$00 d=$00 e=$00 h=$00 l=$00 sp=$0000 pc=$0000 flags=---- ime=0 halted=0 double_speed=0
 ppu ly=0 mode=hblank lcd_on=0
 rev s0

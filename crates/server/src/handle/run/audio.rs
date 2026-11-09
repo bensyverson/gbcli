@@ -166,7 +166,15 @@ pub(super) fn deliver(
     let log = decode(&collected.snapshot, &collected.writes);
     let channels: Vec<ApuChannel> = args.channels.iter().map(|c| c.apu()).collect();
     let shown = on_channels(&log, &channels);
-    let summary = args.summary.then(|| summarize(&shown));
+    let summary = args.summary.then(|| {
+        let mut summary = summarize(&shown);
+        if let Some(symbols) = machine.symbols() {
+            for w in &mut summary.writers {
+                w.symbol = symbols.label_any_bank(w.pc);
+            }
+        }
+        summary
+    });
     let lines = args.log.then(|| {
         shown
             .iter()

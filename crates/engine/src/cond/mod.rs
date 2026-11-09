@@ -2,6 +2,7 @@
 //! since evaluation reads only through `region`, `io_register` and
 //! `registers`, never `bus_read`. Used by breakpoint and watch conditions.
 
+mod block;
 mod cadence;
 pub(crate) mod eval;
 mod lex;
@@ -15,6 +16,7 @@ use gbcli_core::{Core, CoreError, Feature, Region};
 
 use crate::sym::{Symbol, Symbols};
 
+pub use block::{Block, BlockStart, MAX_BLOCK};
 pub(crate) use cadence::Triggers;
 pub use eval::{AccessValues, EvalCtx, EvalError, EvalWarning, StopTrigger, UninitRead, Verdict};
 

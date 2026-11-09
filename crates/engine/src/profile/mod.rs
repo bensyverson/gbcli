@@ -7,6 +7,8 @@ mod measure;
 mod names;
 mod raster;
 mod routines;
+#[cfg(test)]
+mod routines_tests;
 
 pub use frames::{FrameBudget, FrameSplit};
 pub use measure::{Leg, MeasureError, MeasureSpec, Measurement, Stats};

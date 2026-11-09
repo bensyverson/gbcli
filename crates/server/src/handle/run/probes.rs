@@ -183,6 +183,7 @@ fn profile_made(p: Profile, top: Option<u32>) -> ProfileMade {
             addr: r.entry.addr,
             calls: r.calls,
             exclusive_t: r.exclusive_t,
+            idle_t: r.idle_t,
             inclusive_t: r.inclusive_t,
         })
         .collect();

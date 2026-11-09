@@ -237,7 +237,8 @@ pub const RUN: &[FlagSpec] = &[
     switch(
         "audio-summary",
         "print the run's sound-register writes counted by register (wave RAM as WAVE) and \
-         by writer PC, most first, with the registers each wrote: the log in a few rows",
+         by writer PC (and its symbol, Label+$n), most first, with the registers each \
+         wrote: the log in a few rows",
     ),
     repeated(
         "audio-channel",
@@ -275,7 +276,8 @@ pub const RUN: &[FlagSpec] = &[
     ),
     switch(
         "profile",
-        "cycles per routine over the run, by .sym, most exclusive cycles first",
+        "cycles per routine over the run, by .sym, most exclusive cycles first; idle_t is \
+         the HALT share of a routine's exclusive cycles, a HALT reached by `jp` included",
     ),
     value(
         "top",
@@ -423,6 +425,12 @@ pub const VIEW: &[FlagSpec] = &[
     ),
     value("png", "PATH", "also save the view as a PNG"),
     SCALE,
+    value(
+        "out",
+        "FILE",
+        "for view memory: also write the raw bytes to FILE",
+    ),
+    ALLOW_UNINIT,
 ];
 
 pub const READ: &[FlagSpec] = &[SINCE, ALLOW_UNINIT];

@@ -153,6 +153,10 @@ impl SessionStore {
         Ok(SessionRow {
             name: self.name.clone(),
             rom: meta.rom.clone(),
+            model: meta.model,
+            cgb: self
+                .rom_header(meta)
+                .and_then(|h| gbcli_engine::cart::cgb_flag(&h)),
             head_frame,
             head_since,
             rev: meta.rev,
@@ -160,6 +164,17 @@ impl SessionStore {
             last_used: self.last_used().unwrap_or_else(now_secs),
             checkpoints: self.checkpoint_names()?.len(),
         })
+    }
+
+    /// The first $150 bytes of the session's ROM file as it is on disk now,
+    /// or `None` when it can't be read: enough for the header, without
+    /// reading a whole cart per row.
+    fn rom_header(&self, meta: &SessionFile) -> Option<Vec<u8>> {
+        use std::io::Read;
+        let file = fs::File::open(self.resolve(Path::new(&meta.rom))).ok()?;
+        let mut header = Vec::with_capacity(0x150);
+        file.take(0x150).read_to_end(&mut header).ok()?;
+        Some(header)
     }
 
     /// Resolves a stored or given path against the project directory.
@@ -254,6 +269,30 @@ mod tests {
         let store = f.bundle.session("typo").unwrap();
         fs::create_dir_all(store.dir()).unwrap();
         assert!(!store.exists());
+    }
+
+    /// A row names the model and what the ROM on disk was built for (leaf
+    /// jGOxRH), so a DMG session over a `--gbc` build shows it.
+    #[test]
+    fn a_listing_row_names_the_model_and_the_roms_cgb_flag() {
+        use gbcli_core::Model;
+        use gbcli_protocol::CgbFlag;
+        let f = Fixture::new("list-model");
+        f.demo();
+        let row = &f.bundle.list().unwrap()[0];
+        assert_eq!((row.model, row.cgb), (Model::DmgB, Some(CgbFlag::Dmg)));
+        // Rebuilt as dual mode: the row reads the file as it is now.
+        let mut rom = crate::test_fixture::ROM.to_vec();
+        rom[0x143] = 0x80;
+        fs::write(f.root.join("demo.gb"), &rom).unwrap();
+        assert_eq!(f.bundle.list().unwrap()[0].cgb, Some(CgbFlag::Dual));
+        fs::remove_file(f.root.join("demo.gb")).unwrap();
+        let gone = &f.bundle.list().unwrap()[0];
+        assert_eq!(
+            (gone.model, gone.cgb),
+            (Model::DmgB, None),
+            "no file, no flag"
+        );
     }
 
     #[test]

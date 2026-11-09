@@ -43,14 +43,7 @@ fn booted(name: &str) -> (Fixture, Handler) {
 fn tiles_are_data_first_and_skip_the_blank_ones() {
     let (_f, mut h) = booted("view-tiles");
     let before = reads(&mut h, vec!["t".into(), "pc".into()]);
-    let made = view(
-        &mut h,
-        ViewArgs {
-            what: ViewKind::Tiles,
-            map: None,
-            png: None,
-        },
-    );
+    let made = view(&mut h, ViewArgs::new(ViewKind::Tiles));
     assert_eq!(made.png, None, "no PNG unless asked");
     let VideoData::Tiles { tiles, blank } = made.data else {
         panic!("{:?}", made.data)
@@ -71,9 +64,8 @@ fn a_map_row_is_the_bytes_vram_holds() {
     let made = view(
         &mut h,
         ViewArgs {
-            what: ViewKind::Map,
             map: Some(MapSel::Map9800),
-            png: None,
+            ..ViewArgs::new(ViewKind::Map)
         },
     );
     let VideoData::Map {
@@ -115,12 +107,11 @@ fn oam_with_a_png_writes_the_sheet_beside_the_data() {
     let made = view(
         &mut h,
         ViewArgs {
-            what: ViewKind::Oam,
-            map: None,
             png: Some(ImageOut {
                 path: path.to_string_lossy().into_owned(),
                 scale: Some(1),
             }),
+            ..ViewArgs::new(ViewKind::Oam)
         },
     );
     let VideoData::Oam { height, objects } = made.data else {
@@ -143,15 +134,7 @@ fn oam_with_a_png_writes_the_sheet_beside_the_data() {
 }
 
 fn palettes_view(h: &mut Handler) -> VideoData {
-    view(
-        h,
-        ViewArgs {
-            what: ViewKind::Palettes,
-            map: None,
-            png: None,
-        },
-    )
-    .data
+    view(h, ViewArgs::new(ViewKind::Palettes)).data
 }
 
 #[test]
@@ -209,12 +192,11 @@ fn palettes_on_a_gbc_include_palette_ram() {
 fn palettes_have_no_png() {
     let (_f, mut h) = booted("view-palettes-png");
     let response = h.handle(&request(Op::View(ViewArgs {
-        what: ViewKind::Palettes,
-        map: None,
         png: Some(ImageOut {
             path: "p.png".into(),
             scale: None,
         }),
+        ..ViewArgs::new(ViewKind::Palettes)
     })));
     let err = response.outcome.expect_err("refused");
     assert_eq!(err.code, gbcli_protocol::ErrorCode::BadRequest);

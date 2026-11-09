@@ -53,6 +53,8 @@ pub fn summarize(log: &[&DecodedWrite]) -> AudioSummary {
         .into_iter()
         .map(|(pc, (writes, regs))| WriterWrites {
             pc,
+            // Named by the caller, which holds the symbols.
+            symbol: None,
             writes,
             registers: regs.into_iter().map(|(_, name)| name).collect(),
         })

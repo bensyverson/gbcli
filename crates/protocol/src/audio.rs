@@ -165,6 +165,11 @@ pub struct RegisterWrites {
 pub struct WriterWrites {
     /// The PC of the writing instruction.
     pub pc: u16,
+    /// The `.sym` label containing `pc`, as `Name` or `Name+$3` (as a stop
+    /// record spells it). The log keeps no bank, so a PC in a switchable
+    /// area is named only when the `.sym` has labels there in one bank.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub symbol: Option<String>,
     pub writes: u64,
     /// The registers it wrote, in address order.
     pub registers: Vec<String>,

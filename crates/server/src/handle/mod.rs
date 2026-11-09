@@ -12,6 +12,7 @@ mod head;
 mod history;
 mod listing;
 mod log;
+mod memory;
 mod opcode;
 mod pixels;
 mod reads;
@@ -397,6 +398,9 @@ mod keys_tests;
 
 #[cfg(test)]
 mod view_tests;
+
+#[cfg(test)]
+mod memory_tests;
 
 #[cfg(test)]
 mod equiv_tests;

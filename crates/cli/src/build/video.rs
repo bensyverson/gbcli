@@ -138,13 +138,28 @@ pub fn view(inv: &Invocation) -> Result<ViewArgs, Usage> {
         "map" => ViewKind::Map,
         "oam" => ViewKind::Oam,
         "palettes" => ViewKind::Palettes,
+        "memory" => return view_memory(inv),
         other => {
             return Err(Usage::new(
-                format!("`{other}` isn't tiles, map, oam or palettes"),
+                format!("`{other}` isn't tiles, map, oam, palettes or memory"),
                 "e.g. `gbcli view oam`",
             ));
         }
     };
+    if let Some(extra) = inv.positionals.get(1) {
+        return Err(Usage::new(
+            format!("`gbcli view {}` doesn't take `{extra}`", inv.positionals[0]),
+            "only view memory takes an address and a length: `gbcli view memory wMap 16`",
+        ));
+    }
+    for flag in MEMORY_ONLY {
+        if inv.has(flag) {
+            return Err(Usage::new(
+                format!("--{flag} only applies to view memory"),
+                "drop it, or `gbcli view memory ADDR LEN`",
+            ));
+        }
+    }
     let map = inv
         .one("map")
         .map(|m| match m {
@@ -171,5 +186,49 @@ pub fn view(inv: &Invocation) -> Result<ViewArgs, Usage> {
         }
         None => None,
     };
-    Ok(ViewArgs { what, map, png })
+    Ok(ViewArgs {
+        map,
+        png,
+        ..ViewArgs::new(what)
+    })
+}
+
+/// The flags only `view memory` takes, refused on the VRAM views.
+const MEMORY_ONLY: [&str; 2] = ["out", "allow-uninit"];
+
+/// The VRAM views' flags, refused on `view memory`.
+const VRAM_ONLY: [&str; 3] = ["map", "png", "scale"];
+
+/// `view memory ADDR LEN [--out FILE] [--allow-uninit]`.
+fn view_memory(inv: &Invocation) -> Result<ViewArgs, Usage> {
+    let (Some(addr), Some(len)) = (inv.positionals.get(1), inv.positionals.get(2)) else {
+        return Err(Usage::new(
+            "`gbcli view memory` needs ADDR and LEN",
+            "e.g. `gbcli view memory wMap 16`: 16 bytes from wMap",
+        ));
+    };
+    if let Some(flag) = VRAM_ONLY.into_iter().find(|f| inv.has(f)) {
+        return Err(Usage::new(
+            format!("--{flag} doesn't apply to view memory"),
+            "drop it; --out FILE writes the raw bytes",
+        ));
+    }
+    let hex = len.strip_prefix('$').or_else(|| len.strip_prefix("0x"));
+    let parsed = match hex {
+        Some(digits) => u32::from_str_radix(digits, 16),
+        None => len.parse::<u32>(),
+    };
+    let len = parsed.map_err(|_| {
+        Usage::new(
+            format!("LEN is a count of bytes, not `{len}`"),
+            "decimal or $hex, e.g. `gbcli view memory wMap 16` or `... wMap $400`",
+        )
+    })?;
+    Ok(ViewArgs {
+        addr: Some(addr.clone()),
+        len: Some(len),
+        out: inv.one("out").map(str::to_string),
+        allow_uninit: inv.has("allow-uninit"),
+        ..ViewArgs::new(ViewKind::Memory)
+    })
 }

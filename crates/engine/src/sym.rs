@@ -179,6 +179,30 @@ impl Symbols {
             .max_by_key(|s| (s.addr, !is_end_marker(&s.name)))
     }
 
+    /// `addr` as `Label+$n` when its bank isn't known (an audio writer's PC):
+    /// only in a fixed area, or a switchable one this `.sym` has labels in
+    /// for one bank alone; elsewhere naming a bank would be a guess.
+    pub fn label_any_bank(&self, addr: u16) -> Option<String> {
+        let area = Area::of(addr);
+        let switchable = matches!(area, Area::RomX | Area::Vram | Area::Sram | Area::WramX);
+        let bank = if switchable {
+            let mut banks = self
+                .symbols
+                .iter()
+                .filter(|s| Area::of(s.addr) == area)
+                .map(|s| s.bank);
+            let first = banks.next()?;
+            if banks.any(|b| b != first) {
+                return None;
+            }
+            first
+        } else {
+            0
+        };
+        let s = self.containing(bank, addr)?;
+        Some(crate::addr::label(&s.name, i64::from(addr - s.addr)))
+    }
+
     /// Names close to `name` (case-insensitive edit distance at most 2), nearest first.
     pub fn near_misses(&self, name: &str) -> Vec<&str> {
         let lower = name.to_ascii_lowercase();
@@ -312,6 +336,22 @@ fn glob(pattern: &[char], name: &[char]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A PC recorded without its bank (an audio writer's) is named only
+    /// where the bank can't matter (leaf jGOxRH): a fixed area, or a
+    /// switchable one the `.sym` has labels in for one bank alone.
+    #[test]
+    fn a_label_without_a_bank_is_named_only_where_one_bank_can_hold_it() {
+        let one = Symbols::parse("00:0150 Main\n01:4000 Music\n00:c000 wX\n").unwrap();
+        assert_eq!(one.label_any_bank(0x0153).as_deref(), Some("Main+$3"));
+        assert_eq!(one.label_any_bank(0x0150).as_deref(), Some("Main"));
+        assert_eq!(one.label_any_bank(0x4010).as_deref(), Some("Music+$10"));
+        assert_eq!(one.label_any_bank(0xC000).as_deref(), Some("wX"));
+        assert_eq!(one.label_any_bank(0x0100), None, "below every label");
+        let two = Symbols::parse("00:0150 Main\n01:4000 Music\n02:4000 Sfx\n").unwrap();
+        assert_eq!(two.label_any_bank(0x4010), None, "bank 1 or 2");
+        assert_eq!(two.label_any_bank(0x0151).as_deref(), Some("Main+$1"));
+    }
 
     #[test]
     fn an_exported_constant_line_is_not_an_address_and_is_skipped() {

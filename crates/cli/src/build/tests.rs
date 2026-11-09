@@ -413,7 +413,7 @@ fn the_read_verbs_for_shots_views_symbols_and_checkpoints_build_their_ops() {
     assert_eq!((args.map, args.png), (None, None));
     assert_eq!(
         command(&["view", "sprites"]).unwrap_err().message,
-        "`sprites` isn't tiles, map, oam or palettes"
+        "`sprites` isn't tiles, map, oam, palettes or memory"
     );
     assert_eq!(
         command(&["view", "tiles", "--scale", "2"])
@@ -484,6 +484,54 @@ fn run_oam_log_is_a_switch() {
     };
     assert!(oam_log(&["run", "--frames", "3", "--oam-log"]));
     assert!(!oam_log(&["run", "--frames", "3"]));
+}
+
+#[test]
+fn view_memory_takes_a_start_a_length_and_its_own_flags() {
+    let Op::View(args) = request(&[
+        "view",
+        "memory",
+        "wMap+$10",
+        "16",
+        "--out",
+        "m.bin",
+        "--allow-uninit",
+    ])
+    .1
+    else {
+        panic!()
+    };
+    assert_eq!(args.what, gbcli_protocol::ViewKind::Memory);
+    assert_eq!(args.addr.as_deref(), Some("wMap+$10"));
+    assert_eq!(args.len, Some(16));
+    assert_eq!(args.out.as_deref(), Some("m.bin"));
+    assert!(args.allow_uninit);
+    let Op::View(args) = request(&["view", "memory", "$C000", "$400"]).1 else {
+        panic!()
+    };
+    assert_eq!(
+        (args.len, args.out, args.allow_uninit),
+        (Some(0x400), None, false)
+    );
+    let png = command(&["view", "memory", "wMap", "4", "--png", "m.png"]).unwrap_err();
+    assert!(png.remedy.contains("--out"), "{png:?}");
+
+    let missing = command(&["view", "memory", "wMap"]).unwrap_err();
+    assert!(missing.message.contains("LEN"), "{missing:?}");
+    let bad_len = command(&["view", "memory", "wMap", "lots"]).unwrap_err();
+    assert!(bad_len.message.contains("`lots`"), "{bad_len:?}");
+    let extra = command(&["view", "tiles", "wMap"]).unwrap_err();
+    assert!(extra.message.contains("`wMap`"), "{extra:?}");
+    assert!(extra.remedy.contains("view memory"), "{extra:?}");
+    let out = command(&["view", "oam", "--out", "o.bin"]).unwrap_err();
+    assert!(out.message.contains("--out"), "{out:?}");
+    let uninit = command(&["view", "oam", "--allow-uninit"]).unwrap_err();
+    assert!(uninit.message.contains("--allow-uninit"), "{uninit:?}");
+    // The VRAM views still take theirs.
+    assert!(matches!(
+        request(&["view", "map", "--map", "window"]).1,
+        Op::View(_)
+    ));
 }
 
 #[test]

@@ -49,6 +49,7 @@ pub const STOP: &[u8] = include_bytes!("../../sameboy/tests/roms/stop.gb");
 /// Plays notes on all four channels for about 32 frames, then turns the APU
 /// off and writes a register while it is off (`tune.asm`).
 pub const TUNE: &[u8] = include_bytes!("../../audio/tests/roms/tune.gb");
+pub const TUNE_SYM: &[u8] = include_bytes!("../../audio/tests/roms/tune.sym");
 /// Saves $42 to bank 12 of a flash chip with GB Studio's swapped-data
 /// sequence, counting it in $C000 once it reads back (`flash_save.asm`).
 pub const FLASH_SAVE: &[u8] = include_bytes!("../../engine/tests/roms/flash_save.gb");

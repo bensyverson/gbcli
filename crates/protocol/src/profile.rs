@@ -111,6 +111,11 @@ pub struct RoutineRow {
     pub addr: u16,
     pub calls: u64,
     pub exclusive_t: u64,
+    /// Of `exclusive_t`, the cycles the CPU spent halted or stopped in this
+    /// routine's frame, a HALT reached by a tail jump (`jp WaitFrame`)
+    /// included. 0 in a response from before the field.
+    #[serde(default)]
+    pub idle_t: u64,
     pub inclusive_t: u64,
 }
 

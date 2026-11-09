@@ -54,6 +54,7 @@ pub fn profile(p: &ProfileMade) -> String {
             .field("addr", addr(r.addr))
             .field("calls", r.calls)
             .field("exclusive_t", r.exclusive_t)
+            .field("idle_t", r.idle_t)
             .field("inclusive_t", r.inclusive_t)
             .line();
     }

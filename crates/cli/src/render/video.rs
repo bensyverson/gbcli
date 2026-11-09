@@ -1,7 +1,7 @@
 //! Rows for screenshots, VRAM views, symbols, stored states and the keys a
 //! run didn't reach.
 
-use gbcli_protocol::{OamLogMade, ResultBody, VideoData};
+use gbcli_protocol::{MemoryMade, OamLogMade, ResultBody, VideoData};
 
 use super::row::{Row, addr, byte};
 use super::stop::since;
@@ -50,6 +50,9 @@ pub fn rows(r: &ResultBody) -> String {
                 .field("scale", png.scale)
                 .line();
         }
+    }
+    if let Some(block) = &r.memory {
+        out += &memory(block);
     }
     if let Some(symbols) = &r.symbols {
         for s in symbols {
@@ -193,6 +196,35 @@ fn oam_log(log: &OamLogMade) -> String {
     out
 }
 
+/// `view memory`: a header row, then 16 bytes a row indented under it, each
+/// row led by its first byte's address, as the map view prints its bytes.
+fn memory(block: &MemoryMade) -> String {
+    const ROW: usize = 16;
+    let mut out = Row::new("memory")
+        .field("expr", &block.expr)
+        .opt("addr", block.addr.map(addr))
+        .opt("bank", block.bank)
+        .field("len", block.bytes.len())
+        .line();
+    for (i, chunk) in block.bytes.chunks(ROW).enumerate() {
+        let offset = i * ROW;
+        let lead = match (block.bank, block.addr) {
+            (Some(bank), Some(a)) => format!("{bank:02X}:{:04X}", usize::from(a) + offset),
+            (None, Some(a)) => format!("${:04X}", usize::from(a) + offset),
+            _ => format!("+${offset:04X}"),
+        };
+        let bytes: Vec<String> = chunk.iter().map(|b| format!("{b:02x}")).collect();
+        out += &format!("  {lead} {}\n", bytes.join(" "));
+    }
+    if let Some(path) = &block.out {
+        out += &Row::new("out")
+            .field("path", path)
+            .field("bytes", block.bytes.len())
+            .line();
+    }
+    out
+}
+
 fn indented(lines: &[String]) -> String {
     lines.iter().map(|l| format!("  {l}\n")).collect()
 }
@@ -211,7 +243,49 @@ pub fn unapplied(keys: Option<&[gbcli_protocol::KeyEvent]>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::unapplied;
+    use super::{memory, unapplied};
+    use gbcli_protocol::MemoryMade;
+
+    fn block(expr: &str, addr: Option<u16>, bank: Option<u16>, len: u8) -> MemoryMade {
+        MemoryMade {
+            expr: expr.into(),
+            addr,
+            bank,
+            bytes: (0..len).collect(),
+            out: None,
+        }
+    }
+
+    #[test]
+    fn a_memory_view_is_sixteen_bytes_a_row_led_by_the_address() {
+        assert_eq!(
+            memory(&block("wMap", Some(0xC0F8), None, 20)),
+            "memory expr=wMap addr=$C0F8 len=20\n  \
+             $C0F8 00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f\n  \
+             $C108 10 11 12 13\n"
+        );
+    }
+
+    #[test]
+    fn a_banked_or_region_start_leads_its_rows_in_its_own_terms() {
+        assert_eq!(
+            memory(&block("03:4000", Some(0x4000), Some(3), 2)),
+            "memory expr=03:4000 addr=$4000 bank=3 len=2\n  03:4000 00 01\n"
+        );
+        assert_eq!(
+            memory(&block("wram:1A0", None, None, 17)),
+            "memory expr=wram:1A0 len=17\n  \
+             +$0000 00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f\n  \
+             +$0010 10\n"
+        );
+        let mut written = block("wMap", Some(0xC000), None, 1);
+        written.out = Some("map.bin".into());
+        assert!(
+            memory(&written).ends_with("  $C000 00\nout path=map.bin bytes=1\n"),
+            "{}",
+            memory(&written)
+        );
+    }
 
     /// A long keys file and a short run left hundreds of events, printed
     /// one row each and again in a warning (leaf emtFvQ): one row says how

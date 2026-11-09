@@ -9,7 +9,7 @@ exit 0
 {"id":"cli","ok":true,"rev":"s3","result":{"stop":{"reason":"step_done","unit":"frame","pc":364,"bank":0,"symbol":"Work+$9","time":{"ticks":12183208,"t":210496,"since":{"kind":"boot"},"frame":3,"ly":144,"dot":null},"frame_shown":{"n":3,"vblank":"normal"},"budget":{"ticks":140384,"instructions":5644,"frames":1,"limits":{},"defaulted":false}}},"warnings":[]}
 $ gbcli show --session demo --json
 exit 0
-{"id":"cli","ok":true,"rev":"s3","result":{"stop":{"reason":"step_done","unit":"frame","pc":364,"bank":0,"symbol":"Work+$9","time":{"ticks":12183208,"t":210496,"since":{"kind":"boot"},"frame":3,"ly":144,"dot":null},"frame_shown":{"n":3,"vblank":"normal"},"budget":{"ticks":140384,"instructions":5644,"frames":1,"limits":{},"defaulted":false}},"registers":{"a":0,"f":0,"b":0,"c":19,"d":0,"e":216,"h":192,"l":0,"sp":49186,"pc":364,"af":0,"bc":19,"de":216,"hl":49152,"flags":{"z":false,"n":false,"h":false,"c":false},"ime":false,"halted":false,"double_speed":false},"ppu":{"ly":144,"mode":"vblank","lcd_on":true}},"warnings":[]}
+{"id":"cli","ok":true,"rev":"s3","result":{"stop":{"reason":"step_done","unit":"frame","pc":364,"bank":0,"symbol":"Work+$9","time":{"ticks":12183208,"t":210496,"since":{"kind":"boot"},"frame":3,"ly":144,"dot":null},"frame_shown":{"n":3,"vblank":"normal"},"budget":{"ticks":140384,"instructions":5644,"frames":1,"limits":{},"defaulted":false}},"machine":{"model":"dmg-b","cgb":"dmg"},"registers":{"a":0,"f":0,"b":0,"c":19,"d":0,"e":216,"h":192,"l":0,"sp":49186,"pc":364,"af":0,"bc":19,"de":216,"hl":49152,"flags":{"z":false,"n":false,"h":false,"c":false},"ime":false,"halted":false,"double_speed":false},"ppu":{"ly":144,"mode":"vblank","lcd_on":true}},"warnings":[]}
 $ gbcli read u16[wFrame] pc frame --session demo --json
 exit 0
 {"id":"cli","ok":true,"rev":"s3","result":{"reads":[{"expr":"u16[wFrame]","value":1878},{"expr":"pc","value":364},{"expr":"frame","value":3}]},"warnings":[]}
@@ -90,7 +90,7 @@ exit 0
 {"id":"cli","ok":true,"result":{"gaps":[{"feature":"extra_oam","count":1}]},"warnings":[]}
 $ gbcli sessions --json
 exit 0
-{"id":"cli","ok":true,"result":{"sessions":[{"name":"demo","rom":"demo.gb","head_frame":4,"head_since":{"kind":"boot"},"rev":"s12","size_bytes":*,"last_used":*,"checkpoints":1}]},"warnings":[]}
+{"id":"cli","ok":true,"result":{"sessions":[{"name":"demo","rom":"demo.gb","model":"dmg-b","cgb":"dmg","head_frame":4,"head_since":{"kind":"boot"},"rev":"s12","size_bytes":*,"last_used":*,"checkpoints":1}]},"warnings":[]}
 $ gbcli sessions prune --unused-for 7d --json
 exit 0
 {"id":"cli","ok":true,"result":{"pruned":[],"kept":[],"busy":[]},"warnings":[]}

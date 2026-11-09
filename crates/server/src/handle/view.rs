@@ -29,6 +29,16 @@ impl Handler {
         args: &ViewArgs,
         warnings: &mut Vec<String>,
     ) -> Result<ResultBody, Failure> {
+        if args.what == ViewKind::Memory {
+            return self.view_memory(store, meta, args, warnings);
+        }
+        if args.addr.is_some() || args.len.is_some() || args.out.is_some() || args.allow_uninit {
+            return Err(Failure::new(gbcli_protocol::ErrorBody::new(
+                gbcli_protocol::ErrorCode::BadRequest,
+                "only the memory view takes a start, a length, --out or --allow-uninit",
+                "drop them, or view memory ADDR LEN",
+            )));
+        }
         if args.map.is_some() && args.what != ViewKind::Map {
             return Err(Failure::new(gbcli_protocol::ErrorBody::new(
                 gbcli_protocol::ErrorCode::BadRequest,
@@ -71,6 +81,7 @@ fn view_of(machine: &Machine, args: &ViewArgs, host: &Host) -> Result<ViewMade, 
         ViewKind::Map => map(core, choice).map_err(failed)?,
         ViewKind::Oam => objects(core).map_err(failed)?,
         ViewKind::Palettes => palettes(core)?,
+        ViewKind::Memory => unreachable!("answered before the VRAM views"),
     };
     let png = match &args.png {
         None => None,
@@ -79,7 +90,9 @@ fn view_of(machine: &Machine, args: &ViewArgs, host: &Host) -> Result<ViewMade, 
                 ViewKind::Tiles => gbcli_view::tileset(core, TilePalette::Background(0)),
                 ViewKind::Map => gbcli_view::tilemap(core, choice),
                 ViewKind::Oam => gbcli_view::oam_sheet(core),
-                ViewKind::Palettes => unreachable!("refused before the machine loads"),
+                ViewKind::Palettes | ViewKind::Memory => {
+                    unreachable!("refused before the machine loads")
+                }
             };
             Some(write_png(
                 image.map_err(failed)?,

@@ -67,6 +67,10 @@ pub struct RoutineCost {
     pub calls: u64,
     /// Cycles of its own instructions.
     pub exclusive_t: u64,
+    /// Of `exclusive_t`, the steps where the CPU was halted or stopped: a
+    /// routine that waits in HALT, or tail-jumps (`jp WaitFrame`) into code
+    /// that does, has its wait here.
+    pub idle_t: u64,
     /// Cycles from entry to return, callees included.
     pub inclusive_t: u64,
 }
@@ -101,12 +105,15 @@ struct Frame {
     start_t: u64,
     /// Cycles charged to this frame so far, added to its routine at pop.
     exclusive_t: u64,
+    /// Of those, the idle steps.
+    idle_t: u64,
 }
 
 #[derive(Default)]
 struct Cost {
     calls: u64,
     exclusive_t: u64,
+    idle_t: u64,
     inclusive_t: u64,
     /// Open frames of this routine, so recursion is counted once.
     active: u32,
@@ -127,6 +134,7 @@ pub struct Routines {
     ticks: u64,
     shadow: ShadowStats,
     root_exclusive_t: u64,
+    root_idle_t: u64,
 }
 
 impl EventSink for Routines {
@@ -163,15 +171,20 @@ impl EventSink for Routines {
                 self.push(callee, pc, sp_after);
             }
             // Charged in the frame, not the map: this runs every step.
+            let idle = if step == CpuStep::Idle { t } else { 0 };
             match self.stack.last_mut() {
-                Some(frame) => frame.exclusive_t += t,
-                None => self.root_exclusive_t += t,
+                Some(frame) => {
+                    frame.exclusive_t += t;
+                    frame.idle_t += idle;
+                }
+                None => {
+                    self.root_exclusive_t += t;
+                    self.root_idle_t += idle;
+                }
             }
             self.total_t += t;
             self.ticks += u64::from(ticks);
-            if step == CpuStep::Idle {
-                self.idle_t += t;
-            }
+            self.idle_t += idle;
             if let CpuStep::Instruction { opcode } = step {
                 if let Some(len) = call_len(opcode)
                     && sp_after == sp_before.wrapping_sub(2)
@@ -215,6 +228,7 @@ impl Routines {
                 name: super::names::routine_name(symbols, entry),
                 calls: c.calls,
                 exclusive_t: c.exclusive_t,
+                idle_t: c.idle_t,
                 inclusive_t: c.inclusive_t,
             })
             .collect();
@@ -246,6 +260,7 @@ impl Routines {
             let cost = self.costs.entry(root).or_default();
             cost.inclusive_t += self.total_t;
             cost.exclusive_t += std::mem::take(&mut self.root_exclusive_t);
+            cost.idle_t += std::mem::take(&mut self.root_idle_t);
         }
     }
 
@@ -259,6 +274,7 @@ impl Routines {
             sp,
             start_t: self.total_t,
             exclusive_t: 0,
+            idle_t: 0,
         });
     }
 
@@ -269,6 +285,7 @@ impl Routines {
         let cost = self.costs.entry(frame.entry).or_default();
         cost.active -= 1;
         cost.exclusive_t += frame.exclusive_t;
+        cost.idle_t += frame.idle_t;
         if cost.active == 0 {
             cost.inclusive_t += self.total_t - frame.start_t;
         }

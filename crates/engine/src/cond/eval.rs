@@ -55,6 +55,9 @@ impl fmt::Display for UninitRead {
 pub enum EvalWarning {
     /// `allow_uninit` read a never-written byte's power-on value.
     UninitializedRead(UninitRead),
+    /// A block read with `allow_uninit` read `count` never-written bytes,
+    /// `first` the lowest: one warning for the block, not one a byte.
+    UninitializedBytes { first: UninitRead, count: usize },
     /// A run ended while a stop trigger's condition was waiting on a byte
     /// that is still unwritten, so it could not hold (design §8).
     NotYet {
@@ -81,6 +84,11 @@ impl fmt::Display for EvalWarning {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             EvalWarning::UninitializedRead(read) => write!(f, "uninitialized read of {read}"),
+            EvalWarning::UninitializedBytes { first, count } => write!(
+                f,
+                "uninitialized read of {count} never-written bytes, the first {first}: their \
+                 power-on values are random"
+            ),
             EvalWarning::NotYet { trigger, read } => {
                 let what = match trigger {
                     StopTrigger::Until => "the --until predicate".to_string(),
@@ -299,40 +307,50 @@ fn read(
         Width::U16 | Width::S16 => 2,
     };
     let mut bytes = [0u8; 2];
-    for (i, byte) in bytes.iter_mut().enumerate().take(len) {
-        let (target, addr) = match place {
-            Place::Cpu(e) => {
-                let value = eval(e, ctx, warnings)?;
-                let base =
-                    u16::try_from(value).map_err(|_| EvalError::AddressOutOfRange { value })?;
-                let addr = base.wrapping_add(i as u16);
-                (mem::target(ctx.core, addr)?, Some(addr))
-            }
-            Place::Banked { bank, addr } => {
-                let addr = addr.wrapping_add(i as u16);
-                (mem::target_in_bank(ctx.core, *bank, addr)?, Some(addr))
-            }
-            Place::Region { region, offset } => (
-                Target::Backing {
-                    region: *region,
-                    offset: *offset as usize + i,
-                },
-                None,
-            ),
-        };
-        if let Target::Backing { region, offset } = target {
-            check_written(ctx, region, offset, addr, warnings)?;
-        }
-        *byte = match target {
-            Target::Backing { region, offset } => mem::read_backing(ctx.core, region, offset)?,
-            Target::Io(reg) => ctx.core.io_register(reg)?,
-        };
+    for (i, b) in bytes.iter_mut().enumerate().take(len) {
+        *b = byte(place, i as u16, ctx, warnings)?;
     }
     Ok(match width {
         Width::U8 => i64::from(bytes[0]),
         Width::S8 => i64::from(bytes[0] as i8),
         Width::U16 => i64::from(u16::from_le_bytes(bytes)),
         Width::S16 => i64::from(i16::from_le_bytes(bytes)),
+    })
+}
+
+/// The byte `i` bytes on from where `place` starts, read without side
+/// effects; a never-written byte fails unless `allow_uninit` (design §8).
+pub(super) fn byte(
+    place: &Place,
+    i: u16,
+    ctx: &EvalCtx<'_>,
+    warnings: &mut Vec<EvalWarning>,
+) -> Result<u8, EvalError> {
+    let (target, addr) = match place {
+        Place::Cpu(e) => {
+            let value = eval(e, ctx, warnings)?;
+            let base = u16::try_from(value).map_err(|_| EvalError::AddressOutOfRange { value })?;
+            let addr = base.wrapping_add(i);
+            (mem::target(ctx.core, addr)?, Some(addr))
+        }
+        Place::Banked { bank, addr } => {
+            let addr = addr.wrapping_add(i);
+            (mem::target_in_bank(ctx.core, *bank, addr)?, Some(addr))
+        }
+        Place::Region { region, offset } => (
+            Target::Backing {
+                region: *region,
+                offset: *offset as usize + usize::from(i),
+            },
+            None,
+        ),
+    };
+    if let Target::Backing { region, offset } = target {
+        check_written(ctx, region, offset, addr, warnings)?;
+    }
+    Ok(match target {
+        Target::Backing { region, offset } => mem::read_backing(ctx.core, region, offset)?,
+        Target::Io(reg) => ctx.core.io_register(reg)?,
     })
 }
 

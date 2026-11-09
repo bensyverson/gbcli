@@ -40,12 +40,17 @@ equiv   frames: N  b?: {rom?: PATH, sym?: PATH, writes?: [WRITE]}  at?  from?
 shot    shot: SHOT  since?
         SHOT = {path: PATH, scale?: 1-8, crop?: {x, y, width, height},
                 live?: bool, any_frame?: bool}
-view    what: "tiles"|"map"|"oam"|"palettes"  map?: "background"|"window"|"9800"|"9c00"
-        png?: {path: PATH, scale?: N}
+view    what: "tiles"|"map"|"oam"|"palettes"|"memory"
+        map?: "background"|"window"|"9800"|"9c00"  png?: {path: PATH, scale?: N}
+        memory only: addr?: ADDR  len?: N  out?: PATH  allow_uninit?: bool
+        (addr and len required; len 1-65536; result.memory: {expr, addr?,
+        bank?, bytes: HEX, out?}: each byte as read reads it, addr absent
+        for "wram:1A0", bank only when ADDR names one; out gets the raw bytes)
 sym     pattern: GLOB
 checkpoints  —
 step    unit?: "instruction"|"over"|"out"|"frame"|"scanline"
-show    —
+show    —   (result.machine: {model, cgb?: "dmg"|"dual"|"only"}, the header
+        CGB flag at $0143 of the ROM loaded; sessions rows carry both too)
 read    reads: [EXPR]  since?  allow_uninit?
         (each read is {expr, value}; "oam[N]" is {expr, oam: {index, y, x,
         tile, attr, priority, yflip, xflip, palette?, cgb_bank?, cgb_palette?}}:
@@ -100,9 +105,9 @@ Response, one line per request:
   {"id", "ok": false, "rev"?, "error": {"code", "exit", "message", "remedy",
    "stop"?, "keys_unapplied"?, "flash_notes"?, "result"?}, "warnings"}
 result holds only the fields the op fills: stop, reads, expect, shot, measure, profile,
-frame_budget, raster, audio, oam_log, equiv, view, symbols,
+frame_budget, raster, audio, oam_log, equiv, view, memory, symbols,
 checkpoints, keys_unapplied, writes, checkpoint, restored, breakpoint, watch,
-deleted, registers, ppu, sessions, events, gaps, pruned, kept, busy, removed,
+deleted, machine, registers, ppu, sessions, events, gaps, pruned, kept, busy, removed,
 build, assets, doctor, created, song, song_problem, pixels, pixels_problem,
 opcodes, version,
 power_cycle, sav,
@@ -189,6 +194,7 @@ Examples:
   {"id":"33","op":"version"}
   {"id":"34","op":"assets","args":{"manifest":{"images":[{"image":"tiles/font.png","file":"art/font.png"}]},"target":"gbc"}}
   {"id":"35","op":"run","args":{"at":"floor5","frames":900,"keys":["A@4700","-A@4702"],"keys_since":"boot","expect":["[wFail] == 0"]}}
+  {"id":"36","op":"view","args":{"what":"memory","addr":"wMap","len":16,"out":"map.bin"}}
 "#;
 
 #[cfg(test)]

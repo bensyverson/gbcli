@@ -48,6 +48,7 @@ pub fn rows(audio: &AudioMade) -> String {
         for w in &summary.writers {
             out += &Row::new("audio_writer")
                 .field("pc", addr(w.pc))
+                .opt("symbol", w.symbol.as_deref())
                 .field("writes", w.writes)
                 .field("registers", w.registers.join(","))
                 .line();

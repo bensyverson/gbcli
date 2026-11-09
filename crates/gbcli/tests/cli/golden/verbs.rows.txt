@@ -16,6 +16,7 @@ budget frames=1 instructions=5644 ticks=140384
 rev s3
 $ gbcli show --session demo
 exit 0
+machine model=dmg-b cgb=dmg
 registers a=$00 f=$00 b=$00 c=$13 d=$00 e=$D8 h=$C0 l=$00 sp=$C022 pc=$016C flags=---- ime=0 halted=0 double_speed=0
 ppu ly=144 mode=vblank lcd_on=1
 stop step_done unit=frame pc=$016C bank=0 symbol=Work+$9 frame=3 t=210496 since=boot ticks=12183208 ly=144 shown=3 vblank=normal
@@ -441,7 +442,7 @@ exit 0
 gap feature=extra_oam count=1
 $ gbcli sessions
 exit 0
-session name=demo rom=demo.gb rev=s12 head_frame=4 checkpoints=1 size_bytes=* last_used=*
+session name=demo rom=demo.gb model=dmg-b cgb=dmg rev=s12 head_frame=4 checkpoints=1 size_bytes=* last_used=*
 $ gbcli sessions prune --unused-for 7d
 exit 0
 pruned none

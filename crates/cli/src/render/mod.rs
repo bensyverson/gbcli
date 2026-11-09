@@ -17,7 +17,7 @@ mod video;
 
 use std::io::Write;
 
-use gbcli_protocol::{ErrorBody, EventLogLine, PpuModeView, Response, ResultBody};
+use gbcli_protocol::{CgbFlag, ErrorBody, EventLogLine, PpuModeView, Response, ResultBody};
 
 use crate::exec::emit;
 pub use row::Row;
@@ -83,6 +83,13 @@ pub fn error(err: &mut dyn Write, body: &ErrorBody) -> u8 {
 /// absent and prints nothing.
 pub fn rows(r: &ResultBody) -> String {
     let mut out = String::new();
+    if let Some(m) = &r.machine {
+        let json = serde_json::to_value(m).expect("serializes");
+        out += &Row::new("machine")
+            .field("model", json["model"].as_str().unwrap_or("?"))
+            .opt("cgb", m.cgb.map(CgbFlag::name))
+            .line();
+    }
     if let Some(regs) = &r.registers {
         let f = &regs.flags;
         let flags: String = [(f.z, 'Z'), (f.n, 'N'), (f.h, 'H'), (f.c, 'C')]
@@ -218,9 +225,12 @@ pub fn rows(r: &ResultBody) -> String {
     }
     if let Some(sessions) = &r.sessions {
         for s in sessions {
+            let json = serde_json::to_value(s).expect("serializes");
             out += &Row::new("session")
                 .field("name", &s.name)
                 .field("rom", &s.rom)
+                .field("model", json["model"].as_str().unwrap_or("?"))
+                .opt("cgb", s.cgb.map(CgbFlag::name))
                 .field("rev", s.rev)
                 .opt("head_frame", s.head_frame)
                 .field("checkpoints", s.checkpoints)

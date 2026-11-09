@@ -5,6 +5,7 @@
 
 use std::fmt;
 
+const CGB_FLAG: usize = 0x143;
 const CART_TYPE: usize = 0x147;
 const ROM_SIZE: usize = 0x148;
 const RAM_SIZE: usize = 0x149;
@@ -246,6 +247,17 @@ fn ram_size(byte: u8) -> Option<usize> {
         0x04 => 128 * KIB,
         0x05 => 64 * KIB,
         _ => return None,
+    })
+}
+
+/// The header's CGB flag ($0143), or `None` for a file too short to hold it.
+/// Bit 7 is all the CGB boot ROM tests; `$C0` is the CGB-only convention.
+pub fn cgb_flag(rom: &[u8]) -> Option<gbcli_protocol::CgbFlag> {
+    use gbcli_protocol::CgbFlag;
+    Some(match *rom.get(CGB_FLAG)? {
+        0xC0 => CgbFlag::Only,
+        b if b & 0x80 != 0 => CgbFlag::Dual,
+        _ => CgbFlag::Dmg,
     })
 }
 

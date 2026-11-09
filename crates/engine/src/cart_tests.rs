@@ -114,3 +114,26 @@ fn a_file_too_short_for_a_header_says_so_and_nothing_else() {
         [HeaderMismatch::NoHeader { len: 0x100 }]
     );
 }
+
+/// The header's CGB flag ($0143) as the CGB boot ROM reads it (leaf
+/// jGOxRH): bit 7 clear is a DMG game, $C0 is CGB only, any other value
+/// with bit 7 set runs in CGB mode on a CGB and DMG mode on a DMG.
+#[test]
+fn the_cgb_flag_reads_dmg_dual_or_only_from_0143() {
+    use gbcli_protocol::CgbFlag;
+    let with = |byte: u8| {
+        let mut bytes = vec![0u8; 0x150];
+        bytes[0x143] = byte;
+        cgb_flag(&bytes)
+    };
+    assert_eq!(with(0x00), Some(CgbFlag::Dmg));
+    assert_eq!(with(0x7F), Some(CgbFlag::Dmg));
+    assert_eq!(with(0x80), Some(CgbFlag::Dual));
+    assert_eq!(
+        with(0x84),
+        Some(CgbFlag::Dual),
+        "bit 7 is what the boot ROM tests"
+    );
+    assert_eq!(with(0xC0), Some(CgbFlag::Only));
+    assert_eq!(cgb_flag(&[0; 0x143]), None, "too short for the byte");
+}

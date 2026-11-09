@@ -1,11 +1,12 @@
 use gbcli_bundle::SessionStore;
-use gbcli_core::Gap;
+use gbcli_core::{Gap, Region};
+use gbcli_engine::cart::cgb_flag;
 use gbcli_engine::cond::{Condition, EvalCtx, EvalWarning, ExprError, oam_entry};
 use gbcli_engine::inspect::video::{ObjectAttributes, ObjectPalette, object_attributes};
 use gbcli_engine::{Area, Machine, Since};
 use gbcli_protocol::{
-    ErrorBody, ErrorCode, EventsArgs, OamEntryRead, PpuView, ReadArgs, ReadFailed, ReadValue,
-    RegistersView, ResultBody, SessionFile, TimeBase, TimeMark,
+    ErrorBody, ErrorCode, EventsArgs, MachineView, OamEntryRead, PpuView, ReadArgs, ReadFailed,
+    ReadValue, RegistersView, ResultBody, SessionFile, TimeBase, TimeMark,
 };
 
 use super::{Failure, Handler, Need};
@@ -19,7 +20,14 @@ impl Handler {
     ) -> Result<ResultBody, Failure> {
         let (machine, loaded) = self.machine_for(store, meta, Need::Head, None)?;
         warnings.extend(loaded);
+        // The ROM the machine loaded, not the file on disk, which a rebuild
+        // may have replaced since.
+        let rom = machine.core().region(Region::Rom).ok();
         let result = ResultBody {
+            machine: Some(MachineView {
+                model: meta.model,
+                cgb: rom.and_then(|r| cgb_flag(r.bytes)),
+            }),
             registers: Some(RegistersView::of(&machine.core().registers())),
             ppu: Some(PpuView::of(&machine.core().ppu())),
             stop: meta.last_stop.clone(),
@@ -343,6 +351,24 @@ mod tests {
             !warnings.iter().any(|w| w.contains("reads its byte")),
             "{warnings:?}"
         );
+    }
+
+    /// `show` names the machine and what the loaded ROM was built for (leaf
+    /// jGOxRH): the rogue ran DMG sessions over its GBC build unawares.
+    #[test]
+    fn show_names_the_model_and_the_roms_cgb_flag() {
+        use gbcli_core::Model;
+        use gbcli_protocol::CgbFlag;
+        let machine = |f: &Fixture| {
+            let result = handler(f).handle(&request(Op::Show)).outcome.unwrap();
+            assert!(result.registers.is_some(), "the rest of show stands");
+            result.machine.expect("machine")
+        };
+        let dmg = machine(&Fixture::new("show-dmg"));
+        assert_eq!((dmg.model, dmg.cgb), (Model::DmgB, Some(CgbFlag::Dmg)));
+        let gbc = Fixture::with_model("show-gbc", crate::fixture::GBC_PALETTE, Model::CgbE);
+        let gbc = machine(&gbc);
+        assert_eq!((gbc.model, gbc.cgb), (Model::CgbE, Some(CgbFlag::Dual)));
     }
 
     #[test]

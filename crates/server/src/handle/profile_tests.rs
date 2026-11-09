@@ -54,6 +54,29 @@ fn run_profile_ranks_routines_by_exclusive_cycles_and_top_trims_them() {
     assert_eq!(top.total_t, all.total_t);
 }
 
+/// Each routine row says how much of its exclusive time was HALT (leaf
+/// jGOxRH), so a routine that waits reads apart from one that works.
+#[test]
+fn routine_rows_carry_their_halt_cycles_as_idle_t() {
+    let f = Fixture::with_rom_sym("profile-idle", LCD_OFF, LCD_OFF_SYM);
+    let made = run(
+        &mut handler(&f),
+        RunArgs {
+            frames: Some(12),
+            profile: Some(ProfileArgs::default()),
+            ..RunArgs::default()
+        },
+    )
+    .outcome
+    .expect("ran")
+    .profile
+    .expect("a profile");
+    assert!(made.idle_t > 0, "the ROM waits in HALT");
+    let idle: u64 = made.routines.iter().map(|r| r.idle_t).sum();
+    assert_eq!(idle, made.idle_t, "{:?}", made.routines);
+    assert!(made.routines.iter().all(|r| r.idle_t <= r.exclusive_t));
+}
+
 #[test]
 fn run_profile_stops_where_the_run_stops() {
     let f = Fixture::with_sym("profile-to");

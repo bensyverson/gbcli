@@ -72,11 +72,52 @@ pub struct UndoWalk {
     pub origin: Rev,
 }
 
+/// What the ROM header's CGB flag ($0143) says the game supports.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CgbFlag {
+    /// Bit 7 clear: a DMG game, which a CGB runs in its DMG mode.
+    Dmg,
+    /// Bit 7 set (`rgbfix -c`, `$80`): CGB mode on a CGB, DMG mode on a DMG.
+    Dual,
+    /// `$C0` (`rgbfix -C`): made for a CGB only.
+    Only,
+}
+
+impl CgbFlag {
+    /// The wire spelling.
+    pub fn name(self) -> &'static str {
+        match self {
+            CgbFlag::Dmg => "dmg",
+            CgbFlag::Dual => "dual",
+            CgbFlag::Only => "only",
+        }
+    }
+}
+
+/// Which machine a session runs and what its ROM was built for: `show`'s
+/// `machine`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MachineView {
+    #[serde(with = "ModelDef")]
+    pub model: Model,
+    /// The loaded ROM's header CGB flag.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cgb: Option<CgbFlag>,
+}
+
 /// One row of `gbcli sessions`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionRow {
     pub name: String,
     pub rom: String,
+    /// The model the session was created with.
+    #[serde(with = "ModelDef")]
+    pub model: Model,
+    /// The header CGB flag of the ROM file the session names, as it is on
+    /// disk now; absent when the file can't be read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cgb: Option<CgbFlag>,
     /// The head's frame, counted from `head_since` as a stop record counts
     /// it: the boot handoff, or power-on before it. Absent with no head.
     #[serde(default, skip_serializing_if = "Option::is_none")]

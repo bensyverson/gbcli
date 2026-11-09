@@ -106,3 +106,7 @@ Ranked by the time the five DX docs report; each counts what was lost before a f
 3. **Output shaped for an agent: summaries in text, every row in `--json`, each per-frame row with its frame** (A/B 30 min plus a budget script in each game and 20 min on floods; D/E about 25 min plus a script each; C a flood in every leaf). Landed: `lcd_off`, one-row `keys_unapplied`, frame numbers. Open: lag runs (question 5).
 
 Runner-up: **speed-independent equivalence** (C, about an hour), one game's cost, and question 1 explains why gbcli can only partly fix it.
+
+## Ben's decisions (2026-11-09)
+
+**Every recommendation accepted** (questions 1-8, as recommended). Ben then asked whether the plan resolves the three cross-game themes. The main thread's answer: (1) ignored writes, largely (a range form for `watch` stays out unless a game needs it); (2) sessions surviving startup changes, as far as gbcli can (speed-varying renderers are inherent, covered by the help paragraph); (3) output shaped for agents, only case by case: a general rule (any per-frame or per-event list prints a summary or capped rows in text, every row in `--json`, with a guard test) was proposed as a ninth item, and **Ben accepted it** ("that sounds reasonable for 3"): a CLI design rule plus a guard test that fails when a verb prints unbounded rows in text.

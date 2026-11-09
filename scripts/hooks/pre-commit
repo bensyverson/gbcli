@@ -14,7 +14,7 @@ cargo clippy --quiet --workspace --all-targets -- -D warnings
 print -u2 "pre-commit: cargo test"
 # Build first so the timing below is the suite alone. The warm suite must stay
 # under 30 s on a quiet machine (project/2026-11-06-test-suite-speed.md), and
-# this fails the commit when it doesn't. Parallel agents and other sessions
+# this warns when it doesn't (a target, not a gate: Ben, 2026-11-09). Agents and other sessions
 # usually load the machine, so under load only a run past the loaded limit
 # warns, and the 30 s budget is checked with scripts/bench/test-times.py.
 cargo test --quiet --workspace --no-run
@@ -32,8 +32,8 @@ quiet_budget=30
 loaded_limit=60
 if (( load <= cpus / 2.0 )); then
     if (( elapsed > quiet_budget )); then
-        printf 'pre-commit: the test suite took %.1f s on a quiet machine (load %s on %d CPUs), over the %d s budget. Find the slow tests with python3 -I scripts/bench/test-times.py and move or speed them up\n' $elapsed $load $cpus $quiet_budget >&2
-        exit 1
+        # A warning, not a failure (Ben, 2026-11-09): the budget is a target.
+        printf 'pre-commit: WARNING: the test suite took %.1f s on a quiet machine (load %s on %d CPUs), over the %d s budget. Find the slow tests with python3 -I scripts/bench/test-times.py and move or speed them up\n' $elapsed $load $cpus $quiet_budget >&2
     fi
 elif (( elapsed > loaded_limit )); then
     printf 'pre-commit: WARNING: the test suite took %.1f s under load (load %s on %d CPUs), over the %d s loaded limit. Time it on a quiet machine with python3 -I scripts/bench/test-times.py\n' $elapsed $load $cpus $loaded_limit >&2

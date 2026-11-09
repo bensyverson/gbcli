@@ -12,7 +12,7 @@ Ben was around and ruled as things came up. Everything is landed and **pushed**.
 - **`lDEWkI`:** a RAM symbol taken as a truth value is refused in every condition ("a classic pointer error; help agents avoid it"). `--since boot` before the handoff stays as is. Design §7, update of 2026-11-09.
 - **Fonts leaf 1's calls stand:** `assets/fonts/NAME.charlist`, PROTOCOL_VERSION 3, keys per font in the `assets` request ([2026-11-09-pixel-fonts-design.md](2026-11-09-pixel-fonts-design.md), end).
 - **Design nothing that a web build, or a Rust library called as an agent's tool, couldn't use.** Both are real, not immediate, goals. One line in the AGENTS.md head; what it asks and the known debt: [2026-11-09-web-target.md](2026-11-09-web-target.md). The embedded-scripting backlog entry now argues portability, not speed.
-- **No need to re-time the suite** (fonts agents saw 30-37 s under load).
+- **The pre-commit hook's 30 s budget now warns instead of failing** on a quiet machine, after the fonts work brought the suite to 34.8 s (load 2.9 on 8 CPUs) and the hook refused a docs commit. 30 s stays the target ([2026-11-06-test-suite-speed.md](2026-11-06-test-suite-speed.md), docs/development.md). No re-timing asked for.
 - Ben accepted the main thread's two-way-door calls from the last two sessions without review ("you have more context than I do").
 
 **Landed:**
@@ -33,7 +33,7 @@ Ben was around and ruled as things came up. Everything is landed and **pushed**.
 ## Next, in order
 
 1. **Review `6feaf3e`, `daf6d93` and `c085c52`.** One reviewer for fonts 2 (protocol ops, BDF/PNG round trips, the newer-copy refusal, composition), one for the starter renderer (TextDraw against the layout rules, the starter's new VRAM line buffer at tiles 236-255).
-2. **Ben rules on [2026-11-09-examples-dx-review-c.md](2026-11-09-examples-dx-review-c.md)** (leaf `rsUZcp`, labeled `decision`): eight questions, each with a recommendation. The top asks: a warning for VRAM/OAM writes the hardware ignored, breakpoints listed in `show`, frame-budget lag rows as runs, a `mode` keyword, and `equiv --screen off` plus a start-offset warning. Then file the accepted fixes as a container under Stage 11 and fan out by file surface.
+2. **Ben accepted every recommendation of [2026-11-09-examples-dx-review-c.md](2026-11-09-examples-dx-review-c.md)** (leaf `rsUZcp`; decisions at the end). He also accepted a ninth item: a general rule for agent-shaped output (any per-frame or per-event list prints a summary or capped rows in text, every row in `--json`) with a guard test. The top asks: a warning for VRAM/OAM writes the hardware ignored, breakpoints listed in `show`, frame-budget lag rows as runs, a `mode` keyword, and `equiv --screen off` plus a start-offset warning. File the accepted fixes as a container under Stage 11 and fan out by file surface.
 3. **Stage 11 then closes** once `rsUZcp` and its fixes are done. There is no plan beyond it yet: ask Ben what comes next (the web spike and the library entry point are both ruled "not immediate").
 
 ## What this session learned

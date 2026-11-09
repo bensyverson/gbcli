@@ -136,7 +136,8 @@ sav     path: PATH   (writes the head's battery save, and on a flash session
 Response, one line per request:
   {"id", "ok": true, "rev"?: "sN", "result": {…}, "warnings": [TEXT]}
   {"id", "ok": false, "rev"?, "error": {"code", "exit", "message", "remedy",
-   "stop"?, "keys_unapplied"?, "flash_notes"?, "result"?, "moved"?}, "warnings"}
+   "stop"?, "keys_unapplied"?, "flash_notes"?, "ignored_writes"?, "result"?,
+   "moved"?}, "warnings"}
   moved (rom_changed): every symbol the saved state depends on that the
   rebuild moved, {name, role: "pc"|"ram"|"stack", old: {bank, addr},
   new: {bank, addr}|null}; the message names the first five.
@@ -150,7 +151,10 @@ build, assets, doctor, created, song, song_problem, pixels, pixels_problem,
 font, font_problem, font_written, font_problems, font_diff, opcodes, version,
 power_cycle, sav,
 flash_notes (run, step: each flash note, also a warning; a failed run's or
-step's are on its error).
+step's are on its error),
+ignored_writes (run, step: per kind, the writes the PPU ignored, {kind, count,
+pc, symbol, addr, line, frame}, also a warning; a failed run's or step's are
+on its error).
 `gbcli VERB --json` prints the whole response line, as serve writes it.
 
 Build diagnostics, in result.build.diagnostics (on build_failed, in

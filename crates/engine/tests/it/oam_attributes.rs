@@ -80,7 +80,7 @@ fn an_oam_field_reads_raw_oam_while_the_cpu_is_locked_out() {
     oam_counting(&mut m);
     for _ in 0..200_000 {
         let ppu = m.core().ppu();
-        if ppu.lcd_on && matches!(ppu.mode, Some(PpuMode::Drawing | PpuMode::OamScan)) {
+        if ppu.lcd_on && matches!(ppu.mode.exact(), Some(PpuMode::Drawing | PpuMode::OamScan)) {
             assert_eq!(m.core_mut().bus_read(0xFE01).unwrap(), 0xFF, "the CPU");
             assert_eq!(eval(&m, "oam[0].x").unwrap(), 1, "the field");
             return;

@@ -203,10 +203,13 @@ impl Handler {
         let mut outcome = match outcome {
             Ok(outcome) => outcome,
             Err(error) => {
+                let ignored_writes = report_seen(&error, warnings);
                 let flash_notes = report_flash_failed(&mut machine, warnings);
                 let parent = args.at.clone();
                 let failure = self.after_run_error(store, meta, machine, &error, actor, parent);
-                return Err(failure.with_flash_notes(flash_notes));
+                return Err(failure
+                    .with_flash_notes(flash_notes)
+                    .with_ignored_writes(ignored_writes));
             }
         };
         let guarded = self.guarded(&mut outcome);
@@ -291,12 +294,13 @@ impl Handler {
         self.keep_warm(store, meta, machine);
 
         // The run is saved; anything that failed after it rides with its stop.
-        let with_stop = |f: Failure| {
-            f.with_stop(stop.clone())
-                .with_flash_notes(flash_notes.clone())
+        let with_seen = |f: Failure| {
+            f.with_flash_notes(flash_notes.clone())
+                .with_ignored_writes(ignored_writes.clone())
         };
+        let with_stop = |f: Failure| with_seen(f.with_stop(stop.clone()));
         let shot = shot.transpose().map_err(with_stop)?;
-        answered.map_err(|f| f.with_flash_notes(flash_notes.clone()))?;
+        answered.map_err(with_seen)?;
         let measured = measured.transpose().map_err(with_stop)?;
         let strip = strip.transpose().map_err(with_stop)?;
         let sound = sound.transpose().map_err(with_stop)?;
@@ -316,7 +320,7 @@ impl Handler {
             audio: sound,
             oam_log: oam_made,
             keys_unapplied,
-            ignored_writes,
+            ignored_writes: ignored_writes.clone(),
             checkpoint,
             writes: (!writes.is_empty()).then_some(writes),
             flash_notes: flash_notes.clone(),
@@ -418,9 +422,12 @@ impl Handler {
         let mut outcome = match machine.step(args.unit, &opts) {
             Ok(outcome) => outcome,
             Err(error) => {
+                let ignored_writes = report_seen(&error, warnings);
                 let flash_notes = report_flash_failed(&mut machine, warnings);
                 let failure = self.after_run_error(store, meta, machine, &error, actor, None);
-                return Err(failure.with_flash_notes(flash_notes));
+                return Err(failure
+                    .with_flash_notes(flash_notes)
+                    .with_ignored_writes(ignored_writes));
             }
         };
         let guarded = self.guarded(&mut outcome);
@@ -437,7 +444,9 @@ impl Handler {
         self.keep_warm(store, meta, machine);
         if guarded {
             let failure = Failure::new(wall_guard_error(self.wall_guard, stop));
-            return Err(failure.with_flash_notes(flash_notes));
+            return Err(failure
+                .with_flash_notes(flash_notes)
+                .with_ignored_writes(ignored_writes));
         }
         Ok(ResultBody {
             stop: Some(stop),
@@ -467,6 +476,14 @@ fn ignored_rows(warnings: &[EvalWarning]) -> Option<Vec<IgnoredWritesRow>> {
         })
         .collect();
     (!rows.is_empty()).then_some(rows)
+}
+
+/// What a run or step that failed while running saw before it failed: each
+/// a warning, and the ignored writes' rows.
+fn report_seen(error: &DebugError, warnings: &mut Vec<String>) -> Option<Vec<IgnoredWritesRow>> {
+    let seen = error.warnings();
+    warnings.extend(seen.iter().map(warning_text));
+    ignored_rows(seen)
 }
 
 /// Takes the flash notes the machine took, a mask-ROM cart's hint too
@@ -587,6 +604,8 @@ fn stop_of(error: &DebugError) -> Option<&StopRecord> {
 mod checkpoint_tests;
 #[cfg(test)]
 mod expect_tests;
+#[cfg(test)]
+mod failed_tests;
 #[cfg(test)]
 mod target_tests;
 #[cfg(test)]

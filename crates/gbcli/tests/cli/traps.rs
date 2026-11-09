@@ -209,6 +209,78 @@ fn a_vram_write_in_mode_3_warns_and_json_has_every_field() {
     );
 }
 
+/// A run that fails after it ran keeps what it saw (review rev-hw, F1): the
+/// warning and the `ignored_writes` rows ride on the error, as the flash
+/// notes do, whether the run fell short of its target or its `--until`
+/// failed to evaluate after the drop.
+#[test]
+fn a_run_that_fails_after_the_drop_keeps_the_warning_and_the_rows() {
+    let p = demo_in("vram_mode3", "trap-vram_mode3-failed");
+    let short = [
+        "run",
+        "vram_mode3.gb",
+        "--session",
+        "short",
+        "--frames",
+        "2",
+        "--to",
+        "$7FF0",
+    ];
+    // The predicate fails on line 20, after the write on line 10 of frame 0.
+    let until = [
+        "run",
+        "vram_mode3.gb",
+        "--session",
+        "until",
+        "--frames",
+        "2",
+        "--until",
+        "1 / (ly - 20) == 99",
+    ];
+    for (args, code, reason) in [
+        (&short[..], 3, "budget_exhausted"),
+        (&until[..], 2, "predicate_error"),
+    ] {
+        let r = json(&p, args, code);
+        assert_eq!(r["error"]["stop"]["reason"], reason, "{r}");
+        let warned = r["warnings"].as_array().unwrap().iter().any(|w| {
+            w.as_str()
+                .unwrap()
+                .starts_with("1 VRAM write ignored in mode 3, first at $017A (Dropped)")
+        });
+        assert!(warned, "{r}");
+        let rows = r["error"]["ignored_writes"].as_array().expect("rows");
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(rows[0]["addr"], 0x8000, "the field the text lacks: {r}");
+        assert_eq!(rows[0]["line"], 10, "{r}");
+    }
+}
+
+/// The LCD-off warning survives an `--until` that fails after it, too.
+#[test]
+fn a_run_that_fails_after_the_lcd_went_off_keeps_the_warning() {
+    let p = demo_in("lcd_off", "trap-lcd_off-failed");
+    let args = [
+        "run",
+        "lcd_off.gb",
+        "--session",
+        "t",
+        "--frames",
+        "4",
+        "--until",
+        "1 / (ly - 100) == 99",
+    ];
+    let r = json(&p, &args, 2);
+    assert_eq!(r["error"]["stop"]["reason"], "predicate_error", "{r}");
+    assert_eq!(r["error"]["stop"]["time"]["ly"], 100, "{r}");
+    let warned = r["warnings"].as_array().unwrap().iter().any(|w| {
+        w.as_str()
+            .unwrap()
+            .starts_with("the LCD was turned off outside VBlank at $015C (OffMidFrame), line 60")
+    });
+    assert!(warned, "{r}");
+}
+
 #[test]
 fn raster_shows_the_lcd_turned_off_mid_frame_and_in_vblank() {
     let p = demo("lcd_off");

@@ -65,13 +65,34 @@ impl std::ops::BitOr for Keys {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PpuStatus {
     pub ly: u8,
-    /// The mode STAT would read now; `None` where the core can't know it
-    /// without running the PPU ahead (on SameBoy: late in a mode 3 it batched
-    /// by an upper bound). Unknown, never wrong.
-    pub mode: Option<PpuMode>,
+    /// The mode STAT would read now, or as much of it as the core knows
+    /// without running the PPU ahead. Never wrong.
+    pub mode: PpuModeKnown,
     /// The dot within the line, if the core can report it ([`Feature::PpuDot`](crate::Feature::PpuDot)).
     pub dot: Option<u16>,
     pub lcd_on: bool,
+}
+
+/// What a core knows of the PPU's mode without running the PPU ahead.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PpuModeKnown {
+    Known(PpuMode),
+    /// Mode 0 or mode 3, not which: on SameBoy, late in a mode 3 it batched
+    /// by an upper bound, where mode 3 may have ended but the line has not
+    /// (design §8's update of 2026-11-09).
+    HBlankOrDrawing,
+    /// Nothing is known.
+    Unknown,
+}
+
+impl PpuModeKnown {
+    /// The mode, where the core knows exactly which.
+    pub fn exact(self) -> Option<PpuMode> {
+        match self {
+            PpuModeKnown::Known(mode) => Some(mode),
+            PpuModeKnown::HBlankOrDrawing | PpuModeKnown::Unknown => None,
+        }
+    }
 }
 
 /// A hardware register in FF00–FF7F, by its low address byte.

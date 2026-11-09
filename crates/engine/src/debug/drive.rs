@@ -113,7 +113,8 @@ pub fn drive_until(
 }
 
 /// Runs with the core's LCD-off and ignored-write logs on (`lcd`,
-/// `ignored`), and off again after.
+/// `ignored`), and off again after. A condition that fails to evaluate
+/// carries what the run saw up to there, as an outcome would.
 fn run(
     m: &mut Machine,
     opts: &RunOptions<'_>,
@@ -122,7 +123,9 @@ fn run(
 ) -> Result<Outcome, DebugError> {
     lcd::watch(m, true);
     ignored::watch(m, true);
-    let outcome = run_watched(m, opts, goal, condition);
+    let mut notes = Notes::default();
+    let outcome = run_watched(m, opts, goal, condition, &mut notes)
+        .map_err(|e| e.with_warnings(notes.finish(m, None)));
     ignored::watch(m, false);
     lcd::watch(m, false);
     outcome
@@ -133,6 +136,7 @@ fn run_watched(
     opts: &RunOptions<'_>,
     goal: Goal,
     condition: Option<&Condition>,
+    notes: &mut Notes,
 ) -> Result<Outcome, DebugError> {
     let compiled = compile(m)?;
     let goal = match goal {
@@ -170,12 +174,11 @@ fn run_watched(
     let fine = goal.fine() || until.as_ref().is_some_and(Until::fine);
 
     let mut used = Usage::default();
-    let mut notes = Notes::default();
-    let finish = |m: &Machine, reason, used: Usage, notes: Notes| {
+    let finish = |m: &Machine, reason, used: Usage, notes: &mut Notes| {
         let waiting = until.as_ref().and_then(|u| u.waiting(m, opts));
         Ok(Outcome {
             stop: record(m, reason, used, &opts.since),
-            warnings: notes.finish(m, waiting),
+            warnings: std::mem::take(notes).finish(m, waiting),
         })
     };
 
@@ -213,7 +216,7 @@ fn run_watched(
         if used.instructions > 0
             && !decided_here
             && let Some(hit) = exec_hit(m, &exec)
-            && let Some(reason) = decide(m, &compiled, &goal, hit, opts, used, &mut notes)?
+            && let Some(reason) = decide(m, &compiled, &goal, hit, opts, used, notes)?
         {
             return finish(m, reason, used, notes);
         }
@@ -264,7 +267,7 @@ fn run_watched(
                 // In access order: the first hit that is a real stop wins.
                 let mut found = None;
                 for hit in hits.iter() {
-                    found = decide(m, &compiled, &goal, *hit, opts, used, &mut notes)?;
+                    found = decide(m, &compiled, &goal, *hit, opts, used, notes)?;
                     if found.is_some() {
                         break;
                     }
@@ -289,7 +292,7 @@ fn run_watched(
             let breakpoint = if exec_decided.is_some() {
                 None
             } else {
-                exec_breakpoint(m, &compiled, opts, used, &mut notes)?
+                exec_breakpoint(m, &compiled, opts, used, notes)?
             };
             let reason = breakpoint.unwrap_or_else(|| until.reason());
             return finish(m, reason, used, notes);

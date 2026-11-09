@@ -63,7 +63,7 @@ impl fmt::Display for FrameSource {
                     f,
                     "live partial frame: LY {} ({})",
                     ppu.ly,
-                    mode_name(ppu.mode)
+                    mode_name(ppu.mode.exact())
                 )?;
                 if !ppu.lcd_on {
                     f.write_str(", LCD off")?;
@@ -143,8 +143,9 @@ impl Frame {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gbcli_core::PpuModeKnown;
 
-    fn live(mode: Option<PpuMode>) -> String {
+    fn live(mode: PpuModeKnown) -> String {
         FrameSource::Live {
             ppu: PpuStatus {
                 ly: 50,
@@ -161,11 +162,11 @@ mod tests {
     #[test]
     fn a_live_frame_names_its_mode_or_says_it_is_unknown() {
         assert_eq!(
-            live(Some(PpuMode::Drawing)),
+            live(PpuModeKnown::Known(PpuMode::Drawing)),
             "live partial frame: LY 50 (drawing), after complete frame 3"
         );
         assert_eq!(
-            live(None),
+            live(PpuModeKnown::HBlankOrDrawing),
             "live partial frame: LY 50 (mode unknown), after complete frame 3"
         );
     }

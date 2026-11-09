@@ -121,11 +121,13 @@ pub enum DebugError {
         id: u32,
         error: ExprError,
     },
-    /// A condition failed while evaluated; `stop` is where the machine is.
+    /// A condition failed while evaluated; `stop` is where the machine is,
+    /// and `warnings` what the run saw up to there, as [`Outcome::warnings`].
     Eval {
         id: u32,
         error: EvalError,
         stop: Box<StopRecord>,
+        warnings: Vec<EvalWarning>,
     },
     /// An `--until` predicate doesn't compile.
     UntilSyntax {
@@ -133,14 +135,37 @@ pub enum DebugError {
     },
     /// An `--until` predicate failed while evaluated (not a never-written
     /// read, which means "not yet"); `stop` is where the machine is, with
-    /// reason `predicate_error`.
+    /// reason `predicate_error`; `warnings` as for `Eval`.
     Until {
         error: EvalError,
         stop: Box<StopRecord>,
+        warnings: Vec<EvalWarning>,
     },
     Core(CoreError),
     /// `step` doesn't take `ToAddress`: use `run_to`.
     NeedsAddress,
+}
+
+impl DebugError {
+    /// The same error, carrying `found` if it is one that ran (`Eval`,
+    /// `Until`), which the run loop fills in as it returns.
+    pub(crate) fn with_warnings(mut self, found: Vec<EvalWarning>) -> Self {
+        if let DebugError::Eval { warnings, .. } | DebugError::Until { warnings, .. } = &mut self {
+            *warnings = found;
+        }
+        self
+    }
+
+    /// What the run saw before it failed: empty for an error before it ran.
+    pub fn warnings(&self) -> &[EvalWarning] {
+        match self {
+            DebugError::Eval { warnings, .. } | DebugError::Until { warnings, .. } => warnings,
+            DebugError::Condition { .. }
+            | DebugError::UntilSyntax { .. }
+            | DebugError::Core(_)
+            | DebugError::NeedsAddress => &[],
+        }
+    }
 }
 
 impl fmt::Display for DebugError {

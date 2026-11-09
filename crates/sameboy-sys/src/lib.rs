@@ -40,6 +40,10 @@ pub struct GB_gameboy_t {
     _marker: PhantomData<(*mut u8, PhantomPinned)>,
 }
 
+/// What [`gbcli_ppu_mode`] returns for "mode 0 or mode 3, not which"
+/// (`GBCLI_MODE_0_OR_3` in the shim).
+pub const GBCLI_MODE_0_OR_3: c_int = 4;
+
 /// `GB_model_t` (model.h), a C enum.
 pub type GB_model_t = c_uint;
 pub const GB_MODEL_DMG_B: GB_model_t = 0x002;
@@ -256,8 +260,10 @@ unsafe extern "C" {
     pub fn gbcli_set_rom_size(gb: *mut GB_gameboy_t, size: usize) -> bool;
     pub fn gbcli_clear_rtc_epoch(gb: *mut GB_gameboy_t);
     pub fn gbcli_ppu_batched(gb: *mut GB_gameboy_t) -> bool;
-    /// The mode STAT would read now (0-3) without running the display, or -1
-    /// when only running it could tell (late in a mode 3 batched by a bound).
+    /// The mode STAT would read now (0-3) without running the display;
+    /// [`GBCLI_MODE_0_OR_3`] when it is mode 0 or 3 but only running the
+    /// display could tell which (late in a mode 3 batched by a bound); or -1
+    /// when nothing is known.
     pub fn gbcli_ppu_mode(gb: *mut GB_gameboy_t) -> c_int;
     /// Re-converts the CGB color holding palette-RAM byte `index` (0-63) into
     /// the cache the PPU draws from; a no-op on DMG.

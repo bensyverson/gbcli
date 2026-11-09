@@ -229,6 +229,10 @@ pub struct ErrorBody {
     /// returns them in `ResultBody::flash_notes`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub flash_notes: Option<Vec<FlashNoteRow>>,
+    /// The writes the PPU ignored in a failed run or step, as a successful
+    /// one returns them in `ResultBody::ignored_writes`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ignored_writes: Option<Vec<crate::IgnoredWritesRow>>,
     /// An assertion's answer when it is no (`measure --max`, `equiv`): the
     /// result it asserted on, as the op returns it on success.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -249,6 +253,7 @@ impl ErrorBody {
             stop: None,
             keys_unapplied: None,
             flash_notes: None,
+            ignored_writes: None,
             result: None,
             moved: Vec::new(),
         }

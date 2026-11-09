@@ -1,7 +1,7 @@
 //! A failed request, and the gap-ledger entry it carries.
 
 use gbcli_engine::DebugError;
-use gbcli_protocol::{ErrorBody, FlashNoteRow, StopRecord};
+use gbcli_protocol::{ErrorBody, FlashNoteRow, IgnoredWritesRow, StopRecord};
 
 use crate::convert::{self, Gap, debug as debug_body};
 
@@ -32,6 +32,15 @@ impl Failure {
     pub(super) fn with_flash_notes(mut self, rows: Option<Vec<FlashNoteRow>>) -> Self {
         if rows.is_some() {
             self.body.flash_notes = rows;
+        }
+        self
+    }
+
+    /// The same failure, carrying the writes the PPU ignored in the failed
+    /// run or step (none leaves it as it was).
+    pub(super) fn with_ignored_writes(mut self, rows: Option<Vec<IgnoredWritesRow>>) -> Self {
+        if rows.is_some() {
+            self.body.ignored_writes = rows;
         }
         self
     }

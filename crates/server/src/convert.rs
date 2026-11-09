@@ -61,7 +61,9 @@ pub fn debug(e: &DebugError) -> ErrorBody {
             );
             body
         }
-        DebugError::Eval { id, error, stop } => {
+        DebugError::Eval {
+            id, error, stop, ..
+        } => {
             let mut body = eval(error);
             body.message = format!("condition of #{id}: {}", body.message);
             body.with_stop((**stop).clone())
@@ -71,7 +73,7 @@ pub fn debug(e: &DebugError) -> ErrorBody {
             body.message = format!("until: {}", body.message);
             body
         }
-        DebugError::Until { error, stop } => {
+        DebugError::Until { error, stop, .. } => {
             let mut body = eval(error);
             body.message = format!("until: {}", body.message);
             body.with_stop((**stop).clone())

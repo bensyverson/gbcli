@@ -177,3 +177,41 @@ fn a_configure_verb_leaves_the_warm_head_as_it_was() {
     );
     assert_eq!(next.time.frame, first.time.frame + 1, "{next:?}");
 }
+
+fn break_id(h: &mut Handler, at: &str) -> u32 {
+    let r = break_at(h, at, None);
+    r.outcome.expect("break").breakpoint.unwrap().id
+}
+
+/// The warm head takes a breakpoint set while it is warm, and loses one
+/// deleted (review rev-hw's probe of the configure verbs on `Need::Rom`).
+#[test]
+fn a_warm_head_takes_a_breakpoint_set_and_drops_one_deleted() {
+    let f = Fixture::with_sym("warm-break-delete");
+    let mut h = handler(&f);
+    assert!(run_frames(&mut h, 3).is_ok());
+    let id = break_id(&mut h, "Work");
+    let stop = run_frames(&mut h, 3).outcome.unwrap().stop.unwrap();
+    assert_eq!(stop.reason, StopReason::Breakpoint { id }, "{stop:?}");
+    assert!(delete(&mut h, id).is_ok());
+    let stop = run_frames(&mut h, 3).outcome.unwrap().stop.unwrap();
+    assert!(
+        matches!(stop.reason, StopReason::BudgetExhausted { .. }),
+        "{stop:?}"
+    );
+}
+
+/// Undo restores an older head, not an older id counter.
+#[test]
+fn undo_does_not_bring_an_id_back_into_use() {
+    let f = Fixture::with_sym("undo-ids");
+    let mut h = handler(&f);
+    let first = break_id(&mut h, "$0001");
+    assert!(run_frames(&mut h, 1).is_ok());
+    assert!(delete(&mut h, first).is_ok());
+    assert!(run_frames(&mut h, 1).is_ok());
+    let undone = h.handle(&request(Op::Undo));
+    assert!(undone.is_ok(), "{:?}", undone.error());
+    let second = break_id(&mut h, "$0002");
+    assert!(second > first, "{first} then {second}");
+}

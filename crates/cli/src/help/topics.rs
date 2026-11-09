@@ -130,9 +130,11 @@ bus, so evaluating one has no side effects.
               program reads $FF there, but oam[N] shows the stored byte
   machine     frame, t (T-cycles since the time base), ly (the LY register),
               bank, mode (the PPU mode as show's mode= names it: 0 HBlank,
-              1 VBlank, 2 OAM scan, 3 drawing). Like [rSTAT], it is an error
-              where the core can't know it: late in a mode 3 with objects on
-              the line and no STAT HBlank interrupt enabled
+              1 VBlank, 2 OAM scan, 3 drawing). Late in a mode 3 with
+              objects on the line and no STAT HBlank interrupt enabled, it
+              is known only to be 0 or 3: mode == 1 and mode == 2 are false
+              there, but a test that needs 0 told from 3 is an error, as a
+              [rSTAT] read is
   watches     old and new: the byte before and after the write
   operators   + - * / % & | ^ ~ << >>  == != < <= > >=  && || !  (C precedence)
 
@@ -140,7 +142,9 @@ A bare RAM symbol is its address: write [wFrame] >= 60, not wFrame >= 60.
 An address is never zero, so a condition refuses one compared or taken as
 true or false (wDone, wDone && ..., !wDone): write [wDone].
 LY reads 0 through most of line 153, the last VBlank line, so ly > 143 misses
-the end of VBlank: test VBlank with mode == 1.
+the end of VBlank: test VBlank with mode == 1. mode == 1 is a reliable VBlank
+test everywhere; mode == 0 and mode == 3 may be unknown late in mode 3 on a
+line with objects.
 Reading a byte the program never wrote is an error: `gbcli read` fails with
 exit 3, and a run's --read says so in that read's row (error=, message=,
 remedy=) while the run, its stop and its other reads stand. Pass

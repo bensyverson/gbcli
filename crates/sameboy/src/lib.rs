@@ -22,9 +22,9 @@ use std::sync::Mutex;
 use gbcli_core::{
     ApuState, ApuWrite, AudioCapture, AudioSamples, BootRom, Budget, BudgetKind, CartClock,
     ColorMode, Core, CoreConfig, CoreError, CoreInfo, Feature, FrameRef, HaltWake, IgnoredWrites,
-    IoReg, JoypadBounce, Keys, LayerMap, LcdOff, LiveFrame, Model, PpuMode, PpuStatus, Region,
-    RegionView, Registers, Rendering, RtcMode, RunRequest, SavClock, StepUnit, Stop, StopReason,
-    Support, Ticks, WriteTracking, WrittenView,
+    IoReg, JoypadBounce, Keys, LayerMap, LcdOff, LiveFrame, Model, PpuMode, PpuModeKnown,
+    PpuStatus, Region, RegionView, Registers, Rendering, RtcMode, RunRequest, SavClock, StepUnit,
+    Stop, StopReason, Support, Ticks, WriteTracking, WrittenView,
 };
 use sameboy_sys as sb;
 
@@ -184,8 +184,8 @@ impl SameBoy {
     fn frame_untouched(&self) -> bool {
         let ppu = self.ppu();
         !ppu.lcd_on
-            || ppu.mode == Some(PpuMode::VBlank)
-            || (ppu.ly == 0 && ppu.mode == Some(PpuMode::OamScan))
+            || ppu.mode == PpuModeKnown::Known(PpuMode::VBlank)
+            || (ppu.ly == 0 && ppu.mode == PpuModeKnown::Known(PpuMode::OamScan))
     }
 
     fn raw(&self) -> *mut sb::GB_gameboy_t {
@@ -330,7 +330,7 @@ impl Core for SameBoy {
     /// the display's state (`gbcli_ppu_mode` in the shim), as a raster
     /// write's does: the IO array's STAT reads mode 3 late in a mode 3
     /// SameBoy batched by an upper bound, whatever the PPU would say, so the
-    /// mode is unknown there.
+    /// mode there is only known to be 0 or 3.
     fn ppu(&self) -> PpuStatus {
         let io = memory::region(self, Region::Io)
             .expect("the IO region always exists")

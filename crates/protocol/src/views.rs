@@ -114,7 +114,8 @@ impl PpuView {
     pub fn of(p: &gbcli_core::PpuStatus) -> Self {
         PpuView {
             ly: p.ly,
-            mode: p.mode.map(Into::into),
+            // Only an exact mode is on the wire; null otherwise (protocol 2).
+            mode: p.mode.exact().map(Into::into),
             lcd_on: p.lcd_on,
             dot: p.dot,
         }
@@ -129,16 +130,21 @@ mod tests {
     fn a_ppu_mode_the_core_cant_know_is_null_on_the_wire() {
         let status = gbcli_core::PpuStatus {
             ly: 50,
-            mode: None,
+            mode: gbcli_core::PpuModeKnown::HBlankOrDrawing,
             dot: None,
             lcd_on: true,
         };
-        let view = PpuView::of(&status);
-        let json = serde_json::to_string(&view).unwrap();
-        assert_eq!(json, r#"{"ly":50,"mode":null,"lcd_on":true}"#);
-        assert_eq!(serde_json::from_str::<PpuView>(&json).unwrap(), view);
+        for mode in [
+            gbcli_core::PpuModeKnown::HBlankOrDrawing,
+            gbcli_core::PpuModeKnown::Unknown,
+        ] {
+            let view = PpuView::of(&gbcli_core::PpuStatus { mode, ..status });
+            let json = serde_json::to_string(&view).unwrap();
+            assert_eq!(json, r#"{"ly":50,"mode":null,"lcd_on":true}"#);
+            assert_eq!(serde_json::from_str::<PpuView>(&json).unwrap(), view);
+        }
         let known = PpuView::of(&gbcli_core::PpuStatus {
-            mode: Some(gbcli_core::PpuMode::Drawing),
+            mode: gbcli_core::PpuModeKnown::Known(gbcli_core::PpuMode::Drawing),
             ..status
         });
         assert_eq!(known.mode, Some(PpuModeView::Drawing));

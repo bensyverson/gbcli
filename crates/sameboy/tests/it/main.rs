@@ -12,6 +12,7 @@ mod display;
 mod filters;
 mod flash;
 mod frames;
+mod ignored_counts;
 mod ignored_writes;
 mod inspection;
 mod io_decode;

@@ -8,8 +8,8 @@ use crate::common;
 use common::{cgb_machine, machine, program};
 use gbcli_core::{Budget, IgnoredWriteKind};
 use gbcli_engine::cond::EvalWarning;
-use gbcli_engine::{Machine, RunOptions, WritesIgnored};
-use gbcli_protocol::StepKind;
+use gbcli_engine::{DebugError, Machine, RunOptions, WritesIgnored};
+use gbcli_protocol::{Location, StepKind};
 
 const VRAM_MODE3: &[u8] = include_bytes!("../../../gbcli/tests/traps/vram_mode3.gb");
 const VRAM_MODE3_SYM: &str = include_str!("../../../gbcli/tests/traps/vram_mode3.sym");
@@ -150,4 +150,36 @@ fn a_step_over_the_write_warns_and_numbers_its_frame_as_a_stop_record_does() {
         assert_eq!((found[0].pc, found[0].count), (DROPPED, 1), "{name}");
         assert_eq!(found[0].frame, stop.time.frame, "{name}");
     }
+}
+
+/// A run whose `--until` fails after the drop, or whose breakpoint condition
+/// does, carries the warning on its error (review rev-hw, F1).
+#[test]
+fn an_evaluation_error_after_the_drop_carries_the_warning() {
+    let opts = RunOptions::new(Budget::frames(4));
+    let mut m = demo();
+    // At the idle loop, after the drop on line 10; the demo passes line 20
+    // once before it, waiting for VBlank.
+    let err = m
+        .run_until("pc == Idle && 1 / (ly - 20) == 99", &opts)
+        .unwrap_err();
+    let DebugError::Until { warnings, stop, .. } = &err else {
+        panic!("{err:?}")
+    };
+    assert_eq!(stop.time.ly, 20);
+    assert_eq!(ignored(warnings).len(), 1, "{warnings:?}");
+
+    let mut m = demo();
+    let idle = m.symbols().unwrap().get("Idle").unwrap().addr;
+    let at = Location {
+        addr: idle,
+        bank: None,
+        symbol: None,
+    };
+    m.add_breakpoint(at, Some("1 / (a - a) == 1")).unwrap();
+    let err = m.run(&opts).unwrap_err();
+    let DebugError::Eval { warnings, .. } = &err else {
+        panic!("{err:?}")
+    };
+    assert_eq!(ignored(warnings).len(), 1, "{warnings:?}");
 }

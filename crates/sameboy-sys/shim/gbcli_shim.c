@@ -96,17 +96,26 @@ void gbcli_refresh_palette_color(GB_gameboy_t *gb, bool background, uint8_t inde
 // array may lag.
 bool gbcli_ppu_batched(GB_gameboy_t *gb) { return gb->display_cycles > 0; }
 
-// The mode STAT would read now (0-3), without running the display, or -1 when
-// that can't be known without running it. The display only batches at two
-// points (GB_BATCHPOINT in display.c), and returns from either only while the
-// cycles it holds are fewer than the batch's length:
+// The mode STAT would read now (0-3), without running the display;
+// GBCLI_MODE_0_OR_3 when it is mode 0 or mode 3 but only running the display
+// could tell which; or -1 when nothing is known. The display only batches at
+// two points (GB_BATCHPOINT in display.c), and returns from either only while
+// the cycles it holds are fewer than the batch's length:
 //   - state 5, the OAM scan: 80 dots of mode 2, so it is still mode 2;
 //   - state 3, mode 3's start, by mode3_batching_length: that length is
 //     exact (167 + SCX % 8, no objects or window), so it is still mode 3;
 //     or 300, an upper bound where mode 3 has objects or the window but no
 //     HBlank interrupt can be seen, so it is mode 3 only before the shortest
-//     mode 3 could end.
-// No PPU register write happens inside a batch: each one syncs the display.
+//     mode 3 could end, and mode 3 or 0 after: mode 3 starts 89 dots into the
+//     line, and 89 + 300 is short of the line's 456, so the batch never
+//     reaches the next line's mode 2 (GB_display_run also runs any batch that
+//     would cross a line's end), nor VBlank.
+// Positive display_cycles arise only at a batch point: GB_SLEEP returns with
+// them at or below zero. No PPU register write happens inside a batch: each
+// one syncs the display.
+// Mirrored as gbcli_sameboy_sys::GBCLI_MODE_0_OR_3.
+#define GBCLI_MODE_0_OR_3 4
+
 int gbcli_ppu_mode(GB_gameboy_t *gb)
 {
     if (!gbcli_ppu_batched(gb)) return gb->io_registers[GB_IO_STAT] & 3;
@@ -115,7 +124,7 @@ int gbcli_ppu_mode(GB_gameboy_t *gb)
         case 3: {
             if (gb->mode3_batching_length != 300) return 3;
             int32_t shortest = 2 * (167 + (gb->io_registers[GB_IO_SCX] & 7));
-            return gb->display_cycles < shortest ? 3 : -1;
+            return gb->display_cycles < shortest ? 3 : GBCLI_MODE_0_OR_3;
         }
         default: return -1;
     }
@@ -285,9 +294,11 @@ int gbcli_io_peek(GB_gameboy_t *gb, uint8_t reg)
         case GB_IO_OBPD: case GB_IO_OPRI:
             if (gbcli_ppu_batched(gb)) {
                 switch (reg) {
-                    case GB_IO_IF: case GB_IO_STAT:
-                        if (gbcli_ppu_mode(gb) < 0) return -1;
+                    case GB_IO_IF: case GB_IO_STAT: {
+                        int mode = gbcli_ppu_mode(gb);
+                        if (mode < 0 || mode > 3) return -1;
                         break;
+                    }
                     case GB_IO_HDMA5: case GB_IO_BGPD: case GB_IO_OBPD:
                         return -1;
                     default: break;

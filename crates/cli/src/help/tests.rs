@@ -507,3 +507,24 @@ fn the_hblank_recipes_commands_parse() {
     }
     std::fs::remove_dir_all(&cwd).unwrap();
 }
+
+/// Where the core can't tell the mode it still knows it is 0 or 3, so
+/// `mode == 1` answers everywhere and `mode == 0` / `mode == 3` may not (review
+/// rev-hw F2; design §8's update of 2026-11-09): every topic that recommends
+/// `mode == 1` says both.
+#[test]
+fn hardware_traps_and_expressions_give_modes_caveat() {
+    for topic in [Topic::Hardware, Topic::Traps, Topic::Expressions] {
+        let flat = topic
+            .text()
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        for part in [
+            "mode == 1 is a reliable VBlank test everywhere",
+            "mode == 0 and mode == 3 may be unknown late in mode 3",
+        ] {
+            assert!(flat.contains(part), "{topic:?}: {part:?} in {flat}");
+        }
+    }
+}

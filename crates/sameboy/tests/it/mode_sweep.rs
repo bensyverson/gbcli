@@ -14,8 +14,8 @@ use crate::common;
 
 use common::*;
 use gbcli_core::{
-    AddrFilter, BankSel, Budget, Core, Event, EventKinds, EventSink, IoReg, PpuMode, Region,
-    RunRequest, StepUnit, StopReason,
+    AddrFilter, BankSel, Budget, Core, Event, EventKinds, EventSink, IoReg, PpuMode, PpuModeKnown,
+    Region, RunRequest, StepUnit, StopReason,
 };
 
 const ROM: &[u8] = include_bytes!("../roms/mode_sweep.gb");
@@ -180,14 +180,16 @@ fn stat_mode_of(read: u8) -> PpuMode {
 }
 
 /// `ppu().mode` (what `show` prints as mode= and the live frame's label
-/// names) is unknown where SameBoy batched a window line's mode 3 by its
-/// 300-dot bound and only running the PPU could tell 3 from 0, and equal to a
-/// CPU read of STAT (on a copy, since a read runs the PPU) everywhere else.
+/// names) is "HBlank or drawing" where SameBoy batched a window line's mode 3
+/// by its 300-dot bound and only running the PPU could tell 3 from 0, and
+/// equal to a CPU read of STAT (on a copy, since a read runs the PPU)
+/// everywhere else. In the window the read finds both 3 and 0, never 1 or 2.
 #[test]
 fn ppu_mode_is_unknown_not_wrong_in_the_late_window() {
     let mut core = quick_dmg(WIN_ROM);
     let stops = filter(&[WIN_WOKE, WIN_DONE]);
     let (mut wrong, mut unknown, mut known) = (Vec::new(), 0, 0);
+    let mut window_truths = Vec::new();
     // The late frames (k from 100): the sled's NOPs put boundaries all
     // through line 50 and into 51 there.
     while run_to(&mut core, &stops, None) == WIN_WOKE {
@@ -200,9 +202,14 @@ fn ppu_mode_is_unknown_not_wrong_in_the_late_window() {
             let truth = stat_mode_of(core.bus_read(0xFF41).unwrap());
             core.load(&state).unwrap();
             match shown {
-                None => unknown += 1,
-                Some(mode) if mode == truth => known += 1,
-                Some(mode) => wrong.push((core.registers().pc, mode, truth)),
+                PpuModeKnown::HBlankOrDrawing => {
+                    unknown += 1;
+                    if !window_truths.contains(&truth) {
+                        window_truths.push(truth);
+                    }
+                }
+                PpuModeKnown::Known(mode) if mode == truth => known += 1,
+                other => wrong.push((core.registers().pc, other, truth)),
             }
             core.step(StepUnit::Instruction).unwrap();
         }
@@ -215,6 +222,12 @@ fn ppu_mode_is_unknown_not_wrong_in_the_late_window() {
     );
     assert!(unknown > 0, "the sweep never reached the late window");
     assert!(known > unknown, "known {known}, unknown {unknown}");
+    window_truths.sort_by_key(|m| *m as u8);
+    assert_eq!(
+        window_truths,
+        [PpuMode::HBlank, PpuMode::Drawing],
+        "STAT's mode where ppu() says HBlank or drawing"
+    );
 }
 
 /// On window lines (the 300-dot batch on a line with no objects), every

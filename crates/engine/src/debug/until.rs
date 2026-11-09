@@ -69,6 +69,7 @@ impl<'a> Until<'a> {
             Err(error) => Err(DebugError::Until {
                 error,
                 stop: Box::new(record(m, self.failed(), used, &opts.since)),
+                warnings: Vec::new(),
             }),
         }
     }

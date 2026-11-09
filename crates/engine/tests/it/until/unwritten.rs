@@ -55,7 +55,7 @@ fn a_predicate_that_fails_mid_run_stops_with_its_true_reason() {
     // Short-circuited until wFrame reaches 60; then it divides by zero.
     let text = "[wFrame] == 60 && 1 / ([wFrame] - 60) == 0";
     let err = m.run_until(text, &opts()).unwrap_err();
-    let DebugError::Until { error, stop } = &err else {
+    let DebugError::Until { error, stop, .. } = &err else {
         panic!("{err:?}")
     };
     assert_eq!(*error, gbcli_engine::cond::EvalError::DivideByZero);

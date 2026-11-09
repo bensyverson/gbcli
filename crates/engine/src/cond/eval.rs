@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use gbcli_core::{Core, CoreError, Feature, PpuMode, Region, Support};
+use gbcli_core::{Core, CoreError, Feature, PpuMode, PpuModeKnown, Region, Support};
 use gbcli_protocol::TimeMark;
 
 use super::{BinOp, Expr, Flag, Place, Reg, UnOp, Width};
@@ -276,6 +276,9 @@ pub fn eval(
             }
         }
         Expr::Binary(op, l, r) => {
+            if let Some(answer) = mode_settles(*op, l, r, ctx, warnings)? {
+                return Ok(answer);
+            }
             let a = eval(l, ctx, warnings)?;
             // Short-circuit, so `d != 0 && x / d > 2` is safe.
             match op {
@@ -292,7 +295,7 @@ pub fn eval(
 /// The mode as STAT's bits 0-1 hold it. Where the core can't know it, the
 /// read fails as a STAT read there does: unsupported, with the core's reason.
 fn ppu_mode(core: &dyn Core) -> Result<i64, EvalError> {
-    let Some(mode) = core.ppu().mode else {
+    let PpuModeKnown::Known(mode) = core.ppu().mode else {
         let reason = match core.supports(Feature::SideEffectFreeIo) {
             Support::No { reason } => reason,
             Support::Yes => "the core reports no PPU mode here",
@@ -308,6 +311,34 @@ fn ppu_mode(core: &dyn Core) -> Result<i64, EvalError> {
         PpuMode::OamScan => 2,
         PpuMode::Drawing => 3,
     })
+}
+
+/// `mode == v` or `mode != v` (either way round) where the core knows only
+/// that the mode is 0 or 3: answered when `v` is neither, since then the
+/// answer is the same whichever it is (design §8's update of 2026-11-09).
+/// `None` leaves the comparison to the ordinary path.
+fn mode_settles(
+    op: BinOp,
+    l: &Expr,
+    r: &Expr,
+    ctx: &EvalCtx<'_>,
+    warnings: &mut Vec<EvalWarning>,
+) -> Result<Option<i64>, EvalError> {
+    if !matches!(op, BinOp::Eq | BinOp::Ne) {
+        return Ok(None);
+    }
+    let other = match (l, r) {
+        (Expr::Mode, other) | (other, Expr::Mode) => other,
+        _ => return Ok(None),
+    };
+    if ctx.core.ppu().mode != PpuModeKnown::HBlankOrDrawing {
+        return Ok(None);
+    }
+    match eval(other, ctx, warnings)? {
+        // The mode's own failure: only it could tell this.
+        0 | 3 => ppu_mode(ctx.core).map(|_| None),
+        _ => Ok(Some(i64::from(op == BinOp::Ne))),
+    }
 }
 
 fn binary(op: BinOp, a: i64, b: i64) -> Result<i64, EvalError> {

@@ -6,7 +6,9 @@
 use crate::common;
 
 use common::{machine, quick_dmg};
-use gbcli_core::{Budget, Core, Event, EventKinds, EventSink, IoReg, PpuMode, RunRequest};
+use gbcli_core::{
+    Budget, Core, Event, EventKinds, EventSink, IoReg, PpuMode, PpuModeKnown, RunRequest,
+};
 use gbcli_engine::{DebugError, Machine, RunOptions, Symbols};
 use gbcli_protocol::{Location, StopReason, WatchAccess};
 
@@ -142,6 +144,85 @@ fn the_mode_keyword_is_a_condition_error_where_the_core_cant_know_it() {
     assert_eq!(stop.reason, StopReason::ConditionError { id });
 }
 
+/// Late in a mode 3 batched by its bound the mode is still 0 or 3 (Ben's
+/// ruling, design §8's update of 2026-11-09): a comparison with any other
+/// value has its answer, so `mode == 1` is a VBlank test everywhere. A
+/// breakpoint whose condition is false there runs on to the budget.
+#[test]
+fn the_mode_keyword_answers_what_hblank_or_drawing_settles() {
+    for (condition, holds) in [
+        ("mode == 1", false),
+        ("mode == 2", false),
+        ("1 == mode", false),
+        ("mode != 1", true),
+        ("mode != 2", true),
+        ("2 != mode", true),
+        ("mode == ly", false),
+        ("!(mode == 1) && mode != 2", true),
+    ] {
+        let (mut m, id) = with_breakpoint("Line100Late", condition);
+        let stop = m.run(&opts()).expect(condition).stop;
+        if holds {
+            assert_eq!(stop.reason, StopReason::Breakpoint { id }, "{condition}");
+            assert_eq!(m.core().registers().pc, addr("Line100Late"), "{condition}");
+        } else {
+            assert!(
+                matches!(stop.reason, StopReason::BudgetExhausted { .. }),
+                "{condition}: {stop:?}"
+            );
+        }
+    }
+}
+
+/// Anything that needs 0 told from 3 still fails there, as before.
+#[test]
+fn the_mode_keyword_still_fails_where_hblank_must_be_told_from_drawing() {
+    for condition in [
+        "mode == 0",
+        "mode == 3",
+        "3 == mode",
+        "mode != 3",
+        "mode < 3",
+        "mode >= 1",
+        "mode + 0 == 1",
+        "(mode & 1) == 1",
+        "mode",
+    ] {
+        let (mut m, id) = with_breakpoint("Line100Late", condition);
+        let err = m.run(&opts()).unwrap_err();
+        let DebugError::Eval { stop, .. } = &err else {
+            panic!("{condition}: {err:?}")
+        };
+        assert_eq!(
+            stop.reason,
+            StopReason::ConditionError { id },
+            "{condition}"
+        );
+    }
+}
+
+/// The predicate form: `--until "mode == 1"` from inside the window runs on
+/// to VBlank instead of failing (on `ppu_mode.gb`, which has the window).
+#[test]
+fn until_mode_1_runs_through_the_unknown_window_to_vblank() {
+    let mut m = machine(ROM, Some(SYM));
+    let id = m.add_breakpoint(at("Line100Late"), None).unwrap();
+    m.run(&opts()).expect("reaches the window");
+    assert_eq!(m.core().registers().pc, addr("Line100Late"));
+    assert_eq!(
+        m.core().ppu().mode,
+        PpuModeKnown::HBlankOrDrawing,
+        "the window"
+    );
+    m.delete(id);
+    let stop = m.run_until("mode == 1", &opts()).expect("runs").stop;
+    assert!(
+        matches!(stop.reason, StopReason::Predicate { .. }),
+        "{stop:?}"
+    );
+    assert_eq!(m.core().ppu().mode.exact(), Some(PpuMode::VBlank));
+}
+
 /// LY reads 153 for only a few dots of line 153, then 0 for the rest of
 /// it: `ly > 143` is false through most of the last VBlank line, which is
 /// why the help says to test `mode == 1`. On `raster.gb`, which turns the
@@ -155,7 +236,7 @@ fn until_mode_1_stops_in_vblank_and_ly_reads_0_late_in_it() {
         matches!(stop.reason, StopReason::Predicate { .. }),
         "{stop:?}"
     );
-    assert_eq!(m.core().ppu().mode, Some(PpuMode::VBlank));
+    assert_eq!(m.core().ppu().mode.exact(), Some(PpuMode::VBlank));
     assert!(m.core().ppu().ly >= 144, "{stop:?}");
 
     let stop = m
@@ -166,7 +247,7 @@ fn until_mode_1_stops_in_vblank_and_ly_reads_0_late_in_it() {
         matches!(stop.reason, StopReason::Predicate { .. }),
         "{stop:?}"
     );
-    assert_eq!(m.core().ppu().mode, Some(PpuMode::VBlank));
+    assert_eq!(m.core().ppu().mode.exact(), Some(PpuMode::VBlank));
     assert_eq!(m.core().ppu().ly, 0);
 }
 

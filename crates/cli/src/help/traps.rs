@@ -26,7 +26,9 @@ VRAM write during mode 3
   Fix      write VRAM in VBlank or with the LCD off; mid-frame, wait for STAT
            mode 0 or 1 first, and keep the write within that mode. To test
            for VBlank, use the mode (STAT bits 0-1; mode == 1 in a gbcli
-           condition), not LY > 143: LY reads 0 through most of line 153
+           condition), not LY > 143: LY reads 0 through most of line 153.
+           mode == 1 is a reliable VBlank test everywhere; mode == 0 and
+           mode == 3 may be unknown late in mode 3 on a line with objects
   Docs     https://gbdev.io/pandocs/Accessing_VRAM_and_OAM.html#accessing-vram-and-oam
   Demo     crates/gbcli/tests/traps/vram_mode3.asm
 

@@ -216,6 +216,7 @@ pub(super) fn decide(
             used,
             &opts.since,
         )),
+        warnings: Vec::new(),
     };
     let time_base = base(m, &opts.since).1;
     let mut holds = |m: &Machine, id: u32, cond: &Option<Condition>, access| {

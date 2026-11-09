@@ -32,8 +32,8 @@ pub use run::{
     IgnoredWrites, InStop, LcdOff, PpuMode, RunRequest, StepUnit, Usage,
 };
 pub use state::{
-    BootRom, CoreConfig, CoreInfo, HaltWake, IoReg, JoypadBounce, Keys, Model, PpuStatus,
-    Registers, Rendering, RtcMode, WriteTracking,
+    BootRom, CoreConfig, CoreInfo, HaltWake, IoReg, JoypadBounce, Keys, Model, PpuModeKnown,
+    PpuStatus, Registers, Rendering, RtcMode, WriteTracking,
 };
 pub use stop::{Access, Hit, Hits, Stop, StopReason};
 pub use time::Ticks;

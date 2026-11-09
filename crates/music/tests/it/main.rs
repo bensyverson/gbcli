@@ -8,6 +8,7 @@ mod common;
 mod fuzz;
 mod piano;
 mod samples;
+mod short_blocks;
 mod subpattern;
 mod text;
 mod upgrade;

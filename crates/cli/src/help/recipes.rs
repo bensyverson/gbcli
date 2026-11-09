@@ -65,9 +65,9 @@ Play the game from a script (a closed-loop bot), then replay what it did
   runs are deterministic and held keys carry over, so a script can drive a
   session a few frames at a time, reading the state and choosing keys:
   gbcli run --frames 4 --keys 'RIGHT@0' --read '[wPlayerX]' --json, in a loop;
-  it records each key change at its frame counted from the first run (RIGHT@8
-  -RIGHT@12), and gbcli run --at start --frames 3000 --keys-file bot.keys
-  replays the whole game in one run, frame for frame
+  your script (not gbcli) logs each key change at its frame counted from the
+  first run (RIGHT@8 -RIGHT@12), then gbcli run --at start --frames 3000
+  --keys-file bot.keys replays the whole game in one run, frame for frame
 What does my music do?
   gbcli run --frames 120 --audio-log (every sound write, decoded into notes), then
   --wav music.wav to hear it, --channels each for one file per channel, --piano

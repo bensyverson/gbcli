@@ -115,7 +115,9 @@ bus, so evaluating one has no side effects.
   numbers     $FF, 0xFF, 255, %1010
   registers   a f b c d e h l af bc de hl sp pc; flags zf nf hf cf; ime
   memory      [ADDR] reads a byte, u16[ADDR] a little-endian word; ADDR is any
-              address form (gbcli help addresses) or an expression: [hl]
+              address form (gbcli help addresses) or an expression: [hl].
+              Widths: u8[ADDR] (the same as [ADDR]) and u16 unsigned, s8 and
+              s16 signed (sign-extended: s8[wDX] < 0 when bit 7 is set)
   sprites     oam[N].y, .x, .tile, .attr: a byte of OAM entry N (0-39);
               oam[N] alone, in --read and `gbcli read`, prints the entry as
               fields: y x tile attr priority yflip xflip, then palette, or
@@ -149,6 +151,14 @@ The first run of a ROM runs the real boot ROM once and caches the handoff in
 .gbcli/cache/; later runs start there. --from power-on starts cold instead.
 Either --from skips the head: --from boot is how a session starts over on a
 rebuilt ROM, keeping its breakpoints and watches.
+
+Frames and keys. A frame begins as VBlank does (ly=144). A run --frames N
+stops there, at the VBlank interrupt vector ($0040, ly=144), before the
+handler runs: the stop shows the frame just drawn, but what the handler does
+for it (OAM DMA, a frame counter, a joypad read) happens in the next run, so
+run one more frame to see it. A key token K@N changes the buttons at the
+start of the run's frame N (offsets count from the run's start), so every
+joypad read the program makes after that VBlank sees it, and none before.
 ";
 
 const CHECKPOINTING: &str = "\
@@ -242,7 +252,9 @@ RGBDS — the loop: edit, build, restore, measure, with RGBDS from PATH.
                                rgbfix -v -p 0xFF. No build file: the layout
                                is the build; --src, --include, --out change it;
                                PNGs in assets/ too (gbcli help images)
-  gbcli build game --gbc       the same, for the GBC in dual mode: rgbfix -c
+  gbcli build game --gbc       the same, for the GBC in dual mode, to
+                               build/gbc/game.gbc + .sym + .map (its own
+                               folder, so the plain build's stay): rgbfix -c
                                sets $0143 = $80, so the ROM is GBC-enhanced
                                and still runs on the DMG. (Pan Docs calls
                                the GBC the CGB.) rgbfix -C (GBC only, $C0)
@@ -267,6 +279,9 @@ into the rebuilt ROM only if nothing it was running moved; rom_changed (exit
 3) lists what did, and --allow-rom-change loads it anyway. To start over on
 the new ROM instead, `gbcli run --session game --from boot` (breakpoints and
 watches kept, following their labels).
+
+Constants other files assemble against (in ds, IF, REPT) belong in include/:
+an EXPORTed symbol is resolved only at link time, so it isn't constant there.
 ";
 
 #[cfg(test)]

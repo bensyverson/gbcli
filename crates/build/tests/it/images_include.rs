@@ -145,8 +145,9 @@ fn a_gbc_build_labels_each_images_gbc_data() {
         asm.contains("CoinFrame0::\n\tdb 1\n\tdb 0, 0, 0, 0\n"),
         "{asm}"
     );
-    // Every constant images.inc defines is exported, so it is in the .sym.
-    let sym = fs::read_to_string(temp.path("demo/build/demo.sym")).unwrap();
+    // Every constant images.inc defines is exported, so it is in the .sym
+    // (a GBC build's, in build/gbc/).
+    let sym = fs::read_to_string(temp.path("demo/build/gbc/demo.sym")).unwrap();
     for name in ["TOWN_PALETTES", "OBJ_PALETTES", "PALETTE_FOREST"] {
         assert!(
             sym.lines().any(|l| l.ends_with(&format!(" {name}"))),

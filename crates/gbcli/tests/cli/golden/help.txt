@@ -60,7 +60,7 @@ FLAGS
   --since BASE            what frame and t count from: boot (default), power-on or a checkpoint name
   --until EXPR            stop when this condition holds
   --to ADDR               stop before the instruction at this address executes
-  --frames N              frame budget; any run without a budget gets 600 frames, and using them all up without another stop is budget_exhausted
+  --frames N              frame budget; any run without a budget gets 600 frames, and using them all up without another stop is budget_exhausted; it stops as VBlank begins, before the handler runs (gbcli help time)
   --instructions N        instruction budget
   --ticks N               tick budget
   --write TARGET=BYTES…   bus write before the run, as the CPU would
@@ -85,7 +85,7 @@ FLAGS
   --frame-budget          each frame's active and idle (HALT) T-cycles over the run, and the lag frames: frames in which the CPU never halted with the LCD on (LCD-off frames, as at startup or a screen change, count as lcd_off instead); the first row sums up the whole LCD-on frames' active T-cycles (min, max, mean) and the busiest one, then a row per lag frame (--json has every frame; gbcli help budgets)
   --oam-log               OAM at every vblank the run passes: a row per frame with the objects on screen and the OAM indices the 10-per-line limit dropped (--json has every object's fields); each frame's OAM is the one it was drawn from
   --raster                each IO-register write the run made, by frame and line: register, value, writer's PC, ticks into the line (912 per line) and the PPU mode it landed in (mode=, absent where the emulator can't tell)
-  --keys TOKENS           press and release buttons: 'A@0 -A@2 START@10' (frame offsets); a key still held when the run ends stays held into the next run
+  --keys TOKENS           press and release buttons: 'A@0 -A@2 START@10' (frame offsets); a key still held when the run ends stays held into the next run; K@N lands as frame N's VBlank begins (gbcli help time)
   --keys-file FILE        key tokens from a file, after --keys; # starts a comment
 
 SHOT FLAGS (how the PNG is taken)
@@ -192,6 +192,14 @@ The first run of a ROM runs the real boot ROM once and caches the handoff in
 .gbcli/cache/; later runs start there. --from power-on starts cold instead.
 Either --from skips the head: --from boot is how a session starts over on a
 rebuilt ROM, keeping its breakpoints and watches.
+
+Frames and keys. A frame begins as VBlank does (ly=144). A run --frames N
+stops there, at the VBlank interrupt vector ($0040, ly=144), before the
+handler runs: the stop shows the frame just drawn, but what the handler does
+for it (OAM DMA, a frame counter, a joypad read) happens in the next run, so
+run one more frame to see it. A key token K@N changes the buttons at the
+start of the run's frame N (offsets count from the run's start), so every
+joypad read the program makes after that VBlank sees it, and none before.
 $ gbcli help rgbds
 exit 0
 RGBDS — the loop: edit, build, restore, measure, with RGBDS from PATH.
@@ -205,7 +213,9 @@ RGBDS — the loop: edit, build, restore, measure, with RGBDS from PATH.
                                rgbfix -v -p 0xFF. No build file: the layout
                                is the build; --src, --include, --out change it;
                                PNGs in assets/ too (gbcli help images)
-  gbcli build game --gbc       the same, for the GBC in dual mode: rgbfix -c
+  gbcli build game --gbc       the same, for the GBC in dual mode, to
+                               build/gbc/game.gbc + .sym + .map (its own
+                               folder, so the plain build's stay): rgbfix -c
                                sets $0143 = $80, so the ROM is GBC-enhanced
                                and still runs on the DMG. (Pan Docs calls
                                the GBC the CGB.) rgbfix -C (GBC only, $C0)
@@ -230,9 +240,16 @@ into the rebuilt ROM only if nothing it was running moved; rom_changed (exit
 3) lists what did, and --allow-rom-change loads it anyway. To start over on
 the new ROM instead, `gbcli run --session game --from boot` (breakpoints and
 watches kept, following their labels).
+
+Constants other files assemble against (in ds, IF, REPT) belong in include/:
+an EXPORTed symbol is resolved only at link time, so it isn't constant there.
 $ gbcli help images
 exit 0
 Images — PNGs under assets/, converted by `gbcli build` with rgbgfx (RGBDS).
+Which kind? Indexed art (a palette from assets/palettes.txt, 4 colors) is one
+tile set for both machines; color art gets a derived DMG version. A sheet
+(sprites/) is object frames; a tileset (tiles/) is tiles with no map.
+
 Each may be a PNG from any tool, or pixel text: the same name with .pixels
 in any case, as .png (town.pixels, hero.16x16.pixels, town.dmg.pixels;
 gbcli help pixels). Keep one form of an image; both is a layout error.
@@ -290,7 +307,8 @@ DMG's lightest) first, and assigns them to images by path under assets/:
   forest: #fff #8c4 #363 #021               # #rgb is #rrggbb (#88cc44)
   ember:  #ffe #f80 #a20 #200
   objects: 8x8                              # reserved: every sheet's objects
-  bg/town.png = forest                      # pixel text: bg/town.pixels
+  bg/town.png = forest                      # an image by its own file name:
+  bg/town.pixels = forest                   # this one if town is pixel text
 Colors are #rrggbb or #rgb, kept as RGB555. Names are a lowercase letter,
 then lowercase letters, digits or _. '#' then a space or tab (or '#' last
 on a line) starts a comment; any other '#' word is a color, so a fifth
@@ -362,8 +380,9 @@ The images row counts image problems; the build (or assets) row after it
 counts toolchain diagnostics only, so `images warnings=1` can sit above
 `build errors=0 warnings=0`.
 
-GBC — gbcli build --gbc makes a ROM in dual mode (rgbfix -c, $0143 = $80):
-GBC colors on a GBC, the same game in 4 shades on a DMG. Each image is
+GBC — gbcli build --gbc makes a ROM in dual mode (rgbfix -c, $0143 = $80),
+build/gbc/NAME.gbc beside the plain build/NAME.gb: GBC colors on a GBC,
+the same game in 4 shades on a DMG. Each image is
 one of two kinds of art:
   color art     no palette assigned: drawn in any colors. Its DMG
                 version is derived, each color taking its shade by the
@@ -453,8 +472,8 @@ https://gbdev.io/pandocs/Tile_Maps.html#bg-map-attributes-cgb-mode-only
 
 Check one ROM on both: a session's model is fixed (restore refuses another
 model), so one session each. From inside game/, after gbcli build --gbc:
-  gbcli run build/game.gb --session dmg --model dmg --frames 60 --shot d.png
-  gbcli run build/game.gb --session gbc --model gbc --frames 60 --shot g.png
+  gbcli run build/gbc/game.gbc -s dmg --model dmg --frames 60 --shot d.png
+  gbcli run build/gbc/game.gbc -s gbc --model gbc --frames 60 --shot g.png
 Compare d.png with the .preview.png files, g.png with the .gbc.preview.png.
 
 Without a build: gbcli assets game --json converts the same images the
@@ -476,14 +495,15 @@ USAGE
 
 Builds the project in DIR (default: here) by convention: rgbasm assembles
 every .asm under src/ with include/ on the include path, rgblink links them
-into build/<DIR's name>.gb with a .sym and a .map, and rgbfix fixes the
-header. Each step's outputs must exist and be non-empty. Every diagnostic is a
-`diagnostic` row with its file and line (a message repeated on lines in a row
-is one row, with lines= and count=); any error fails with build_failed (exit
-4) and leaves the last good ROM in place. With --session and --restore, a good
-build is reloaded: the checkpoint is restored into the rebuilt ROM, which
-loads only if nothing it was running moved (rom_changed, exit 3, says what
-did; `gbcli run --from boot` then starts the session over on the new ROM).
+into build/<DIR's name>.gb with a .sym and a .map (--gbc: build/gbc/<DIR's
+name>.gbc, so both builds' outputs stay), and rgbfix fixes the header. Each
+step's outputs must exist and be non-empty. Every diagnostic is a `diagnostic`
+row with its file and line (a message repeated on lines in a row is one row,
+with lines= and count=); any error fails with build_failed (exit 4) and leaves
+the last good ROM in place. With --session and --restore, a good build is
+reloaded: the checkpoint is restored into the rebuilt ROM, which loads only if
+nothing it was running moved (rom_changed, exit 3, says what did; `gbcli run
+--from boot` then starts the session over on the new ROM).
 
 CLASS
   build: runs RGBDS from PATH, checked against the pinned version (`gbcli doctor`); a session only to reload the build into; `new`, `song` and `pixels` need neither, and `assets` only rgbgfx.
@@ -491,7 +511,7 @@ CLASS
 FLAGS
   --src DIR…              assemble every .asm under DIR instead of src/ (relative to the project)
   --include DIR…          put DIR on rgbasm's include path instead of include/
-  --out FILE              the ROM to write, with its .sym and .map beside it (default build/<project>.gb)
+  --out FILE              the ROM to write, with its .sym and .map beside it (default build/<project>.gb; with --gbc, build/gbc/<project>.gbc)
   --gbc                   build for the GBC in dual mode: rgbfix -c sets $0143 to $80, and the ROM still runs on the DMG
   --restore NAME          after a good build, restore this checkpoint into --session, under the rebuilt-ROM check
 

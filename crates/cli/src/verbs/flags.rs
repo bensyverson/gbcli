@@ -175,7 +175,8 @@ pub const RUN: &[FlagSpec] = &[
         "frames",
         "N",
         "frame budget; any run without a budget gets 600 frames, and using them all up \
-         without another stop is budget_exhausted",
+         without another stop is budget_exhausted; it stops as VBlank begins, before the \
+         handler runs (gbcli help time)",
     ),
     value("instructions", "N", "instruction budget"),
     value("ticks", "N", "tick budget"),
@@ -295,7 +296,8 @@ pub const RUN: &[FlagSpec] = &[
         "keys",
         "TOKENS",
         "press and release buttons: 'A@0 -A@2 START@10' (frame offsets); a key still \
-         held when the run ends stays held into the next run",
+         held when the run ends stays held into the next run; K@N lands as frame N's \
+         VBlank begins (gbcli help time)",
     ),
     value(
         "keys-file",

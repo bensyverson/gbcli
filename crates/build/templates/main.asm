@@ -5,6 +5,16 @@
 include "hardware.inc"                ; every register, plus PAD_* (and B_PAD_*) for a joypad byte with the D-pad in bits 4-7
 
 ; ---------------------------------------------------------------------------
+; Restart vectors ($0000-$003F), claimed so rgblink can't place other code
+; there: it fills any free gap, $0000 included, and a stray jump to 0 would
+; then run it. All 64 bytes are $FF, `rst $38`, so a jump into them lands
+; in a loop at $0038 you can break on. Put an `rst` routine here by
+; replacing the fill up to its address.
+
+SECTION "Restart vectors", ROM0[$0000]
+	ds $40, $FF                 ; rst $38
+
+; ---------------------------------------------------------------------------
 ; Interrupt vector. VBlank is enabled below; music.asm adds the timer when
 ; its song wants it.
 

@@ -202,9 +202,60 @@ fn the_help_says_held_keys_carry_over_and_offers_the_bot_recipe() {
         .expect("the bot recipe");
     let body: Vec<&str> = recipes.lines().skip(bot + 1).take(6).collect();
     let body = body.join(" ");
-    for needed in ["--read", "--json", "--keys-file", "--at start"] {
+    // The agent's script keeps the key file; gbcli records nothing.
+    for needed in [
+        "--read",
+        "--json",
+        "--keys-file",
+        "--at start",
+        "your script",
+    ] {
         assert!(body.contains(needed), "{needed}: {body}");
     }
+}
+
+/// The D/E review's help items (W2MhQb): when a frame ends and a key lands,
+/// pointed to from run --help; the signed widths; both assignment forms
+/// and a lead in images; the include/ rule in rgbds.
+#[test]
+fn the_de_review_help_items_are_in_place() {
+    let time = Topic::Time.text();
+    for needed in [
+        "$0040",
+        "ly=144",
+        "before the",
+        "one more frame",
+        "K@N",
+        "frame N",
+    ] {
+        assert!(time.contains(needed), "{needed}: {time}");
+    }
+    let run = verb(crate::verbs::by_name("run").unwrap());
+    for flag in ["--frames N", "--keys TOKENS"] {
+        let at = run
+            .lines()
+            .position(|l| l.trim_start().starts_with(flag))
+            .unwrap();
+        let entry = run.lines().skip(at).take(4).collect::<Vec<_>>().join(" ");
+        assert!(entry.contains("gbcli help time"), "{flag}: {entry}");
+    }
+    let expressions = Topic::Expressions.text();
+    for width in ["u8[ADDR]", "u16", "s8", "s16", "sign-extended"] {
+        assert!(expressions.contains(width), "{width}: {expressions}");
+    }
+    let images = Topic::Images.text();
+    assert!(
+        images.lines().nth(1).unwrap().starts_with("Which kind?"),
+        "{images}"
+    );
+    let assignment = |form: &str| images.lines().any(|l| l.trim_start().starts_with(form));
+    assert!(assignment("bg/town.png = forest"), "{images}");
+    assert!(assignment("bg/town.pixels = forest"), "{images}");
+    let rgbds = Topic::Rgbds.text();
+    assert!(
+        rgbds.contains("include/:") && rgbds.contains("EXPORT"),
+        "{rgbds}"
+    );
 }
 
 /// The budgets topic says how the frame budget counts LCD-off frames.

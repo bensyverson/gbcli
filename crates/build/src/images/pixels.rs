@@ -59,7 +59,7 @@ impl Pixels {
             Err(gbcli_pixels::PixelsError::Text(e)) => return Err(Unread::Text(e)),
             Err(e) => return Err(Unread::Png(e.to_string())),
         };
-        let raster = picture.raster(palettes).map_err(Unread::Text)?;
+        let raster = picture.raster(palettes).map_err(Unread::Palette)?;
         Ok(Read {
             pixels: raster.into(),
             text: Some(picture),
@@ -87,9 +87,11 @@ pub(crate) struct Read {
 pub(crate) enum Unread {
     /// Not a PNG gbcli can read (nor pixel text): the decoder's message.
     Png(String),
-    /// Pixel text that doesn't parse, or names a palette entry the
-    /// palettes don't have.
+    /// Pixel text that doesn't parse.
     Text(gbcli_pixels::ParseError),
+    /// Pixel text that parses but names a palette entry the palettes don't
+    /// have: moot when the palette file itself didn't read.
+    Palette(gbcli_pixels::ParseError),
 }
 
 /// `#rrggbb`.

@@ -45,3 +45,12 @@ pub fn width(name: &str) -> Option<Width> {
         _ => return None,
     })
 }
+
+/// C's spelling of a signed width (`i8`, `i16`), as this grammar spells it.
+pub fn c_signed_width(name: &str) -> Option<&'static str> {
+    match name {
+        "i8" => Some("s8"),
+        "i16" => Some("s16"),
+        _ => None,
+    }
+}

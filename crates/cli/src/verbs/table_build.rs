@@ -18,7 +18,8 @@ const BUILD: &[FlagSpec] = &[
     value(
         "out",
         "FILE",
-        "the ROM to write, with its .sym and .map beside it (default build/<project>.gb)",
+        "the ROM to write, with its .sym and .map beside it (default build/<project>.gb; \
+         with --gbc, build/gbc/<project>.gbc)",
     ),
     switch(
         "gbc",
@@ -82,7 +83,8 @@ pub const BUILD_VERB: VerbSpec = VerbSpec {
     groups: &[RELOAD, CHANGE, OUTPUT],
     about: "Builds the project in DIR (default: here) by convention: rgbasm assembles every \
             .asm under src/ with include/ on the include path, rgblink links them into \
-            build/<DIR's name>.gb with a .sym and a .map, and rgbfix fixes the header. Each \
+            build/<DIR's name>.gb with a .sym and a .map (--gbc: build/gbc/<DIR's name>.gbc, \
+            so both builds' outputs stay), and rgbfix fixes the header. Each \
             step's outputs must exist and be non-empty. Every diagnostic is a `diagnostic` \
             row with its file and line (a message repeated on lines in a row is one row, \
             with lines= and count=); any error fails with build_failed (exit 4) and leaves \

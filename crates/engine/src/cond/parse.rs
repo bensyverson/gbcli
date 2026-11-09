@@ -134,6 +134,18 @@ impl Parser<'_> {
                         (at, _) => Err(ExprError::syntax(at, format!("expected [ after {name}"))),
                     };
                 }
+                if let Some(signed) = names::c_signed_width(&name)
+                    && self.peek() == Some(&Tok::LBracket)
+                {
+                    return Err(ExprError::Syntax {
+                        at,
+                        message: format!("{name} is not a width"),
+                        hint: Some(format!(
+                            "{signed}[ADDR]? Reads are u8 and u16 (unsigned), s8 and s16 \
+                             (signed, sign-extended)"
+                        )),
+                    });
+                }
                 if let Some(e) = names::keyword(&name) {
                     return Ok(e);
                 }

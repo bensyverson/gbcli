@@ -601,8 +601,18 @@ fn the_clis_gbc_build_is_the_serve_op_with_target_gbc() {
     let p = Project::game("rgbds-gbc-same-path");
     let cli = p.rgbds(&["build", "game", "--gbc", "--json"]);
     assert_eq!(cli.code, 0, "{}", cli.stderr);
-    assert_eq!(fs::read(p.path("game/build/game.gb")).unwrap()[0x143], 0x80);
-    let run = p.rgbds(&["show", "--rom", "game/build/game.gb", "--session", "game"]);
+    // Its own ROM, beside the plain build's (leaf XtevSe).
+    assert_eq!(
+        fs::read(p.path("game/build/gbc/game.gbc")).unwrap()[0x143],
+        0x80
+    );
+    let run = p.rgbds(&[
+        "show",
+        "--rom",
+        "game/build/gbc/game.gbc",
+        "--session",
+        "game",
+    ]);
     assert_eq!(run.code, 0, "{}", run.stderr);
     let input = r#"{"id":"cli","op":"build","args":{"dir":"game","target":"gbc"}}"#;
     let theirs = p.gbcli_with(

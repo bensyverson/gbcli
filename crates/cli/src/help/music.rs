@@ -69,7 +69,10 @@ Each line's first word says what it is; # starts a comment line.
                                 plays at each order, in play order; every
                                 channel names one on every order line
   storage P3 P1 ...             the .uge's pattern order, when not by number
-  pattern P0 P1 P2 P3           then rows: NN cell | cell | cell | cell
+  pattern P0 P1 P2 P3           then rows: NN cell | cell | cell | cell;
+                                - for none, = for a pattern another block
+                                shows. Fewer columns: pattern P4 is
+                                pattern P4 = = =, rows then one cell each
 
 A cell is hUGETracker's clipboard spelling: note, instrument, volume, effect.
   C-5 01 ... 2FF   note C-3 to B-8, or ...; instrument 01-15 from the
@@ -77,16 +80,20 @@ A cell is hUGETracker's clipboard spelling: note, instrument, volume, effect.
                    effect: code and parameter in hex, or ... for none
 Note names are hUGETracker's, an octave above scientific pitch:
 C-3 sounds as C2 (65 Hz), and `run --audio-log` names the note it plays C2.
-A pattern several orders play is shown in every block that plays it, and
-every copy must read the same. Rows, fields, instruments and waves left out
-take hUGETracker's defaults; --text writes the canonical form, with all 64
-rows and every field. A value a file stores outside its range is written !N.
+A pattern several orders play needs its rows written once: write them in
+one block, and name it = (or leave its column off the end) in the others.
+A block that names it again must read the same. A row has one cell per
+column its pattern line names. Rows, fields, instruments and waves left out
+take hUGETracker's defaults; --text writes the canonical form, with all four
+columns of every block, all 64 rows and every field. A value a file stores
+outside its range is written !N.
 
 Effects (x and y are the parameter's hex digits):
 ";
 
 const EXAMPLE_HEAD: &str = "
-Example: two orders. P1-P3 play under both leads, so both blocks show them.
+Example: two orders. P1-P3 play under both leads; the first block shows
+them, and the second names only P4.
 
 ";
 

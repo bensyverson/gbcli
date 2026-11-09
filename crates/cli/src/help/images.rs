@@ -4,6 +4,10 @@
 
 pub const IMAGES: &str = "\
 Images — PNGs under assets/, converted by `gbcli build` with rgbgfx (RGBDS).
+Which kind? Indexed art (a palette from assets/palettes.txt, 4 colors) is one
+tile set for both machines; color art gets a derived DMG version. A sheet
+(sprites/) is object frames; a tileset (tiles/) is tiles with no map.
+
 Each may be a PNG from any tool, or pixel text: the same name with .pixels
 in any case, as .png (town.pixels, hero.16x16.pixels, town.dmg.pixels;
 gbcli help pixels). Keep one form of an image; both is a layout error.
@@ -61,7 +65,8 @@ DMG's lightest) first, and assigns them to images by path under assets/:
   forest: #fff #8c4 #363 #021               # #rgb is #rrggbb (#88cc44)
   ember:  #ffe #f80 #a20 #200
   objects: 8x8                              # reserved: every sheet's objects
-  bg/town.png = forest                      # pixel text: bg/town.pixels
+  bg/town.png = forest                      # an image by its own file name:
+  bg/town.pixels = forest                   # this one if town is pixel text
 Colors are #rrggbb or #rgb, kept as RGB555. Names are a lowercase letter,
 then lowercase letters, digits or _. '#' then a space or tab (or '#' last
 on a line) starts a comment; any other '#' word is a color, so a fifth
@@ -133,8 +138,9 @@ The images row counts image problems; the build (or assets) row after it
 counts toolchain diagnostics only, so `images warnings=1` can sit above
 `build errors=0 warnings=0`.
 
-GBC — gbcli build --gbc makes a ROM in dual mode (rgbfix -c, $0143 = $80):
-GBC colors on a GBC, the same game in 4 shades on a DMG. Each image is
+GBC — gbcli build --gbc makes a ROM in dual mode (rgbfix -c, $0143 = $80),
+build/gbc/NAME.gbc beside the plain build/NAME.gb: GBC colors on a GBC,
+the same game in 4 shades on a DMG. Each image is
 one of two kinds of art:
   color art     no palette assigned: drawn in any colors. Its DMG
                 version is derived, each color taking its shade by the
@@ -224,8 +230,8 @@ https://gbdev.io/pandocs/Tile_Maps.html#bg-map-attributes-cgb-mode-only
 
 Check one ROM on both: a session's model is fixed (restore refuses another
 model), so one session each. From inside game/, after gbcli build --gbc:
-  gbcli run build/game.gb --session dmg --model dmg --frames 60 --shot d.png
-  gbcli run build/game.gb --session gbc --model gbc --frames 60 --shot g.png
+  gbcli run build/gbc/game.gbc -s dmg --model dmg --frames 60 --shot d.png
+  gbcli run build/gbc/game.gbc -s gbc --model gbc --frames 60 --shot g.png
 Compare d.png with the .preview.png files, g.png with the .gbc.preview.png.
 
 Without a build: gbcli assets game --json converts the same images the

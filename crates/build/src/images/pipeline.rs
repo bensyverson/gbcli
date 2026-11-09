@@ -74,7 +74,8 @@ pub(crate) fn convert(
     let resolve = super::palettes::eight_bit(&named_palettes);
     let read_image = |path: &Path| match Pixels::read(path, &resolve) {
         Ok(read) => Ok(Ok(read)),
-        Err(Unread::Text(e)) => Ok(Err(text_problem(&shown(path), e))),
+        Err(Unread::Text(e)) => Ok(Err((text_problem(&shown(path), e), false))),
+        Err(Unread::Palette(e)) => Ok(Err((text_problem(&shown(path), e), true))),
         Err(Unread::Png(e)) => Err(BuildError::Layout {
             message: format!("{} isn't a PNG gbcli can read: {e}", shown(path)),
             remedy: match origin {
@@ -91,11 +92,12 @@ pub(crate) fn convert(
     // hardware problem can name the line that drew its tile.
     let mut texts: Vec<(String, gbcli_pixels::Picture)> = Vec::new();
     // Pixel text that doesn't read is a problem of its own image: every
-    // other image is still checked.
-    let mut unread: Vec<ImageProblem> = Vec::new();
+    // other image is still checked. Each is kept with whether it is a
+    // palette reference that didn't resolve.
+    let mut unread: Vec<(ImageProblem, bool)> = Vec::new();
     let mut all = Vec::with_capacity(sources.len());
     for s in &sources {
-        let mut take = |read: Result<Read, ImageProblem>, path: &Path| match read {
+        let mut take = |read: Result<Read, (ImageProblem, bool)>, path: &Path| match read {
             Ok(Read { pixels, text }) => {
                 let is_text = text.is_some();
                 texts.extend(text.map(|t| (shown(path), t)));
@@ -120,9 +122,16 @@ pub(crate) fn convert(
     }
     // A bad palette file stops the conversion once the images are known to
     // read: the shades are chosen from the palettes and every image. Pixel
-    // text that doesn't parse is said beside it.
+    // text that doesn't parse is said beside it, but not a palette
+    // reference, which can't resolve when the file didn't read (review D-4:
+    // one bad line had given every such image "the palettes define none").
     let bad_palettes = made.first_error().is_some();
-    made.problems.extend(unread);
+    made.problems.extend(
+        unread
+            .into_iter()
+            .filter(|(_, reference)| !(bad_palettes && *reference))
+            .map(|(p, _)| p),
+    );
     if bad_palettes {
         return Ok(Some(Converted { made, ..stopped }));
     }

@@ -144,7 +144,7 @@ fn a_program_using_every_gbc_label_draws_what_the_gbc_preview_shows() {
 
     let built = p.rgbds(&["build", "game", "--gbc"]);
     assert_eq!(built.code, 0, "{}{}", built.stdout, built.stderr);
-    let sym = fs::read_to_string(p.path("game/build/game.sym")).unwrap();
+    let sym = fs::read_to_string(p.path("game/build/gbc/game.sym")).unwrap();
     for name in [
         "TOWN_PALETTES",
         "OBJ_PALETTES",
@@ -169,7 +169,7 @@ fn a_program_using_every_gbc_label_draws_what_the_gbc_preview_shows() {
 
     let run = p.gbcli(&[
         "run",
-        "game/build/game.gb",
+        "game/build/gbc/game.gbc",
         "--session",
         "color",
         "--model",

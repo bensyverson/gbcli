@@ -10,6 +10,17 @@ use crate::common::{Project, png_golden, read_png};
 /// of them, and with no VBK the attribute map would land on the tilemap.
 const GBC_REGISTERS: [&str; 5] = ["rVBK", "rBCPS", "rBCPD", "rOCPS", "rOCPD"];
 
+/// The ROM `starter` built: a --gbc build's own (build/gbc/, leaf XtevSe),
+/// else the plain one.
+fn rom(p: &Project) -> &'static str {
+    const GBC: &str = "game/build/gbc/game.gbc";
+    if p.path(GBC).is_file() {
+        GBC
+    } else {
+        "game/build/game.gb"
+    }
+}
+
 /// `gbcli new game`, then `gbcli build game` with `flags`.
 fn starter(name: &str, flags: &[&str]) -> Project {
     let p = Project::new(name);
@@ -28,7 +39,7 @@ fn shot(p: &Project, model: &str) -> (Vec<u8>, Vec<[u8; 3]>) {
     let png = format!("{model}.png");
     let run = p.gbcli(&[
         "run",
-        "game/build/game.gb",
+        rom(p),
         "--session",
         model,
         "--model",
@@ -85,7 +96,7 @@ fn a_starter_built_without_gbc_takes_the_dmg_path_on_a_gbc_too() {
 #[test]
 fn only_a_gbc_build_carries_the_color_path() {
     let has = |p: &Project, label: &str| {
-        let sym = fs::read_to_string(p.path("game/build/game.sym")).unwrap();
+        let sym = fs::read_to_string(p.path(rom(p)).with_extension("sym")).unwrap();
         sym.lines().any(|l| l.ends_with(&format!(" {label}")))
     };
     let plain = starter("starter-plain-sym", &[]);
@@ -101,7 +112,7 @@ fn only_a_gbc_build_carries_the_color_path() {
 fn gbc_register_writes(p: &Project, model: &str) -> Vec<String> {
     let run = p.gbcli(&[
         "run",
-        "game/build/game.gb",
+        rom(p),
         "--session",
         model,
         "--model",

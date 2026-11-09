@@ -5,6 +5,8 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use gbcli_protocol::BuildTarget;
+
 use super::{BuildError, BuildOptions};
 use crate::paths::quote;
 
@@ -80,7 +82,7 @@ impl Layout {
             .map_or("game".into(), |n| n.to_string_lossy().into_owned());
         let out = match &options.out {
             Some(out) => project.join(out),
-            None => project.join("build").join(format!("{name}.gb")),
+            None => project.join(default_out(&name, options.target)),
         };
         // rgblink would be given one path for two outputs.
         for beside in ["sym", "map"] {
@@ -104,6 +106,17 @@ impl Layout {
             objects: project.join("build").join("obj"),
             out,
         })
+    }
+}
+
+/// The ROM a build writes without --out: `build/NAME.gb`, or for the GBC
+/// `build/gbc/NAME.gbc`, in a folder of its own because every tool finds a
+/// ROM's .sym by swapping its extension, so `build/NAME.gbc` would share
+/// the plain build's `build/NAME.sym` (Ben's ruling, 2026-11-09).
+fn default_out(name: &str, target: BuildTarget) -> PathBuf {
+    match target {
+        BuildTarget::Dmg => Path::new("build").join(format!("{name}.gb")),
+        BuildTarget::Gbc => Path::new("build").join("gbc").join(format!("{name}.gbc")),
     }
 }
 

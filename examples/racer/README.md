@@ -10,7 +10,7 @@ Switchback is a pseudo-3D racer for the original Game Boy, also in color on a Ga
 
 ```sh
 cd examples/racer
-gbcli build                                  # or gbcli build --gbc, for color
+gbcli build                                  # or gbcli build --gbc, for color: build/gbc/racer.gbc
 gbcli run build/racer.gb --session play --frames 600 --keys 'START@30 -START@32 A@40' --shot build/race.png
 ```
 
@@ -73,9 +73,9 @@ python3 -I tools/budget_summary.py build/budget.json 40
 **The same game in color.** After `gbcli build --gbc`, the same keys win on a GBC and, with the same ROM, on a DMG:
 
 ```sh
-gbcli run build/racer.gb --session gbc --model gbc --keys-file tools/win.keys --until '[wState] == 2' --frames 3000 --read '[wTimeSec]'
+gbcli run build/gbc/racer.gbc --session gbc --model gbc --keys-file tools/win.keys --until '[wState] == 2' --frames 3000 --read '[wTimeSec]'
 #   stop predicate … frame=2718 …;  wTimeSec 7
-gbcli run build/racer.gb --session gbc-on-dmg --keys-file tools/win.keys --until '[wState] == 2' --frames 3000
+gbcli run build/gbc/racer.gbc --session gbc-on-dmg --keys-file tools/win.keys --until '[wState] == 2' --frames 3000
 #   stop predicate … frame=2715 …
 ```
 

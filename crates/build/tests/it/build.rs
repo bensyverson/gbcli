@@ -65,6 +65,52 @@ fn the_starter_builds_a_fixed_rom_with_its_sym_and_map() {
     assert!(staging.is_empty(), "staging is cleaned up: {staging:?}");
 }
 
+/// Each ROM0 section in an rgblink map: its start and its name.
+fn rom0_sections(map: &str) -> Vec<(u32, String)> {
+    map.lines()
+        .skip_while(|l| !l.starts_with("ROM0 bank"))
+        .skip(1)
+        .take_while(|l| !l.is_empty())
+        .filter_map(|l| {
+            let rest = l.trim().strip_prefix("SECTION: $")?;
+            let start = u32::from_str_radix(&rest[..4], 16).unwrap();
+            let name = rest.split('"').nth(1).unwrap().to_string();
+            Some((start, name))
+        })
+        .collect()
+}
+
+#[test]
+fn the_starter_claims_the_restart_vectors_so_nothing_floats_into_them() {
+    // rgblink puts a floating ROM0 section in any free gap, $0000 included:
+    // the rhythm example's PlaySfx landed there.
+    let (temp, options) = starter("rst-vectors");
+    fs::write(
+        temp.path("demo/src/tiny.asm"),
+        "SECTION \"Tiny\", ROM0\nTiny::\n\tret\n",
+    )
+    .unwrap();
+    build(&rgbds(), &options).unwrap();
+    let map = fs::read_to_string(temp.path("demo/build/demo.map")).unwrap();
+    let low: Vec<_> = rom0_sections(&map)
+        .into_iter()
+        .filter(|(start, _)| *start < 0x40)
+        .collect();
+    assert_eq!(low, [(0, "Restart vectors".to_string())], "{map}");
+    let rom = fs::read(temp.path("demo/build/demo.gb")).unwrap();
+    // Every byte is rst $38.
+    assert!(
+        rom[..0x40].iter().all(|&b| b == 0xFF),
+        "{:02x?}",
+        &rom[..0x40]
+    );
+    // The rest of the starter still links where it did.
+    let sections = rom0_sections(&map);
+    for (start, name) in [(0x40, "VBlank vector"), (0x100, "Header")] {
+        assert!(sections.contains(&(start, name.to_string())), "{map}");
+    }
+}
+
 #[test]
 fn a_syntax_error_is_a_structured_error_with_file_and_line() {
     let (temp, options) = starter("syntax");
@@ -119,9 +165,69 @@ fn the_gbc_target_writes_the_dual_mode_header_and_the_result_records_it() {
     options.target = BuildTarget::Gbc;
     let made = build(&rgbds(), &options).unwrap();
     assert_eq!(made.target, BuildTarget::Gbc);
-    let rom = fs::read(temp.path("demo/build/demo.gb")).unwrap();
+    let rom = fs::read(temp.path("demo/build/gbc/demo.gbc")).unwrap();
     assert_eq!(rom[0x143], 0x80);
     assert_eq!(rom[0x14D], checksum(&rom));
+}
+
+/// A plain build and a --gbc build in one project leave both ROMs, each
+/// with its own .sym and .map: the GBC build has its own folder, since
+/// every tool finds a ROM's .sym by swapping its extension (Ben's ruling,
+/// 2026-11-09, leaf XtevSe).
+#[test]
+fn a_plain_and_a_gbc_build_leave_both_roms_with_their_own_sym_and_map() {
+    let (temp, mut options) = starter("gbc-beside");
+    let plain = build(&rgbds(), &options).unwrap();
+    options.target = BuildTarget::Gbc;
+    let gbc = build(&rgbds(), &options).unwrap();
+    let paths = |made: &gbcli_protocol::BuildMade| -> Vec<String> {
+        made.outputs.iter().map(|o| o.path.clone()).collect()
+    };
+    assert_eq!(
+        paths(&plain),
+        [
+            "demo/build/demo.gb",
+            "demo/build/demo.sym",
+            "demo/build/demo.map"
+        ]
+    );
+    assert_eq!(
+        paths(&gbc),
+        [
+            "demo/build/gbc/demo.gbc",
+            "demo/build/gbc/demo.sym",
+            "demo/build/gbc/demo.map"
+        ]
+    );
+    // The plain ROM survives the GBC build, and each .sym is its own ROM's.
+    assert_eq!(
+        fs::read(temp.path("demo/build/demo.gb")).unwrap()[0x143],
+        0x00
+    );
+    assert_eq!(
+        fs::read(temp.path("demo/build/gbc/demo.gbc")).unwrap()[0x143],
+        0x80
+    );
+    for out in plain.outputs.iter().chain(&gbc.outputs) {
+        let len = fs::metadata(temp.path(&out.path)).unwrap().len();
+        assert_eq!(len, out.bytes, "{}", out.path);
+    }
+    let sym = |p: &str| fs::read_to_string(temp.path(p)).unwrap();
+    assert_ne!(sym("demo/build/demo.sym"), sym("demo/build/gbc/demo.sym"));
+    assert!(sym("demo/build/gbc/demo.sym").contains(" ColorGbc"));
+    assert!(!sym("demo/build/demo.sym").contains(" ColorGbc"));
+}
+
+/// --out still names the ROM under --gbc.
+#[test]
+fn out_wins_over_the_gbc_default() {
+    let (temp, mut options) = starter("gbc-out");
+    options.target = BuildTarget::Gbc;
+    options.out = Some(PathBuf::from("build/color.gb"));
+    let made = build(&rgbds(), &options).unwrap();
+    assert_eq!(made.outputs[0].path, "demo/build/color.gb");
+    assert_eq!(made.outputs[1].path, "demo/build/color.sym");
+    assert!(!temp.path("demo/build/gbc").exists());
 }
 
 /// `GBCLI_GBC` is defined for every source under the GBC target, by the
@@ -136,19 +242,28 @@ fn gbcli_gbc_is_defined_for_every_source_under_the_gbc_target_only() {
         "IF DEF(GBCLI_GBC)\nSECTION \"probe\", ROM0\nProbe:: db GBCLI_GBC\nENDC\n",
     )
     .unwrap();
-    let probe = |temp: &Temp| {
-        let sym = fs::read_to_string(temp.path("demo/build/demo.sym")).unwrap();
+    // Each target's ROM and .sym (the GBC's in build/gbc/).
+    let probe = |temp: &Temp, rom: &str| {
+        let rom = temp.path(rom);
+        let sym = fs::read_to_string(rom.with_extension("sym")).unwrap();
         sym.lines().find(|l| l.ends_with(" Probe")).map(|l| {
             let addr = u16::from_str_radix(&l[3..7], 16).unwrap();
-            let rom = fs::read(temp.path("demo/build/demo.gb")).unwrap();
-            rom[addr as usize]
+            fs::read(&rom).unwrap()[addr as usize]
         })
     };
     build(&rgbds(), &options).unwrap();
-    assert_eq!(probe(&temp), None, "undefined for the DMG");
+    assert_eq!(
+        probe(&temp, "demo/build/demo.gb"),
+        None,
+        "undefined for the DMG"
+    );
     options.target = BuildTarget::Gbc;
     build(&rgbds(), &options).unwrap();
-    assert_eq!(probe(&temp), Some(1), "1 for the GBC");
+    assert_eq!(
+        probe(&temp, "demo/build/gbc/demo.gbc"),
+        Some(1),
+        "1 for the GBC"
+    );
 }
 
 /// A failed GBC build's remedy builds for the GBC again, and its report

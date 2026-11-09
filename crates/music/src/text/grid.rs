@@ -1,7 +1,9 @@
 //! The orders and the pattern blocks. A block shows up to four patterns
 //! side by side, one per channel, as the orders play them together; a
 //! pattern several order rows play appears in several blocks, and every
-//! copy must read the same.
+//! copy must read the same. On input a block may name fewer columns, and
+//! `=` marks a column whose pattern another block shows, so a shared
+//! pattern can be written once.
 
 use std::collections::BTreeMap;
 
@@ -99,9 +101,21 @@ struct Shown {
     line: u32,
 }
 
+/// What one column of a `pattern` line holds.
+#[derive(Clone, Copy, Debug)]
+enum Column {
+    /// The pattern this block shows.
+    Shows(Named),
+    /// `-`: no pattern.
+    Nothing,
+    /// `=`: the pattern the orders give this channel, shown in another block.
+    Elsewhere,
+}
+
 struct Open {
     line: u32,
-    names: [Option<Named>; 4],
+    /// One to four columns, from channel 1.
+    columns: Vec<Column>,
     rows: [Rows; 4],
     /// Each given row's line and its four cells' columns.
     lines: [Option<(u32, [u32; 4])>; ROWS],
@@ -115,26 +129,44 @@ pub struct Blocks {
     storage: Vec<Named>,
 }
 
-const CELL_SHAPE: &str = "a pattern row is the row number, then four cells (square 1, square \
-                          2, wave, noise) separated by |, each a note, instrument, volume and \
-                          effect: 00 C-5 01 ... 2FF | ... .. ... ... | ...";
+const PATTERN_SHAPE: &str = "pattern P0 P1 P2 P3: the pattern each column shows (channels 1-4), \
+                             - for none, or = for one another block shows; columns left off \
+                             the end are =";
+
+/// The row shape for a block of `columns` columns.
+fn cell_shape(columns: usize) -> String {
+    let count = ["one cell", "two cells", "three cells", "four cells"][columns - 1];
+    format!(
+        "a pattern row is the row number, then {count} (one per column the pattern line \
+         names: square 1, square 2, wave, noise) separated by |, each a note, instrument, \
+         volume and effect: 00 C-5 01 ... 2FF | ... .. ... ... | ..."
+    )
+}
 
 impl Blocks {
-    /// `pattern P0 P1 P2 P3`.
+    /// `pattern P0 P1 P2 P3`, or fewer columns.
     pub fn start(&mut self, line: u32, tokens: &[Token]) -> Result<(), ParseError> {
-        let a = args(
-            line,
-            tokens,
-            4,
-            "pattern P0 P1 P2 P3: the pattern each column shows, or - for none",
-        )?;
-        let mut names = [None; 4];
-        for (c, t) in a.iter().enumerate() {
-            names[c] = name(line, t)?;
+        let a = &tokens[1..];
+        if !(1..=4).contains(&a.len()) {
+            return Err(at(
+                line,
+                &tokens[0],
+                format!("`pattern` names 1-4 columns, not {}", a.len()),
+                format!("write it as: {PATTERN_SHAPE}"),
+            ));
         }
+        let columns = a
+            .iter()
+            .map(|t| {
+                if t.text == "=" {
+                    return Ok(Column::Elsewhere);
+                }
+                Ok(name(line, t)?.map_or(Column::Nothing, Column::Shows))
+            })
+            .collect::<Result<Vec<_>, ParseError>>()?;
         self.open = Some(Open {
             line,
-            names,
+            columns,
             rows: [BLANK_ROWS; 4],
             lines: [None; ROWS],
             last_row: None,
@@ -158,12 +190,19 @@ impl Blocks {
             ));
         }
         let cells: Vec<&[Token]> = tokens[1..].split(|t| t.kind == Kind::Bar).collect();
-        if cells.len() != 4 {
+        let width = open.columns.len();
+        if cells.len() != width {
             return Err(at(
                 line,
                 &tokens[0],
-                format!("this row has {} cells", cells.len()),
-                CELL_SHAPE,
+                format!(
+                    "this row has {} cells, and the pattern line at line {} names {width} \
+                     column{}",
+                    cells.len(),
+                    open.line,
+                    if width == 1 { "" } else { "s" }
+                ),
+                cell_shape(width),
             ));
         }
         let mut columns = [0; 4];
@@ -173,7 +212,7 @@ impl Blocks {
                     line,
                     &tokens[0],
                     format!("cell {} is empty", c + 1),
-                    CELL_SHAPE,
+                    cell_shape(width),
                 ));
             };
             if fields.len() != 4 {
@@ -181,18 +220,33 @@ impl Blocks {
                     line,
                     first,
                     format!("cell {} has {} fields", c + 1, fields.len()),
-                    CELL_SHAPE,
+                    cell_shape(width),
                 ));
             }
             let cell = cell(line, fields)?;
-            if open.names[c].is_none() && !cell.is_blank() {
-                return Err(at(
-                    line,
-                    first,
-                    format!("channel {} has no pattern in this block (-)", c + 1),
-                    "name a pattern for the column on the pattern line, or leave its cells \
-                     blank (... .. ... ...)",
-                ));
+            if !cell.is_blank() {
+                match open.columns[c] {
+                    Column::Shows(_) => {}
+                    Column::Nothing => {
+                        return Err(at(
+                            line,
+                            first,
+                            format!("channel {} has no pattern in this block (-)", c + 1),
+                            "name a pattern for the column on the pattern line, or leave its \
+                             cells blank (... .. ... ...)",
+                        ));
+                    }
+                    Column::Elsewhere => {
+                        return Err(at(
+                            line,
+                            first,
+                            format!("channel {}'s pattern is shown in another block (=)", c + 1),
+                            "write its rows in the block that shows it, and leave its cells \
+                             here blank (... .. ... ...); or name it on this pattern line \
+                             in place of =",
+                        ));
+                    }
+                }
             }
             open.rows[c][n] = cell;
             columns[c] = first.column;
@@ -208,8 +262,10 @@ impl Blocks {
         let Some(open) = self.open.take() else {
             return Ok(());
         };
-        for (c, named) in open.names.iter().enumerate() {
-            let Some(named) = named else { continue };
+        for (c, column) in open.columns.iter().enumerate() {
+            let Column::Shows(named) = column else {
+                continue;
+            };
             let rows = open.rows[c];
             let Some(first) = self.shown.get(&named.key) else {
                 self.shown.insert(
@@ -236,8 +292,8 @@ impl Blocks {
                     named.key, first.line
                 ),
                 remedy: "a pattern shown in several blocks must read the same in each: edit \
-                         every copy, or give this column a new pattern name here and in the \
-                         orders"
+                         every copy, write = for this column so only one block shows it, or \
+                         give this column a new pattern name here and in the orders"
                     .into(),
             });
         }

@@ -381,3 +381,63 @@ fn a_bad_palette_file_keeps_the_pixel_text_problems() {
     let limits: Vec<ImageLimit> = made.problems.iter().map(|p| p.limit).collect();
     assert_eq!(limits, [ImageLimit::PaletteFile, ImageLimit::PixelsText]);
 }
+
+/// 8x8 pixel text drawn in the palette `forest`.
+const FOREST: &str = "\
+format gbcli-pixels 1
+size 8 8
+color 0 forest 0
+color 1 forest 3
+fill 0
+rows
+01010101
+";
+
+fn forest_project(name: &str, palettes: &str) -> Temp {
+    let temp = Temp::new(name);
+    fs::create_dir_all(temp.path("demo/assets/bg")).unwrap();
+    for image in ["a", "b", "c"] {
+        fs::write(temp.path(&format!("demo/assets/bg/{image}.pixels")), FOREST).unwrap();
+    }
+    fs::write(temp.path("demo/assets/palettes.txt"), palettes).unwrap();
+    temp
+}
+
+/// One bad line in a palette file is one error: the pixel text naming its
+/// palettes isn't also told they define none (review D-4).
+#[test]
+fn a_bad_palette_file_is_the_only_error_its_palettes_references_get() {
+    let temp = forest_project(
+        "pixels-bad-palettes-refs",
+        "forest: #e0f8d0 #88c070 #346856 #081820\nthis is not a palette\n",
+    );
+    let made = match demo_assets(&temp, BuildTarget::Dmg) {
+        Err(gbcli_build::AssetsError::Failed(made)) => made.images,
+        other => panic!("expected problems, got {other:?}"),
+    };
+    let limits: Vec<ImageLimit> = made.problems.iter().map(|p| p.limit).collect();
+    assert_eq!(limits, [ImageLimit::PaletteFile], "{:#?}", made.problems);
+    assert_eq!(made.problems[0].line, Some(2));
+}
+
+/// With a good palette file, a palette it doesn't define is still each
+/// image's own error.
+#[test]
+fn a_palette_a_good_file_lacks_is_still_each_images_error() {
+    let temp = forest_project(
+        "pixels-missing-palette",
+        "sea: #e0f8d0 #88c070 #346856 #081820\n",
+    );
+    let made = match demo_assets(&temp, BuildTarget::Dmg) {
+        Err(gbcli_build::AssetsError::Failed(made)) => made.images,
+        other => panic!("expected problems, got {other:?}"),
+    };
+    let messages: Vec<&str> = made.problems.iter().map(|p| p.message.as_str()).collect();
+    assert_eq!(messages.len(), 3, "{messages:?}");
+    for m in messages {
+        assert!(
+            m.contains("no palette forest: the palettes define sea"),
+            "{m}"
+        );
+    }
+}

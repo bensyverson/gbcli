@@ -19,7 +19,7 @@ You need gbcli and RGBDS (see the [README](../README.md)).
 
 ```sh
 cd examples/racer
-gbcli build                      # or: gbcli build --gbc, for color
+gbcli build                      # or: gbcli build --gbc, for color (build/gbc/racer.gbc)
 gbcli run build/racer.gb --session play --frames 600 --shot shot.png
 ```
 

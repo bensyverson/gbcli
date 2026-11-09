@@ -39,7 +39,8 @@ pub(crate) const OBJECTS: &str = "objects";
 pub(crate) const REMEDY: &str = "one palette a line, `name: c0 c1 c2 c3` (#rrggbb or #rgb, index 0 \
                       lightest first; `dmg:` for the colors of DMG shades 0-3; `objects: 8x8` \
                       or `objects: 8x16` for every sheet's object size), or one image a \
-                      line, `bg/town.png = name`; '#' and a space or tab starts a comment \
+                      line by its own file name, `bg/town.png = name` or, for pixel text, \
+                      `bg/town.pixels = name`; '#' and a space or tab starts a comment \
                       (gbcli help images)";
 
 /// Why a palette file was refused.
@@ -261,7 +262,8 @@ pub(crate) fn parse(text: &str) -> Result<Parsed, Bad> {
                 line,
                 format!(
                     "{:?} is neither a palette (`name: c0 c1 c2 c3`), an assignment \
-                     (`bg/town.png = name`) nor a comment ('#', a space or tab, then text)",
+                     (`bg/town.png = name`, or `bg/town.pixels = name` for pixel text) nor a \
+                     comment ('#', a space or tab, then text)",
                     raw.trim()
                 ),
             ));
@@ -550,6 +552,21 @@ mod tests {
         let named = parse("forest: #fff #8c4 #363 #021\n").unwrap().named;
         assert_eq!((named.dmg, named.palettes.len()), (None, 1));
         assert_eq!(parse("# nothing yet\n\n").unwrap(), Parsed::default());
+    }
+
+    /// The grammar's remedy shows both forms of an assignment, each on the
+    /// image's own file name, so a .png can't read as how to assign pixel
+    /// text (review E-5).
+    #[test]
+    fn the_remedy_assigns_a_png_and_pixel_text_by_their_own_names() {
+        assert!(REMEDY.contains("`bg/town.png = name`"), "{REMEDY}");
+        assert!(REMEDY.contains("`bg/town.pixels = name`"), "{REMEDY}");
+        let bad = parse("this is not a palette\n").unwrap_err();
+        assert!(
+            bad.message.contains("`bg/town.pixels = name`"),
+            "{}",
+            bad.message
+        );
     }
 
     /// Each refusal names its line and what is wrong on it.

@@ -221,6 +221,28 @@ fn a_hardware_register_shadows_a_sym_symbol_of_the_same_name() {
 }
 
 #[test]
+fn a_c_style_signed_width_names_s8_and_s16() {
+    for (text, wanted) in [("i8[wFrame] < 0", "s8[ADDR]"), ("i16[$C000]", "s16[ADDR]")] {
+        let err = Condition::compile(text, Some(&syms())).unwrap_err();
+        let ExprError::Syntax {
+            at: 0,
+            hint: Some(hint),
+            ..
+        } = &err
+        else {
+            panic!("{text}: {err:?}")
+        };
+        assert!(hint.contains(wanted), "{hint}");
+        assert!(err.remedy().contains("s8") && err.remedy().contains("s16"));
+    }
+    // Without the C name, a symbol named i8 still reads as one.
+    let s = Symbols::parse("00:c000 i8\n").unwrap();
+    assert!(Condition::compile("[i8] == 1", Some(&s)).is_ok());
+    // And the real widths parse.
+    parse("s8[wFrame] < 0 && s16[wFrame] < 0");
+}
+
+#[test]
 fn a_bare_ram_symbol_compared_suggests_a_read() {
     let err = Condition::compile("wFrame >= 60", Some(&syms())).unwrap_err();
     let ExprError::Syntax {

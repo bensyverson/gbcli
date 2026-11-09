@@ -1,7 +1,7 @@
 use gbcli_bundle::SessionStore;
 use gbcli_protocol::{
-    BreakArgs, BreakpointMade, DebuggerConfig, DeleteArgs, Deleted, ErrorBody, ErrorCode, Location,
-    ResultBody, SessionFile, WatchAccess, WatchArgs, WatchMade,
+    Arming, BreakArgs, BreakpointMade, DebuggerConfig, DeleteArgs, Deleted, ErrorBody, ErrorCode,
+    Location, ResultBody, SessionFile, WatchAccess, WatchArgs, WatchMade,
 };
 
 use super::writes::parse_location;
@@ -110,25 +110,32 @@ impl Handler {
     }
 }
 
-/// The ids `delete` could take, as a remedy.
+/// The ids `delete` could take, as a remedy, each disarmed one said so.
 fn existing_ids(config: &DebuggerConfig) -> String {
-    let place = |at: &Location| {
-        at.symbol.clone().unwrap_or_else(|| match at.bank {
+    let place = |at: &Location, arming: Arming| {
+        let place = at.symbol.clone().unwrap_or_else(|| match at.bank {
             Some(bank) => format!("{bank:02X}:{:04X}", at.addr),
             None => format!("${:04X}", at.addr),
-        })
+        });
+        match arming {
+            Arming::Armed => place,
+            Arming::Disarmed => format!("{place} (disarmed)"),
+        }
     };
     let mut ids: Vec<(u32, String)> = config
         .breakpoints
         .iter()
-        .map(|b| (b.id, format!("#{} break {}", b.id, place(&b.at))))
+        .map(|b| (b.id, format!("#{} break {}", b.id, place(&b.at, b.arming))))
         .chain(config.watches.iter().map(|w| {
             let access = match w.access {
                 WatchAccess::Read => "read",
                 WatchAccess::Write => "write",
                 WatchAccess::Access => "access",
             };
-            (w.id, format!("#{} watch {access} {}", w.id, place(&w.at)))
+            (
+                w.id,
+                format!("#{} watch {access} {}", w.id, place(&w.at, w.arming)),
+            )
         }))
         .collect();
     if ids.is_empty() {

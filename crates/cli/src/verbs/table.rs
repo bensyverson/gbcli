@@ -314,7 +314,8 @@ pub const VERBS: &[VerbSpec] = &[
         about: "Stop every later run before the instruction at ADDR executes (when --if \
                 holds). Prints the breakpoint's id, which `delete` takes. Set by a symbol, \
                 it follows that symbol when the ROM is rebuilt, with a warning when it \
-                moves; set by an address, it stays.",
+                moves; while a rebuild lacks the symbol it is disarmed (kept, warned about, \
+                stopping nothing) until a build has it again. Set by an address, it stays.",
         example: (
             "gbcli break Main.loop --session dx --if 'a == 3'",
             "stops runs at Main.loop whenever a is 3",
@@ -335,7 +336,8 @@ pub const VERBS: &[VerbSpec] = &[
         groups: CHANGE_VERB,
         about: "Stop every later run at an access to ADDR. In --if, `old` and `new` are the \
                 byte before and after a write. --once deletes it after it fires. Set by a \
-                symbol, it follows that symbol when the ROM is rebuilt.",
+                symbol, it follows that symbol when the ROM is rebuilt, and is disarmed \
+                while a rebuild lacks the symbol.",
         example: (
             "gbcli watch write rDMA --session dx --once",
             "stops the next run when OAM DMA starts",

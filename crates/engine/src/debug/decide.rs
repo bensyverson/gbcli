@@ -19,7 +19,9 @@ use crate::cond::{
 use crate::machine::Machine;
 use crate::mem;
 
-/// The machine's breakpoints and watches, conditions compiled.
+/// The machine's armed breakpoints and watches, conditions compiled: a
+/// disarmed one (its symbol gone from the ROM on disk) stops nothing, and its
+/// condition isn't compiled, since it may name the same gone symbol.
 pub(super) struct Compiled {
     pub breakpoints: Vec<(u32, Location, Option<Condition>)>,
     pub watches: Vec<(u32, WatchAccess, Location, Option<Condition>, bool)>,
@@ -47,11 +49,13 @@ pub(super) fn compile(m: &Machine) -> Result<Compiled, DebugError> {
         breakpoints: config
             .breakpoints
             .iter()
+            .filter(|b| b.arming.is_armed())
             .map(|b| Ok((b.id, reached(m, &b.at), cond(b.id, &b.condition)?)))
             .collect::<Result<_, DebugError>>()?,
         watches: config
             .watches
             .iter()
+            .filter(|w| w.arming.is_armed())
             .map(|w| {
                 Ok((
                     w.id,

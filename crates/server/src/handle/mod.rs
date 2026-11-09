@@ -378,6 +378,9 @@ mod restart_tests;
 mod relabel_tests;
 
 #[cfg(test)]
+mod relabel_gone_tests;
+
+#[cfg(test)]
 mod rom_change_tests;
 
 #[cfg(test)]

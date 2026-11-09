@@ -17,8 +17,8 @@ use std::sync::atomic::AtomicBool;
 
 use gbcli_core::{Budget, CoreError, EventSink, canonical_addr};
 use gbcli_protocol::{
-    BreakpointSpec, KeyEvent, Location, StepKind, StopRecord, TimeBase, TimeMark, WatchAccess,
-    WatchSpec,
+    Arming, BreakpointSpec, KeyEvent, Location, StepKind, StopRecord, TimeBase, TimeMark,
+    WatchAccess, WatchSpec,
 };
 
 use crate::cond::{Condition, EvalError, EvalWarning, ExprError};
@@ -176,6 +176,7 @@ impl Machine {
             id,
             at: canonical(at),
             condition: condition.map(String::from),
+            arming: Arming::Armed,
         });
         Ok(id)
     }
@@ -196,6 +197,7 @@ impl Machine {
             at: canonical(at),
             condition: condition.map(String::from),
             once,
+            arming: Arming::Armed,
         });
         Ok(id)
     }

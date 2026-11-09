@@ -98,7 +98,8 @@ Does every scroll or palette write land in HBlank?
   (every write to the register reads mode=hblank, or vblank; any other row
   names its instruction with pc=, and a row with no mode= proves nothing).
   To stop at a write that starts outside HBlank and look around, break on it,
-  then gbcli run --session hb --from boot:
+  then rerun the same input from boot (gbcli run --session hb --from boot
+  --frames 3000 --keys-file play.txt):
   gbcli break YourWrite --if '([rSTAT] & 3) != 0' --session hb
   (STAT is read as the instruction starts, before it writes, so no stop
   proves nothing: a write that starts late in HBlank can land in the next

@@ -9,7 +9,9 @@ use gbcli_engine::{
     Backend, Checkpoint, CheckpointError, LoadOptions, LoadWarning, Machine, MovedRole, Rebased,
     SaveMeta, Session, sha256,
 };
-use gbcli_protocol::{BreakpointSpec, DebuggerConfig, Location, Sha256, WatchAccess, WatchSpec};
+use gbcli_protocol::{
+    Arming, BreakpointSpec, DebuggerConfig, Location, Sha256, WatchAccess, WatchSpec,
+};
 
 fn meta() -> SaveMeta {
     SaveMeta {
@@ -293,6 +295,7 @@ fn breakpoint(id: u32, addr: u16, symbol: Option<&str>) -> BreakpointSpec {
             symbol: symbol.map(str::to_string),
         },
         condition: None,
+        arming: Arming::Armed,
     }
 }
 
@@ -329,6 +332,7 @@ fn attaching_a_debugger_moves_each_label_with_its_symbol_and_no_address() {
             id,
             at: label(text),
             condition: None,
+            arming: Arming::Armed,
         });
     }
     // V1's Work, by address: no symbol to follow.
@@ -339,6 +343,7 @@ fn attaching_a_debugger_moves_each_label_with_its_symbol_and_no_address() {
         at: label("Work.done"),
         condition: None,
         once: false,
+        arming: Arming::Armed,
     });
 
     let report = rebuilt.attach_debugger(config);
@@ -354,7 +359,7 @@ fn attaching_a_debugger_moves_each_label_with_its_symbol_and_no_address() {
         .iter()
         .map(|r| match r {
             Rebased::Moved { id, .. } => *id,
-            Rebased::Lost { .. } => panic!("{r:?}"),
+            Rebased::Lost { .. } | Rebased::Rearmed { .. } => panic!("{r:?}"),
         })
         .collect();
     assert_eq!(moved, [1, 2, 5], "one report per move, none for Main");

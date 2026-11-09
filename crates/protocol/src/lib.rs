@@ -41,7 +41,7 @@ pub use battery::{
     PowerCycleMade, SavArgs, SavClockState, SavMade,
 };
 pub use checkpoint::{
-    BreakpointSpec, CheckpointHeader, CoreId, DebuggerConfig, LiveSymbol, Location, Patch,
+    Arming, BreakpointSpec, CheckpointHeader, CoreId, DebuggerConfig, LiveSymbol, Location, Patch,
     RenderConfig, Sha256, SymbolRole, TimeMark, WatchAccess, WatchSpec, model_from_name,
     model_name,
 };

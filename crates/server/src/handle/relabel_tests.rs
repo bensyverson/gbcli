@@ -192,3 +192,29 @@ fn a_run_at_a_checkpoint_across_a_rebuild_fires_label_breakpoints_where_they_mov
     );
     assert_eq!(pc, 0x0172);
 }
+
+/// `undo` across a rebuild moves a label breakpoint and keeps the move.
+#[test]
+fn undo_across_a_rebuild_moves_a_label_breakpoint() {
+    let f = Fixture::with_sym("relabel-undo");
+    let mut h = handler(&f);
+    parked_at_main(&mut h);
+    // A later head, so undo has Main's to go back to.
+    let ran = run_frames(&mut h, 1);
+    assert!(ran.is_ok(), "{:?}", ran.error());
+    break_at(&mut h, "Work.done");
+    f.rebuild(V2, V2_SYM);
+
+    let undone = handler(&f).handle(&request(Op::Undo));
+    assert!(undone.is_ok(), "{:?}", undone.error());
+    assert!(
+        undone
+            .warnings
+            .iter()
+            .any(|w| w.contains("#2") && w.contains("$0170 -> $0172")),
+        "{:?}",
+        undone.warnings
+    );
+    let meta = f.bundle.session("demo").unwrap().read_meta().unwrap();
+    assert_eq!(meta.debugger.breakpoints[1].at.addr, 0x0172);
+}

@@ -134,6 +134,27 @@ pub struct BreakpointSpec {
     pub at: Location,
     /// Condition source text (design §8).
     pub condition: Option<String>,
+    #[serde(default, skip_serializing_if = "Arming::is_armed")]
+    pub arming: Arming,
+}
+
+/// Whether a breakpoint or watch can stop a run (design §7). Only one set by
+/// a symbol is ever disarmed: while the ROM on disk doesn't resolve that
+/// symbol, it stays in the session but stops nothing, and it is armed again
+/// where a later build puts the symbol.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Arming {
+    #[default]
+    Armed,
+    /// Set by a symbol the ROM on disk doesn't resolve.
+    Disarmed,
+}
+
+impl Arming {
+    pub fn is_armed(&self) -> bool {
+        *self == Arming::Armed
+    }
 }
 
 /// Which accesses a watch matches.
@@ -153,6 +174,8 @@ pub struct WatchSpec {
     pub condition: Option<String>,
     /// Delete the watch after its first stop.
     pub once: bool,
+    #[serde(default, skip_serializing_if = "Arming::is_armed")]
+    pub arming: Arming,
 }
 
 /// A SHA-256 digest, written as 64 lowercase hex digits.
@@ -359,6 +382,57 @@ mod tests {
         json.as_object_mut().unwrap().remove("flash");
         let back: CheckpointHeader = serde_json::from_value(json).unwrap();
         assert_eq!(back.flash, None);
+    }
+
+    fn config_with(arming: Arming) -> DebuggerConfig {
+        let at = Location {
+            addr: 0x0171,
+            bank: None,
+            symbol: Some("Extra".into()),
+        };
+        DebuggerConfig {
+            breakpoints: vec![BreakpointSpec {
+                id: 1,
+                at: at.clone(),
+                condition: None,
+                arming,
+            }],
+            watches: vec![WatchSpec {
+                id: 2,
+                access: WatchAccess::Write,
+                at,
+                condition: None,
+                once: false,
+                arming,
+            }],
+        }
+    }
+
+    #[test]
+    fn an_armed_entry_leaves_arming_out_and_a_disarmed_one_round_trips() {
+        let armed = serde_json::to_value(config_with(Arming::Armed)).unwrap();
+        assert!(armed["breakpoints"][0].get("arming").is_none(), "{armed}");
+        assert!(armed["watches"][0].get("arming").is_none(), "{armed}");
+        let disarmed = config_with(Arming::Disarmed);
+        let json = serde_json::to_value(&disarmed).unwrap();
+        assert_eq!(json["breakpoints"][0]["arming"], "disarmed");
+        assert_eq!(json["watches"][0]["arming"], "disarmed");
+        let back: DebuggerConfig = serde_json::from_value(json).unwrap();
+        assert_eq!(back, disarmed);
+    }
+
+    #[test]
+    fn an_entry_saved_before_arming_existed_loads_armed() {
+        let old = r#"{
+            "breakpoints": [{"id": 1, "at": {"addr": 369, "bank": null, "symbol": "Extra"},
+                             "condition": null}],
+            "watches": [{"id": 2, "access": "write",
+                         "at": {"addr": 49152, "bank": null, "symbol": null},
+                         "condition": null, "once": false}]
+        }"#;
+        let config: DebuggerConfig = serde_json::from_str(old).unwrap();
+        assert_eq!(config.breakpoints[0].arming, Arming::Armed);
+        assert_eq!(config.watches[0].arming, Arming::Armed);
     }
 
     #[test]

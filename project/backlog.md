@@ -136,7 +136,9 @@ Eval run 5 asked for axis labels or a legend on the image too; `help music` now 
 
 ## 2026-11-08 — Small run and view refinements from the example games
 
-**What:** three items from [2026-11-08-examples-dx-review.md](2026-11-08-examples-dx-review.md), item 12. First, keys-file offsets counted from a time base (`--keys-since boot`), so a recording can resume from a checkpoint. Second, separate default output names for the DMG and GBC builds (both write `build/NAME.gb` today). Third, `dropped_by_line_limit` saying which lines dropped an object.
+**What:** two items from [2026-11-08-examples-dx-review.md](2026-11-08-examples-dx-review.md), item 12. First, separate default output names for the DMG and GBC builds (both write `build/NAME.gb` today). Second, `dropped_by_line_limit` saying which lines dropped an object.
+
+> **Update, 2026-11-09:** a third item, keys-file offsets from a time base, was un-parked: both D and E hit it, and Ben accepted `run --keys-since BASE` ([2026-11-09-examples-dx-review-de.md](2026-11-09-examples-dx-review-de.md), question 4). The rogue also built `--gbc` over its plain build's `build/rogue.gb` and ran the wrong ROM for 20 minutes. Ben accepted `model=`/`cgb=` in `show` and `sessions` for that; separate default output names stay here until Ben rules on them.
 
 **Why parked:** each cost an agent five minutes or less, each had a clean workaround (measure from boot, `--out`, read the screenshot), and Ben accepted the review's call to backlog them.
 
@@ -170,4 +172,6 @@ What: let pixel text (or a sheet's name) name its tiles and frames so `images.in
 
 **Why parked:** most of the games' Python was art (now `.pixels`), build-time data tables (normal), or post-processing gbcli output (since made features); only the bots argue for in-process scripting, and the script API is a second interface to design and keep stable beside the JSONL protocol. The examples DX review (2026-11-08) set the bar: a built-in input driver when a third game shows it's needed.
 
-**Un-park when:** the D (roguelike) or E (rhythm) DX doc shows an input bot, or another per-frame script, costing real time or calls again. Lantern Drum's agent (E) wrote Python tools for its song, chart, sync check and key files: check its DX doc ([2026-11-09-dx-rhythm.md](2026-11-09-dx-rhythm.md)) first.
+**Un-park when:** an agent ranks driving an input bot among its costliest stumbles, or a real-time game's bot needs a decision every frame or two, so per-call overhead dominates. C (the raycaster) is the next test, and its agent reports its bot's call count and wall time.
+
+> **Update, 2026-11-09:** the condition used to read "the D or E DX doc shows an input bot … costing real time or calls again". D's bot made about 1,100 cheap calls (6.5 s a win), and the agent ranked it its best help; E had no bot. The condition held by its wording but not its intent, so Ben kept the entry parked and sharpened the condition ([2026-11-09-examples-dx-review-de.md](2026-11-09-examples-dx-review-de.md), question 5).

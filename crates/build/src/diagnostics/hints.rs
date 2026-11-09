@@ -15,13 +15,27 @@ struct Hint {
 }
 
 /// RGBDS 1.0.4's wording.
-const HINTS: &[Hint] = &[Hint {
-    tool: Tool::Rgbasm,
-    // `Section "W" cannot contain code or data (not `ROM0` or `ROMX`)`:
-    // an instruction or `db` in a RAM section.
-    fragment: "cannot contain code or data (not `ROM0` or `ROMX`)",
-    remedy: "code and data go in a ROM0 or ROMX section: start one (`SECTION \"Code\", ROM0`)",
-}];
+const HINTS: &[Hint] = &[
+    Hint {
+        tool: Tool::Rgbasm,
+        // `Section "W" cannot contain code or data (not `ROM0` or `ROMX`)`:
+        // an instruction or `db` in a RAM section.
+        fragment: "cannot contain code or data (not `ROM0` or `ROMX`)",
+        remedy: "code and data go in a ROM0 or ROMX section: start one (`SECTION \"Code\", ROM0`)",
+    },
+    Hint {
+        tool: Tool::Rgblink,
+        // `Unable to place "rst08" (ROM0 section) at address $0008: section
+        // overlaps with "Restart vectors"`: an rst routine in a section of
+        // its own, over the starter's fill of $0000-$003F. rgblink names no
+        // file or line, so the remedy says where the fill is.
+        fragment: "section overlaps with \"Restart vectors\"",
+        remedy: "the starter's \"Restart vectors\" section in src/main.asm fills all of \
+                 $0000-$003F (`ds $40, $FF`): drop your section and put the routine in that \
+                 one, replacing the fill up to its address and padding after it, e.g. \
+                 `ds $08, $FF`, the routine, then `ds $40 - @, $FF`",
+    },
+];
 
 /// What fixes `d`, ending with where, when its message has a hint.
 pub fn remedy(d: &Diagnostic) -> Option<String> {
@@ -82,6 +96,30 @@ mod tests {
                  ROM0`) before the first such line (src/main.asm:193)"
             )
         );
+    }
+
+    /// A section placed in $0000-$003F of a starter project collides with
+    /// its "Restart vectors" fill; rgblink names no file or line, so the hint
+    /// says where that section is and how to make room in it.
+    #[test]
+    fn a_section_over_the_starters_restart_vectors_points_at_its_fill() {
+        let d = Diagnostic::new(
+            Tool::Rgblink,
+            Severity::Error,
+            "Unable to place \"rst08\" (ROM0 section) at address $0008: section overlaps with \
+             \"Restart vectors\"",
+        );
+        let text = remedy(&d).unwrap();
+        for needed in ["src/main.asm", "\"Restart vectors\"", "ds $40 - @, $FF"] {
+            assert!(text.contains(needed), "{needed}: {text}");
+        }
+        // Another section's overlap is not the starter's fill.
+        let other = Diagnostic::new(
+            Tool::Rgblink,
+            Severity::Error,
+            "Unable to place \"A\" (ROM0 section) at address $0150: section overlaps with \"B\"",
+        );
+        assert_eq!(remedy(&other), None);
     }
 
     fn line(file: &str, line: u32, within: Option<&str>) -> gbcli_protocol::SourceLine {

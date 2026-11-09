@@ -301,15 +301,20 @@ fn the_help_says_held_keys_carry_over_and_offers_the_bot_recipe() {
 fn the_de_review_help_items_are_in_place() {
     let time = Topic::Time.text();
     for needed in [
-        "$0040",
         "ly=144",
-        "before the",
+        "before the VBlank handler runs",
+        "pc= is wherever the CPU was",
         "one more frame",
         "K@N",
         "frame N",
     ] {
         assert!(time.contains(needed), "{needed}: {time}");
     }
+    // A frames stop lands at the $0040 vector only when the interrupt is
+    // dispatched in the same step (the DMG starter in HALT); the GBC starter
+    // stops after its halt and a busy loop in the loop, so the topic must not
+    // name $0040 as where a run stops.
+    assert!(!time.contains("$0040"), "{time}");
     let run = verb(crate::verbs::by_name("run").unwrap());
     for flag in ["--frames N", "--keys TOKENS"] {
         let at = run

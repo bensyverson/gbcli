@@ -26,6 +26,7 @@ use crate::diagnostics;
 use crate::paths::{display, quote};
 use crate::toolchain::{Toolchain, ToolchainError};
 use layout::Layout;
+pub use layout::{default_rom, default_target_of};
 use staging::Staging;
 
 /// What to build, and how paths are printed. Relative paths are relative to

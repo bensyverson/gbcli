@@ -14,12 +14,13 @@ Either --from skips the head: --from boot is how a session starts over on a
 rebuilt ROM, keeping its breakpoints and watches.
 
 Frames and keys. A frame begins as VBlank does (ly=144). A run --frames N
-stops there, at the VBlank interrupt vector ($0040, ly=144), before the
-handler runs: the stop shows the frame just drawn, but what the handler does
-for it (OAM DMA, a frame counter, a joypad read) happens in the next run, so
-run one more frame to see it. A key token K@N changes the buttons at the
-start of the run's frame N (offsets count from the run's start), so every
-joypad read the program makes after that VBlank sees it, and none before.
+stops there, before the VBlank handler runs; pc= is wherever the CPU was
+then (the halt or loop it waits in, or the handler's vector). The stop shows
+the frame just drawn, but what the handler does for it (OAM DMA, a frame
+counter, a joypad read) happens in the next run, so run one more frame to
+see it. A key token K@N changes the buttons at the start of the run's
+frame N (offsets count from the run's start), so every joypad read the
+program makes after that VBlank sees it, and none before.
 With --keys-since BASE (boot, power-on or a checkpoint) offsets count from
 that base instead, as the frame= a stop prints with --since BASE: a key
 file recorded from boot replays from a mid-run checkpoint with

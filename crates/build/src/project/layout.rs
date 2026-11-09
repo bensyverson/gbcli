@@ -77,12 +77,9 @@ impl Layout {
             }
             options.include.clone()
         };
-        let name = project
-            .file_name()
-            .map_or("game".into(), |n| n.to_string_lossy().into_owned());
         let out = match &options.out {
             Some(out) => project.join(out),
-            None => project.join(default_out(&name, options.target)),
+            None => default_rom(project, options.target),
         };
         // rgblink would be given one path for two outputs.
         for beside in ["sym", "map"] {
@@ -95,7 +92,7 @@ impl Layout {
                     ),
                     remedy: format!(
                         "pass an --out that ends .gb, e.g. --out {}",
-                        quote(&format!("build/{name}.gb"))
+                        quote(&format!("build/{}.gb", project_name(project)))
                     ),
                 });
             }
@@ -107,6 +104,29 @@ impl Layout {
             out,
         })
     }
+}
+
+/// The ROM a build of `project` for `target` writes without --out, under
+/// `project`: `build/NAME.gb` or `build/gbc/NAME.gbc`, NAME being the
+/// project directory's name.
+pub fn default_rom(project: &Path, target: BuildTarget) -> PathBuf {
+    project.join(default_out(&project_name(project), target))
+}
+
+/// The target whose build of `project`, without --out, wrote `rom`; `None`
+/// for any other file, or one that doesn't exist.
+pub fn default_target_of(project: &Path, rom: &Path) -> Option<BuildTarget> {
+    let rom = rom.canonicalize().ok()?;
+    [BuildTarget::Dmg, BuildTarget::Gbc]
+        .into_iter()
+        .find(|&t| default_rom(project, t).canonicalize().ok().as_ref() == Some(&rom))
+}
+
+/// The name a project's ROM takes: its directory's.
+fn project_name(project: &Path) -> String {
+    project
+        .file_name()
+        .map_or("game".into(), |n| n.to_string_lossy().into_owned())
 }
 
 /// The ROM a build writes without --out: `build/NAME.gb`, or for the GBC
@@ -140,4 +160,26 @@ fn asm_files(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_default_rom_names_its_target_and_any_other_file_none() {
+        let project = std::env::temp_dir()
+            .join(format!("gbcli-layout-{}", std::process::id()))
+            .join("game");
+        fs::create_dir_all(project.join("build/gbc")).unwrap();
+        for rom in ["build/game.gb", "build/gbc/game.gbc", "build/other.gb"] {
+            fs::write(project.join(rom), b"rom").unwrap();
+        }
+        let of = |rom: &str| default_target_of(&project, &project.join(rom));
+        assert_eq!(of("build/game.gb"), Some(BuildTarget::Dmg));
+        assert_eq!(of("build/./gbc/game.gbc"), Some(BuildTarget::Gbc));
+        assert_eq!(of("build/other.gb"), None);
+        assert_eq!(of("build/missing.gb"), None);
+        fs::remove_dir_all(project.parent().unwrap()).unwrap();
+    }
 }

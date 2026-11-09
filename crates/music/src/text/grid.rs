@@ -284,18 +284,36 @@ impl Blocks {
                 Some((line, columns)) => (line, columns[c]),
                 None => (named.line, named.column),
             };
-            return Err(ParseError {
-                line,
-                column,
-                message: format!(
-                    "pattern P{} differs from its copy in the block at line {}, at row {r:02}",
-                    named.key, first.line
-                ),
-                remedy: "a pattern shown in several blocks must read the same in each: edit \
-                         every copy, write = for this column so only one block shows it, or \
-                         give this column a new pattern name here and in the orders"
-                    .into(),
-            });
+            // Blocks start on different lines, so a copy from this block's
+            // own line is another column of this block.
+            let error = if first.line == open.line {
+                ParseError {
+                    line,
+                    column,
+                    message: format!(
+                        "pattern P{} is named twice in this block, and its columns differ at \
+                         row {r:02}",
+                        named.key
+                    ),
+                    remedy: "give each column its own pattern name, here and in the orders, or \
+                             make both columns' cells the same"
+                        .into(),
+                }
+            } else {
+                ParseError {
+                    line,
+                    column,
+                    message: format!(
+                        "pattern P{} differs from its copy in the block at line {}, at row {r:02}",
+                        named.key, first.line
+                    ),
+                    remedy: "a pattern shown in several blocks must read the same in each: edit \
+                             every copy, write = for this column so only one block shows it, or \
+                             give this column a new pattern name here and in the orders"
+                        .into(),
+                }
+            };
+            return Err(error);
         }
         Ok(())
     }

@@ -480,6 +480,42 @@ fn build_restore_needs_a_session_over_the_rom_it_built() {
     assert!(wrong.stderr.contains("demo.gb"), "{}", wrong.stderr);
 }
 
+/// A session on the other target's build of the same project is refused like
+/// any other ROM, but the remedy names the likely cause: --gbc given or left
+/// out, and where each build goes.
+#[test]
+fn build_restore_into_the_other_targets_session_names_the_gbc_flag() {
+    let p = game_with_session("rgbds-restore-other-target");
+    let gbc = p.rgbds(&[
+        "build",
+        "game",
+        "--gbc",
+        "--session",
+        "game",
+        "--restore",
+        "x",
+    ]);
+    gbc.fails(2, "bad_request", "without --gbc");
+    assert!(gbc.stderr.contains("build/game.gb"), "{}", gbc.stderr);
+    assert!(gbc.stderr.contains("build/gbc/game.gbc"), "{}", gbc.stderr);
+
+    let run = p.rgbds(&[
+        "show",
+        "--rom",
+        "game/build/gbc/game.gbc",
+        "--session",
+        "color",
+    ]);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    let plain = p.rgbds(&["build", "game", "--session", "color", "--restore", "x"]);
+    plain.fails(2, "bad_request", "with --gbc");
+    assert!(
+        plain.stderr.contains("build/gbc/game.gbc"),
+        "{}",
+        plain.stderr
+    );
+}
+
 /// The responses `gbcli serve` writes for `lines`, run with only the pinned
 /// RGBDS on `PATH`.
 fn served(p: &Project, args: &[&str], lines: &[&str]) -> Vec<serde_json::Value> {

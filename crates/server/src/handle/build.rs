@@ -7,11 +7,12 @@
 //! (`session`, `rev`, `allow_rom_change`), rather than ignore them.
 
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use gbcli_build::{BuildOptions, DoctorInput, Toolchain};
 use gbcli_protocol::{
-    BuildArgs, ErrorBody, ErrorCode, NewArgs, Op, Request, Response, RestoreArgs, ResultBody,
+    BuildArgs, BuildTarget, ErrorBody, ErrorCode, NewArgs, Op, Request, Response, RestoreArgs,
+    ResultBody,
 };
 
 use super::Handler;
@@ -168,7 +169,7 @@ impl Handler {
             body.result = Some(Box::new(result));
             Response::failed(id.clone(), None, body).with_warnings(warnings)
         };
-        if let Err(body) = self.runs_rom(&session, &rom.path, &rom.shown) {
+        if let Err(body) = self.runs_rom(&session, &rom) {
             return refuse(*body, result, warnings);
         }
         let restore = Request {
@@ -215,13 +216,14 @@ impl Handler {
 
     /// Whether `session` runs the ROM at `rom`: restoring into any other
     /// would load the old program, not the build.
-    fn runs_rom(&self, session: &str, rom: &Path, shown: &str) -> Result<(), Box<ErrorBody>> {
+    fn runs_rom(&self, session: &str, rom: &Rom) -> Result<(), Box<ErrorBody>> {
         let store_error = |e| Box::new(convert::store(&e));
         let store = self.bundle.session(session).map_err(store_error)?;
         let meta = store.read_meta().map_err(store_error)?;
+        let shown = &rom.shown;
         let same = match (
             self.bundle.project().join(&meta.rom).canonicalize(),
-            rom.canonicalize(),
+            rom.path.canonicalize(),
         ) {
             (Ok(a), Ok(b)) => a == b,
             _ => false,
@@ -229,17 +231,36 @@ impl Handler {
         if same {
             return Ok(());
         }
+        let message = format!(
+            "session {session} runs {}, not the build's {shown}; restoring would load the old ROM",
+            meta.rom
+        );
+        let start_one = format!(
+            "start a session on the build with `gbcli run {shown} --session NAME`, then \
+             checkpoint and restore in that one"
+        );
+        let runs = self.bundle.project().join(&meta.rom);
+        let remedy = match gbcli_build::default_target_of(&rom.project, &runs) {
+            // The session runs this project's other build: --gbc given or
+            // left out is the likely slip.
+            Some(theirs) if theirs != rom.target => {
+                let (theirs, flag) = if theirs.is_dmg() {
+                    ("plain", "without --gbc")
+                } else {
+                    ("GBC", "with --gbc")
+                };
+                format!(
+                    "the session runs this project's {theirs} build, {}; build {flag} to \
+                     restore into it, or {start_one}",
+                    meta.rom
+                )
+            }
+            _ => start_one,
+        };
         Err(Box::new(ErrorBody::new(
             ErrorCode::BadRequest,
-            format!(
-                "session {session} runs {}, not the build's {shown}; restoring would load the \
-                 old ROM",
-                meta.rom
-            ),
-            format!(
-                "start a session on the build with `gbcli run {shown} --session NAME`, then \
-                 checkpoint and restore in that one"
-            ),
+            message,
+            remedy,
         )))
     }
 }
@@ -251,10 +272,13 @@ struct Built {
     rom: Rom,
 }
 
-/// The ROM a build wrote: where it is, and as the response shows it.
+/// The ROM a build wrote: where it is, as the response shows it, and the
+/// project and target it was built from.
 struct Rom {
     path: PathBuf,
     shown: String,
+    project: PathBuf,
+    target: BuildTarget,
 }
 
 impl Built {
@@ -282,7 +306,7 @@ fn build(host: &Host, request: &Request, args: &BuildArgs) -> Result<Built, Box<
         .map_err(|e| Box::new(Response::failed(id, None, e.body())))?;
     let warnings = tools.warnings();
     let project = host.cwd.join(args.dir.as_deref().unwrap_or("."));
-    let mut options = BuildOptions::new(project, host.cwd.clone());
+    let mut options = BuildOptions::new(project.clone(), host.cwd.clone());
     options.src = args.src.iter().map(PathBuf::from).collect();
     options.include = args.include.iter().map(PathBuf::from).collect();
     options.out = args.out.as_ref().map(PathBuf::from);
@@ -294,6 +318,8 @@ fn build(host: &Host, request: &Request, args: &BuildArgs) -> Result<Built, Box<
     let rom = Rom {
         path: host.cwd.join(&rom.path),
         shown: rom.path.clone(),
+        project,
+        target: args.target,
     };
     Ok(Built {
         result: ResultBody {

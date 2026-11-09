@@ -23,7 +23,7 @@ pub use diagnostics::parse as parse_diagnostics;
 pub use doctor::{BOOT_ROM_SIZES, DoctorInput, GIT_LOCAL_ENV_VARS, doctor};
 pub use music::{MUSIC_DIR, MUSIC_OUT, song_problem};
 pub use pixels::pixels;
-pub use project::{BuildError, BuildOptions, TOOL_TIMEOUT, build};
+pub use project::{BuildError, BuildOptions, TOOL_TIMEOUT, build, default_rom, default_target_of};
 pub use scaffold::{HARDWARE_INC, HUGEDRIVER, NewError, new_project};
 pub use toolchain::{
     INSTALL_COMMAND, ImageTool, PinMatch, RGBDS_PIN, ToolFound, ToolProblem, Toolchain,

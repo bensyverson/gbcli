@@ -188,6 +188,19 @@ fn a_pattern_line_names_one_to_four_columns() {
     );
 }
 
+/// A block that names one pattern twice with different cells: the error is
+/// at the differing cell and says the pattern is named twice in this block,
+/// not that it differs from a copy in another (review-build's probe).
+#[test]
+fn a_block_naming_a_pattern_twice_with_different_cells_says_so() {
+    let e = error(&format!(
+        "{FORMAT_LINE}\norders\n00 P0 P0 P0 P0\n\
+         pattern P0 P0\n00 C-5 01 ... ... | {BLANK}\n"
+    ));
+    check(&e, 5, 21, "named twice in this block", "own pattern name");
+    assert!(!e.message.contains("its copy"), "{}", e.message);
+}
+
 #[test]
 fn equals_is_not_a_pattern_in_the_orders() {
     let e = error(&format!(

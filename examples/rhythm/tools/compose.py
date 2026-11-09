@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Writes Lantern Drum's two songs as gbcli song text:
 
-  assets/music/lantern.song   the song you play: channel 1 (the lead) is the
-                              chart, which tools/chart.py reads from it
+  assets/music/lantern.song   the song you play: tools/chart.py makes the
+                              chart from its lead (channel 1), with chords
+                              from its bass (channel 3)
   assets/music/title.song     the title screen's loop
 
 Both leave channel 2 silent: it belongs to the hit and miss sounds, so an
@@ -37,6 +38,10 @@ def chord_root(name, octave=0):
 # The game song: A minor, 7 ticks a row (one tick a frame: 128 BPM).
 
 LEADS = {
+    # The opening: one chord tone every two beats, so the first notes to
+    # hit are slow and far apart (tools/chart.py charts them a lane at a time).
+    "I": {0: "A-5", 8: "C-6", 16: "A-5", 24: "F-5",
+          32: "G-5", 40: "E-5", 48: "G-5", 56: "B-5"},
     "A": {0: "E-6", 4: "A-5", 8: "C-6", 10: "B-5", 12: "A-5",
           16: "F-5", 20: "A-5", 24: "C-6", 28: "A-5",
           32: "G-5", 36: "C-6", 40: "E-6", 44: "D-6", 46: "C-6",
@@ -53,7 +58,6 @@ LEADS = {
           32: "D-6", 36: "F-6", 40: "A-6", 44: "F-6",
           48: "G#6", 52: "E-6", 56: "B-5", 60: "G#5"},
     "O": {0: "A-5", 8: "C-6", 16: "E-6", 32: "A-6"},
-    "-": {},
 }
 LEADS["C2"] = {**LEADS["C"], 10: "D-6", 26: "C-6", 42: "F-6", 58: "B-5", 62: "E-6"}
 
@@ -66,7 +70,7 @@ PROGRESSIONS = {
 
 # Each order: lead pattern, chords, drum style.
 SONG = [
-    ("-", "verse", "intro"),
+    ("I", "verse", "intro"),
     ("A", "verse", "groove"),
     ("B", "verse", "groove"),
     ("C", "chorus", "drive"),
@@ -220,7 +224,7 @@ def song_text(name, comment, ticks_per_row, orders, leads, drum_fn, lead_inst):
 def songs():
     return {
         MUSIC / "lantern.song": song_text(
-            "Lantern Drum", "Channel 1 is the chart (tools/chart.py); channel 2 is the effects'.",
+            "Lantern Drum", "Channels 1 and 3 make the chart (tools/chart.py); channel 2 is the effects'.",
             7, SONG, LEADS, drums, 1),
         MUSIC / "title.song": song_text(
             "Lantern Drum title", "The title loop; channel 2 is left to the effects.",

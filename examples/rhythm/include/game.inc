@@ -6,11 +6,15 @@ DEF GAME_INC EQU 1
 include "chart.inc"             ; PREROLL, CHART_LEN, SONG_END_TICK (tools/chart.py)
 
 ; Judgment windows, in driver ticks (one tick is one frame: `timer off`).
-DEF PERFECT_WIN EQU 2           ; |press - note| <= 2 ticks: perfect
-DEF GOOD_WIN EQU 6              ; <= 6: good; a note 7 ticks past is a miss
+; Wide enough for a first-time player: 3 ticks is 50 ms either side, 8 is
+; 133 ms. The closest two notes of one lane are 14 ticks apart, so a good
+; window never reaches the next note's tick.
+DEF PERFECT_WIN EQU 3           ; |press - note| <= 3 ticks: perfect
+DEF GOOD_WIN EQU 8              ; <= 8: good; a note 9 ticks past is a miss
 DEF LOOKAHEAD EQU 56            ; ticks before its tick that a note shows
 DEF SPEED_SHIFT EQU 1           ; notes fall 2 px a tick
 DEF HIT_Y EQU 120               ; screen y of the hit line's top
+DEF LABEL_ROW EQU HIT_Y / 8 + 1 ; map row of the lanes' button names
 
 ; What wJudged holds for a note, and wLastJudge for the latest one.
 DEF JUDGE_NONE EQU 0
@@ -19,9 +23,15 @@ DEF JUDGE_GOOD EQU 2
 DEF JUDGE_MISS EQU 3
 
 ; The life meter: full at LIFE_MAX, a miss costs LIFE_MISS, a perfect
-; gives back 1; empty fails the song.
-DEF LIFE_MAX EQU 24
-DEF LIFE_MISS EQU 4
+; gives back LIFE_PERFECT and a good LIFE_GOOD; empty fails the song.
+; 24 misses in a row from full fail it, and two goods (or one perfect) pay
+; back a miss, so a player who hits two notes in three, however late or
+; early, never fails. The opening lesson's LESSON_NOTES (include/chart.inc)
+; cost no life at all.
+DEF LIFE_MAX EQU 48
+DEF LIFE_MISS EQU 2
+DEF LIFE_PERFECT EQU 2
+DEF LIFE_GOOD EQU 1
 DEF LIFE_CELLS EQU 6            ; meter cells; each holds LIFE_MAX / 6
 DEF JUDGE_SHOW EQU 30           ; frames a judgment word stays up
 
@@ -56,7 +66,7 @@ DEF BURST_FRAMES EQU 8          ; frames a hit's burst shows
 DEF BURST_PALETTE EQU 4         ; GBC OBJ palette of the bursts
 
 ; Text: tile = FONT_BASE + its place in tools/font.py's CHARS.
-DEF FONT_CHARS EQUS " 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ!-:[]"
+DEF FONT_CHARS EQUS " 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ!-:[]<>"
 FOR I, STRLEN("{FONT_CHARS}")
 	CHARMAP STRSLICE("{FONT_CHARS}", I, I + 1), FONT_BASE + I
 ENDR

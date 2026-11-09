@@ -1,7 +1,7 @@
 format gbcli-pixels 1
 # Lantern Drum's text tiles, one per character: made by tools/font.py.
-# Characters, in tile order: ' 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ!-:[]'
-size 336 8
+# Characters, in tile order: ' 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ!-:[]<>'
+size 352 8
 color . #ffffff
 color g #aaaaaa
 color k #000000
@@ -425,3 +425,23 @@ kggggggk
 kggggggk
 kggggggk
 kkkkkkkk
+
+rows 336 0   # '<'
+...k....
+..kk....
+.kkkkkk.
+kkkkkkk.
+.kkkkkk.
+..kk....
+...k....
+........
+
+rows 344 0   # '>'
+....k...
+....kk..
+.kkkkkk.
+.kkkkkkk
+.kkkkkk.
+....kk..
+....k...
+........

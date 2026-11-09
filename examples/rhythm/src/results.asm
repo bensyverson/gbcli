@@ -21,6 +21,11 @@ ShowResults::
 	ld a, STATE_RESULTS
 	ld [wState], a
 	call LcdOff
+IF DEF(GBCLI_GBC)
+	ldh a, [hGbc]                ; the play's lane labels leave colors behind
+	and a
+	call nz, ClearAttrs
+ENDC
 	ld hl, TILEMAP0
 	ld bc, $400
 	call ClearMem

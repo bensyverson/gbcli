@@ -15,7 +15,9 @@ whose stop names frame=N: the main loop of frame N reads wNow = 0.
 Usage (from examples/rhythm):
   python3 -I tools/keys.py --start N --shift 0 > build/perfect.keys
   python3 -I tools/keys.py --start N --shift 4 > build/late.keys
-  [--skip K]   leave every Kth note unpressed (a run with misses)
+  [--skip K]        leave every Kth note unpressed (a run with misses)
+  [--jitter A,B,..] add these frames to --shift, note by note, in turn
+                    (a sloppy player: some early, some late)
 """
 
 import argparse
@@ -35,18 +37,25 @@ def main():
     ap.add_argument("--start", type=int, required=True)
     ap.add_argument("--shift", type=int, default=0)
     ap.add_argument("--skip", type=int, default=0)
+    ap.add_argument("--jitter", default="0")
     ap.add_argument("--title", type=int, default=60)
     args = ap.parse_args()
+    jitter = [int(j) for j in args.jitter.split(",")]
     chart = make_chart(Song(SONG.read_text()))
-    print(f"# Lantern Drum: start={args.start} shift={args.shift} skip={args.skip}, "
-          f"{len(chart)} notes")
+    print(f"# Lantern Drum: start={args.start} shift={args.shift} skip={args.skip} "
+          f"jitter={args.jitter}, {len(chart)} notes")
     print(f"START@{args.title} -START@{args.title + HOLD}  # leave the title screen")
-    for i, (tick, lane, note, order, row) in enumerate(chart):
+    free = {}  # key -> the first frame it can go down again
+    for i, n in enumerate(chart):
         if args.skip and i % args.skip == args.skip - 1:
             continue
-        frame = args.start + PREROLL + tick + args.shift
-        key = LANE_KEYS[lane]
-        print(f"{key}@{frame} -{key}@{frame + HOLD}  # note {i} tick {tick}")
+        frame = args.start + PREROLL + n.tick + args.shift + jitter[i % len(jitter)]
+        key = LANE_KEYS[n.lane]
+        if frame < free.get(key, 0):
+            raise SystemExit(f"note {i}: {key} would go down at frame {frame}, "
+                             f"before its last press is up (frame {free[key]})")
+        free[key] = frame + HOLD + 1
+        print(f"{key}@{frame} -{key}@{frame + HOLD}  # note {i} tick {n.tick}")
     return 0
 
 

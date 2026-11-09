@@ -3,7 +3,8 @@
 
 One 8x8 tile per character, in CHARS order, so the game's charmap
 (src/text.asm) is tile = FONT_BASE + CHARS.index(c). '[' and ']' are the
-life meter's empty and full cells.
+life meter's empty and full cells; '<' and '>' are the d-pad's LEFT and
+RIGHT, drawn bold across the whole cell so a lane's key reads at a glance.
 
 Run: python3 -I tools/font.py [--check]   (from examples/rhythm)
 """
@@ -14,7 +15,27 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT = ROOT / "assets" / "tiles" / "font.pixels"
 
-CHARS = " 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ!-:[]"
+CHARS = " 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ!-:[]<>"
+
+# The lane labels' arrows, a whole 8x8 cell each.
+ARROWS = {
+    "<": ["...k....",
+          "..kk....",
+          ".kkkkkk.",
+          "kkkkkkk.",
+          ".kkkkkk.",
+          "..kk....",
+          "...k....",
+          "........"],
+    ">": ["....k...",
+          "....kk..",
+          ".kkkkkk.",
+          ".kkkkkkk",
+          ".kkkkkk.",
+          "....kk..",
+          "....k...",
+          "........"],
+}
 
 G = {
     " ": [".....", ".....", ".....", ".....", ".....", ".....", "....."],
@@ -65,6 +86,8 @@ def cell(c):
         return ["kkkkkkkk"] + ["k......k"] * 6 + ["kkkkkkkk"]
     if c == "]":
         return ["kkkkkkkk"] + ["kggggggk"] * 6 + ["kkkkkkkk"]
+    if c in ARROWS:
+        return ARROWS[c]
     rows = ["." + r.replace("X", "k") + ".." for r in G[c]]
     return rows + ["........"]
 

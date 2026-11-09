@@ -214,17 +214,15 @@ ApplyJudge:
 	jr nz, .good
 	ld hl, wPerfect
 	inc [hl]
-	ld a, [wLife]
-	cp LIFE_MAX
-	jr nc, .full
-	inc a
-	ld [wLife], a
-.full
+	ld a, LIFE_PERFECT
+	call GainLife
 	ld a, $03                   ; 300, in BCD hundreds
 	jr AddScoreHundreds
 .good
 	ld hl, wGood
 	inc [hl]
+	ld a, LIFE_GOOD
+	call GainLife
 	ld a, $01                   ; 100
 	jr AddScoreHundreds
 .miss
@@ -232,12 +230,26 @@ ApplyJudge:
 	inc [hl]
 	xor a
 	ld [wCombo], a
+	ld a, [wHead]               ; the note missed: the lesson's cost no life
+	cp LESSON_NOTES
+	ret c
 	ld a, [wLife]
 	sub LIFE_MISS
 	jr nc, .alive
 	xor a
 .alive
 	ld [wLife], a
+	ret
+
+; Adds a to the life, up to LIFE_MAX. Keeps BC and DE.
+GainLife:
+	ld hl, wLife
+	add [hl]
+	cp LIFE_MAX
+	jr c, .store
+	ld a, LIFE_MAX
+.store
+	ld [hl], a
 	ret
 
 ; Adds a (BCD, in hundreds) to the score.

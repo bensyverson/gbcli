@@ -142,6 +142,11 @@ MainLoop:
 ; The title screen, with its music. Leaves the LCD on.
 ShowTitle:
 	call LcdOff
+IF DEF(GBCLI_GBC)
+	ldh a, [hGbc]                ; the play's lane labels leave colors behind
+	and a
+	call nz, ClearAttrs
+ENDC
 	ld hl, wShadowOAM
 	call HideFrom
 	ld hl, TILEMAP0
@@ -335,6 +340,38 @@ DrawPlayfield:
 	add hl, de
 	dec b
 	jr nz, .row
+	; The lane's button, just under its drum, where the player looks.
+	ld a, l                     ; hl is the lane's tile in row 18: back up
+	sub LOW(TILEMAP_WIDTH * (SCREEN_HEIGHT - LABEL_ROW))
+	ld l, a
+	ld a, h
+	sbc HIGH(TILEMAP_WIDTH * (SCREEN_HEIGHT - LABEL_ROW))
+	ld h, a
+	push hl
+	ld hl, LaneLabels
+	ld a, c
+	add l
+	ld l, a
+	adc h
+	sub l
+	ld h, a
+	ld a, [hl]
+	pop hl
+	ld [hl], a
+IF DEF(GBCLI_GBC)
+	; On a GBC, the label takes its lane's color: BG palette 1 + lane.
+	ldh a, [hGbc]
+	and a
+	jr z, .colored
+	ld a, 1
+	ldh [rVBK], a
+	ld a, c
+	inc a
+	ld [hl], a
+	xor a
+	ldh [rVBK], a
+.colored
+ENDC
 	inc c
 	ld a, c
 	cp 4
@@ -349,6 +386,9 @@ DrawPlayfield:
 	ld de, StrLife
 	jp PrintStr
 
+; Each lane's button, in LaneMasks' order: LEFT, RIGHT, B, A.
+LaneLabels: db "<>BA"
+
 StrScore: db "SCORE", 0
 StrCombo: db "COMBO", 0
 StrLife:  db "LIFE", 0
@@ -358,8 +398,8 @@ IF DEF(GBCLI_GBC)
 ColorGbc:
 	ld a, BGPI_AUTOINC
 	ldh [rBCPS], a
-	ld hl, BgPalette
-	ld b, 8
+	ld hl, BgPalettes
+	ld b, BgPalettes.end - BgPalettes
 .bg
 	ld a, [hli]
 	ldh [rBCPD], a
@@ -374,6 +414,10 @@ ColorGbc:
 	ldh [rOCPD], a
 	dec b
 	jr nz, .obj
+	; fall through
+
+; GBC mode only, LCD off: every map tile back to BG palette 0.
+ClearAttrs::
 	ld a, 1
 	ldh [rVBK], a
 	ld hl, ATTRMAP0
@@ -387,11 +431,30 @@ MACRO rgb
 	dw (\1) | (\2) << 5 | (\3) << 10
 ENDM
 
-BgPalette:
+; Palette 0 for the screen; 1-4 for the lane labels (LEFT, RIGHT, B, A),
+; each the night sky with its lane's lantern color as the ink.
+BgPalettes:
 	rgb 4, 4, 10
 	rgb 10, 10, 18
 	rgb 20, 18, 26
 	rgb 31, 28, 20
+	rgb 4, 4, 10
+	rgb 10, 10, 18
+	rgb 20, 18, 26
+	rgb 31, 24, 8               ; amber
+	rgb 4, 4, 10
+	rgb 10, 10, 18
+	rgb 20, 18, 26
+	rgb 12, 31, 28              ; teal
+	rgb 4, 4, 10
+	rgb 10, 10, 18
+	rgb 20, 18, 26
+	rgb 31, 18, 26              ; rose
+	rgb 4, 4, 10
+	rgb 10, 10, 18
+	rgb 20, 18, 26
+	rgb 20, 31, 12              ; leaf
+.end
 ; One a lane (its lanterns), then the bursts'. Color 0 is never drawn.
 ObjPalettes:
 	rgb 0, 0, 0

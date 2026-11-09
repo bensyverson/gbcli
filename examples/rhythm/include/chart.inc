@@ -5,6 +5,9 @@
 IF !DEF(CHART_INC)
 DEF CHART_INC EQU 1
 DEF PREROLL EQU 64
-DEF CHART_LEN EQU 165
+DEF CHART_LEN EQU 184
 DEF SONG_END_TICK EQU 4480
+; The opening lesson (the lanes walked a pair at a time): its misses
+; cost no life.
+DEF LESSON_NOTES EQU 8
 ENDC

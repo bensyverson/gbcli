@@ -21,7 +21,7 @@ mod sha256;
 mod sym;
 
 pub use checkpoint::{Checkpoint, LoadOptions, MAGIC, SaveMeta, VERSION};
-pub use checkpoint_error::{CheckpointError, LoadWarning, Moved, MovedRole, SymbolAt, SymbolSide};
+pub use checkpoint_error::{CheckpointError, LoadWarning, SymbolSide};
 pub use debug::{
     CallFrame, DebugError, EventTap, FrameSink, KeyTimeline, LcdOffOutsideVblank, Outcome,
     RunOptions, Since, core_code, eval_code, expr_code, unapplied_keys,

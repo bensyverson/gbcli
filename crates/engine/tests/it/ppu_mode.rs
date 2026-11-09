@@ -118,6 +118,61 @@ fn a_condition_that_cannot_be_evaluated_is_an_error_not_a_breakpoint_stop() {
     assert_eq!(m.core().registers().pc, addr("Line100Late"));
 }
 
+/// `mode` is the PPU mode `show` prints as `mode=`, as a number (C-4).
+#[test]
+fn the_mode_keyword_reads_the_ppu_mode_stat_would_show() {
+    for (label, condition) in [
+        ("Line50Oam", "mode == 2"),
+        ("Line50Drawing", "mode == 3"),
+        ("Line50HBlank", "mode == 0"),
+    ] {
+        let (mut m, id) = with_breakpoint(label, condition);
+        let stop = m.run(&opts()).expect("evaluates").stop;
+        assert_eq!(stop.reason, StopReason::Breakpoint { id }, "{label}");
+    }
+}
+
+#[test]
+fn the_mode_keyword_is_a_condition_error_where_the_core_cant_know_it() {
+    let (mut m, id) = with_breakpoint("Line100Late", "mode != 0");
+    let err = m.run(&opts()).unwrap_err();
+    let DebugError::Eval { stop, .. } = &err else {
+        panic!("{err:?}")
+    };
+    assert_eq!(stop.reason, StopReason::ConditionError { id });
+}
+
+/// LY reads 153 for only a few dots of line 153, then 0 for the rest of
+/// it: `ly > 143` is false through most of the last VBlank line, which is
+/// why the help says to test `mode == 1`. On `raster.gb`, which turns the
+/// LCD on and draws no objects, so the mode is known throughout
+/// (`ppu_mode.gb` has the unknown window).
+#[test]
+fn until_mode_1_stops_in_vblank_and_ly_reads_0_late_in_it() {
+    let mut m = machine(RASTER, Some(RASTER_SYM));
+    let stop = m.run_until("mode == 1", &opts()).expect("runs").stop;
+    assert!(
+        matches!(stop.reason, StopReason::Predicate { .. }),
+        "{stop:?}"
+    );
+    assert_eq!(m.core().ppu().mode, Some(PpuMode::VBlank));
+    assert!(m.core().ppu().ly >= 144, "{stop:?}");
+
+    let stop = m
+        .run_until("mode == 1 && ly == 0", &opts())
+        .expect("runs")
+        .stop;
+    assert!(
+        matches!(stop.reason, StopReason::Predicate { .. }),
+        "{stop:?}"
+    );
+    assert_eq!(m.core().ppu().mode, Some(PpuMode::VBlank));
+    assert_eq!(m.core().ppu().ly, 0);
+}
+
+const RASTER: &[u8] = include_bytes!("../roms/raster.gb");
+const RASTER_SYM: &str = include_str!("../roms/raster.sym");
+
 const SWEEP: &[u8] = include_bytes!("../../../sameboy/tests/roms/mode_sweep.gb");
 const SWEEP_SYM: &str = include_str!("../../../sameboy/tests/roms/mode_sweep.sym");
 /// The frame of the sweep whose VRAM write starts at the end of mode 2 and

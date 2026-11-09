@@ -200,14 +200,15 @@ pub const VERBS: &[VerbSpec] = &[
         verb: Verb::Show,
         name: "show",
         class: Class::Read,
-        summary: "the machine, registers, the PPU and the last stop",
+        summary: "the machine, registers, the PPU, breakpoints and watches, the last stop",
         usage: "[flags]",
         arity: NONE,
         flags: &[],
         groups: READ_VERB,
         about: "Print the session's model and the loaded ROM's header CGB flag (cgb=dmg, \
                 dual or only, from $0143), the head's CPU registers and flags, the PPU's \
-                line and mode, and the stop record of the last run.",
+                line and mode, every breakpoint and watch (id, place, condition, armed=1 \
+                or 0), and the stop record of the last run.",
         example: ("gbcli show --session dx", "prints where the machine is"),
     },
     VerbSpec {
@@ -319,7 +320,9 @@ pub const VERBS: &[VerbSpec] = &[
         flags: BREAK,
         groups: CHANGE_VERB,
         about: "Stop every later run before the instruction at ADDR executes (when --if \
-                holds). Prints the breakpoint's id, which `delete` takes. Set by a symbol, \
+                holds). Prints the breakpoint's id, which `delete` takes and no later one \
+                reuses, and its condition; `show` lists them all. ADDR resolves against \
+                the ROM on disk, so it works right after a rebuild. Set by a symbol, \
                 it follows that symbol when the ROM is rebuilt, with a warning when it \
                 moves; while a rebuild lacks the symbol it is disarmed (kept, warned about, \
                 stopping nothing) until a build has it again. Set by an address, it stays.",
@@ -342,7 +345,8 @@ pub const VERBS: &[VerbSpec] = &[
         flags: WATCH,
         groups: CHANGE_VERB,
         about: "Stop every later run at an access to ADDR. In --if, `old` and `new` are the \
-                byte before and after a write. --once deletes it after it fires. Set by a \
+                byte before and after a write. --once deletes it after it fires. ADDR \
+                resolves against the ROM on disk, as for `break`. Set by a \
                 symbol, it follows that symbol when the ROM is rebuilt, and is disarmed \
                 while a rebuild lacks the symbol.",
         example: (
@@ -360,7 +364,7 @@ pub const VERBS: &[VerbSpec] = &[
         flags: &[],
         groups: CHANGE_VERB,
         about: "Remove the breakpoint or watchpoint with this id, as `break` or `watch` \
-                printed it.",
+                printed it and `show` lists it. Works right after a rebuild.",
         example: ("gbcli delete 1 --session dx", "removes breakpoint 1"),
     },
     NEW_VERB,

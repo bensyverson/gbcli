@@ -6,11 +6,11 @@ use crate::common;
 use common::*;
 use gbcli_core::{Budget, Model, Region, RunRequest};
 use gbcli_engine::{
-    Backend, Checkpoint, CheckpointError, LoadOptions, LoadWarning, Machine, MovedRole, Rebased,
-    SaveMeta, Session, sha256,
+    Backend, Checkpoint, CheckpointError, LoadOptions, LoadWarning, Machine, Rebased, SaveMeta,
+    Session, sha256,
 };
 use gbcli_protocol::{
-    Arming, BreakpointSpec, DebuggerConfig, Location, Sha256, WatchAccess, WatchSpec,
+    Arming, BreakpointSpec, DebuggerConfig, Location, Sha256, SymbolRole, WatchAccess, WatchSpec,
 };
 
 fn meta() -> SaveMeta {
@@ -254,7 +254,7 @@ fn a_rebuilt_rom_whose_symbols_moved_under_pc_is_refused_naming_them() {
     let CheckpointError::RomChanged { moved } = &err else {
         panic!("{err:?}")
     };
-    let pc = moved.iter().find(|m| m.role == MovedRole::Pc).unwrap();
+    let pc = moved.iter().find(|m| m.role == SymbolRole::Pc).unwrap();
     assert_eq!(pc.name, "Work");
     assert_eq!(
         (pc.old.addr, pc.new.map(|n| n.addr)),
@@ -263,7 +263,7 @@ fn a_rebuilt_rom_whose_symbols_moved_under_pc_is_refused_naming_them() {
     assert!(
         moved
             .iter()
-            .any(|m| m.role == MovedRole::Stack && m.name == "Main.loop"),
+            .any(|m| m.role == SymbolRole::Stack && m.name == "Main.loop"),
         "the return address into Main.loop: {moved:?}"
     );
     assert!(err.to_string().contains("Work"), "{err}");
@@ -282,7 +282,7 @@ fn a_rebuilt_rom_whose_ram_moved_is_refused() {
     assert!(
         moved
             .iter()
-            .any(|m| m.role == MovedRole::Ram && m.name == "wFrame")
+            .any(|m| m.role == SymbolRole::Ram && m.name == "wFrame")
     );
 }
 

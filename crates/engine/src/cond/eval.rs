@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use gbcli_core::{Core, CoreError, Region};
+use gbcli_core::{Core, CoreError, Feature, PpuMode, Region, Support};
 use gbcli_protocol::TimeMark;
 
 use super::{BinOp, Expr, Flag, Place, Reg, UnOp, Width};
@@ -255,6 +255,7 @@ pub fn eval(
             (core.now().0 as i64 - ctx.base.ticks as i64) / per_t
         }
         Expr::Ly => i64::from(core.ppu().ly),
+        Expr::Mode => ppu_mode(core)?,
         Expr::Old => {
             let access = ctx.access.ok_or(EvalError::NoAccess { which: "old" })?;
             i64::from(access.old.ok_or(EvalError::OldUnknown)?)
@@ -281,6 +282,27 @@ pub fn eval(
             let b = eval(r, ctx, warnings)?;
             binary(*op, a, b)?
         }
+    })
+}
+
+/// The mode as STAT's bits 0-1 hold it. Where the core can't know it, the
+/// read fails as a STAT read there does: unsupported, with the core's reason.
+fn ppu_mode(core: &dyn Core) -> Result<i64, EvalError> {
+    let Some(mode) = core.ppu().mode else {
+        let reason = match core.supports(Feature::SideEffectFreeIo) {
+            Support::No { reason } => reason,
+            Support::Yes => "the core reports no PPU mode here",
+        };
+        return Err(EvalError::Core(CoreError::Unsupported {
+            feature: Feature::SideEffectFreeIo,
+            reason,
+        }));
+    };
+    Ok(match mode {
+        PpuMode::HBlank => 0,
+        PpuMode::VBlank => 1,
+        PpuMode::OamScan => 2,
+        PpuMode::Drawing => 3,
     })
 }
 

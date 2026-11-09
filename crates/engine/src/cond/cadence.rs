@@ -77,9 +77,14 @@ fn walk(e: &Expr, cart: Cart, out: &mut Triggers) {
         Expr::Num(_) | Expr::Sym { .. } => {}
         Expr::Frame => out.vblank = true,
         Expr::Ly => out.scanline = true,
-        Expr::Reg(_) | Expr::Flag(_) | Expr::Ime | Expr::Bank | Expr::T | Expr::Old | Expr::New => {
-            out.every_instruction = true
-        }
+        Expr::Reg(_)
+        | Expr::Flag(_)
+        | Expr::Ime
+        | Expr::Bank
+        | Expr::T
+        | Expr::Mode
+        | Expr::Old
+        | Expr::New => out.every_instruction = true,
         Expr::Unary(_, inner) => walk(inner, cart, out),
         Expr::Binary(_, l, r) => {
             walk(l, cart, out);

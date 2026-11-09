@@ -115,6 +115,11 @@ pub struct LiveSymbol {
 pub struct DebuggerConfig {
     pub breakpoints: Vec<BreakpointSpec>,
     pub watches: Vec<WatchSpec>,
+    /// The least id the next breakpoint or watch may take, so a deleted id
+    /// is never handed out again. 0 in a session made before the counter
+    /// existed: the next id is then one past the highest set.
+    #[serde(default)]
+    pub next_id: u32,
 }
 
 /// Where a breakpoint or watch applies: resolved when set, and one set by a
@@ -405,6 +410,7 @@ mod tests {
                 once: false,
                 arming,
             }],
+            next_id: 3,
         }
     }
 
@@ -433,6 +439,18 @@ mod tests {
         let config: DebuggerConfig = serde_json::from_str(old).unwrap();
         assert_eq!(config.breakpoints[0].arming, Arming::Armed);
         assert_eq!(config.watches[0].arming, Arming::Armed);
+        assert_eq!(config.next_id, 0, "saved before the id counter existed");
+    }
+
+    #[test]
+    fn the_id_counter_round_trips() {
+        let config = config_with(Arming::Armed);
+        let json = serde_json::to_value(&config).unwrap();
+        assert_eq!(json["next_id"], 3);
+        assert_eq!(
+            serde_json::from_value::<DebuggerConfig>(json).unwrap(),
+            config
+        );
     }
 
     #[test]

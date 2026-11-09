@@ -268,12 +268,19 @@ impl Machine {
             .transpose()
     }
 
-    fn next_id(&self) -> u32 {
-        let config = self.debugger_config();
+    /// Takes the next id: past every id this session has handed out (the
+    /// counter), and past every id it holds (a session saved before the
+    /// counter existed has it at 0).
+    fn next_id(&mut self) -> u32 {
+        let config = self.debugger_config_mut();
         let ids = config.breakpoints.iter().map(|b| b.id);
-        ids.chain(config.watches.iter().map(|w| w.id))
+        let past_held = ids
+            .chain(config.watches.iter().map(|w| w.id))
             .max()
-            .map_or(1, |m| m + 1)
+            .map_or(1, |m| m + 1);
+        let id = past_held.max(config.next_id).max(1);
+        config.next_id = id + 1;
+        id
     }
 }
 

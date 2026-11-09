@@ -15,7 +15,7 @@ impl Handler {
         args: &BreakArgs,
         warnings: &mut Vec<String>,
     ) -> Result<ResultBody, Failure> {
-        let (mut machine, loaded) = self.machine_for(store, meta, Need::Head, None)?;
+        let (mut machine, loaded) = self.machine_for(store, meta, Need::Rom, None)?;
         warnings.extend(loaded);
         let at = parse_location(&machine, &args.at)?;
         let id = machine
@@ -32,9 +32,12 @@ impl Handler {
             .find(|b| b.id == id)
             .map(|b| b.at.clone())
             .unwrap_or(at);
-        self.keep_warm(store, meta, machine);
         Ok(ResultBody {
-            breakpoint: Some(BreakpointMade { id, at: made }),
+            breakpoint: Some(BreakpointMade {
+                id,
+                at: made,
+                condition: args.condition.clone(),
+            }),
             ..ResultBody::default()
         })
     }
@@ -46,7 +49,7 @@ impl Handler {
         args: &WatchArgs,
         warnings: &mut Vec<String>,
     ) -> Result<ResultBody, Failure> {
-        let (mut machine, loaded) = self.machine_for(store, meta, Need::Head, None)?;
+        let (mut machine, loaded) = self.machine_for(store, meta, Need::Rom, None)?;
         warnings.extend(loaded);
         let at = parse_location(&machine, &args.at)?;
         let id = machine
@@ -68,12 +71,12 @@ impl Handler {
             .find(|w| w.id == id)
             .map(|w| w.at.clone())
             .unwrap_or(at);
-        self.keep_warm(store, meta, machine);
         Ok(ResultBody {
             watch: Some(WatchMade {
                 id,
                 access: args.access,
                 at: made,
+                condition: args.condition.clone(),
             }),
             ..ResultBody::default()
         })
@@ -86,12 +89,11 @@ impl Handler {
         args: &DeleteArgs,
         warnings: &mut Vec<String>,
     ) -> Result<ResultBody, Failure> {
-        let (mut machine, loaded) = self.machine_for(store, meta, Need::Head, None)?;
+        let (mut machine, loaded) = self.machine_for(store, meta, Need::Rom, None)?;
         warnings.extend(loaded);
         let found = machine.delete(args.id);
         if !found {
             let remedy = existing_ids(machine.debugger_config());
-            self.keep_warm(store, meta, machine);
             return Err(Failure::new(ErrorBody::new(
                 ErrorCode::BadRequest,
                 format!("there is no breakpoint or watch #{}", args.id),
@@ -102,7 +104,6 @@ impl Handler {
         store
             .write_meta(meta)
             .map_err(|e| Failure::from_store(&e))?;
-        self.keep_warm(store, meta, machine);
         Ok(ResultBody {
             deleted: Some(Deleted { id: args.id, found }),
             ..ResultBody::default()

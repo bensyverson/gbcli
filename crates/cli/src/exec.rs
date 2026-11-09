@@ -160,7 +160,7 @@ fn start_handler(target: &Target, env: &Env, opens: bool) -> Result<Handler, Ope
 }
 
 pub fn store(e: StoreError) -> ErrorBody {
-    ErrorBody::new(e.code(), e.to_string(), e.remedy())
+    e.body()
 }
 
 /// Answers `request` exactly as `gbcli serve` answers its line: the same

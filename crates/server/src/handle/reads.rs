@@ -30,6 +30,7 @@ impl Handler {
             }),
             registers: Some(RegistersView::of(&machine.core().registers())),
             ppu: Some(PpuView::of(&machine.core().ppu())),
+            debugger: Some(machine.debugger_config().clone()),
             stop: meta.last_stop.clone(),
             ..ResultBody::default()
         };

@@ -136,11 +136,16 @@ sav     path: PATH   (writes the head's battery save, and on a flash session
 Response, one line per request:
   {"id", "ok": true, "rev"?: "sN", "result": {…}, "warnings": [TEXT]}
   {"id", "ok": false, "rev"?, "error": {"code", "exit", "message", "remedy",
-   "stop"?, "keys_unapplied"?, "flash_notes"?, "result"?}, "warnings"}
+   "stop"?, "keys_unapplied"?, "flash_notes"?, "result"?, "moved"?}, "warnings"}
+  moved (rom_changed): every symbol the saved state depends on that the
+  rebuild moved, {name, role: "pc"|"ram"|"stack", old: {bank, addr},
+  new: {bank, addr}|null}; the message names the first five.
 result holds only the fields the op fills: stop, reads, expect, shot, measure, profile,
 frame_budget, raster, audio, oam_log, equiv, view, memory, symbols,
 checkpoints, keys_unapplied, writes, checkpoint, restored, breakpoint, watch,
-deleted, machine, registers, ppu, sessions, events, gaps, pruned, kept, busy, removed,
+deleted, machine, registers, ppu, debugger (show: {breakpoints, watches,
+next_id}, each entry as the session file holds it, with "arming": "disarmed"
+only on one disarmed), sessions, events, gaps, pruned, kept, busy, removed,
 build, assets, doctor, created, song, song_problem, pixels, pixels_problem,
 font, font_problem, font_written, font_problems, font_diff, opcodes, version,
 power_cycle, sav,

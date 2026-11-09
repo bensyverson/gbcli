@@ -14,6 +14,7 @@ mod hex;
 mod images;
 mod keys;
 mod listing;
+mod moved;
 mod opcode;
 mod palettes;
 mod parse;
@@ -67,6 +68,7 @@ pub use images::{
 };
 pub use keys::{Button, KEY_GRAMMAR, KeyAction, KeyError, KeyEvent, parse_keys};
 pub use listing::{CheckpointRow, SymArgs, SymbolArea, SymbolRow};
+pub use moved::{MovedSymbol, SymbolAt};
 pub use opcode::{OpcodeArgs, OpcodeRow};
 pub use palettes::{
     FaultAt, GbcPalette, NamedPalette, NamedPalettes, NotRgb555, PaletteFault, Rgb555,

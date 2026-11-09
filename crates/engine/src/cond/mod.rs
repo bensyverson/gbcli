@@ -203,6 +203,9 @@ pub enum Expr {
     /// CPU T-cycles since the time base.
     T,
     Ly,
+    /// The PPU mode STAT would read (0 HBlank, 1 VBlank, 2 OAM scan, 3
+    /// drawing); an error where the core can't know it.
+    Mode,
     /// In a watch condition: the byte before the access.
     Old,
     /// In a watch condition: the byte read or written.

@@ -4,55 +4,7 @@
 use std::fmt;
 
 use gbcli_core::Model;
-use gbcli_protocol::{CoreId, ErrorCode, Sha256, model_name};
-
-/// A bank and address.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SymbolAt {
-    pub bank: u16,
-    pub addr: u16,
-}
-
-impl fmt::Display for SymbolAt {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:02X}:{:04X}", self.bank, self.addr)
-    }
-}
-
-/// Why a moved symbol matters to the saved state.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MovedRole {
-    /// The ROM symbol containing PC.
-    Pc,
-    /// A WRAM, HRAM or cart RAM symbol.
-    Ram,
-    /// The ROM symbol containing a possible return address on the stack.
-    Stack,
-}
-
-/// A symbol whose address differs between the saved and the current `.sym`.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Moved {
-    pub name: String,
-    pub role: MovedRole,
-    pub old: SymbolAt,
-    /// `None` when the symbol is gone.
-    pub new: Option<SymbolAt>,
-}
-
-impl fmt::Display for Moved {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let role = match self.role {
-            MovedRole::Pc => "PC is in",
-            MovedRole::Ram => "RAM symbol",
-            MovedRole::Stack => "return address on the stack is in",
-        };
-        match self.new {
-            Some(new) => write!(f, "{role} {}: {} -> {new}", self.name, self.old),
-            None => write!(f, "{role} {}: {} -> gone", self.name, self.old),
-        }
-    }
-}
+use gbcli_protocol::{CoreId, ErrorCode, MovedSymbol, Sha256, model_name};
 
 /// Which side of a ROM change lacks symbols.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -89,7 +41,7 @@ pub enum CheckpointError {
     /// Step 5: the ROM changed and there are no symbols to check it by.
     SymbolsMissing { side: SymbolSide },
     /// Step 5: the ROM changed under something the state depends on.
-    RomChanged { moved: Vec<Moved> },
+    RomChanged { moved: Vec<MovedSymbol> },
     /// Step 6: a patch's replaced bytes differ in the current ROM.
     PatchConflict {
         offset: u32,
@@ -226,11 +178,21 @@ impl fmt::Display for CheckpointError {
             }
             CheckpointError::RomChanged { moved } => {
                 write!(f, "the ROM changed under the saved state: ")?;
-                for (i, m) in moved.iter().enumerate() {
+                if moved.len() > MOVED_NAMED {
+                    write!(f, "{} symbols moved: ", moved.len())?;
+                }
+                for (i, m) in moved.iter().take(MOVED_NAMED).enumerate() {
                     if i > 0 {
                         write!(f, "; ")?;
                     }
                     write!(f, "{m}")?;
+                }
+                if moved.len() > MOVED_NAMED {
+                    write!(
+                        f,
+                        "; and {} more (--json lists every one, in the error's moved)",
+                        moved.len() - MOVED_NAMED
+                    )?;
                 }
                 Ok(())
             }
@@ -252,6 +214,10 @@ impl fmt::Display for CheckpointError {
 
 impl std::error::Error for CheckpointError {}
 
+/// How many moved symbols a `rom_changed` message names; the error's
+/// `moved` carries every one.
+pub const MOVED_NAMED: usize = 5;
+
 /// How a session gets past a rebuild that its saved states can't cross.
 const RESTART: &str = "restart the session on the ROM on disk with `gbcli run --from boot`, which \
                        keeps its breakpoints and watches (the old head stays in history, and \
@@ -267,7 +233,7 @@ pub enum LoadWarning {
     /// `--allow-rom-change` forced the load (`forced`). `checked` counts the
     /// symbols compared; zero when there were no symbols to compare.
     RomChanged {
-        moved: Vec<Moved>,
+        moved: Vec<MovedSymbol>,
         checked: usize,
         forced: bool,
     },
@@ -285,6 +251,7 @@ pub enum LoadWarning {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gbcli_protocol::{SymbolAt, SymbolRole};
 
     fn core_id(commit: &str) -> CoreId {
         CoreId {
@@ -367,9 +334,9 @@ mod tests {
     #[test]
     fn a_rom_that_moved_live_symbols_is_rom_changed() {
         let e = CheckpointError::RomChanged {
-            moved: vec![Moved {
+            moved: vec![MovedSymbol {
                 name: "wSpeed".into(),
-                role: MovedRole::Ram,
+                role: SymbolRole::Ram,
                 old: SymbolAt {
                     bank: 0,
                     addr: 0xc000,
@@ -378,6 +345,45 @@ mod tests {
             }],
         };
         assert_code(e, ErrorCode::RomChanged, 3);
+    }
+
+    fn ram_moved(n: u16) -> MovedSymbol {
+        MovedSymbol {
+            name: format!("wVar{n}"),
+            role: SymbolRole::Ram,
+            old: SymbolAt {
+                bank: 0,
+                addr: 0xC000 + n,
+            },
+            new: Some(SymbolAt {
+                bank: 0,
+                addr: 0xC001 + n,
+            }),
+        }
+    }
+
+    /// A rebuild can move hundreds of RAM symbols (10 KB of text in the
+    /// raycaster's review, C-6): the message names the first few and counts
+    /// the rest, and the error's `moved` carries every one.
+    #[test]
+    fn a_long_list_of_moved_symbols_names_the_first_few_and_counts_the_rest() {
+        let e = CheckpointError::RomChanged {
+            moved: (0..40).map(ram_moved).collect(),
+        };
+        let text = e.to_string();
+        assert!(text.contains("40 symbols moved"), "{text}");
+        assert!(text.contains("wVar0: 00:C000 -> 00:C001"), "{text}");
+        assert!(text.contains(&format!("wVar{}", MOVED_NAMED - 1)), "{text}");
+        assert!(!text.contains(&format!("wVar{}:", MOVED_NAMED)), "{text}");
+        assert!(text.contains("35 more"), "{text}");
+        assert!(text.contains("--json"), "{text}");
+
+        let few = CheckpointError::RomChanged {
+            moved: (0..2).map(ram_moved).collect(),
+        };
+        let text = few.to_string();
+        assert!(text.contains("wVar1"), "{text}");
+        assert!(!text.contains("more"), "{text}");
     }
 
     #[test]

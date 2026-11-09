@@ -32,7 +32,9 @@ PPU modes, every drawn line  https://gbdev.io/pandocs/Rendering.html#ppu-modes
 Blocked writes are ignored; blocked reads return garbage, usually $FF.
 Mode 3 grows by SCX % 8 dots, 6 for the window and 6-11 per object drawn.
   https://gbdev.io/pandocs/Rendering.html#mode-3-length
-STAT ($FF41) bits 0-1 hold the mode; LY ($FF44) is the line, 0-153.
+STAT ($FF41) bits 0-1 hold the mode; LY ($FF44) is the line, 0-153, but
+LY reads 0 through most of line 153 (153 only for its first few dots). Test
+VBlank by the mode (mode == 1 in gbcli's expressions), not by LY > 143.
   https://gbdev.io/pandocs/STAT.html#ff41--stat-lcd-status
   https://gbdev.io/pandocs/STAT.html#ff44--ly-lcd-y-coordinate-read-only
 
@@ -101,6 +103,16 @@ mod tests {
             let just_a_link = pandocs_links(line).len() == 1 && !line.trim().contains(' ');
             assert!(line.chars().count() <= 80 || just_a_link, "{line}");
         }
+    }
+
+    #[test]
+    fn the_cheat_sheet_says_ly_reads_0_through_most_of_line_153() {
+        let flat = HARDWARE.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(
+            flat.contains("LY reads 0 through most of line 153"),
+            "{flat}"
+        );
+        assert!(flat.contains("mode == 1"), "{flat}");
     }
 
     /// `--ticks` counts 2^23 Hz ticks (`gbcli_core::Ticks`), not T-cycles:

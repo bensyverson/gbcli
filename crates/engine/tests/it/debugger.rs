@@ -95,6 +95,41 @@ fn a_bad_condition_is_refused_when_set() {
     assert!(m.debugger_config().breakpoints.is_empty());
 }
 
+/// A deleted id is never handed out again (C-5): a script that deletes
+/// #2 and sets a new trap must not find its old #2 answering.
+#[test]
+fn a_deleted_id_is_never_reused() {
+    let mut m = machine(V1, Some(V1_SYM));
+    let first = m.add_breakpoint(at(0x0163), None).unwrap();
+    let second = m
+        .add_watch(WatchAccess::Write, at(0xC000), None, false)
+        .unwrap();
+    assert_eq!((first, second), (1, 2));
+    assert!(m.delete(second));
+    let third = m.add_breakpoint(at(0x0170), None).unwrap();
+    assert_eq!(third, 3, "the highest id, deleted, isn't reused");
+    assert!(m.delete(first));
+    assert!(m.delete(third));
+    let fourth = m
+        .add_watch(WatchAccess::Write, at(0xC000), None, false)
+        .unwrap();
+    assert_eq!(fourth, 4, "nor is any id once every entry is gone");
+    assert_eq!(m.debugger_config().next_id, 5);
+}
+
+/// A session saved before the counter existed has `next_id` 0: its next id
+/// is one past the highest it holds.
+#[test]
+fn a_config_saved_before_the_id_counter_continues_past_its_highest_id() {
+    let mut m = machine(V1, Some(V1_SYM));
+    m.add_breakpoint(at(0x0163), None).unwrap();
+    m.add_breakpoint(at(0x0170), None).unwrap();
+    let mut old = m.debugger_config().clone();
+    old.next_id = 0;
+    m.attach_debugger(old);
+    assert_eq!(m.add_breakpoint(at(0x015E), None).unwrap(), 3);
+}
+
 #[test]
 fn a_write_watch_stops_after_the_access_with_old_and_new() {
     let mut m = machine(V1, Some(V1_SYM));

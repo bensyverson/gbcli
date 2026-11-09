@@ -6,9 +6,10 @@ USAGE
   gbcli watch read|write|access ADDR [--if EXPR] [--once] [flags]
 
 Stop every later run at an access to ADDR. In --if, `old` and `new` are the
-byte before and after a write. --once deletes it after it fires. Set by a
-symbol, it follows that symbol when the ROM is rebuilt, and is disarmed while
-a rebuild lacks the symbol.
+byte before and after a write. --once deletes it after it fires. ADDR resolves
+against the ROM on disk, as for `break`. Set by a symbol, it follows that
+symbol when the ROM is rebuilt, and is disarmed while a rebuild lacks the
+symbol.
 
 CLASS
   configure: changes the session's settings, not the machine; needs a session.

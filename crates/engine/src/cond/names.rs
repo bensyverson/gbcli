@@ -30,6 +30,7 @@ pub fn keyword(name: &str) -> Option<Expr> {
         "frame" => Expr::Frame,
         "t" => Expr::T,
         "ly" => Expr::Ly,
+        "mode" => Expr::Mode,
         "old" => Expr::Old,
         "new" => Expr::New,
         _ => return None,

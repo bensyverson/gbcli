@@ -10,7 +10,7 @@ use gbcli_engine::{
 use gbcli_protocol::{ErrorBody, ErrorCode};
 
 pub fn store(e: &StoreError) -> ErrorBody {
-    ErrorBody::new(e.code(), e.to_string(), e.remedy())
+    e.body()
 }
 
 pub fn addr(e: &AddrError) -> ErrorBody {

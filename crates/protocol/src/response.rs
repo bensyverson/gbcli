@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::assets::AssetsMade;
 use crate::audio::AudioMade;
 use crate::battery::{FlashNoteRow, PowerCycleMade, SavMade};
-use crate::checkpoint::{Location, WatchAccess};
+use crate::checkpoint::{DebuggerConfig, Location, WatchAccess};
 use crate::equiv::EquivMade;
 use crate::error::{ErrorBody, ErrorCode};
 use crate::font::{FontMade, FontProblem};
@@ -204,6 +204,9 @@ pub struct ResultBody {
     pub registers: Option<RegistersView>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ppu: Option<PpuView>,
+    /// `show`: every breakpoint and watch the session holds, armed or not.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub debugger: Option<DebuggerConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sessions: Option<Vec<SessionRow>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -377,6 +380,9 @@ pub struct WriteMade {
 pub struct BreakpointMade {
     pub id: u32,
     pub at: Location,
+    /// The `--if` condition as stored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub condition: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -384,6 +390,9 @@ pub struct WatchMade {
     pub id: u32,
     pub access: WatchAccess,
     pub at: Location,
+    /// The `--if` condition as stored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub condition: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

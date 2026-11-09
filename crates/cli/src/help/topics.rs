@@ -128,13 +128,19 @@ bus, so evaluating one has no side effects.
               cgb_bank cgb_palette in CGB mode. Both read OAM itself, not
               what the CPU sees: during PPU modes 2 and 3 (and OAM DMA) the
               program reads $FF there, but oam[N] shows the stored byte
-  machine    frame, t (T-cycles since the time base), ly, bank
+  machine     frame, t (T-cycles since the time base), ly (the LY register),
+              bank, mode (the PPU mode as show's mode= names it: 0 HBlank,
+              1 VBlank, 2 OAM scan, 3 drawing). Like [rSTAT], it is an error
+              where the core can't know it: late in a mode 3 with objects on
+              the line and no STAT HBlank interrupt enabled
   watches     old and new: the byte before and after the write
   operators   + - * / % & | ^ ~ << >>  == != < <= > >=  && || !  (C precedence)
 
 A bare RAM symbol is its address: write [wFrame] >= 60, not wFrame >= 60.
 An address is never zero, so a condition refuses one compared or taken as
 true or false (wDone, wDone && ..., !wDone): write [wDone].
+LY reads 0 through most of line 153, the last VBlank line, so ly > 143 misses
+the end of VBlank: test VBlank with mode == 1.
 Reading a byte the program never wrote is an error: `gbcli read` fails with
 exit 3, and a run's --read says so in that read's row (error=, message=,
 remedy=) while the run, its stop and its other reads stand. Pass
@@ -299,6 +305,19 @@ an EXPORTed symbol is resolved only at link time, so it isn't constant there.
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// LY reads 0 through most of line 153, so `ly > 143` misses late
+    /// VBlank (C-4): the topic names `mode` and says so.
+    #[test]
+    fn the_expressions_topic_names_mode_and_the_ly_caveat() {
+        let flat = EXPRESSIONS.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(flat.contains("mode (the PPU mode"), "{flat}");
+        assert!(
+            flat.contains("LY reads 0 through most of line 153"),
+            "{flat}"
+        );
+        assert!(flat.contains("mode == 1"), "{flat}");
+    }
 
     #[test]
     fn every_topic_round_trips_by_name_and_has_text() {

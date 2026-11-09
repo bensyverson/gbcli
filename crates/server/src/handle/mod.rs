@@ -89,7 +89,7 @@ struct Loaded {
 /// How a request gets its machine.
 #[derive(Clone, Copy)]
 enum Need {
-    /// Inspect or configure: the head, or power-on when there is none; never
+    /// Inspect: the head, or power-on when there is none; never
     /// the boot run.
     Head,
     /// Advance or change the state: from `at`, else from the `--from` start
@@ -100,6 +100,11 @@ enum Need {
     /// over the session's ROM. The head isn't loaded, so a head the ROM
     /// rebuild made unloadable doesn't block the restore that fixes it.
     Replace,
+    /// Configure the debugger (`break`, `watch`, `delete`): a power-on
+    /// machine over the ROM and `.sym` on disk, which places are resolved
+    /// against. The head isn't loaded, so a rebuild doesn't block them, and
+    /// the warm head is left as it was, since this machine isn't it.
+    Rom,
 }
 
 impl Handler {
@@ -285,6 +290,10 @@ impl Handler {
     ) -> Result<(Machine, Vec<String>), Failure> {
         let load = &self.load;
         self.loaded = None;
+        if let Need::Rom = need {
+            let machine = store.machine(meta).map_err(|e| Failure::from_store(&e))?;
+            return Ok(attach(machine, meta, Vec::new()));
+        }
         // An explicit start skips the head, and so the warm head too.
         let cold = matches!(need, Need::Start(Some(_)));
         let warm = self.warm.take().filter(|w| {
@@ -296,7 +305,7 @@ impl Handler {
                 && w.rev == meta.rev
         });
         let warm = warm.and_then(|mut w| w.files.still_current().then_some(w));
-        let (mut machine, warnings, files) = match (warm, need) {
+        let (machine, warnings, files) = match (warm, need) {
             (Some(warm), _) => (warm.machine, Vec::new(), warm.files),
             (None, need) => {
                 // Stamped before the files are read: a rebuild in between
@@ -307,7 +316,7 @@ impl Handler {
                         store.start_machine(meta, at, from, load, Some(&self.interrupt))
                     }
                     Need::Head => store.head_or_power_on(meta, load),
-                    Need::Replace => store.machine(meta).map(|m| (m, Vec::new())),
+                    Need::Replace | Need::Rom => store.machine(meta).map(|m| (m, Vec::new())),
                 }
                 .map_err(|e| Failure::from_store(&e))?;
                 (machine, warnings, files)
@@ -318,18 +327,29 @@ impl Handler {
             rev: meta.rev,
             exact: warnings.is_empty(),
         });
-        let mut warnings = warnings;
-        // The session's breakpoints may have been resolved against another
-        // build (a head or checkpoint that loaded across a rebuild, or a
-        // restart): those set by a symbol follow it, warning per move, and a
-        // request that saves the session keeps them.
-        let rebased = machine.attach_debugger(meta.debugger.clone());
-        warnings.extend(rebased.iter().map(|r| r.to_string()));
-        // On every request, warm or cold: the ROM is the same file either way.
-        warnings.extend(battery::header_warnings(&machine));
-        Ok((machine, warnings))
+        Ok(attach(machine, meta, warnings))
     }
+}
 
+/// Gives a request's machine the session's breakpoints and watches, and adds
+/// what that and the cartridge header warn of to `warnings`. The session's
+/// breakpoints may have been resolved against another build (a head or
+/// checkpoint that loaded across a rebuild, or a restart): those set by a
+/// symbol follow it, warning per move, and a request that saves the session
+/// keeps them.
+fn attach(
+    mut machine: Machine,
+    meta: &SessionFile,
+    mut warnings: Vec<String>,
+) -> (Machine, Vec<String>) {
+    let rebased = machine.attach_debugger(meta.debugger.clone());
+    warnings.extend(rebased.iter().map(|r| r.to_string()));
+    // On every request, warm or cold: the ROM is the same file either way.
+    warnings.extend(battery::header_warnings(&machine));
+    (machine, warnings)
+}
+
+impl Handler {
     /// Keeps `machine` for the next request when it is the session's head as
     /// a flagless cold load would build it: the request saved it as the head,
     /// or loaded the head exactly.
@@ -410,6 +430,8 @@ mod view_tests;
 #[cfg(test)]
 mod memory_tests;
 
+#[cfg(test)]
+mod debugger_tests;
 #[cfg(test)]
 mod equiv_tests;
 #[cfg(test)]

@@ -87,6 +87,7 @@ fn registers_flags_and_machine_values() {
         ("frame", Expr::Frame),
         ("t", Expr::T),
         ("ly", Expr::Ly),
+        ("mode", Expr::Mode),
         ("old", Expr::Old),
         ("new", Expr::New),
     ] {
@@ -358,6 +359,8 @@ fn the_cadence_names_the_costliest_trigger_the_reads_need() {
     assert_eq!(cadence("[rTIMA] > 0"), Cadence::EveryInstruction);
     assert_eq!(cadence("[rIF] != 0"), Cadence::EveryInstruction);
     assert_eq!(cadence("[rSTAT] != 0"), Cadence::EveryInstruction);
+    // The mode changes with the PPU, not on a scanline or a write.
+    assert_eq!(cadence("mode == 1"), Cadence::EveryInstruction);
     // A CPU address in a switchable area changes with the bank, not the byte.
     assert_eq!(cadence("[$D000] == 1"), Cadence::EveryInstruction);
     assert_eq!(cadence("[$A000] == 1"), Cadence::EveryInstruction);

@@ -5,7 +5,7 @@ use std::fmt;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use gbcli_protocol::{ErrorCode, Rev};
+use gbcli_protocol::{ErrorBody, ErrorCode, Rev};
 
 use gbcli_core::CoreError;
 use gbcli_engine::{CheckpointError, DebugError, LoadWarning, SetupError};
@@ -148,6 +148,16 @@ impl Setting {
 }
 
 impl StoreError {
+    /// The error as a response carries it: code, message and remedy, and
+    /// for `rom_changed` every moved symbol.
+    pub fn body(&self) -> ErrorBody {
+        let mut body = ErrorBody::new(self.code(), self.to_string(), self.remedy());
+        if let StoreError::Checkpoint(CheckpointError::RomChanged { moved }) = self {
+            body.moved = moved.clone();
+        }
+        body
+    }
+
     pub fn code(&self) -> ErrorCode {
         match self {
             StoreError::Io { .. } | StoreError::NoRoot { .. } => ErrorCode::IoFailed,

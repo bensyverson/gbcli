@@ -5,6 +5,7 @@ mod audio;
 mod battery;
 #[cfg(test)]
 mod bounded_tests;
+mod debugger;
 mod equiv;
 mod font;
 mod images;
@@ -127,6 +128,9 @@ pub fn rows(r: &ResultBody) -> String {
             .opt("dot", ppu.dot)
             .line();
     }
+    if let Some(config) = &r.debugger {
+        out += &debugger::held(config);
+    }
     for w in r.writes.iter().flatten() {
         let json = serde_json::to_value(w).expect("serializes");
         out += &Row::new("write")
@@ -214,22 +218,7 @@ pub fn rows(r: &ResultBody) -> String {
             .field("rev", restored.rev)
             .line();
     }
-    if let Some(b) = &r.breakpoint {
-        out += &location(Row::new("breakpoint").field("id", b.id), &b.at).line();
-    }
-    if let Some(w) = &r.watch {
-        let json = serde_json::to_value(w).expect("serializes");
-        let row = Row::new("watch")
-            .field("id", w.id)
-            .field("access", json["access"].as_str().unwrap_or("?"));
-        out += &location(row, &w.at).line();
-    }
-    if let Some(d) = &r.deleted {
-        out += &Row::new("deleted")
-            .field("id", d.id)
-            .flag("found", d.found)
-            .line();
-    }
+    out += &debugger::made(r);
     if let Some(sessions) = &r.sessions {
         for s in sessions {
             let json = serde_json::to_value(s).expect("serializes");
@@ -279,12 +268,6 @@ pub fn rows(r: &ResultBody) -> String {
 
 fn none_if_empty(empty: bool) -> &'static str {
     if empty { "none\n" } else { "" }
-}
-
-fn location(row: Row, at: &gbcli_protocol::Location) -> Row {
-    row.field("addr", addr(at.addr))
-        .opt("bank", at.bank)
-        .opt("symbol", at.symbol.as_deref())
 }
 
 fn event(e: &EventLogLine) -> String {
@@ -363,6 +346,75 @@ mod tests {
              expect expr=[wNever] ok=0 error=uninitialized_read message=\"never written\" \
              remedy=--allow-uninit\n"
         );
+    }
+
+    fn place(addr: u16, symbol: Option<&str>) -> gbcli_protocol::Location {
+        gbcli_protocol::Location {
+            addr,
+            bank: None,
+            symbol: symbol.map(String::from),
+        }
+    }
+
+    #[test]
+    fn break_and_watch_rows_echo_the_condition() {
+        use gbcli_protocol::{BreakpointMade, WatchAccess, WatchMade};
+        let r = ResultBody {
+            breakpoint: Some(BreakpointMade {
+                id: 1,
+                at: place(0x0170, Some("Work.done")),
+                condition: Some("[wFrame] == 3".into()),
+            }),
+            watch: Some(WatchMade {
+                id: 2,
+                access: WatchAccess::Write,
+                at: place(0xC000, None),
+                condition: None,
+            }),
+            ..ResultBody::default()
+        };
+        assert_eq!(
+            super::rows(&r),
+            "breakpoint id=1 addr=$0170 symbol=Work.done condition=\"[wFrame] == 3\"\n\
+             watch id=2 access=write addr=$C000\n"
+        );
+    }
+
+    /// `show` lists every breakpoint and watch, each saying whether it is
+    /// armed: "nothing fired" is only a proof when the traps were armed.
+    #[test]
+    fn show_rows_list_every_breakpoint_and_watch_and_whether_it_is_armed() {
+        use gbcli_protocol::{Arming, BreakpointSpec, DebuggerConfig, WatchAccess, WatchSpec};
+        let r = ResultBody {
+            debugger: Some(DebuggerConfig {
+                breakpoints: vec![BreakpointSpec {
+                    id: 1,
+                    at: place(0x0170, Some("Work.done")),
+                    condition: Some("mode != 1".into()),
+                    arming: Arming::Armed,
+                }],
+                watches: vec![WatchSpec {
+                    id: 3,
+                    access: WatchAccess::Write,
+                    at: place(0xC003, Some("wGone")),
+                    condition: None,
+                    once: true,
+                    arming: Arming::Disarmed,
+                }],
+                next_id: 4,
+            }),
+            ..ResultBody::default()
+        };
+        assert_eq!(
+            super::rows(&r),
+            "breakpoint id=1 addr=$0170 symbol=Work.done condition=\"mode != 1\" armed=1\n\
+             watch id=3 access=write addr=$C003 symbol=wGone once=1 armed=0\n"
+        );
+        let none = ResultBody {
+            debugger: Some(DebuggerConfig::default()),
+            ..ResultBody::default()
+        };
+        assert_eq!(super::rows(&none), "");
     }
 
     #[test]

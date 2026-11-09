@@ -2,10 +2,8 @@ use std::io;
 use std::path::PathBuf;
 
 use gbcli_core::{CoreError, Feature, Model};
-use gbcli_engine::{
-    CheckpointError, DebugError, LoadWarning, Moved, MovedRole, SetupError, SymbolAt, SymbolSide,
-};
-use gbcli_protocol::{CoreId, ErrorCode, Sha256};
+use gbcli_engine::{CheckpointError, DebugError, LoadWarning, SetupError, SymbolSide};
+use gbcli_protocol::{CoreId, ErrorCode, MovedSymbol, Sha256, SymbolAt, SymbolRole};
 
 use super::StoreError;
 
@@ -75,9 +73,9 @@ fn every_checkpoint_error() -> Vec<(CheckpointError, ErrorCode, u8)> {
         ),
         (
             CheckpointError::RomChanged {
-                moved: vec![Moved {
+                moved: vec![MovedSymbol {
                     name: "wSpeed".into(),
-                    role: MovedRole::Ram,
+                    role: SymbolRole::Ram,
                     old: SymbolAt {
                         bank: 0,
                         addr: 0xc000,
@@ -341,4 +339,36 @@ fn bad_arguments_are_bad_requests_with_their_own_remedies() {
         2,
         "use a number and a unit (s, m, h or d): 30m, 12h or 7d",
     );
+}
+
+/// The message names the first few moved symbols (C-6); the body a
+/// response carries lists every one.
+#[test]
+fn a_rom_changed_body_carries_every_moved_symbol() {
+    let moved: Vec<MovedSymbol> = (0..40u16)
+        .map(|n| MovedSymbol {
+            name: format!("wVar{n}"),
+            role: SymbolRole::Ram,
+            old: SymbolAt {
+                bank: 0,
+                addr: 0xC000 + n,
+            },
+            new: None,
+        })
+        .collect();
+    let e = StoreError::Checkpoint(CheckpointError::RomChanged {
+        moved: moved.clone(),
+    });
+    let body = e.body();
+    assert_eq!(body.code, ErrorCode::RomChanged);
+    assert_eq!(body.message, e.to_string());
+    assert_eq!(body.moved, moved);
+    let json = serde_json::to_value(&body).unwrap();
+    assert_eq!(json["moved"].as_array().unwrap().len(), 40);
+
+    let other = StoreError::Checkpoint(CheckpointError::SymbolsMissing {
+        side: SymbolSide::Both,
+    });
+    let json = serde_json::to_value(other.body()).unwrap();
+    assert!(json.get("moved").is_none(), "{json}");
 }

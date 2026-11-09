@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::battery::FlashNoteRow;
 use crate::keys::KeyEvent;
+use crate::moved::MovedSymbol;
 use crate::response::ResultBody;
 use crate::stop::StopRecord;
 
@@ -232,6 +233,10 @@ pub struct ErrorBody {
     /// result it asserted on, as the op returns it on success.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result: Option<Box<ResultBody>>,
+    /// `rom_changed`: every symbol the saved state depends on that the
+    /// rebuild moved, where the message names only the first few.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub moved: Vec<MovedSymbol>,
 }
 
 impl ErrorBody {
@@ -245,6 +250,7 @@ impl ErrorBody {
             keys_unapplied: None,
             flash_notes: None,
             result: None,
+            moved: Vec::new(),
         }
     }
 

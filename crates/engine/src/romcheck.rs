@@ -2,9 +2,9 @@
 //! loads under a changed ROM only if nothing the state depends on moved.
 
 use gbcli_core::Core;
-use gbcli_protocol::{CheckpointHeader, LiveSymbol, SymbolRole};
+use gbcli_protocol::{CheckpointHeader, LiveSymbol, MovedSymbol, SymbolAt, SymbolRole};
 
-use crate::checkpoint_error::{CheckpointError, Moved, MovedRole, SymbolAt, SymbolSide};
+use crate::checkpoint_error::{CheckpointError, SymbolSide};
 use crate::mem;
 use crate::sym::{Area, Symbols};
 
@@ -123,14 +123,9 @@ pub fn check(
         };
         let new = at(&live.name);
         if new != Some(old) {
-            let role = match live.role {
-                SymbolRole::Pc => MovedRole::Pc,
-                SymbolRole::Ram => MovedRole::Ram,
-                SymbolRole::Stack => MovedRole::Stack,
-            };
-            moved.push(Moved {
+            moved.push(MovedSymbol {
                 name: live.name.clone(),
-                role,
+                role: live.role,
                 old,
                 new,
             });

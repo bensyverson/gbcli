@@ -12,7 +12,7 @@ gbcli is an agent-friendly Game Boy development tool: a headless, deterministic 
 
 **Local ruling (Ben, 2026-11-07): this head holds only what every agent needs.** Features, crate inventories, figures and dated `project/` docs don't go here: a new capability goes in [docs/architecture.md](docs/architecture.md), setup in [docs/development.md](docs/development.md), figures beside the benchmark that makes them.
 
-**Local ruling (Ben, 2026-11-09): design nothing that a web build couldn't use.** A web IDE embedding gbcli (compiled to WASM) is a real, not immediate, goal: new core paths take data, not paths or processes; no new subprocess, thread or clock in a core path; new dependencies must build for `wasm32`. What that asks and the known debt: [project/2026-11-09-web-target.md](project/2026-11-09-web-target.md).
+**Local ruling (Ben, 2026-11-09): design nothing that a web build, or a Rust library called as an agent's tool, couldn't use.** A web IDE embedding gbcli (WASM) and gbcli as a library crate are real, not immediate, goals: every verb is a protocol op whose decision lives in a library crate; new core paths take data, not paths or processes; no new subprocess, thread or clock in a core path; new dependencies must build for `wasm32`. What these ask, and the known debt: [project/2026-11-09-web-target.md](project/2026-11-09-web-target.md).
 
 ## Documentation
 

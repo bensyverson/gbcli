@@ -8,7 +8,7 @@
 
 use std::fmt::Write;
 
-use gbcli_protocol::{GbcPalette, ImageArt, ImageAsset, ImageKind, NamedPalette};
+use gbcli_protocol::{GbcPalette, ImageArt, ImageAsset, ImageKind, NamedPalette, ObjectSize};
 
 use super::super::indexed::by_obp;
 use super::{Entry, Shared};
@@ -34,7 +34,8 @@ impl<'a> Gbc<'a> {
         let g = asset.gbc.as_ref()?;
         let mut slots = vec![0; units];
         let unit = match asset.kind {
-            ImageKind::Sprites => Some(2),
+            // A sheet's unit is one object: one tile at 8x8, two at 8x16.
+            ImageKind::Sprites => Some(asset.object_size.unwrap_or(ObjectSize::Tall).tiles()),
             ImageKind::Tiles => Some(1),
             ImageKind::Bg => None,
         };

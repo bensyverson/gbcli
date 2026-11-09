@@ -22,6 +22,7 @@ mod images_palette;
 mod images_palette_rules;
 mod images_png_encodings;
 mod images_remedies;
+mod images_review_8x8;
 mod images_shade_edges;
 mod images_shades;
 mod images_shared_palettes;

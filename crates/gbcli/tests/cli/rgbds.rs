@@ -514,6 +514,22 @@ fn build_restore_into_the_other_targets_session_names_the_gbc_flag() {
         "{}",
         plain.stderr
     );
+
+    // Under --out the build isn't a default ROM, so --gbc isn't the slip
+    // (review-fix of 81ae475): the remedy is the generic one.
+    let out = p.rgbds(&[
+        "build",
+        "game",
+        "--gbc",
+        "--out",
+        "build/custom.gbc",
+        "--session",
+        "game",
+        "--restore",
+        "x",
+    ]);
+    out.fails(2, "bad_request", "--session NAME");
+    assert!(!out.stderr.contains("--gbc"), "{}", out.stderr);
 }
 
 /// The responses `gbcli serve` writes for `lines`, run with only the pinned

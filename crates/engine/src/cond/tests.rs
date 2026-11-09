@@ -558,6 +558,12 @@ fn a_bare_ram_symbol_as_a_truth_value_suggests_a_read() {
     assert!(hint.contains("![wFrame]"), "{hint}");
     let hint = refusal_hint("(wFrame)");
     assert!(hint.contains("([wFrame])"), "{hint}");
+    // A logical operator under a comparison takes its operands' truth too
+    // (review-fix of 655a334): `!wFrame == 0` is `(!$C000) == 0`.
+    let hint = refusal_hint("!wFrame == 0");
+    assert!(hint.contains("![wFrame] == 0"), "{hint}");
+    let hint = refusal_hint("(wFrame || [wFrame] == 1) == 1");
+    assert!(hint.contains("([wFrame] || [wFrame] == 1) == 1"), "{hint}");
     // The hint rewrites the bare occurrence, not one already read.
     let hint = refusal_hint("[wFrame] == 0 || wFrame");
     assert!(hint.starts_with("[wFrame] == 0 || [wFrame] or"), "{hint}");

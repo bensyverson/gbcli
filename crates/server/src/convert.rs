@@ -54,6 +54,11 @@ pub fn debug(e: &DebugError) -> ErrorBody {
         DebugError::Condition { id, error } => {
             let mut body = expr(error);
             body.message = format!("condition of #{id}: {}", body.message);
+            // The condition is stored, so every run fails until it's replaced.
+            body.remedy = format!(
+                "{}; #{id} is stored in the session: `gbcli delete {id}`, then set it again",
+                body.remedy
+            );
             body
         }
         DebugError::Eval { id, error, stop } => {
@@ -157,5 +162,26 @@ mod tests {
             message: "the core said no".into(),
         });
         assert_eq!(backend.code, ErrorCode::Internal);
+    }
+
+    /// A stored condition that no longer compiles (one set before a stricter
+    /// rule) blocks every run: the remedy says how to replace it.
+    #[test]
+    fn a_stored_condition_that_fails_to_compile_says_how_to_replace_it() {
+        let body = debug(&DebugError::Condition {
+            id: 3,
+            error: gbcli_engine::cond::ExprError::Syntax {
+                at: 0,
+                message: "wFrame is an address, not the value stored there".into(),
+                hint: Some("[wFrame] or u16[wFrame]? A bare symbol is its address".into()),
+            },
+        });
+        assert!(
+            body.message.starts_with("condition of #3:"),
+            "{}",
+            body.message
+        );
+        assert!(body.remedy.contains("[wFrame]"), "{}", body.remedy);
+        assert!(body.remedy.contains("gbcli delete 3"), "{}", body.remedy);
     }
 }

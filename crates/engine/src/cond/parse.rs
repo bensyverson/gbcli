@@ -360,10 +360,20 @@ fn check_bare_ram_symbols(e: &Expr, text: &str) -> Result<(), ExprError> {
                     refuse_ram_symbol(side, text)?;
                 }
             }
+            if matches!(op, BinOp::And | BinOp::Or) {
+                // Wherever the operator sits, it takes its operands' truth.
+                check_truth_positions(l, text)?;
+                check_truth_positions(r, text)?;
+            }
             check_bare_ram_symbols(l, text)?;
             check_bare_ram_symbols(r, text)
         }
-        Expr::Unary(_, inner) => check_bare_ram_symbols(inner, text),
+        Expr::Unary(op, inner) => {
+            if *op == UnOp::LogicalNot {
+                check_truth_positions(inner, text)?;
+            }
+            check_bare_ram_symbols(inner, text)
+        }
         _ => Ok(()),
     }
 }

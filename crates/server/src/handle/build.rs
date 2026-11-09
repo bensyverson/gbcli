@@ -240,10 +240,14 @@ impl Handler {
              checkpoint and restore in that one"
         );
         let runs = self.bundle.project().join(&meta.rom);
+        // Only a build to its default ROM can have --gbc as the slip: under
+        // --out, dropping or adding --gbc still builds somewhere else.
+        let default_build =
+            gbcli_build::default_target_of(&rom.project, &rom.path) == Some(rom.target);
         let remedy = match gbcli_build::default_target_of(&rom.project, &runs) {
             // The session runs this project's other build: --gbc given or
             // left out is the likely slip.
-            Some(theirs) if theirs != rom.target => {
+            Some(theirs) if default_build && theirs != rom.target => {
                 let (theirs, flag) = if theirs.is_dmg() {
                     ("plain", "without --gbc")
                 } else {

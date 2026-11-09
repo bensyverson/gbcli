@@ -136,6 +136,9 @@ pub enum FontFileKind {
     Chars,
     Bdf,
     GuideSheet,
+    /// A working copy's record of the font it was made from (`NAME.base`
+    /// beside it), which `font_save` checks.
+    Base,
 }
 
 /// What differs between two fonts.

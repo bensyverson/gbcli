@@ -130,14 +130,16 @@ fn a_font_round_trips_through_a_png_and_a_bdf_working_copy_unchanged() {
         paths,
         [
             ("demo/build/font-edit/talk.png", FontFileKind::Png),
-            ("demo/build/font-edit/talk.chars", FontFileKind::Chars)
+            ("demo/build/font-edit/talk.chars", FontFileKind::Chars),
+            // The record of the font the copy was made from (leaf 2xiOiv).
+            ("demo/build/font-edit/talk.base", FontFileKind::Base)
         ]
     );
     assert_eq!(made.glyphs, 5);
     // The copy's own path finds its font.
     let saved = save(&temp, "demo/build/font-edit/talk.png").expect("saves");
     assert_eq!(saved.font, TALK);
-    assert_eq!(saved.removed.len(), 2);
+    assert_eq!(saved.removed.len(), 3);
     assert!(!temp.path("demo/build/font-edit/talk.png").exists());
     assert_eq!(fs::read_to_string(temp.path(TALK)).unwrap(), FONT);
     // And through BDF, saved by the font's path.

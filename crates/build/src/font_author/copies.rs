@@ -2,8 +2,10 @@
 //! project (the folder holding `assets/` when the font is in
 //! `assets/fonts/`, else the font's own folder), which the starter's
 //! `.gitignore` already ignores (`/build/`), as `NAME.png` with
-//! `NAME.chars`, or `NAME.bdf`. A build refuses while one is newer than
-//! its `.yaff` ([`newer_copy`]).
+//! `NAME.chars`, or `NAME.bdf`, with `NAME.base` recording the font it
+//! was made from. A build refuses while a copy is newer than its `.yaff`
+//! ([`newer_copy`]); nothing but `font edit` and `font new` writes into
+//! the folder ([`in_copy_dir`]).
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -21,10 +23,13 @@ pub(crate) struct Copies {
     pub png: PathBuf,
     pub chars: PathBuf,
     pub bdf: PathBuf,
+    /// The record of the font the copy was made from ([`super::base`]):
+    /// part of the copy, but not a copy itself, so not [`Copies::existing`].
+    pub base: PathBuf,
 }
 
 impl Copies {
-    /// The ones that exist.
+    /// The copy files that exist.
     pub fn existing(&self) -> Vec<PathBuf> {
         [&self.png, &self.chars, &self.bdf]
             .into_iter()
@@ -56,6 +61,7 @@ pub(crate) fn copies(yaff: &Path) -> Copies {
         png: file("png"),
         chars: file(gbcli_font::CHARS_EXTENSION),
         bdf: file(BDF_EXTENSION),
+        base: file(super::base::BASE_EXTENSION),
     }
 }
 
@@ -93,6 +99,14 @@ pub(crate) fn newer_copy(yaff: &Path) -> Option<PathBuf> {
     })
 }
 
+/// Whether `path` is in a working copies' folder, where a file would be
+/// taken for a copy.
+pub(crate) fn in_copy_dir(path: &Path) -> bool {
+    normalize(path)
+        .parent()
+        .is_some_and(|dir| dir.ends_with(COPY_DIR))
+}
+
 trait StripSuffix {
     fn strip_suffix_path(&self, suffix: &Path) -> Option<PathBuf>;
 }
@@ -117,6 +131,7 @@ mod tests {
         assert_eq!(c.png, Path::new("/p/game/build/font-edit/main.png"));
         assert_eq!(c.chars, Path::new("/p/game/build/font-edit/main.chars"));
         assert_eq!(c.bdf, Path::new("/p/game/build/font-edit/main.bdf"));
+        assert_eq!(c.base, Path::new("/p/game/build/font-edit/main.base"));
         let loose = copies(Path::new("/tmp/x/talk.yaff"));
         assert_eq!(loose.png, Path::new("/tmp/x/build/font-edit/talk.png"));
     }

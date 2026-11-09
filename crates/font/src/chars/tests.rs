@@ -61,6 +61,19 @@ fn the_writer_escapes_what_would_read_back_differently() {
 }
 
 #[test]
+fn the_writer_escapes_a_byte_order_mark_which_a_reader_would_strip() {
+    let rows = vec![vec![c('\u{FEFF}'), c('A')]];
+    let text = write_chars(&rows);
+    assert_eq!(text, "<u+FEFF>A\n");
+    assert_eq!(read_chars(&text).unwrap(), rows);
+    // A real byte order mark before the text is still not a cell.
+    assert_eq!(
+        read_chars("\u{FEFF}AB\n").unwrap(),
+        vec![vec![c('A'), c('B')]]
+    );
+}
+
+#[test]
 fn a_list_ignores_line_breaks_gaps_and_repeats() {
     let keys = read_list("ab\nba<>\n<heart>").unwrap();
     assert_eq!(

@@ -2,6 +2,7 @@ $ gbcli font edit main.yaff
 exit 0
 wrote kind=png path=build/font-edit/main.png bytes=232
 wrote kind=chars path=build/font-edit/main.chars bytes=18
+wrote kind=base path=build/font-edit/main.base bytes=25
 font path=main.yaff glyphs=4
 $ gbcli font edit main.yaff --as bdf
 exit 2
@@ -13,15 +14,18 @@ exit 0
 wrote kind=yaff path=main.yaff bytes=338
 removed path=build/font-edit/main.png
 removed path=build/font-edit/main.chars
+removed path=build/font-edit/main.base
 font path=main.yaff glyphs=4
 $ gbcli font edit main.yaff --as bdf
 exit 0
 wrote kind=bdf path=build/font-edit/main.bdf bytes=623
+wrote kind=base path=build/font-edit/main.base bytes=25
 font path=main.yaff glyphs=4
 $ gbcli font save main.yaff
 exit 0
 wrote kind=yaff path=main.yaff bytes=338
 removed path=build/font-edit/main.bdf
+removed path=build/font-edit/main.base
 font path=main.yaff glyphs=4
 $ gbcli font export main.yaff --bdf main.bdf
 exit 0
@@ -31,6 +35,7 @@ $ gbcli font new hud.yaff --chars ascii
 exit 0
 wrote kind=png path=build/font-edit/hud.png bytes=246
 wrote kind=chars path=build/font-edit/hud.chars bytes=108
+wrote kind=base path=build/font-edit/hud.base bytes=7
 font path=hud.yaff glyphs=0
 $ gbcli font diff main.yaff other.yaff --png diff.png
 exit 0

@@ -25,6 +25,7 @@ fn font() -> Font {
         comment: vec!["A test font.".into()],
         properties: vec![
             prop("family", "Talk"),
+            prop("foo.bar", "a dotted name"),
             prop("ascent", "6"),
             prop("descent", "2"),
             prop("notice", "Free: use it \"as is\""),
@@ -63,14 +64,10 @@ fn a_font_round_trips_through_bdf_glyphs_and_properties() {
     let imported = read_bdf(&bdf, None).unwrap();
     assert_eq!(imported.font.glyphs, font().glyphs);
     assert_eq!(imported.font.comment, font().comment);
-    for p in &font().properties {
-        assert_eq!(
-            imported.font.property(&p.key),
-            Some(p.value.as_str()),
-            "{}",
-            p.key
-        );
-    }
+    // Exactly the font's properties, by their own names, in their order:
+    // `Font::property` treats `_` and `-` alike, which hid a renamed
+    // property and the order, so compare them whole.
+    assert_eq!(imported.font.properties, font().properties);
     assert!(imported.skipped.is_empty() && imported.missing.is_empty());
     reads_back(&imported.font);
 }

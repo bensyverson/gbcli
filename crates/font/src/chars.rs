@@ -2,7 +2,8 @@
 //! cells, each character the key of the cell under it, left to right.
 //! Besides a character as itself, a line writes `<name>` for a named
 //! glyph, `<u+XXXX>` for any character by code point (the writer uses it
-//! for a space, a combining mark and an ambiguous `<`), and `<>` for a
+//! for a space, a combining mark, U+FEFF, which a reader takes for a byte
+//! order mark, and an ambiguous `<`), and `<>` for a
 //! cell left empty. A line shorter than the row leaves the rest empty.
 //!
 //! A character list (`--chars FILE` on `import` and `new`) is the same
@@ -115,7 +116,10 @@ pub fn write_chars(rows: &[Vec<Slot>]) -> String {
                     let ambiguous = *c == '<'
                         && !matches!(next, Some(Some(Key::Char(n))) if !(n.is_ascii_alphabetic() || *n == '>'))
                         && next.is_some();
-                    if c.is_whitespace() || marks::is_combining(*c) || ambiguous {
+                    // U+FEFF first in the file would read as a byte order
+                    // mark and be dropped.
+                    let bom = *c == '\u{FEFF}';
+                    if c.is_whitespace() || marks::is_combining(*c) || ambiguous || bom {
                         out.push_str(&format!("<u+{:04X}>", u32::from(*c)));
                     } else {
                         out.push(*c);

@@ -127,7 +127,10 @@ a working copy for an editing tool, never committed:
   gbcli font diff A.yaff B.yaff [--png PATH]
                        each changed glyph; the PNG draws it before and after
 A build refuses while a copy is newer than its font, naming `gbcli font
-save`. One copy at a time.
+save`. One copy at a time. Beside the copy, NAME.base records the font as
+it was; if the font changed since, save refuses, naming both (remove
+NAME.base to save the copy over it anyway). Export, a guide sheet and a
+diff's PNG never write over a .yaff or into build/font-edit/.
 
 The PNG copy is a grid of 8x8 cells, 16 to a row (128 px wide), glyphs in
 order, each at its cell's left edge. An opaque pixel is ink (the darker of
@@ -144,9 +147,11 @@ color, a line past 16 cells or the image's rows, a character listed
 twice.
 
 BDF import places each glyph by its bounding box and the font's ascent
-(FONT_ASCENT), so trimmed glyphs (Misaki's) land where they draw, and
-advances it by DWIDTH (1-8). The BDF must be Unicode (ISO10646); its
-properties become the font's, FONT_ASCENT as ascent.
+(FONT_ASCENT), so trimmed glyphs land where they draw, and advances it by
+DWIDTH (1-8). The BDF must be Unicode (ISO10646): convert a JIS-encoded
+one, such as Misaki's, first (FontForge, or monobit-convert). Its
+properties become the font's, FONT_ASCENT as ascent unless it is the
+default (7, with FONT_DESCENT 1).
 
 The starter's renderer: `gbcli new` writes src/text.asm, a font drawn for
 gbcli (assets/fonts/main.yaff: the 95 printable ASCII characters, 2-6 px wide,

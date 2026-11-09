@@ -2,17 +2,20 @@
 //! top row sits `ascent - (y offset + height)` rows down, where the
 //! font's ascent is `FONT_ASCENT` (else the font's bounding box's top),
 //! and its pixels start `x offset` columns right of the pen. It advances
-//! by its `DWIDTH`. So a trimmed glyph (Misaki's) lands where it draws.
+//! by its `DWIDTH`. So a trimmed glyph (Misaki's, once converted to
+//! Unicode) lands where it draws.
 //!
 //! Glyphs are keyed by `ENCODING` as Unicode (the file's
 //! `CHARSET_REGISTRY` must be ISO10646, or ISO8859 with encoding 1, or
 //! absent), or, unencoded, by their `STARTCHAR` name when it is a gbcli
 //! glyph name. Properties become YAFF properties, named in lower case
-//! with `-` for `_`; `FONT_ASCENT` and `FONT_DESCENT` become `ascent` and
-//! `descent`.
+//! with `-` for `_` (a `.` kept); `FONT_ASCENT` and `FONT_DESCENT` become
+//! `ascent` and `descent`, unless they are gbcli's default (7 and 1),
+//! which a font needn't state, so a font exported to BDF reads back with
+//! the properties it had.
 
 use crate::key::{Key, said};
-use crate::model::{Font, Glyph, HEIGHT, MAX_WIDTH, Property};
+use crate::model::{DEFAULT_ASCENT, Font, Glyph, HEIGHT, MAX_WIDTH, Property};
 use crate::problem::Problem;
 
 const FORMAT: &str = "check the file is BDF 2.1 (STARTFONT, then glyphs from STARTCHAR to \
@@ -141,10 +144,27 @@ pub fn read_bdf(text: &str, only: Option<&[Key]>) -> Result<Imported, Vec<Proble
             )]);
         }
     }
-    let ascent = prop("FONT_ASCENT")
-        .and_then(|a| a.parse::<i64>().ok())
-        .or(font_box.map(|b| b[1] + b[3]))
-        .unwrap_or(i64::from(crate::model::DEFAULT_ASCENT));
+    if let Some(b) = font_box.filter(|b| !in_range(b)) {
+        return Err(vec![Problem::new(
+            format!(
+                "FONTBOUNDINGBOX {} {} {} {} is past any bitmap font's size",
+                b[0], b[1], b[2], b[3]
+            ),
+            FORMAT,
+        )]);
+    }
+    let ascent = match prop("FONT_ASCENT").and_then(|a| a.parse::<i64>().ok()) {
+        Some(a) if !in_range(&[a]) => {
+            return Err(vec![Problem::new(
+                format!("FONT_ASCENT {a} is past any bitmap font's size"),
+                FORMAT,
+            )]);
+        }
+        Some(a) => a,
+        None => font_box
+            .map(|b| b[1] + b[3])
+            .unwrap_or(i64::from(DEFAULT_ASCENT)),
+    };
     let mut problems = Vec::new();
     let mut glyphs: Vec<Glyph> = Vec::new();
     let mut skipped = Vec::new();
@@ -215,6 +235,12 @@ fn place(c: &Char, key: &Key, ascent: i64) -> Result<Glyph, Problem> {
     let [w, h, xo, yo] = c
         .bbx
         .ok_or_else(|| Problem::new(format!("{who} has no BBX"), FORMAT))?;
+    if !in_range(&[w, h, xo, yo]) {
+        return Err(Problem::new(
+            format!("{who}'s BBX {w} {h} {xo} {yo} is past any bitmap font's size"),
+            FORMAT,
+        ));
+    }
     if c.bitmap.len() as i64 != h {
         return Err(Problem::new(
             format!(
@@ -272,8 +298,31 @@ fn place(c: &Char, key: &Key, ascent: i64) -> Result<Glyph, Problem> {
 }
 
 /// The BDF properties as YAFF properties the strict reader takes: named
-/// in lower case, each once, none empty, none that moves glyphs.
+/// in lower case, each once, none empty, none that moves glyphs. An
+/// ascent and descent that are gbcli's own default (what the writer
+/// states for a font that sets neither) become no property.
 fn properties(props: &[(String, String)]) -> Vec<Property> {
+    let mut out = converted(props);
+    let number = |key: &str| {
+        out.iter()
+            .find(|p| p.key == key)
+            .map(|p| p.value.parse::<i64>().ok())
+    };
+    let default = i64::from(DEFAULT_ASCENT);
+    let ascent_is_default = number("ascent") == Some(Some(default));
+    let descent_is_default = match number("descent") {
+        None => true,
+        Some(d) => d == Some(HEIGHT as i64 - default),
+    };
+    if ascent_is_default && descent_is_default {
+        out.retain(|p| p.key != "ascent" && p.key != "descent");
+    }
+    out
+}
+
+/// Each BDF property as a YAFF property, named in lower case with `-` for
+/// `_` (a `.` kept), each once.
+fn converted(props: &[(String, String)]) -> Vec<Property> {
     let mut out: Vec<Property> = Vec::new();
     for (name, value) in props {
         let key = match name.as_str() {
@@ -310,6 +359,16 @@ fn properties(props: &[(String, String)]) -> Vec<Property> {
         });
     }
     out
+}
+
+/// The largest magnitude a size or offset may have: far past any bitmap
+/// font, and small enough that the placement's sums of a few can't
+/// overflow.
+const LIMIT: u64 = 1 << 24;
+
+/// Whether every number is within [`LIMIT`].
+fn in_range(numbers: &[i64]) -> bool {
+    numbers.iter().all(|n| n.unsigned_abs() <= LIMIT)
 }
 
 /// Four whole numbers.

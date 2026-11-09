@@ -1,11 +1,12 @@
 //! BDF out: every glyph a full-height box at the pen, as wide as it
 //! advances, so an editor shows it in its cell; the font's ascent (its
 //! `ascent` property, else row 7's top) as `FONT_ASCENT`; its other
-//! properties as string properties named in capitals, which an import
-//! reads back under their own names.
+//! properties, in its order, as string properties named in capitals with
+//! `_` for `-` (a `.` kept), which an import reads back under their own
+//! names.
 
 use crate::key::Key;
-use crate::model::{Font, HEIGHT};
+use crate::model::{Font, HEIGHT, Property};
 
 /// `font` as BDF, its `FONT` named `name`.
 pub fn write_bdf(font: &Font, name: &str) -> String {
@@ -16,18 +17,39 @@ pub fn write_bdf(font: &Font, name: &str) -> String {
         out += &format!("COMMENT {line}\n").replace("COMMENT \n", "COMMENT\n");
     }
     out += &format!("FONT {name}\nSIZE 8 75 75\nFONTBOUNDINGBOX 8 8 0 -{descent}\n");
-    let others: Vec<_> = font
-        .properties
-        .iter()
-        .filter(|p| !matches!(p.key.to_ascii_lowercase().as_str(), "ascent" | "descent"))
-        .collect();
-    out += &format!("STARTPROPERTIES {}\n", others.len() + 4);
-    out += &format!("FONT_ASCENT {ascent}\nFONT_DESCENT {descent}\n");
-    out += "CHARSET_REGISTRY \"ISO10646\"\nCHARSET_ENCODING \"1\"\n";
-    for p in others {
-        let key = p.key.to_ascii_uppercase().replace(['-', '.'], "_");
-        let value = p.value.replace('\n', " ").replace('"', "\"\"");
-        out += &format!("{key} \"{value}\"\n");
+    let is = |p: &Property, key: &str| p.key.eq_ignore_ascii_case(key);
+    let has = |key: &str| font.properties.iter().any(|p| is(p, key));
+    let ascent_line = format!("FONT_ASCENT {ascent}");
+    let descent_line = format!("FONT_DESCENT {descent}");
+    // Every editor wants both metrics: stated first when the font sets
+    // neither, else where the font sets them, in its order.
+    let mut props = Vec::new();
+    if !has("ascent") {
+        props.push(ascent_line.clone());
+        if !has("descent") {
+            props.push(descent_line.clone());
+        }
+    }
+    for p in &font.properties {
+        if is(p, "ascent") {
+            props.push(ascent_line.clone());
+            if !has("descent") {
+                props.push(descent_line.clone());
+            }
+        } else if is(p, "descent") {
+            props.push(descent_line.clone());
+        } else {
+            let key = p.key.to_ascii_uppercase().replace('-', "_");
+            let value = p.value.replace('\n', " ").replace('"', "\"\"");
+            props.push(format!("{key} \"{value}\""));
+        }
+    }
+    props.push("CHARSET_REGISTRY \"ISO10646\"".into());
+    props.push("CHARSET_ENCODING \"1\"".into());
+    out += &format!("STARTPROPERTIES {}\n", props.len());
+    for line in props {
+        out += &line;
+        out.push('\n');
     }
     out += &format!("ENDPROPERTIES\nCHARS {}\n", font.glyphs.len());
     for g in &font.glyphs {

@@ -2,24 +2,31 @@
 //! decisions): `font_edit`, `font_save`, `font_import`, `font_export`,
 //! `font_new` and `font_diff`. The conversions are `gbcli-font`'s, data in
 //! and data out; this module reads and writes the files around them and
-//! keeps the working copy (`copies`). The `.yaff` is the one source: a
-//! save takes the glyphs from the copy and the font's comments and
-//! properties (and each glyph's comment, by key) from the `.yaff`.
+//! keeps the working copy (`copies`) and its record of the font it was
+//! made from (`base`). The `.yaff` is the one source: a save takes the
+//! glyphs from the copy and the font's comments and properties (and each
+//! glyph's comment, by key) from the `.yaff`, and refuses when the font
+//! changed after the copy was made (`save`). Nothing but `edit` and `new`
+//! writes over a font's copy or into the copies' folder, and nothing but
+//! `save` over a font.
 
+mod base;
 mod copies;
 mod io;
+mod save;
 
 use std::path::{Path, PathBuf};
 
-use gbcli_font::{Font, Key, grid};
+use gbcli_font::{Key, grid};
 use gbcli_protocol::{
     ErrorBody, FontDiffArgs, FontDiffMade, FontEditArgs, FontExportArgs, FontFileKind, FontForm,
-    FontImportArgs, FontNewArgs, FontPreview, FontSaveArgs, FontWritten, GlyphChange,
-    GlyphChangeKind,
+    FontImportArgs, FontNewArgs, FontPreview, FontWritten, GlyphChange, GlyphChangeKind,
 };
 
+use base::Base;
 pub(crate) use copies::newer_copy;
-use io::{Out, bad, problems_error, read_text, resolve_chars, write_files};
+use io::{Out, bad, problems_error, read_text, refuse_sources, resolve_chars, write_files};
+pub use save::font_save;
 
 use crate::font::read_font;
 use crate::paths::{display, normalize, quote};
@@ -28,9 +35,10 @@ use crate::paths::{display, normalize, quote};
 pub fn font_edit(cwd: &Path, args: &FontEditArgs) -> Result<FontWritten, Box<ErrorBody>> {
     let font = read_font(cwd, &args.file)?;
     let yaff = normalize(&cwd.join(&args.file));
+    let bytes = std::fs::read(&yaff).map_err(|e| io::io_failed(&args.file, e))?;
     let copies = copies::copies(&yaff);
     refuse_existing(cwd, &copies, &args.file)?;
-    let outs = match args.form {
+    let mut outs = match args.form {
         FontForm::Png => {
             let g = grid::to_grid(&font, true);
             vec![
@@ -48,115 +56,12 @@ pub fn font_edit(cwd: &Path, args: &FontEditArgs) -> Result<FontWritten, Box<Err
             gbcli_font::bdf::write_bdf(&font, &stem(&yaff)).into_bytes(),
         )],
     };
+    outs.push(base_out(&copies, Base::of(Some(&bytes))));
     Ok(FontWritten {
         font: args.file.clone(),
         glyphs: font.glyphs.len() as u32,
         files: write_files(cwd, outs)?,
         removed: Vec::new(),
-        missing: Vec::new(),
-        skipped: Vec::new(),
-    })
-}
-
-/// `font_save`: converts the working copy back into its `.yaff` and
-/// removes it.
-pub fn font_save(cwd: &Path, args: &FontSaveArgs) -> Result<FontWritten, Box<ErrorBody>> {
-    let given = normalize(&cwd.join(&args.file));
-    let is_yaff = given
-        .extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case(gbcli_font::EXTENSION));
-    let yaff = if is_yaff {
-        given.clone()
-    } else {
-        copies::font_of(&given).ok_or_else(|| {
-            bad(
-                format!(
-                    "{} is neither a .yaff font nor a working copy of one",
-                    args.file
-                ),
-                format!(
-                    "pass the font (assets/fonts/NAME.yaff) or its copy in {}",
-                    copies::COPY_DIR
-                ),
-            )
-        })?
-    };
-    let shown = display(&yaff, cwd);
-    let copies = copies::copies(&yaff);
-    let existing = copies.existing();
-    let png = copies.png.is_file() || copies.chars.is_file();
-    if existing.is_empty() {
-        return Err(bad(
-            format!("{shown} has no working copy to save"),
-            format!("`gbcli font edit {}` writes one", quote(&shown)),
-        ));
-    }
-    if png && copies.bdf.is_file() {
-        return Err(bad(
-            format!(
-                "{shown} has two working copies, {} and {}",
-                display(&copies.png, cwd),
-                display(&copies.bdf, cwd)
-            ),
-            "remove the one whose edits to discard, then save again",
-        ));
-    }
-    let glyphs = if png {
-        let png_shown = display(&copies.png, cwd);
-        let chars_shown = display(&copies.chars, cwd);
-        let bytes = std::fs::read(&copies.png).map_err(|e| {
-            bad(
-                format!("{png_shown}: {e}"),
-                "the PNG and its .chars go together",
-            )
-        })?;
-        let chars = read_text(&copies.chars, &chars_shown)?;
-        let image = gbcli_pixels::decode_png(&bytes)
-            .map_err(|e| bad(format!("{png_shown}: {}", e.message), e.remedy))?;
-        grid::from_grid(&image, &chars).map_err(|p| problems_error(&png_shown, &chars_shown, &p))?
-    } else {
-        let bdf_shown = display(&copies.bdf, cwd);
-        let text = read_text(&copies.bdf, &bdf_shown)?;
-        let imported = gbcli_font::bdf::read_bdf(&text, None)
-            .map_err(|p| problems_error(&bdf_shown, &bdf_shown, &p))?;
-        if !imported.skipped.is_empty() {
-            return Err(bad(
-                format!(
-                    "{bdf_shown} has glyphs gbcli can't key: {}",
-                    imported.skipped.join(", ")
-                ),
-                "give each an ENCODING (its Unicode code point), or a STARTCHAR name of two or \
-                 more ASCII letters, digits, _ and - with ENCODING -1",
-            ));
-        }
-        imported.font.glyphs
-    };
-    let mut font = if yaff.is_file() {
-        read_font(cwd, &shown)?
-    } else {
-        Font::default()
-    };
-    let glyphs = glyphs
-        .into_iter()
-        .map(|mut g| {
-            if let Some(i) = font.find(&g.key) {
-                g.comment = font.glyphs[i].comment.clone();
-            }
-            g
-        })
-        .collect();
-    font.glyphs = glyphs;
-    let files = write_files(cwd, vec![io::yaff_out(&yaff, &font)?])?;
-    let mut removed = Vec::new();
-    for p in existing {
-        std::fs::remove_file(&p).map_err(|e| io::io_failed(&display(&p, cwd), e))?;
-        removed.push(display(&p, cwd));
-    }
-    Ok(FontWritten {
-        font: shown,
-        glyphs: font.glyphs.len() as u32,
-        files,
-        removed,
         missing: Vec::new(),
         skipped: Vec::new(),
     })
@@ -231,6 +136,7 @@ pub fn font_export(cwd: &Path, args: &FontExportArgs) -> Result<FontWritten, Box
             text.into_bytes(),
         ));
     }
+    refuse_sources(cwd, "an export", &outs)?;
     Ok(FontWritten {
         font: args.file.clone(),
         glyphs: font.glyphs.len() as u32,
@@ -267,9 +173,12 @@ pub fn font_new(cwd: &Path, args: &FontNewArgs) -> Result<FontWritten, Box<Error
             g.chars.clone().into_bytes(),
         ),
     ];
+    outs.push(base_out(&copies, Base::Absent));
     if let Some(sheet) = &args.guide_sheet {
         let png = grid::guide_sheet(&g.image, &g.chars);
-        outs.push(Out::new(&cwd.join(sheet), FontFileKind::GuideSheet, png));
+        let out = Out::new(&cwd.join(sheet), FontFileKind::GuideSheet, png);
+        refuse_sources(cwd, "a guide sheet", std::slice::from_ref(&out))?;
+        outs.push(out);
     }
     Ok(FontWritten {
         font: shown,
@@ -290,10 +199,9 @@ pub fn font_diff(cwd: &Path, args: &FontDiffArgs) -> Result<FontDiffMade, Box<Er
         Some(out) => {
             let bytes = gbcli_font::diff::diff_png(&d);
             let len = bytes.len() as u64;
-            write_files(
-                cwd,
-                vec![Out::new(&cwd.join(out), FontFileKind::Png, bytes)],
-            )?;
+            let outs = vec![Out::new(&cwd.join(out), FontFileKind::Png, bytes)];
+            refuse_sources(cwd, "a diff", &outs)?;
+            write_files(cwd, outs)?;
             Some(FontPreview {
                 path: out.clone(),
                 bytes: len,
@@ -322,6 +230,15 @@ pub fn font_diff(cwd: &Path, args: &FontDiffArgs) -> Result<FontDiffMade, Box<Er
         reordered: d.reordered,
         png,
     })
+}
+
+/// The copy's record of the font it was made from.
+fn base_out(copies: &copies::Copies, base: Base) -> Out {
+    Out::new(
+        &copies.base,
+        FontFileKind::Base,
+        base.to_text().into_bytes(),
+    )
 }
 
 /// Refuses a second working copy of one font.

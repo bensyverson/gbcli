@@ -36,6 +36,7 @@ pub fn rows(r: &ResultBody) -> String {
                 FontFileKind::Chars => "chars",
                 FontFileKind::Bdf => "bdf",
                 FontFileKind::GuideSheet => "guide_sheet",
+                FontFileKind::Base => "base",
             };
             out += &Row::new("wrote")
                 .field("kind", kind)

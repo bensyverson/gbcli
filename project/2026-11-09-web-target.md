@@ -21,7 +21,7 @@ Lantern's bot (examples/raycaster/tools/bot.py) settled whether driving gbcli fr
 
 - **The build runs RGBDS as subprocesses** (`crates/build/src/toolchain.rs`, `project/tool.rs`), and `doctor` reads `PATH` and git.
 - **The bundle store is the filesystem** (`.gbcli/` sessions, checkpoints, caches, `crates/bundle`), with file locks (`crates/bundle/src/lock.rs`).
-- **Font authoring's save decides on files** (`crates/build/src/font_author/`): which glyphs come from the working copy and which comments and properties from the `.yaff` is interleaved with reading and writing them, and the newer-copy check reads file times. The conversions themselves (`gbcli-font`) are data in, data out. Found by review on 2026-11-09 (leaf 2xiOiv); its fix may separate the merge where that's cheap.
+- **Font authoring's save decides on files** (`crates/build/src/font_author/`): which glyphs come from the working copy and which comments and properties from the `.yaff` is interleaved with reading and writing them, and the newer-copy check reads file times. The conversions themselves (`gbcli-font`) are data in, data out. Found by review on 2026-11-09 (leaf 2xiOiv); Resolved by that fix: `base::drift` and `save::merged` take data, and only the file reads and writes stay around them (the hash replaced file times).
 - **`serve`'s watchdog is a thread** (`crates/server/src/watchdog.rs`).
 - **Example tools and bots are Python.** That's fine for examples, but it means a bot isn't portable to a web host.
 

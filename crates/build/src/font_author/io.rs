@@ -89,6 +89,36 @@ pub(super) fn yaff_out(path: &Path, font: &Font) -> Result<Out, Box<ErrorBody>> 
     }
 }
 
+/// Refuses, before anything is written, an output of `verb` (an export,
+/// a guide sheet, a diff's PNG) that would land on a font or in a working
+/// copies' folder. Any other file it writes over, as `shot` and `pixels`
+/// do: running an export again is the everyday loop.
+pub(super) fn refuse_sources(cwd: &Path, verb: &str, outs: &[Out]) -> Result<(), Box<ErrorBody>> {
+    for o in outs {
+        let shown = display(&o.path, cwd);
+        let is_font = o
+            .path
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case(gbcli_font::EXTENSION));
+        if is_font {
+            return Err(bad(
+                format!("{shown} is a font; {verb} never writes over one"),
+                "name a path that isn't a .yaff",
+            ));
+        }
+        if super::copies::in_copy_dir(&o.path) {
+            return Err(bad(
+                format!(
+                    "{shown} is in {}, where working copies live; {verb} never writes there",
+                    super::copies::COPY_DIR
+                ),
+                format!("name a path outside {}", super::copies::COPY_DIR),
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Writes every output, making folders as needed, and reports them with
 /// paths from `cwd`.
 pub(super) fn write_files(cwd: &Path, outs: Vec<Out>) -> Result<Vec<FontFile>, Box<ErrorBody>> {

@@ -13,8 +13,10 @@ use serde::{Deserialize, Serialize};
 /// null where the core can't know it (design §5's update of 2026-11-09).
 /// 3 since leaf IQRDj5: fonts, whose error code (`font_unreadable`) and
 /// image limits (`font_text`, `font_glyphs`, `font_missing`) are new values
-/// of enums a response carries.
-pub const PROTOCOL_VERSION: u32 = 3;
+/// of enums a response carries. 4 since leaf 2xiOiv: `FontFileKind` gains
+/// `base` (a working copy's record of its font), a new value of an enum a
+/// response carries that was published under 3.
+pub const PROTOCOL_VERSION: u32 = 4;
 
 /// What `version` answers.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -57,7 +59,7 @@ mod tests {
         };
         assert_eq!(
             serde_json::to_string(&result).unwrap(),
-            r#"{"version":{"gbcli":"0.1.0","protocol":3,"sameboy":"abc","patch_set":"def"}}"#
+            r#"{"version":{"gbcli":"0.1.0","protocol":4,"sameboy":"abc","patch_set":"def"}}"#
         );
     }
 }

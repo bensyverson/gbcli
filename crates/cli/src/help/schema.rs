@@ -11,7 +11,7 @@ id is yours and is echoed back. session and as default to serve's --session
 and --as. A mutation that passes rev is refused (rev_mismatch) if the session
 moved on. Unknown and repeated fields are refused, naming the nearest field.
 Fields marked ? may be left out; an op with no required field may omit args.
-This schema's protocol version is 3, which the version op reports. It goes up
+This schema's protocol version is 4, which the version op reports. It goes up
 on a breaking change to these shapes (a new value of a response's enum among
 them), not for a new op or a new optional request field.
 
@@ -105,7 +105,8 @@ font    file: PATH  sample?: TEXT  preview?: PATH  fit?: PX
 font_edit  file: PATH  form?: "png"|"bdf"  (a working copy in the project's
         build/font-edit/: NAME.png and NAME.chars with guides, or NAME.bdf)
 font_save  file: PATH  (the .yaff or its copy: the copy converted back into
-        the .yaff, keeping its comments and properties, and removed)
+        the .yaff, keeping its comments and properties, and removed; refused
+        when the .yaff changed after the copy was made)
 font_import  file: PATH  chars?: SET|PATH  out?: PATH  (a BDF as a .yaff;
         never over a file)
 font_export  file: PATH  png?: PATH  bdf?: PATH  guides?: true
@@ -115,7 +116,7 @@ font_diff  a: PATH  b: PATH  png?: PATH  (result.font_diff: {a, b, glyphs:
         [{key, change: "changed"|"added"|"removed", width_a?, width_b?}],
         reordered, png?: {path, bytes}})
         (the others: result.font_written: {font, glyphs, files: [{path, kind:
-        "yaff"|"png"|"chars"|"bdf"|"guide_sheet", bytes}], removed?, missing?,
+        "yaff"|"png"|"chars"|"bdf"|"guide_sheet"|"base", bytes}], removed?, missing?,
         skipped?}; on font_unreadable from a copy or a BDF,
         error.result.font_problems: [{path, line?, column?, cell?: {x, y},
         glyph?, message, remedy}], every problem)
@@ -242,7 +243,7 @@ Examples:
   {"id":"38","op":"assets","args":{"dir":"game","glyphs":{"fonts/talk.yaff":["H","i","heart"]}}}
   {"id":"39","op":"font_edit","args":{"file":"assets/fonts/talk.yaff","form":"png"}}
   {"id":"40","op":"font_save","args":{"file":"assets/fonts/talk.yaff"}}
-  {"id":"41","op":"font_import","args":{"file":"misaki.bdf","chars":"latin1","out":"assets/fonts/misaki.yaff"}}
+  {"id":"41","op":"font_import","args":{"file":"pixel.bdf","chars":"latin1","out":"assets/fonts/pixel.yaff"}}
   {"id":"42","op":"font_export","args":{"file":"assets/fonts/talk.yaff","bdf":"talk.bdf"}}
   {"id":"43","op":"font_new","args":{"name":"hud","chars":"ascii","guide_sheet":"hud-sheet.png"}}
   {"id":"44","op":"font_diff","args":{"a":"old.yaff","b":"assets/fonts/talk.yaff","png":"diff.png"}}

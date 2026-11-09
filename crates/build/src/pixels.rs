@@ -2,7 +2,8 @@
 //! pixel text, read through `gbcli-pixels`, its palette references resolved
 //! through the project's `assets/palettes.txt` (or `--palettes`), and
 //! written as canonical text, a PNG or a preview. Everything is made
-//! before anything is written, so a failure writes nothing.
+//! before anything is written, so a failure to make or write an output
+//! writes nothing (`write_all`).
 
 use std::path::{Path, PathBuf};
 
@@ -91,13 +92,27 @@ pub fn pixels(cwd: &Path, args: &PixelsArgs) -> Result<PixelsMade, Box<ErrorBody
     })
 }
 
-/// Writes every output, or none: each goes to a temporary file beside it
-/// first, and only when all are written are they renamed into place, so
-/// an output that can't be written leaves the others unwritten.
+/// Writes every output: each goes to a temporary file beside it first, and
+/// only when all are written are they renamed into place, so an output
+/// that can't be written, or whose path is a directory, leaves the others
+/// unwritten. (A rename failing for another reason, midway, can leave the
+/// outputs before it in place.) Two outputs of one path write the later.
 fn write_all(
     cwd: &Path,
-    files: Vec<(PixelsOutputKind, &String, Vec<u8>)>,
+    mut files: Vec<(PixelsOutputKind, &String, Vec<u8>)>,
 ) -> Result<Vec<PixelsOutput>, Box<ErrorBody>> {
+    // The later of two outputs of one path is the one written.
+    let mut seen = std::collections::HashSet::new();
+    files.reverse();
+    files.retain(|(_, out, _)| seen.insert(cwd.join(out)));
+    files.reverse();
+    if let Some((_, out, _)) = files.iter().find(|(_, out, _)| cwd.join(out).is_dir()) {
+        return Err(Box::new(ErrorBody::new(
+            ErrorCode::IoFailed,
+            format!("writing {out}: it is a directory"),
+            "name a file to write, not a directory".to_string(),
+        )));
+    }
     let failed = |out: &str, e: std::io::Error| {
         Box::new(ErrorBody::new(
             ErrorCode::IoFailed,

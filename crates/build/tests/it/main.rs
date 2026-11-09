@@ -38,6 +38,7 @@ mod music;
 mod music_equiv;
 mod music_regressions;
 mod pixels;
+mod pixels_outputs;
 mod player;
 mod pngs;
 mod rom_banks;

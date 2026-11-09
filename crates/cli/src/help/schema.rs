@@ -129,7 +129,8 @@ tile_map (no slot without --gbc); a --gbc build fills gbc for every image.
   problems[].line?: N, column?: N  (1-based; column in characters): where
             palettes.txt or a .pixels image is at fault (column:
             pixels_text only); on a hardware limit of a .pixels image, the
-            line of the block that drew the first tile in tiles
+            line (block, map row or fill) that drew the most legend
+            characters of the first tile in tiles, the later on a tie
 ENTRY = {index: N, flip?: "x"|"y"|"xy", palette?: 0-7}: the tile in the
 image's own data (a sheet unit's top tile, even), how a sheet unit is
 flipped, and its GBC palette slot (on a GBC image, every entry has one).

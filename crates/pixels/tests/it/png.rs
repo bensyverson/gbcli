@@ -112,12 +112,12 @@ fn more_colors_than_legend_characters_names_the_first_too_many() {
 }
 
 #[test]
-fn a_png_past_the_texts_largest_side_is_refused_at_conversion() {
+fn a_png_past_the_texts_largest_side_reads_but_is_refused_as_text() {
     let side = MAX_SIDE + 8;
     for (width, height) in [(side, 1), (1, side)] {
-        let wide = vec![[0xFF, 0xFF, 0xFF, 0xFF]; (width * height) as usize];
-        let e = from_raster(&raster(width, wide)).expect_err("past MAX_SIDE");
-        assert_eq!(e.pixel, None);
+        // It reads, so a preview or a PNG can still be made from it.
+        let loaded = read(&encode_png(&raster(width, vec![[0xFF; 4]; side as usize]))).unwrap();
+        let e = to_text(&loaded.picture, Layout::Rows { frame: None }).expect_err("past MAX_SIDE");
         assert_eq!(
             e.message,
             format!("the image is {width}x{height}, and pixel text holds 1 to 1024 pixels a side")
@@ -126,8 +126,6 @@ fn a_png_past_the_texts_largest_side_is_refused_at_conversion() {
             e.remedy,
             "keep it a PNG, or split it into images of at most 1024 pixels a side"
         );
-        // `read` converts, so a file this size doesn't read as a picture.
-        assert!(read(&encode_png(&raster(width, vec![[0xFF; 4]; side as usize]))).is_err());
     }
     let edge = vec![[0xFF, 0xFF, 0xFF, 0xFF]; MAX_SIDE as usize];
     let picture = from_raster(&raster(MAX_SIDE, edge)).expect("1024 a side fits");

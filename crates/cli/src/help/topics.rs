@@ -477,7 +477,7 @@ mod tests {
         for needle in [
             "sheets cut in both sizes warn",
             "in any case, as .png",
-            "drew the most of the first tile's colors",
+            "drew the most legend characters of the\n                      first tile",
         ] {
             assert!(text.contains(needle), "{needle} missing:\n{text}");
         }

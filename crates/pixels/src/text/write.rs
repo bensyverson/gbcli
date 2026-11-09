@@ -3,12 +3,24 @@
 
 use std::fmt::Write;
 
-use super::{FORMAT_LINE, Layout};
+use super::{FORMAT_LINE, Layout, MAX_SIDE};
 use crate::error::LayoutError;
 use crate::model::{Picture, TILE, Value};
 
 /// The canonical text of `picture` in `layout`.
 pub fn to_text(picture: &Picture, layout: Layout) -> Result<String, LayoutError> {
+    // Text past the parser's size would be written and then refused.
+    if picture.width > MAX_SIDE || picture.height > MAX_SIDE {
+        return Err(LayoutError {
+            message: format!(
+                "the image is {}x{}, and pixel text holds 1 to {MAX_SIDE} pixels a side",
+                picture.width, picture.height
+            ),
+            remedy: format!(
+                "keep it a PNG, or split it into images of at most {MAX_SIDE} pixels a side"
+            ),
+        });
+    }
     let mut out = format!("{FORMAT_LINE}\nsize {} {}\n", picture.width, picture.height);
     for i in picture.used() {
         let s = &picture.legend[usize::from(i)];

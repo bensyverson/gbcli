@@ -335,7 +335,8 @@ the image's 8x8 grid; --json lists them all), message and remedy.
   pixels_text         a .pixels image doesn't read (line=N column=N); the
                       other images are still checked. On a .pixels image,
                       a limit naming tiles also gives line=, the block (or
-                      map row) that drew the most of the first tile's colors
+                      map row) that drew the most legend characters of the
+                      first tile
 
 What the program gets (build/images/, rewritten by every build):
   INCLUDE "images.inc"   constants: TOWN_WIDTH, TOWN_HEIGHT (tiles),

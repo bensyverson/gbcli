@@ -82,7 +82,8 @@ impl From<PngError> for PixelsError {
     }
 }
 
-/// A layout the picture can't be written in: `--tiles` on an image whose
+/// A picture that can't be written as text: past [`MAX_SIDE`](crate::MAX_SIDE)
+/// a side, or `--tiles` on an image whose
 /// size isn't whole tiles.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LayoutError {

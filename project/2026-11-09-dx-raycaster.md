@@ -536,3 +536,104 @@ new start (108 calls, 4.3 s), and `keys/win.keys` still wins on both builds.
    bot won on its first try in 108 calls and about 4 s. It writes its keys out, and one
    run replays the win on either machine. "It can be lost" and "START returns to the
    title" are one yes-or-no run each. For this game, gbcli needs no embedded scripting.
+
+## 2026-11-09 — Play-test polish (lantern, ZSCWQN)
+
+Agent `lantern`, the same binary rebuilt at 70163ab, RGBDS 1.0.4. Ben play-tested
+Lantern. He reported two problems: the key reads as a white wall, and he got one key
+before the oil ran out.
+
+### What I did
+
+- **Floating keys.** The keys are no longer wall blocks. `NewGame` turns each key cell
+  into floor and lists it in `wKeyCell`, and a walk into the cell takes the key.
+  `src/sprite.asm` projects each key from the cast pose. It computes depth and lateral
+  offset with four signed multiplies, then x from a pixels-per-cell table. It picks
+  one of four sizes of `assets/sprites/key.24x16.pixels` (8x16 objects) by half height
+  and bobs it. Each object is hidden where its middle column's wall is nearer:
+  `RenderView` now keeps a per-column depth in quarter cells, `wDepth`. Each view tile
+  set has its own shadow OAM page, so a key's objects change in the same frame as the
+  walls they were cast with. A copy that ends early enough in VBlank flips at once and
+  does a second OAM DMA. Otherwise the next VBlank flips first thing.
+- **Difficulty.** The lamp now lasts 9,600 frames, up from 6,400, and each key refills a
+  quarter. The reasoning and the check, `tools/human.py`, are in the README: a
+  left-hand-rule walker with pauses and overshooting turns.
+- **The reference** (`tools/raymath.py`, `tools/reference.py`) now places the keys too.
+  It compares them with `gbcli view oam --json` and masks the objects' boxes out of the
+  pixel compare. `check_poses.py` has 16 poses: every key size, a key half behind a
+  wall, and two bob phases.
+
+### Criteria, and the commands that show them
+
+- **Keys visible on DMG and GBC:** `python3 tools/check_poses.py --gbcli gbcli --session
+  verify` and `--session verifyc` each print `ok 16 of 16 views`; the key poses show
+  `objects=3` or `objects=1`. The README's two `--shot` runs show a light gray and
+  white key with a black outline on the DMG, and a brass one on the GBC.
+- **A human-paced run wins:** `python3 tools/human.py --gbcli gbcli --session verify`
+  prints `won at frame 10626; keys=3 oil=70/128 (54%) lowest=70 cells=212 gbcli
+  calls=419`. Before the retune, the same walk on the old ROM printed `NOT WON at frame
+  12728; keys=2 oil=0/128 (0%) cells=212 gbcli calls=414`. That run went on after the
+  lamp died, so its frame count is not the walk's length.
+- **The bot still wins:** `won at frame 4179; oil=117/128 gbcli calls=113`.
+  `tools/verify.py` reran every README claim, 33 steps: `ok: 0 failed, 136 s` on
+  the final build.
+- **Frame budget:** the cast is up 5.1% (mean 249,718 → 262,462 T), the period 7.4%
+  (3.80 → 4.08 frames), and the cast max is 275,092 → 291,504 T. That last one breaks
+  the old 280,000 bound, which is now 300,000 in the README. On the GBC, the cast is up
+  4.2% and the period 3.8% (2.08 → 2.16 frames). All figures are from `python3
+  tools/bench.py --gbcli gbcli verify verifyc`. My first design always deferred the
+  flip a frame, and its period was 4.68 frames. `run --profile` and a second measure
+  brought it down; see below. One more fix came from reading my own VBlank change:
+  a view left waiting as a game ended would have flipped the title's LCDC. A poke
+  test (`--poke wFlipReady=1 --expect '[rLCDC] == $91'` on the title) failed, then
+  passed with the flip gated on the maze mode.
+
+### Where gbcli helped
+
+- **The sprite pipeline did all the conversion.** A pixel-text sheet with four 24x16
+  frames, plus `objects: 8x16` in `palettes.txt`, gave `KeyTiles`, `KeyFrames` (blank
+  objects already dropped), `KEY_OBP` from the dmg line, and in the `--gbc` build
+  `KeyTilesGbc` and `ObjPalettesGbc` for the brass key. I wrote no 2bpp or palette
+  code. `gbcli pixels FILE --preview` showed the art at 4x before any build.
+- **`gbcli view oam --json`** gives raw y, x, tile and flags, so the reference compares
+  OAM exactly. The check caught a deliberately wrong constant in 9 of 16 poses
+  (`keys differ ... oam=[(64, 76, 224, 0), ...] reference=[(60, 76, 224, 0), ...]`).
+- **`gbcli measure ShowView..ShowView.oamDone`** said 776 T (1.70 lines) for the flip
+  and second DMA. That number set the safe LY bound (`FLIP_LAST_LY` = 152) instead of a
+  guess. A second break in the VRAM proof (`ShowView.oamDone`) checks it over two
+  whole games.
+- **`run --profile` call counts** explained a period regression I couldn't see in the
+  cast. `hOAMDMA calls=732` in 600 frames showed how many views flipped at once. Idle
+  `MainLoop.waitCopy` time against the old ROM's (2.86M T against 2.27M T) showed the
+  wait wasn't the cast. Profiling the old ROM took one `git archive` into `target/`.
+- **Deterministic `run --read` loops** made the human player as cheap as the bot: 419
+  calls, each one press with its state read back.
+
+### Where it stumbled, costliest first
+
+1. **No screenshot without objects** (about 30 min). `gbcli shot` always composites
+   objects, so a pixel reference of the walls can't simply compare once keys float in
+   front. I had to read OAM, parse `KeyFrame` lists out of the generated
+   `build/images/images.asm` with a regex, re-derive each object's place on the host,
+   and mask its 8x16 box. Expected: `shot --layers bg` (or `--no-objects`), or the
+   frame lists in `gbcli assets --json`. Today that JSON has a per-slot `tile_map` with
+   `null` for blank objects, but no frame offsets, and the help doesn't say how slots
+   map to frames.
+2. **Every rebuild meant a new session** (small, and partly mine). After each ROM
+   change I ran `gbcli sessions rm h --with-checkpoints` and then `gbcli run
+   build/raycaster.gb --session h ... --checkpoint start`, about 12 times. `gbcli run
+   --from boot ... --checkpoint start` would have done it in one call. `gbcli build
+   --help` points at `--restore`, which refuses once code moves, but not at `--from
+   boot`.
+3. **Generated files depend on the working directory.** `gbcli build
+   /Users/ben/.../examples/raycaster`, run from the repo root, wrote
+   `images.inc`/`images.asm` comments naming
+   `.claude/worktrees/lantern/examples/raycaster/assets/sprites/key.24x16.pixels`. Every
+   build row uses the same cwd-relative path. Built from the project folder, the same
+   file says `assets/...`. It's harmless here (`build/` is ignored), but a generated
+   file shouldn't change with where you stand.
+4. **`measure --keys-file` warns on every run:** `keys_unapplied count=19
+   first=-UP@165`. A measure that ends before the walk does is the normal case, not a
+   mistake.
+
+`gbcli gaps` (from `examples/raycaster/`, all of this leaf's sessions): `none`.

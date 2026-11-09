@@ -84,6 +84,23 @@ def generate():
         "CellShade::",
     ]
     out += rows(shades, lambda v: "%d" % v)
+    out += [
+        "",
+        "SECTION \"Cos magnitudes\", ROM0, ALIGN[8]",
+        "; |cos(a)| in 0.8, capped at 255, for a = 0..1023 (four pages, one a",
+        "; quadrant); sin(a) is entry (a - 256) & 1023. The sign is the quadrant's.",
+        "CosMag::",
+    ]
+    out += rows(rm.COS_MAG, lambda v: "%d" % v)
+    out += [
+        "",
+        "SECTION \"Key projection\", ROM0, ALIGN[8]",
+        "; Pixels on screen per cell sideways, by depth >> 4 (1/16 cell).",
+        "Proj::",
+    ]
+    out += rows(rm.PROJ, lambda v: "%d" % v)
+    out += ["; The key's bob in pixels (signed), by (frame >> 2) & 15.", "Bob::"]
+    out += rows(rm.BOB, hexb)
     pats = rm.wall_patterns()
     out += [
         "",

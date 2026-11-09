@@ -4,9 +4,10 @@
 ; exactly as the view's tiles (two buffers: it casts into one while the other
 ; is copied). The VBlank handler copies the buffer's edge tiles and changed
 ; map rows into whichever VRAM tile set and map are not on screen, as many
-; 16-byte chunks as VBlank allows, and flips LCDC bits 4 and 3 when the copy
-; is done, so the view never shows half a frame and no VRAM write lands
-; outside VBlank.
+; 16-byte chunks as VBlank allows, and flips LCDC bits 4 and 3 at the start
+; of the VBlank after the copy is done, along with the keys' OAM page, so the
+; view never shows half a frame, the keys always match it, and no VRAM write
+; lands outside VBlank.
 
 include "hardware.inc"
 include "defs.inc"
@@ -174,6 +175,7 @@ InitMazeVideo::
 	dec c
 	jr nz, .wallTile
 	call LoadFont
+	call LoadKeys
 
 	; Both background maps, one per tile set: the view's map is copied into
 	; the one not on screen along with its tiles.
@@ -185,6 +187,7 @@ InitMazeVideo::
 	xor a
 	ld [wShown], a
 	ld [wCopyPending], a
+	ld [wFlipReady], a
 	call SetBack
 	; Each buffer's meta map starts as the back maps do (DrawView copies
 	; only the rows that differ from it).
@@ -222,7 +225,7 @@ StartMaze::
 	call MusicPlay
 	ld a, MODE_MAZE
 	ld [wMode], a
-	ld a, LCDC_ON | LCDC_BG_ON | LCDC_OBJ_ON | LCDC_BLOCK01 | LCDC_BG_9800
+	ld a, LCDC_ON | LCDC_BG_ON | LCDC_OBJ_ON | LCDC_OBJ_16 | LCDC_BLOCK01 | LCDC_BG_9800
 	ldh [rLCDC], a
 	ld a, IE_VBLANK
 	ldh [rIE], a
@@ -245,10 +248,12 @@ MainLoop:
 	nop
 	jr .waitCopy
 .handOff
-	; Hand this buffer, and the pose it was cast from, to the VBlank handler.
+	; Hand this buffer, its keys, and the pose it was cast from, to the
+	; VBlank handler.
+	call StageKeys
 	ld hl, wRPosX
 	ld de, wCopyPose
-	ld b, 6
+	ld b, 7                     ; wRPosX, wRPosY, wRAngle, wRBob
 .pose
 	ld a, [hli]
 	ld [de], a
@@ -313,8 +318,28 @@ VBlank:
 	push de
 	push hl
 	; OAM DMA first, so it never runs past VBlank; the copy then takes the
-	; rest of VBlank, as LY allows.
-	ld a, HIGH(wShadowOAM)
+	; rest of VBlank, as LY allows. A view copied in full by an earlier
+	; VBlank is shown here, its keys' OAM page with it (ShowView's own DMA).
+	; Frame-locked, it is shown only on the period's tick; on the title,
+	; never (a view handed off as the game ended must not flip the title).
+	ld a, [wMode]
+	and a                       ; MODE_TITLE
+	jr z, .noFlip
+	ld a, [wFlipReady]
+	and a
+	jr z, .noFlip
+	ld a, [wLock]
+	and a
+	jr z, .flip
+	ld a, [wFrame]
+	and LOCK_PERIOD - 1
+	jr nz, .noFlip
+.flip
+	call ShowView
+	jr .oamDone
+.noFlip
+	ld a, [wShown]
+	add HIGH(wOamA)             ; the shown set's OAM page
 	call hOAMDMA
 .oamDone::
 	ld a, [wMode]
@@ -325,17 +350,9 @@ VBlank:
 	ld a, [wCopyPending]
 	and a
 	jr z, .vramDone
-	call CopyChunks
-	; Frame-locked: show a finished view only on the period's tick.
-	ld a, [wLock]
+	ld a, [wFlipReady]
 	and a
-	jr z, .vramDone
-	ld a, [wCopyLeft]
-	and a
-	jr nz, .vramDone
-	ld a, [wFrame]
-	and LOCK_PERIOD - 1
-	call z, ShowView
+	call z, CopyChunks
 .vramDone
 	ld hl, wFrame
 	inc [hl]
@@ -503,8 +520,6 @@ SECTION "GBC mode", HRAM
 hGbc:: db                       ; nonzero in GBC mode
 ENDC
 
-SECTION "Shadow OAM", WRAM0, ALIGN[8]
-wShadowOAM:: ds OAM_SIZE
 
 SECTION "Stack", WRAMX[$DF00]
 wStackBottom:: ds $100

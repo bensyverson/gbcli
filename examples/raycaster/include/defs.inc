@@ -29,6 +29,19 @@ DEF TILE_SHADE2 EQU $83
 ; Tiles $90-$9F: a whole tile inside the walls of a tile column's four rays,
 ; one per mix of x sides (shade 3) and y sides (shade 2).
 DEF TILE_WALL0  EQU $90
+; Tiles $E0-$F1: the key sheet's 8x16 objects (assets/sprites/key.24x16).
+DEF KEY_TILE_BASE EQU $E0
+
+; The keys as objects (src/sprite.asm; tools/raymath.py's key_objects holds
+; the same numbers).
+DEF KEY_COUNT   EQU 3           ; the keys' list length: the maze's MAZE_KEYS
+DEF KEY_SLOTS   EQU 3           ; OAM entries per key: the widest frame's
+DEF DEPTH_MIN   EQU 64          ; a key nearer than 1/4 cell is not drawn
+DEF FRAME0_HH   EQU 21          ; the half height from which frame 0 is used
+DEF FRAME1_HH   EQU 14          ; frame 1
+DEF FRAME2_HH   EQU 8           ; frame 2; below it, frame 3
+DEF KEY_Y       EQU 56          ; OAM y of the frame's top at the horizon, before lift and bob
+DEF KEY_X       EQU 76          ; OAM x of the frame's left for a key dead ahead
 
 ; Each view buffer's meta page: the view's map, then the copy list.
 DEF LIST_START  EQU 128
@@ -43,6 +56,10 @@ DEF SWATCH_MAP_Y EQU 16
 ; 114), and the flip follows the last at once, so every write ends inside
 ; VBlank (lines 144-153). gbcli checks it: see the README.
 DEF COPY_LAST_LY EQU 152
+; A copy that ends while LY is below this shows its view at once: the flip
+; and a second OAM DMA (ShowView to ShowView.oamDone, under 1.6 lines) still
+; end inside VBlank. Later, the next VBlank shows it first thing.
+DEF FLIP_LAST_LY EQU 152
 
 DEF LOCK_PERIOD EQU 32          ; frames per view in the frame-locked bench mode
 
@@ -60,7 +77,8 @@ DEF STATE_PLAY  EQU 0
 DEF STATE_WON   EQU 1
 DEF STATE_LOST  EQU 2
 DEF OIL_PIXELS  EQU 128         ; the oil bar's length, 16 tiles
-DEF OIL_SUB     EQU 50          ; frames per pixel: a full lamp lasts 6,400 frames
+DEF OIL_SUB     EQU 75          ; frames per pixel: a full lamp lasts 9,600 frames
+DEF KEY_OIL     EQU 32          ; pixels of oil a key refills (a quarter lamp, 2,400 frames)
 
 RSRESET
 DEF SFX_KEY     RB 1

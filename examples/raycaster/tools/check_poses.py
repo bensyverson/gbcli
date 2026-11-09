@@ -32,13 +32,19 @@ WALKS = [
 
 
 # Poses set directly with --poke (x, y in 8.8 cells, angle): each faces a key
-# block or the exit door, so their shades are checked too.
+# or the exit door, so the door's shades and every frame of the key are
+# checked too (the first walk's view has a key hidden behind a wall). The
+# fourth number is extra frames to settle, which moves the keys' bob.
 POKES = [
-    (0x0D80, 0x0180, 0),      # the key at (14, 1), ahead
-    (0x0380, 0x0A80, 768),    # the key at (3, 9), ahead
-    (0x0180, 0x0E80, 800),    # the key at (1, 13), ahead and to the right
-    (0x0E80, 0x0E40, 40),     # the exit door at (15, 14), close
-    (0x0B80, 0x0D80, 60),     # the door from farther off
+    (0x0D80, 0x0180, 0, 0),       # the key at (14, 1), ahead: frame 0
+    (0x0380, 0x0A80, 768, 20),    # the key at (3, 9), ahead, bobbing up
+    (0x0180, 0x0E80, 800, 44),    # the key at (1, 13), ahead and to the right, bobbing down
+    (0x0A40, 0x0180, 928, 0),     # the key at (14, 1), to the right: frame 1
+    (0x0740, 0x0180, 928, 0),     # farther: frame 2
+    (0x0740, 0x0140, 0, 0),       # dead ahead: frame 3
+    (0x0780, 0x0140, 960, 0),     # one of its two objects behind a wall
+    (0x0E80, 0x0E40, 40, 0),      # the exit door at (15, 14), close
+    (0x0B80, 0x0D80, 60, 0),      # the door from farther off
 ]
 
 
@@ -58,7 +64,7 @@ def main():
 
     failed = 0
     runs = [(keys, frames, []) for keys, frames in WALKS]
-    runs += [("", 0, poke_args(*p)) for p in POKES]
+    runs += [("", wait, poke_args(x, y, a)) for x, y, a, wait in POKES]
     for keys, frames, pokes in runs:
         cmd = [opts.gbcli, "run", "--session", opts.session, "--dir", opts.dir,
                "--at", opts.at, "--frames", str(frames + SETTLE)] + pokes

@@ -1,8 +1,9 @@
 ; The game: find the keys, reach the door before the lamp runs dry.
 ;
-; Keys are glowing blocks in the maze: walk into one to take it. The exit
-; door opens to a walk into it once every key is held, and that wins. The
-; lamp's oil burns a little every frame; when it runs out, the game is lost.
+; Keys float over the floor (sprite.asm draws them): walk into one's cell to
+; take it, and a quarter lamp of oil with it. The exit door opens to a walk
+; into it once every key is held, and that wins. The lamp's oil burns a
+; little every frame; when it runs out, the game is lost.
 ; START after either ending begins a new game.
 
 include "hardware.inc"
@@ -25,6 +26,21 @@ NewGame::
 	ld de, Maze
 	ld bc, MAP_W * MAP_W
 	call CopyMem
+	; The keys float over the floor: each key cell of the maze becomes floor,
+	; and its index goes on the key list (src/sprite.asm draws them).
+	ld hl, wMap
+	ld de, wKeyCell
+.scan
+	ld a, [hl]
+	cp CELL_KEY
+	jr nz, .notKey
+	ld [hl], 0
+	ld a, l
+	ld [de], a
+	inc de
+.notKey
+	inc l
+	jr nz, .scan
 	ld hl, wPosX
 	ld a, $80
 	ld [hli], a
@@ -63,9 +79,22 @@ GameTick::
 	jp SfxPlay
 .play
 	call MovePlayer
-	ld a, [wBumpCell]
-	cp CELL_KEY
+	; A key is taken by walking into its cell.
+	ld a, [wPosY + 1]
+	swap a
+	ld b, a
+	ld a, [wPosX + 1]
+	or b
+	ld b, a
+	ld hl, wKeyCell
+	ld c, MAZE_KEYS
+.findKey
+	ld a, [hli]
+	cp b
 	jr z, .key
+	dec c
+	jr nz, .findKey
+	ld a, [wBumpCell]
 	cp CELL_DOOR
 	jr z, .door
 .burn
@@ -90,14 +119,20 @@ GameTick::
 	ld a, MSG_LOST
 	jr SetMessage
 .key
-	; Take the key: the block becomes floor.
-	ld a, [wBumpIdx]
-	ld l, a
-	ld h, HIGH(wMap)
-	ld [hl], 0
+	; Take the key: off the list, so it is no longer drawn.
+	dec hl
+	ld [hl], $FF
 	ld hl, wKeys
 	inc [hl]
-	ld a, HUD_KEYS
+	; Each key tops the lamp up by KEY_OIL, to at most full.
+	ld a, [wOilPx]
+	add KEY_OIL
+	cp OIL_PIXELS + 1
+	jr c, .topped
+	ld a, OIL_PIXELS
+.topped
+	ld [wOilPx], a
+	ld a, HUD_KEYS | HUD_OIL
 	call MarkHud
 	ld a, SFX_KEY
 	call SfxPlay

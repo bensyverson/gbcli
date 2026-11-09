@@ -1,5 +1,5 @@
 # A losing game from checkpoint start: turn south, walk a few cells, then
-# stand still until the lamp's oil runs out (6,400 frames).
-# gbcli run --at start --until '[wState] == 2' --frames 7000 --keys-file keys/lose.keys
+# stand still until the lamp's oil runs out (9,600 frames).
+# gbcli run --at start --until '[wState] == 2' --frames 10000 --keys-file keys/lose.keys
 RIGHT@0 -RIGHT@43
 UP@43 -UP@100

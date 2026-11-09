@@ -37,7 +37,7 @@ WALL_X = 3  # a wall face crossed by a vertical grid line (east/west face)
 WALL_Y = 2  # a wall face crossed by a horizontal grid line (north/south face)
 
 # The shade of each map cell's faces, (x side, y side), by cell value:
-# 1 stone, 2 a key block (glowing white), 3 the exit door (light gray).
+# 1 stone, 2 a key (never in wMap in play: NewGame makes it floor), 3 the exit door (light gray).
 CELL_SHADES = {1: (WALL_X, WALL_Y), 2: (0, 0), 3: (1, 1)}
 
 
@@ -97,11 +97,28 @@ def wall_patterns():
     return out
 
 
+def cos_mags():
+    """|cos(a)| in 0.8, capped at 255, for a = 0..1023; its sign is cos_neg."""
+    return [min(255, int(round(256 * abs(math.cos(2 * math.pi * a / ANG))))) for a in range(ANG)]
+
+
+def projections():
+    """Pixels on screen per cell sideways, by depth >> 4 (1/16 cell), capped
+    at 255: FOCAL over the depth, at the middle of each step."""
+    return [min(255, int(round(FOCAL * 256 / (i * 16 + 8)))) for i in range(256)]
+
+
+# The key's bob, in pixels, by (frame >> 2) & 15.
+BOB = [0, 1, 1, 2, 2, 2, 1, 1, 0, -1, -1, -2, -2, -2, -1, -1]
+
+
 DELTA = delta_table()
 COL_OFF = col_offsets()
 COS_OFF = cos_offsets(COL_OFF)
 HH = half_heights()
 MOVE = move_table()
+COS_MAG = cos_mags()
+PROJ = projections()
 
 
 def step_x(a):
@@ -153,16 +170,81 @@ def cast(px, py, a, cells):
     return side, dist, cells[idx]
 
 
+def depth_byte(d):
+    """A depth in quarter cells: what the ROM keeps per column (wDepth) and
+    compares a key's depth with. No ray or key is 64 cells away, so it fits."""
+    return d >> 6
+
+
 def ray_columns(px, py, pa, cells):
-    """(half height, wall shade) for each of the RAYS columns."""
+    """(half height, wall shade, depth byte) for each of the RAYS columns."""
     cols = []
     for c in range(RAYS):
         a = (pa + COL_OFF[c]) & (ANG - 1)
         side, dist, cell = cast(px, py, a, cells)
         perp = mul16x8(dist, COS_OFF[c])
         hh = HH[min(perp >> 3, HH_ENTRIES - 1)]
-        cols.append((hh, CELL_SHADES[cell][side]))
+        cols.append((hh, CELL_SHADES[cell][side], depth_byte(perp)))
     return cols
+
+
+# The keys (src/sprite.asm): each key still in the maze floats in the middle
+# of its cell, drawn as one frame of the key sheet (assets/sprites/key.24x16)
+# chosen by its half height, centered where the camera projects it.
+KEY_TILE_BASE = 0xE0    # the sheet's first tile in VRAM ($8E00)
+KEY_SLOTS = 3           # OAM entries per key: the widest frame's objects
+DEPTH_MIN = 64          # nearer than 1/4 cell (or behind): not drawn
+FRAME_HH = (21, 14, 8)  # the half height from which frames 0, 1, 2 are used
+KEY_LIFT = 2            # the key floats hh >> KEY_LIFT below the horizon
+
+
+def cos_neg(a):
+    return ((a + 256) & (ANG - 1)) >= 512
+
+
+def smul(v, mag, neg):
+    """The ROM's SMul: (|v| * mag) >> 8, negated if v < 0 xor neg."""
+    p = mul16x8(abs(v), mag)
+    return -p if (v < 0) != neg else p
+
+
+def key_objects(px, py, pa, bob_phase, key_cells, frames, depths):
+    """The OAM entries the ROM writes for the keys, as (y, x, tile, attr)
+    for each visible object, in slot order. key_cells: each key's map index
+    (y * 16 + x), or None once taken. frames: the sheet's frame lists, each
+    a list of (y, x, tile, attr). depths: each column's depth byte."""
+    c, cn = COS_MAG[pa], cos_neg(pa)
+    sa = (pa - 256) & (ANG - 1)
+    s, sn = COS_MAG[sa], cos_neg(sa)
+    out = []
+    for cell in key_cells:
+        if cell is None:
+            continue
+        dx = (cell & 15) * 256 + 128 - px
+        dy = (cell >> 4) * 256 + 128 - py
+        depth = smul(dx, c, cn) + smul(dy, s, sn)
+        lat = smul(dy, c, cn) - smul(dx, s, sn)
+        if depth < DEPTH_MIN:
+            continue
+        kd = depth_byte(depth)
+        if kd > max(depths):
+            continue        # beyond the farthest wall: hidden wherever it is
+        hh = HH[min(depth >> 3, HH_ENTRIES - 1)]
+        base = smul(lat, PROJ[min(depth >> 4, 255)], False) + 76
+        if not 8 <= base <= 144:
+            continue
+        f = 3
+        for i, t in enumerate(FRAME_HH):
+            if hh >= t:
+                f = i
+                break
+        bob = BOB[bob_phase] if f == 0 else BOB[bob_phase] >> 1 if f == 1 else 0
+        y = 56 + (hh >> KEY_LIFT) + bob
+        for oy, ox, tile, attr in frames[f]:
+            vl = base - 24 + ox
+            if 0 <= vl <= 120 and depths[(vl + 4) >> 1] >= kd:
+                out.append((y + oy, base + ox, KEY_TILE_BASE + tile, attr))
+    return out
 
 
 def render(px, py, pa, cells):
@@ -171,7 +253,7 @@ def render(px, py, pa, cells):
     rows = []
     for y in range(VIEW_H):
         row = []
-        for hh, shade in cols:
+        for hh, shade, _ in cols:
             if y < HALF_H - hh:
                 v = CEILING
             elif y < HALF_H + hh:

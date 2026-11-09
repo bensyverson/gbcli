@@ -1,6 +1,6 @@
 ; OAM DMA: during the 160 M-cycles a DMA takes, the CPU can only read HRAM,
 ; so the routine that starts it and waits must run from HRAM. CopyOAMDMA puts
-; it there once at startup; afterwards, `ld a, HIGH(wShadowOAM)` then
+; it there once at startup; afterwards, `ld a, HIGH(wOamA)` (or HIGH(wOamB)) then
 ; `call hOAMDMA` copies shadow OAM to OAM. Call it only during VBlank.
 
 include "hardware.inc"

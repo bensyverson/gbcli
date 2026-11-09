@@ -21,6 +21,12 @@ RenderView::
 	dec b
 	jr nz, .pose
 	ei
+	; The keys' bob phase for this view: (frame >> 2) & 15.
+	ld a, [wFrame]
+	rrca
+	rrca
+	and 15
+	ld [wRBob], a
 
 	xor a
 .ray
@@ -48,6 +54,14 @@ RenderView::
 	ld h, HIGH(CosOff)
 	ld a, [hl]
 	call Mul16x8                ; HL = perpendicular distance
+	; The column's depth for the keys, in quarter cells: distance >> 6
+	; (no ray reaches 64 cells, so the high bits are clear).
+	ld a, l
+	and $C0
+	or h
+	rlca
+	rlca
+	ld c, a
 	; Half height from the table, indexed by distance >> 3.
 	ld a, l
 	srl h
@@ -65,6 +79,9 @@ RenderView::
 	ld l, a
 	ld h, HIGH(wHH)
 	ld [hl], b
+	dec h                       ; wDepth
+	ld [hl], c
+	inc h
 	; The wall's shade, from the cell hit and the side, as the ray's pair
 	; bits in each plane: wLoBits (shade bit 0), wHiBits (shade bit 1).
 	ld a, l
@@ -101,8 +118,9 @@ RenderView::
 	ld a, [wCol]
 	inc a
 	cp RAYS
-	jr nz, .ray
+	jp nz, .ray
 
+	call PlaceKeys
 	jp DrawView
 
 ; HL = (DE * A) >> 8, exactly: D * A + ((E * A) >> 8), each 8x8 product
@@ -190,11 +208,13 @@ SECTION "Render variables", WRAM0
 wRPosX:: dw
 wRPosY:: dw
 wRAngle:: dw
+wRBob:: db                      ; the keys' bob phase (Bob's index)
 wCol:: db
 wSide:: db                      ; the last ray's wall: 0 x side, 1 y side
 wCell:: db                      ; and the cell it hit
 
 SECTION "Column heights", WRAM0, ALIGN[8]
+wDepth:: ds 256                 ; wall depth per column in quarter cells, for the keys
 wHH:: ds 256                    ; half height per column (RAYS used)
 wLoBits:: ds 256                ; the column's pair bits if its shade has bit 0
 wHiBits:: ds 256                ; and if it has bit 1

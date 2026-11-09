@@ -12,8 +12,8 @@ include "defs.inc"
 SECTION "VRAM copy", ROM0
 
 ; Called from the VBlank handler while wCopyPending is set: copies chunks
-; while LY is below COPY_LAST_LY, and after the last one flips the sets and maps and
-; records the pose the view was cast from. Reads the source with pop (SP
+; while LY is below COPY_LAST_LY, and after the last one shows the view
+; (ShowView) and its keys, now or at the start of the next VBlank. Reads the source with pop (SP
 ; points into WRAM), so interrupts must be off, as they are in the handler.
 CopyChunks::
 	ld a, [wCopyLeft]
@@ -107,11 +107,23 @@ CopyChunks::
 	and a
 	ret nz
 .done
+	; Show it now if VBlank has room for the flip and a second OAM DMA; if
+	; not (or frame-locked), the VBlank handler shows it first thing in the
+	; next VBlank. Either way the walls and the keys change in one frame.
 	ld a, [wLock]
 	and a
-	ret nz                      ; frame-locked: the VBlank handler shows it on its tick
+	jr nz, .later
+	ldh a, [rLY]
+	sub LY_VBLANK
+	cp FLIP_LAST_LY - LY_VBLANK
+	jr c, ShowView
+.later
+	ld a, 1
+	ld [wFlipReady], a
+	ret
 
-; The whole view is in the back set and map: show them. Call only in VBlank.
+; The whole view is in the back set and map: show them, and its keys' OAM
+; page (OAM DMA). Call only in VBlank.
 ShowView::
 	ldh a, [rLCDC]
 	xor LCDC_BLOCK01 | LCDC_BG_9C00
@@ -120,10 +132,13 @@ ShowView::
 	ld a, [wShown]
 	xor 1
 	ld [wShown], a
+	add HIGH(wOamA)             ; its OAM page (sprite.asm)
+	call hOAMDMA
+.oamDone::                      ; and its keys'; the rest needs no VBlank
 	call SetBack
 	ld hl, wCopyPose
 	ld de, wViewX
-	ld b, 6
+	ld b, 7                     ; with wViewBob
 .pose
 	ld a, [hli]
 	ld [de], a
@@ -138,6 +153,7 @@ ShowView::
 .counted
 	xor a
 	ld [wCopyPending], a
+	ld [wFlipReady], a
 	ret
 
 ; Sets wBackSet and wBackMap from wShown: set A ($8000) shows with the map
@@ -168,7 +184,8 @@ SECTION "Copy variables", WRAM0
 wCopyPending:: db               ; nonzero while a view waits to be copied
 wCopySrc:: db                   ; the high byte of its buffer (wBuf0 or wBuf1)
 wCopyMeta:: db                  ; the high byte of its meta page (wMeta0 or wMeta1)
-wCopyPose:: ds 6                ; the pose it was cast from
+wCopyPose:: ds 7                ; the pose it was cast from, and its keys' bob phase
+wFlipReady:: db                 ; nonzero once it is all copied: the next VBlank shows it
 wCopyLeft:: db                  ; chunks still to copy
 wCopyIdx:: db                   ; the next chunk: changed map rows, then the list
 wShown:: db                     ; 0: set A on screen; 1: set B
@@ -180,6 +197,7 @@ wViews:: dw                     ; views shown since power-on
 wViewX:: dw
 wViewY:: dw
 wViewA:: dw
+wViewBob:: db                   ; and its keys' bob phase
 ; Nonzero in the frame-locked bench mode (SELECT held at power-on): a view is
 ; shown only on frames that are a multiple of LOCK_PERIOD, so the screen is
 ; the same frame for frame whatever the renderer's speed (gbcli equiv).

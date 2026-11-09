@@ -17,7 +17,7 @@
 ; rows above the first edge are all ceiling (floor below the horizon), rows
 ; past the last are all wall: the view's map points those at shared tiles.
 ; Shared wall tiles exist for stone only (H = $FF: shades 2 and 3); in a
-; column with a key or the door, the wall rows are written and copied too.
+; column with the door, the wall rows are written and copied too.
 
 include "hardware.inc"
 include "defs.inc"

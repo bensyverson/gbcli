@@ -3,14 +3,14 @@
 
   python3 tools/bot.py --gbcli PATH --session S [--at start] [--out keys/win.keys]
 
-From checkpoint --at, it reads the maze (wMap) and then repeats: plan a path
-by breadth-first search to the nearest key block (the door once every key is
+From checkpoint --at, it reads the maze (wMap, and the keys on wKeyCell) and then repeats: plan a path
+by breadth-first search to the nearest key (the door once every key is
 held), turn to face the next stretch, walk it, read the player back. Each
 step is one `gbcli run --frames N --keys ... --read ...`; the session's head
 moves forward step by step. It writes every key change, at its frame counted
 from --at, to --out, so one run replays the whole game:
   gbcli run --at start --frames N --keys-file keys/win.keys --expect '[wState] == 1'
-It prints how many gbcli calls it made and its wall time.
+It prints the oil left, how many gbcli calls it made and its wall time.
 """
 
 import argparse
@@ -28,7 +28,7 @@ PROJECT = os.path.normpath(os.path.join(HERE, ".."))
 TURN_SPEED = 6      # angle units a frame (defs.inc)
 WALK_SPEED = 16     # 1/256 cells a frame at full stride (MOVE_SPEED)
 STATE_WON = 1
-READS = ["u16[wPosX]", "u16[wPosY]", "u16[wAngle]", "[wKeys]", "[wState]"]
+READS = ["u16[wPosX]", "u16[wPosY]", "u16[wAngle]", "[wKeys]", "[wState]", "[wOilPx]"]
 
 
 class Bot:
@@ -65,13 +65,20 @@ class Bot:
         vals = [int(v) for v in re.findall(r"^read expr=\S+ value=(\d+)", out, re.M)]
         if len(vals) != len(READS):
             raise SystemExit("unexpected output:\n" + out)
-        return dict(zip(("x", "y", "a", "keys", "state"), vals))
+        return dict(zip(("x", "y", "a", "keys", "state", "oil"), vals))
 
     def read_map(self):
+        """wMap, with each key still on wKeyCell marked 2 (the keys float
+        over floor, so the map itself holds none)."""
         path = os.path.join(self.opts.dir, "build", "bot-map.bin")
         self.gbcli(["view", "memory", "wMap", "256", "--out", path])
         with open(path, "rb") as f:
-            return list(f.read(256))
+            cells = list(f.read(256))
+        out = self.gbcli(["read", "[wKeyCell]", "[wKeyCell+1]", "[wKeyCell+2]"])
+        for v in re.findall(r"^read expr=\S+ value=(\d+)", out, re.M):
+            if int(v) != 0xFF:
+                cells[int(v)] = 2
+        return cells
 
 
 def plan(cells, start, want):
@@ -170,8 +177,8 @@ def main():
                 % (opts.at, bot.frame + 1, os.path.relpath(opts.out, opts.dir)))
         for frame, token in bot.events:
             f.write("%s@%d\n" % (token, frame))
-    print("won at frame %d; gbcli calls=%d wall_s=%.1f keys=%s"
-          % (bot.frame, bot.calls, time.time() - t0, os.path.relpath(opts.out, opts.dir)))
+    print("won at frame %d; oil=%d/128 gbcli calls=%d wall_s=%.1f keys=%s"
+          % (bot.frame, st["oil"], bot.calls, time.time() - t0, os.path.relpath(opts.out, opts.dir)))
     return 0
 
 

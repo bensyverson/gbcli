@@ -131,15 +131,15 @@ impl BuildError {
                 // The overflow is the cause only when its row leads: a
                 // one-bank link that failed on something else leads with
                 // that error instead (`build`), and the overflow, still true
-                // of the first link, rides along.
+                // of the first link, rides along. The derived row names the
+                // section it couldn't place after this lead.
                 if let Some(o) = &made.overflow
-                    && errors
-                        .first()
-                        .is_some_and(|d| d.message == overflow_message(o))
+                    && let Some(d) = errors.first()
+                    && d.message.starts_with(&overflow_lead(o))
                 {
                     let mut body = ErrorBody::new(
                         ErrorCode::BuildFailed,
-                        format!("the build failed: {}", overflow_message(o)),
+                        format!("the build failed: {}", d.message),
                         OVERFLOW_REMEDY,
                     );
                     body.result = Some(Box::new(ResultBody {
@@ -303,14 +303,17 @@ pub fn build(tools: &Toolchain, options: &BuildOptions) -> Result<BuildMade, Bui
         Some(spill) => {
             // A cartridge with no MBC maps one flat 32 KB, which is how
             // `--tiny` links. Only a build that spilled pays this second
-            // link, so a build that fits is linked as it always was. A full
-            // bank 0 left no ROM to read the header from, so the one-bank
-            // ROM's header decides; under an MBC, the first link's error
-            // stands. Only the rows of the link that made the ROM are kept.
+            // link, so a build that fits is linked as it always was.
             //
-            // So a full bank 0 under an MBC still pays a one-bank link it
-            // discards: the header byte is in the objects, and nothing short
-            // of parsing them reads it without a ROM.
+            // When the one-bank link succeeds, its ROM's header decides
+            // whether the build is accepted. When it fails after the first
+            // link wrote a ROM, its rows lead: the first link stopped short
+            // of them. After a failed first link (a full bank 0) there is no
+            // ROM, so the header is unknown: a row that is true only when it
+            // names no MBC can't lead there. A full bank 0 under an MBC
+            // still pays a one-bank link it discards: the header byte is in
+            // the objects, and nothing short of parsing them reads it
+            // without a ROM.
             let first = run.made.diagnostics.split_off(before_link);
             let one_bank = run.link(&objects, &staged, options.target, Banks::Tiny)?;
             if one_bank && (matches!(spill, Spill::PastBank1(_)) || run.names_no_mbc(&staged[0])?) {
@@ -321,36 +324,50 @@ pub fn build(tools: &Toolchain, options: &BuildOptions) -> Result<BuildMade, Bui
                 ));
             } else {
                 let tiny = run.made.diagnostics.split_off(before_link);
-                // Linked as one bank, rgblink calls every section, ROMX
-                // too, a ROM0 section, so one it can't place anywhere means
-                // 32 KB is full. Any other failure (a ROMX bank past 1, an
-                // overlap, an undefined symbol) is the real cause, and it
-                // leads: the first link stopped short of it.
-                let other = !one_bank && !tiny.iter().any(banks::bank_0_full);
                 match spill {
                     Spill::PastBank1(overflow) => {
-                        if other {
-                            run.made.diagnostics.extend(tiny);
-                            run.made.diagnostics.push(Diagnostic::new(
-                                Tool::Rgblink,
-                                Severity::Warning,
-                                tiny_failed_message(&overflow),
-                            ));
-                        } else {
-                            run.error(Tool::Rgblink, None, overflow_message(&overflow));
-                            run.made.diagnostics.extend(first);
+                        // Linked as one bank, rgblink calls every section,
+                        // ROMX too, a ROM0 section. One it can't place
+                        // anywhere may have no room because 32 KB is full or
+                        // because a pinned section splits the space, so the
+                        // derived row names the section and keeps rgblink's
+                        // row rather than asserting the total size.
+                        match tiny.iter().find_map(banks::unplaced) {
+                            Some(unplaced) => {
+                                run.error(
+                                    Tool::Rgblink,
+                                    None,
+                                    overflow_message(&overflow, unplaced),
+                                );
+                                run.made.diagnostics.extend(tiny);
+                            }
+                            None => {
+                                // Any other failure (a ROMX bank past 1, an
+                                // overlap, an undefined symbol) is the real
+                                // cause, and it leads: the first link stopped
+                                // short of it.
+                                run.made.diagnostics.extend(tiny);
+                                run.made.diagnostics.push(Diagnostic::new(
+                                    Tool::Rgblink,
+                                    Severity::Warning,
+                                    tiny_failed_message(&overflow),
+                                ));
+                            }
                         }
+                        run.made.diagnostics.extend(first);
                         run.made.overflow = Some(overflow);
                     }
                     Spill::Bank0Full => {
-                        // With no ROM, the header is unknown: under no MBC
-                        // the one-bank link's error is the one to fix, and
-                        // under an MBC bank 0 is still full, so the first
-                        // link's row follows. (Under an MBC, an error only
-                        // the one-bank link makes, such as a ROMX bank past
-                        // 1, would lead wrongly; that takes a full bank 0
-                        // as well.)
-                        if other {
+                        // The first link wrote no ROM, so the header is
+                        // unknown: a row that is true only when it names no
+                        // MBC can't lead, and its hint can't attach. Any
+                        // other one-bank error (an undefined symbol, say) is
+                        // real, and the first link's row follows it.
+                        let tiny: Vec<Diagnostic> = tiny
+                            .into_iter()
+                            .filter(|d| !banks::romx_bank_past_1(d))
+                            .collect();
+                        if !one_bank && !tiny.is_empty() && !tiny.iter().any(banks::bank_0_full) {
                             run.made.diagnostics.extend(tiny);
                         }
                         run.made.diagnostics.extend(first);
@@ -587,14 +604,24 @@ fn past_bank_1(o: &BankOverflow) -> String {
     )
 }
 
-/// Why a build whose header names no MBC failed: it doesn't fit in 32 KB
-/// even linked as one bank.
-fn overflow_message(o: &BankOverflow) -> String {
+/// The start of the derived row for a one-bank link that couldn't place a
+/// section. It names the section after this, so `body` recognizes the row it
+/// wrote by the lead rather than the whole message.
+fn overflow_lead(o: &BankOverflow) -> String {
     format!(
         "the header names no MBC (cartridge type ${:02X}), so the cartridge maps banks 0 and 1 \
-         (32 KB) only, and the code and data don't fit in 32 KB even linked as one bank; \
-         linked in 16 KB banks, they put {}",
-        o.cart_type,
+         (32 KB) only; linked as one 32 KB bank (rgblink -t), rgblink could not place",
+        o.cart_type
+    )
+}
+
+/// Why a build whose header names no MBC failed: the one-bank link had
+/// nowhere for `unplaced`. The 32 KB may be full or split by a pinned
+/// section, so the row names the section and claims no total size.
+fn overflow_message(o: &BankOverflow, unplaced: &str) -> String {
+    format!(
+        "{} \"{unplaced}\" anywhere; linked in 16 KB banks, the link put {}",
+        overflow_lead(o),
         past_bank_1(o)
     )
 }
@@ -638,10 +665,14 @@ fn tiny_message(spill: &Spill) -> String {
     )
 }
 
-/// What to do about a link past 32 KB on a cartridge with no MBC.
-const OVERFLOW_REMEDY: &str = "shrink the sections until everything fits in 32 KB (banks 0 and \
-     1), or name an MBC in the header (the byte at $0147, e.g. $01 for MBC1) and switch banks \
-     (write the bank number to $2000) around the code that reads each section past bank 1";
+/// What to do about a one-bank link that couldn't place a section on a
+/// cartridge with no MBC. Its 32 KB may be full or split by a pinned section,
+/// so moving a pin is an option beside shrinking.
+const OVERFLOW_REMEDY: &str = "move the section the one-bank link couldn't place, or a section \
+     pinned to a fixed address that splits the space (a `ROMX[$4000]` section, say), or shrink the \
+     sections until they fit in 32 KB (banks 0 and 1), or name an MBC in the header (the byte at \
+     $0147, e.g. $01 for MBC1) and switch banks (write the bank number to $2000) around the code \
+     that reads each section past bank 1";
 
 /// The command that builds the project shown as `dir` with `options`' layout
 /// again, each word quoted for a shell.

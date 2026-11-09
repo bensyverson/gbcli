@@ -291,13 +291,18 @@ fn rows(made: &gbcli_protocol::BuildMade) -> String {
         .join("\n")
 }
 
-/// The failed build of the starter (without music) with `asm` added as
-/// src/fixed.asm, and its report's message and remedy.
-fn fails_with(name: &str, asm: &str) -> (Box<gbcli_protocol::BuildMade>, String, String) {
+/// The failed build of the starter (without music) with `files` added under
+/// src/, and its report's message and remedy.
+fn fails_with(
+    name: &str,
+    files: &[(&str, &str)],
+) -> (Box<gbcli_protocol::BuildMade>, String, String) {
     let (temp, options) = starter(name);
     let project = temp.path("demo");
     without_music(&project);
-    fs::write(project.join("src/fixed.asm"), asm).unwrap();
+    for (file, asm) in files {
+        fs::write(project.join("src").join(file), asm).unwrap();
+    }
     let err = build(&rgbds(), &options).unwrap_err();
     let body = err.body();
     let BuildError::Failed { made, .. } = err else {
@@ -307,28 +312,38 @@ fn fails_with(name: &str, asm: &str) -> (Box<gbcli_protocol::BuildMade>, String,
     (made, body.message, body.remedy)
 }
 
-/// A small ROMX section fixed in bank 2 on a header with no MBC: the first
-/// link puts it past bank 1, and the one-bank link refuses any ROMX bank
-/// but 1. The report leads with rgblink's own refusal, not a size claim it
-/// never checked; the structured overflow (bank 2) is still reported.
+/// A ROM-only build that spills past bank 1, plus a small ROMX section fixed
+/// in bank 2: the first link puts both past bank 1, and the one-bank link
+/// refuses any ROMX bank but 1. The report leads with rgblink's own refusal,
+/// not a size claim it never checked; the structured overflow (bank 2) is
+/// still reported.
 #[test]
 fn a_rom_only_section_fixed_in_bank_2_fails_with_rgblinks_own_error() {
     let (made, message, remedy) = fails_with(
         "banks-fixed-bank2",
-        "SECTION \"Fixed\", ROMX, BANK[2]\ndb 1\n",
+        &[
+            ("levels.asm", BIG),
+            ("fixed.asm", "SECTION \"Fixed\", ROMX, BANK[2]\ndb 1\n"),
+        ],
     );
     let rows = rows(&made);
     assert!(message.contains("must be in bank 1"), "{message}\n{rows}");
     assert!(!rows.contains("32 KB even"), "{message}\n{rows}");
     assert!(!message.contains("32 KB even"), "{message}\n{rows}");
     let overflow = made.overflow.as_ref().expect("the overflow, structured");
-    assert_eq!(overflow.sections.len(), 1, "{overflow:?}");
-    assert_eq!(
-        (
-            overflow.sections[0].name.as_str(),
-            overflow.sections[0].bank
-        ),
-        ("Fixed", 2)
+    // The spill is real: BIG's Level A is past bank 1 beside the fixed one,
+    // so this test can't pass on a build that never left bank 1.
+    assert_eq!(overflow.sections.len(), 2, "{overflow:?}");
+    assert!(
+        overflow
+            .sections
+            .iter()
+            .any(|s| s.name == "Fixed" && s.bank == 2),
+        "{overflow:?}"
+    );
+    assert!(
+        overflow.sections.iter().any(|s| s.name == "Level A"),
+        "{overflow:?}"
     );
     assert!(rows.contains("past bank 1"), "{rows}");
     assert!(remedy.contains("BANK["), "{remedy}");
@@ -340,7 +355,10 @@ fn a_rom_only_section_fixed_in_bank_2_fails_with_rgblinks_own_error() {
 fn a_rom_only_overlap_in_the_one_bank_link_fails_with_rgblinks_own_error() {
     let (made, message, _) = fails_with(
         "banks-fixed-addr",
-        "SECTION \"A\", ROMX[$4000]\ndb 1\n\nSECTION \"B\", ROMX[$4000]\ndb 2\n",
+        &[(
+            "fixed.asm",
+            "SECTION \"A\", ROMX[$4000]\ndb 1\n\nSECTION \"B\", ROMX[$4000]\ndb 2\n",
+        )],
     );
     let rows = rows(&made);
     assert!(
@@ -364,13 +382,30 @@ fn a_full_bank_0_shows_the_one_bank_links_undefined_symbol() {
     )
     .unwrap();
     let err = build(&rgbds(), &options).unwrap_err();
-    let message = err.body().message;
+    let body = err.body();
+    let message = body.message;
     let BuildError::Failed { made, .. } = &err else {
         panic!("expected a failed build, got {err:?}");
     };
     let rows = rows(made);
     assert!(message.contains("Undefined symbol"), "{message}\n{rows}");
     assert!(message.contains("Nowhere"), "{message}\n{rows}");
+    // The first link must have stopped at a full bank 0, or the one-bank
+    // link was never run; without this the test passes on a build that
+    // simply linked once and failed on the symbol.
+    assert!(
+        rows.contains("Unable to place \"Sound Driver\" (ROM0 section) anywhere"),
+        "the first link did not reach a full bank 0:\n{rows}"
+    );
+    assert!(
+        rows.lines()
+            .next()
+            .is_some_and(|r| r.contains("Undefined symbol `Nowhere`")),
+        "the one-bank link's symbol error must lead:\n{rows}"
+    );
+    assert!(message.contains("2 errors, the first"), "{message}");
+    assert!(made.overflow.is_none(), "{:?}", made.overflow);
+    assert!(!project.join("build/demo.gb").exists());
 }
 
 /// A ROMX section fixed in bank 1 beside two that spill: the one-bank link

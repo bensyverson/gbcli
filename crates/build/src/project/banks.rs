@@ -19,10 +19,31 @@ const NO_MBC: [u8; 3] = [0x00, 0x08, 0x09];
 /// (RGBDS 1.0.4: `Unable to place "NAME" (ROM0 section) anywhere`), as
 /// opposed to one that overlaps another at a fixed address.
 pub(super) fn bank_0_full(d: &Diagnostic) -> bool {
+    unplaced(d).is_some()
+}
+
+/// The section rgblink couldn't place anywhere: `Unable to place "NAME"
+/// (ROM0 section) anywhere`. The space may be fragmented by a pinned
+/// section rather than full, so callers must not read it as a total-size
+/// failure.
+pub(super) fn unplaced(d: &Diagnostic) -> Option<&str> {
+    if d.tool != Tool::Rgblink || d.severity != Severity::Error {
+        return None;
+    }
+    d.message
+        .strip_prefix("Unable to place \"")?
+        .strip_suffix("\" (ROM0 section) anywhere")
+}
+
+/// rgblink's `-t` refusal of a ROMX section fixed past bank 1. It is true
+/// only when the header names no MBC, so a report made when the first link
+/// wrote no ROM — and the header is therefore unknown — must not lead with
+/// it.
+pub(super) fn romx_bank_past_1(d: &Diagnostic) -> bool {
     d.tool == Tool::Rgblink
         && d.severity == Severity::Error
-        && d.message.starts_with("Unable to place ")
-        && d.message.ends_with(" (ROM0 section) anywhere")
+        && d.message
+            .contains(crate::diagnostics::hints::ROMX_BANK_PAST_1)
 }
 
 /// Whether `rom`'s header names no MBC: a cartridge that maps 32 KB flat.
@@ -142,5 +163,46 @@ mod tests {
             Severity::Warning,
             full
         )));
+    }
+
+    /// An unplaced section's name is read from rgblink's "anywhere" row and
+    /// nowhere else; an overlap at a fixed address names two sections, not
+    /// one that found nowhere to go.
+    #[test]
+    fn an_unplaced_rom0_section_names_itself() {
+        let d = |tool, message: &str| Diagnostic::new(tool, Severity::Error, message);
+        let anywhere = "Unable to place \"Wide\" (ROM0 section) anywhere";
+        assert_eq!(unplaced(&d(Tool::Rgblink, anywhere)), Some("Wide"));
+        assert_eq!(unplaced(&d(Tool::Rgbasm, anywhere)), None);
+        assert_eq!(
+            unplaced(&Diagnostic::new(Tool::Rgblink, Severity::Warning, anywhere)),
+            None
+        );
+        assert_eq!(
+            unplaced(&d(
+                Tool::Rgblink,
+                "Unable to place \"A\" (ROM0 section) at address $4000: section overlaps with \
+                 \"B\""
+            )),
+            None
+        );
+    }
+
+    /// The one-bank link's bank-1 refusal is recognized on rgblink errors
+    /// only, by the fragment its hint shares.
+    #[test]
+    fn the_one_bank_links_bank_1_refusal_is_recognized() {
+        let d = Diagnostic::new(
+            Tool::Rgblink,
+            Severity::Error,
+            "Section \"Fixed\" has type `ROMX`, which must be in bank 1 (if any) with option '-t'",
+        );
+        assert!(romx_bank_past_1(&d));
+        let mut warning = d.clone();
+        warning.severity = Severity::Warning;
+        assert!(!romx_bank_past_1(&warning));
+        let mut assembler = d;
+        assembler.tool = Tool::Rgbasm;
+        assert!(!romx_bank_past_1(&assembler));
     }
 }

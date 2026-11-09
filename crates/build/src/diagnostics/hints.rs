@@ -14,6 +14,11 @@ struct Hint {
     remedy: &'static str,
 }
 
+/// The `-t` refusal of a ROMX section fixed past bank 1. Its truth depends on
+/// the header naming no MBC, so both this hint and `project::banks`'s filter
+/// find the row by this one fragment.
+pub(crate) const ROMX_BANK_PAST_1: &str = "must be in bank 1 (if any) with option '-t'";
+
 /// RGBDS 1.0.4's wording.
 const HINTS: &[Hint] = &[
     Hint {
@@ -53,7 +58,7 @@ const HINTS: &[Hint] = &[
         // `Section "Fixed" has type `ROMX`, which must be in bank 1 (if any)
         // with option '-t'`: a ROMX section fixed past bank 1 on a header
         // with no MBC, which the build links as one bank (`project`).
-        fragment: "must be in bank 1 (if any) with option '-t'",
+        fragment: ROMX_BANK_PAST_1,
         remedy: "the header names no MBC, so the cartridge maps 32 KB (banks 0 and 1) only and \
                  the build links it as one bank, where no section can sit in bank 2 or later: \
                  drop the section's `BANK[n]` (or make it `BANK[1]`), or name an MBC in the \

@@ -1,6 +1,6 @@
 # Design: pixel fonts, fixed and variable width
 
-2026-11-09, leaf 5UVSjE (decision for Ben). **Status: proposed; nothing is built.** Ben asked whether gbcli has a design for pixel fonts, and pointed at GB Studio's font atlas, whose variable-width fonts he wants. It has none. This doc reads how GB Studio does it, then gives options for gbcli with a recommendation for each, and ends with questions for Ben.
+2026-11-09, leaf 5UVSjE (decision for Ben). **Status: ruled 2026-11-09, in a revised form: see "Ben's decisions" at the end, which supersede the options below wherever they differ (YAFF replaces `.pixels` glyph blocks; a `.chars` sidecar reverses A4; the 254 cap applies to what a build emits).** Nothing is built. Ben asked whether gbcli has a design for pixel fonts, and pointed at GB Studio's font atlas, whose variable-width fonts he wants. It has none. This doc reads how GB Studio does it, then gives options for gbcli with a recommendation for each, and ends with questions for Ben.
 
 **Sources, pinned:** GB Studio `eb6aa8a7` (2026-10-21) and gbvm `bd6f41cc` (2026-05-30), which is the submodule commit GB Studio pins at `eb6aa8a7` (`git ls-tree eb6aa8a7 appData/engine/gbvm`). These are the same commits as [2026-11-07-asset-pipeline-research.md](2026-11-07-asset-pipeline-research.md). Paths are relative to each repo's root. RGBDS 1.0.4 (`man 5 rgbasm`, "Character maps"). "Observed" means read in source or run in this session. "Inferred" marks a conclusion that no source states. GB Studio is MIT-licensed. This doc learns its technique and copies none of its art, fonts or code.
 
@@ -237,3 +237,46 @@ The starter already ships a music player (`crates/build/templates/music.asm`), b
 8. **The typewriter (C3)**: starter code or a help recipe? *Recommend a recipe* until a game wants dialogue boxes.
 9. **The VRAM reserve.** Keep the backlog's engine-budget reserve parked, with the starter documenting its 20-tile line buffer? *Recommend yes*, and record in the backlog item that a starter font now exists, so the next check that miscounts un-parks it.
 10. **Verification.** A `gbcli font` verb with `--sample`, `--preview` and `--fit`, or `--sample` on `gbcli pixels`? *Recommend `gbcli font`.* `pixels` stays about images, and the verb is where `help fonts` points.
+
+## Ben's decisions (2026-11-09)
+
+Ben ruled after reading LoadHigh's response, [loadhigh/project/2026-11-09-pixel-fonts-response.md](../../loadhigh/project/2026-11-09-pixel-fonts-response.md), and its [font formats survey](../../loadhigh/project/2026-11-09-pixel-font-formats-survey.md). LoadHigh's asks are adopted, and Ben ruled the five points where gbcli's side differed. Where these decisions and the options above disagree, these win.
+
+**Adopted from LoadHigh's response (asks 1-11; Ben's direction of the same day):**
+- **Questions 1, 2, 4, 5, 8 and 10 stand as recommended.** Fonts are their own kind in `assets/fonts/`: not deduplicated, order kept, GB Studio's grid with alpha 0 as the width marker, 1bpp with ink and paper at run time, dense glyph numbers, a charmap macro with `$FE`/`$FF` reserved, the typewriter as a recipe, and a `gbcli font` verb with `--sample`, `--preview` and `--fit`. Question 6 stands (a warning with a remedy). Question 9 stands (the reserve stays parked).
+- **One canonical source per font: a `.yaff` file, committed.** It is a strict subset of monobit's YAFF, in place of question 3's `.pixels` glyph blocks. Keys are YAFF labels: any single UTF-8 character (`'é':`), a code point (`u+00E9:`), or a name for a symbol Unicode lacks (`"heart":`). Images other than fonts keep `.pixels`.
+- **PNG (with a `.chars` sidecar, one line per row of cells) and BDF are working copies for editing tools, never committed.**
+  - `gbcli font edit FONT.yaff --as png|bdf` writes a copy to a gitignored folder and prints its path, with guides for PNG.
+  - `gbcli font save FONT.yaff` (or the copy's own path) converts the copy back and removes it.
+  - A build refuses while a working copy is newer than its `.yaff`, naming the command.
+  - Every disagreement between the `.chars` file and the art is a build problem naming the cell.
+- **Guide pixels:** in a font's working copy, half-transparent pixels (alpha 1-254) are guides, and the conversion drops them. Other images keep treating them as a problem.
+- **Authoring:**
+  - `gbcli font import FILE.bdf [--chars FILE]` places trimmed glyphs by their bounding box and the font's ascent;
+  - `gbcli font export`;
+  - `gbcli font new NAME --chars SET`, with guides and `--guide-sheet`;
+  - `gbcli font diff A B --png OUT`.
+- **The seam:** a typed `FontAsset` in the `assets` op's manifest, defined once in `gbcli_protocol`. It holds glyphs in glyph-number order, each with its key, width, 8 row bytes and whether it was drawn or composed, plus the fixed flag. LoadHigh reads fonts only through it.
+- **Layout rules, stated normatively in `gbcli help fonts`,** with `gbcli font --sample` as the reference:
+  - the pen advances by the width;
+  - a glyph starts at its cell's left edge;
+  - spacing is drawn into the glyph;
+  - there is no kerning;
+  - the bit order and the masking at a tile boundary are stated exactly.
+
+**Ben's rulings on gbcli's side:**
+1. **gbcli writes its own strict-subset YAFF reader and writer**, with no `libyaff` dependency. Strictness is gbcli's to enforce anyway, since a general library accepts all of YAFF. Test it against monobit's published samples.
+2. **The glyph cap.** A font file may hold any number of glyphs.
+   - `gbcli build` emits every glyph of a font with at most 254, since gbcli can't see which characters an asm program's strings use. Past 254 it refuses, with a remedy asking for a character list that limits what it emits.
+   - The `assets` op takes the characters the caller wants and has no cap.
+3. **Diacritics are composed from a mark table gbcli keeps** (Latin-1 and Latin Extended-A, about a dozen combining marks), with no Unicode-normalization dependency.
+   - A missing precomposed letter is its mark laid over its base, at the base's width, and a drawn glyph overrides it.
+   - An overlap is a warning naming the glyph.
+   - Keys must be NFC: a decomposed key the table knows is refused, naming its precomposed form.
+   - Composition happens only for requested characters: the `assets` op's request, or a build's character list.
+4. **The order of work: three leaves.**
+   - First, the core: the strict YAFF reader and writer, the font kind, the build output, `FontAsset`, `gbcli font` with `--sample`/`--preview`/`--fit`, and `help fonts` with the layout rules.
+   - Second, authoring: edit/save with working copies, `.chars` and guides, BDF import and export, `new` and `diff`, and composition.
+   - Third, the starter renderer (question 7, C2), with an original default font as `.yaff`.
+   - LoadHigh can consume `FontAsset` after the first.
+5. **Two text formats are accepted:** YAFF for fonts, `.pixels` for every other image. A font has labels and widths that an image doesn't, and other tools read YAFF.

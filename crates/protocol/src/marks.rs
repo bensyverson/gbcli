@@ -10,9 +10,12 @@
 //! What it composes, precisely: a base followed by one mark from its scope,
 //! left to right, once each singleton is mapped to what it is canonically
 //! ([`singleton`]). It holds no combining classes, so it does no canonical
-//! reordering: that is NFC for those sequences, not for every string (a base
-//! with two marks, or marks out of canonical order, is not composed as NFC
-//! would). Data and lookups only: no I/O, no allocation.
+//! reordering: that is NFC for a base and mark pair the table holds, not
+//! for every string. A base with two marks, or marks out of canonical order,
+//! is not composed as NFC would; nor is a pair whose letter lies outside the
+//! table's scope (A and U+030C, which NFC composes to U+01CD); and the
+//! singletons it maps are only those onto its own letters, bases and marks
+//! (U+2126 OHM SIGN is not mapped, so it stays a character of its own). Data and lookups only: no I/O, no allocation.
 
 mod table;
 

@@ -18,8 +18,10 @@ table knows, naming its precomposed form (design
 missing letter from its base and mark; LoadHigh composes the string
 literals' pairs with it. What it composes is a base followed by one mark
 from its scope, left to right, after mapping the singletons, with no
-canonical reordering (it holds no combining classes): NFC for those
-sequences, not for every string.
+canonical reordering (it holds no combining classes): NFC for a base and
+mark pair the table holds, not for every string (NFC also composes pairs
+whose letter lies outside the table's scope, such as A and U+030C, and maps
+singletons the table doesn't hold, such as U+2126 OHM SIGN).
 
 Python's unicodedata is the reference, so neither needs a normalization
 dependency at run time. Run from anywhere:

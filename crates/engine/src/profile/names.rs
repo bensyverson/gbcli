@@ -16,10 +16,12 @@ pub(super) fn routine_name(symbols: Option<&Symbols>, entry: Entry) -> Option<St
 /// before it, except inside an interrupt vector or the cartridge header,
 /// where a label from before the region names the wrong code and the
 /// region's own name (`STAT_vector`, `Header`) does. The hardware enters
-/// those whatever the game's labels say. An RST slot is entered only by the
-/// game's own `rst`, so a game label running over it (Tetris's `rst $28`
-/// jump table reaches $0033) names the code there; the slot's name (`RST_30`)
-/// is used only when no label, or an end marker, comes before. Stop rows and
+/// those whatever the game's labels say. An RST slot is entered only at its
+/// first byte (by `rst`, or by an $FF byte run as code: `rst $38`), so the
+/// slot's name (`RST_38`) names that byte; past it, a game label running
+/// over the slot (Tetris's `rst $28` jump table reaches $0033) names the
+/// code there, and the slot names it only when no label, or an end marker,
+/// comes before. Stop rows and
 /// profile rows both use this, so one address has one name.
 pub(crate) fn name_at(symbols: Option<&Symbols>, bank: u16, addr: u16) -> Option<String> {
     let found = symbols.and_then(|s| s.containing(bank, addr));
@@ -30,7 +32,9 @@ pub(crate) fn name_at(symbols: Option<&Symbols>, bank: u16, addr: u16) -> Option
         {
             Some(label(&s.name, i64::from(addr - s.addr)))
         }
-        (Some(s), Some((start, _))) if start < RST_END && !is_end_marker(&s.name) => {
+        (Some(s), Some((start, _)))
+            if start < RST_END && addr != start && !is_end_marker(&s.name) =>
+        {
             Some(label(&s.name, i64::from(addr - s.addr)))
         }
         // An end marker is the end of what came before: on a vector, the
@@ -169,9 +173,24 @@ mod tests {
         let syms = Symbols::parse("00:0028 JumpTable\n00:0150 Main\n").unwrap();
         let name = |addr| name_at(Some(&syms), 0, addr);
         assert_eq!(name(0x0031).as_deref(), Some("JumpTable+$9"));
-        assert_eq!(name(0x0038).as_deref(), Some("JumpTable+$10"));
+        // A slot's first byte is where its `rst` (or an $FF byte run as
+        // code) enters, so the slot names it, even under a long label.
+        assert_eq!(name(0x0030).as_deref(), Some("RST_30"));
+        assert_eq!(name(0x0038).as_deref(), Some("RST_38"));
         // The interrupt vectors past the RSTs are still the hardware's.
         assert_eq!(name(0x0041).as_deref(), Some("VBlank_vector+$1"));
+    }
+
+    /// From rev-cli2's probe: $0038 is where an $FF byte run as code lands,
+    /// so a game that labels only its RST $00 routine must not name that
+    /// crash, or `rst $08`'s entry, after it.
+    #[test]
+    fn an_rst_entry_is_not_named_after_an_earlier_slot() {
+        let syms = Symbols::parse("00:0000 Rst00\n00:0150 Main\n").unwrap();
+        let name = |addr| name_at(Some(&syms), 0, addr);
+        assert_eq!(name(0x0038).as_deref(), Some("RST_38"));
+        assert_eq!(name(0x0008).as_deref(), Some("RST_08"));
+        assert_eq!(name(0x0009).as_deref(), Some("Rst00+$9"));
     }
 
     /// An end marker says the code before it has ended, so it names no RST

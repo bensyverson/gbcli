@@ -89,7 +89,9 @@ impl Key {
         let chars = elements(label)?;
         match chars.as_slice() {
             [c] => Key::char(*c),
-            [base, mark] => match marks::compose(*base, *mark) {
+            // NFC maps a singleton before composing (U+212A is K), so
+            // KELVIN SIGN and a cedilla is Ķ, decomposed.
+            [base, mark] => match marks::compose(canonical(*base), canonical(*mark)) {
                 Some(letter) => Err(bad(
                     format!(
                         "`{label}` is {} followed by the combining mark u+{:04X}: a decomposed \
@@ -299,6 +301,12 @@ fn elements(label: &str) -> Result<Vec<char>, KeyError> {
         return Err(bad(format!("`{label}` names no character"), KEY_REMEDY));
     }
     Ok(out)
+}
+
+/// What `c` is canonically by itself, if it is a singleton the mark table
+/// maps, or `c`.
+fn canonical(c: char) -> char {
+    marks::singleton(c).unwrap_or(c)
 }
 
 #[cfg(test)]

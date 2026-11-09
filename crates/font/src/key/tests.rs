@@ -37,6 +37,13 @@ fn a_decomposed_key_the_mark_table_knows_is_refused_naming_its_precomposed_form(
     assert!(e.remedy.contains("'K'"), "{}", e.remedy);
     let e = refused("u+0341");
     assert!(e.remedy.contains("key it by u+0301:"), "{}", e.remedy);
+    // From rev-cli2's review: a pair spelled with a singleton is still a
+    // decomposed letter, as NFC composes it (KELVIN SIGN and cedilla is Ķ).
+    for (label, letter) in [("u+212A, u+0327", "'Ķ'"), ("'A', u+0341", "'Á'")] {
+        let e = refused(label);
+        assert!(e.message.contains("decomposed"), "{label}: {}", e.message);
+        assert!(e.remedy.contains(letter), "{label}: {}", e.remedy);
+    }
     // A cluster the table doesn't know is refused as several characters.
     assert!(refused("'ff'").message.contains("several characters"));
     assert!(

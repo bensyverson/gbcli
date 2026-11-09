@@ -11,6 +11,8 @@ const TEST_SONG: &str = include_str!("../../../build/tests/data/every_effect_but
 
 /// The starter's song (the help topic's example) plays: its first square-1
 /// notes are triggered in order, at the driver's periods for C-5, E-5, G-5.
+/// Read from `--json`: the text log is capped, and these writes come after
+/// its first rows.
 #[test]
 fn a_new_projects_song_plays_in_the_audio_log() {
     let p = Project::new("music-plays");
@@ -33,13 +35,16 @@ fn a_new_projects_song_plays_in_the_audio_log() {
         "--frames",
         "240",
         "--audio-log",
+        "--json",
     ]);
     assert_eq!(run.code, 0, "{}", run.stderr);
-    let periods: Vec<&str> = run
-        .stdout
-        .lines()
-        .filter(|l| l.contains("square 1 trigger"))
-        .filter_map(|l| l.split("period ").nth(1)?.split(' ').next())
+    let response: serde_json::Value = serde_json::from_str(&run.stdout).unwrap();
+    let log = response["result"]["audio"]["log"].as_array().unwrap();
+    let periods: Vec<&str> = log
+        .iter()
+        .filter_map(|w| w["text"].as_str())
+        .filter(|t| t.contains("square 1 trigger"))
+        .filter_map(|t| t.split("period ").nth(1)?.split(' ').next())
         .take(3)
         .collect();
     assert_eq!(periods, ["1546", "1650", "1714"], "{}", run.stdout);

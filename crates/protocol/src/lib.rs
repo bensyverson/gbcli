@@ -76,10 +76,10 @@ pub use pixels::{
     PixelsArgs, PixelsForm, PixelsMade, PixelsOutput, PixelsOutputKind, PixelsProblem,
 };
 pub use profile::{
-    CpuSpeedName, CycleStats, FrameBudgetMade, FrameBudgetRow, MeasureArgs, MeasureMade,
+    CpuSpeedName, CycleStats, FrameBudgetMade, FrameBudgetRow, LagRun, MeasureArgs, MeasureMade,
     PercentStats, ProfileArgs, ProfileMade, Real, RoutineRow, RunMeasure,
 };
-pub use raster::{RasterLineRow, RasterMade, RasterWriteRow};
+pub use raster::{RasterLineRow, RasterMade, RasterWriteRow, RasterWriter};
 pub use request::{
     BreakArgs, CheckpointArgs, DeleteArgs, EventsArgs, Op, PruneArgs, ReadArgs, Request,
     RestoreArgs, RmArgs, RunArgs, Start, StepArgs, WatchArgs, WriteArg, WriteArgs, WriteKind,
@@ -107,7 +107,7 @@ pub use toolchain::{
 pub use version::{PROTOCOL_VERSION, VersionMade};
 pub use video::{
     AddressingView, CgbColorView, CgbPaletteView, DmgPaletteView, ImageMade, ImageOut, MapAreaView,
-    MapSel, MemoryMade, OamFrameView, OamLogMade, OamView, TileView, VideoData, ViewArgs, ViewKind,
-    ViewMade,
+    MapSel, MemoryMade, OamDrops, OamFrameView, OamLogMade, OamView, TileView, VideoData, ViewArgs,
+    ViewKind, ViewMade,
 };
 pub use views::{FlagsView, PpuModeView, PpuView, RegistersView};

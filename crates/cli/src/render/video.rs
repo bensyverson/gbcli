@@ -3,7 +3,7 @@
 
 use gbcli_protocol::{MemoryMade, OamLogMade, ResultBody, VideoData};
 
-use super::row::{Row, addr, byte};
+use super::row::{Row, addr, byte, capped};
 use super::stop::since;
 
 pub fn rows(r: &ResultBody) -> String {
@@ -175,25 +175,34 @@ fn data(data: &VideoData) -> String {
     out
 }
 
-/// `run --oam-log`: a row per frame; `--json` has every object's fields.
+/// `run --oam-log`: `oam_log since= frames= [drop_frames= dropped=
+/// never_drawn=]`, the 10-per-line limit over the whole log, then a row per
+/// frame, capped; `--json` has every frame and every object's fields.
 fn oam_log(log: &OamLogMade) -> String {
-    let mut out = Row::new("oam_log")
+    let drops = log.drops();
+    let list = |of: &[u8]| {
+        let names: Vec<String> = of.iter().map(u8::to_string).collect();
+        (!names.is_empty()).then(|| names.join(","))
+    };
+    let out = Row::new("oam_log")
         .field("since", since(&log.since))
         .field("frames", log.frames.len())
+        .opt("drop_frames", (drops.frames > 0).then_some(drops.frames))
+        .opt("dropped", list(&drops.dropped))
+        .opt("never_drawn", list(&drops.never_drawn))
         .line();
-    for frame in &log.frames {
+    out + &capped("oam_frame", &log.frames, |frame| {
         let dropped: Vec<String> = frame.dropped().iter().map(u8::to_string).collect();
         let shown: Vec<String> = frame.objects.iter().map(|o| o.index.to_string()).collect();
-        out += &Row::new("oam_frame")
+        Row::new("oam_frame")
             .field("frame", frame.frame)
             .opt("lcd_off", frame.lcd_off.then_some(1))
             .field("height", frame.height)
             .field("on_screen", frame.objects.len())
             .opt("objects", (!shown.is_empty()).then(|| shown.join(",")))
             .opt("dropped", (!dropped.is_empty()).then(|| dropped.join(",")))
-            .line();
-    }
-    out
+            .line()
+    })
 }
 
 /// `view memory`: a header row, then 16 bytes a row indented under it, each
@@ -285,6 +294,52 @@ mod tests {
             "{}",
             memory(&written)
         );
+    }
+
+    /// The header answers "is every sprite drawn in some frame?" for the
+    /// whole log, since the frame rows are capped.
+    #[test]
+    fn an_oam_log_header_sums_up_the_drops() {
+        use gbcli_protocol::{OamFrameView, OamLogMade, OamView, TimeBase};
+        let object = |index, dropped| OamView {
+            index,
+            y: 80,
+            x: 8,
+            tile: 0,
+            flags: 0,
+            screen_x: 0,
+            screen_y: 64,
+            on_screen: true,
+            dropped_by_line_limit: dropped,
+        };
+        let frame = |n, objects| OamFrameView {
+            frame: n,
+            lcd_off: false,
+            height: 8,
+            objects,
+        };
+        let log = OamLogMade {
+            since: TimeBase::Boot,
+            frames: vec![
+                frame(
+                    1,
+                    vec![object(0, false), object(10, true), object(11, true)],
+                ),
+                frame(2, vec![object(10, false), object(11, true)]),
+            ],
+        };
+        assert!(
+            super::oam_log(&log).starts_with(
+                "oam_log since=boot frames=2 drop_frames=2 dropped=10,11 never_drawn=11\n"
+            ),
+            "{}",
+            super::oam_log(&log)
+        );
+        let calm = OamLogMade {
+            since: TimeBase::Boot,
+            frames: vec![frame(1, vec![object(0, false)])],
+        };
+        assert!(super::oam_log(&calm).starts_with("oam_log since=boot frames=1\n"));
     }
 
     /// A long keys file and a short run left hundreds of events, printed

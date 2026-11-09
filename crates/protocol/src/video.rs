@@ -262,6 +262,50 @@ impl OamFrameView {
     }
 }
 
+/// The 10-per-line limit over a whole OAM log, so whether every object is
+/// drawn in some frame is one row however long the run. Frames with the LCD
+/// off drew nothing and are left out.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct OamDrops {
+    /// The frames that dropped any object.
+    pub frames: u64,
+    /// The OAM indices dropped in some frame, ascending.
+    pub dropped: Vec<u8>,
+    /// Of those, the ones on screen in some frame and dropped in every one:
+    /// never drawn.
+    pub never_drawn: Vec<u8>,
+}
+
+impl OamLogMade {
+    pub fn drops(&self) -> OamDrops {
+        let mut drops = OamDrops::default();
+        let mut drawn = [false; 40];
+        let mut dropped = [false; 40];
+        for frame in self.frames.iter().filter(|f| !f.lcd_off) {
+            let mut any = false;
+            for o in &frame.objects {
+                let slot = usize::from(o.index).min(39);
+                if o.dropped_by_line_limit {
+                    dropped[slot] = true;
+                    any = true;
+                } else {
+                    drawn[slot] = true;
+                }
+            }
+            drops.frames += u64::from(any);
+        }
+        for index in 0..40u8 {
+            if dropped[usize::from(index)] {
+                drops.dropped.push(index);
+                if !drawn[usize::from(index)] {
+                    drops.never_drawn.push(index);
+                }
+            }
+        }
+        drops
+    }
+}
+
 /// The `view` result: the data, and the PNG when one was asked for.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ViewMade {
@@ -298,6 +342,59 @@ mod tests {
         assert!(!request.op.mutates_head());
         assert_eq!(serde_json::to_string(&request).unwrap(), line);
         assert!(parse_request(r#"{"id":"1","op":"view","args":{"what":"sprites"}}"#).is_err());
+    }
+
+    fn object(index: u8, dropped: bool) -> OamView {
+        OamView {
+            index,
+            y: 80,
+            x: 8,
+            tile: 0,
+            flags: 0,
+            screen_x: 0,
+            screen_y: 64,
+            on_screen: true,
+            dropped_by_line_limit: dropped,
+        }
+    }
+
+    fn frame(n: i64, lcd_off: bool, objects: Vec<OamView>) -> OamFrameView {
+        OamFrameView {
+            frame: n,
+            lcd_off,
+            height: 8,
+            objects,
+        }
+    }
+
+    #[test]
+    fn drops_name_the_objects_dropped_and_those_never_drawn() {
+        let log = OamLogMade {
+            since: crate::stop::TimeBase::Boot,
+            frames: vec![
+                frame(
+                    1,
+                    false,
+                    vec![object(0, false), object(10, true), object(11, true)],
+                ),
+                frame(
+                    2,
+                    false,
+                    vec![object(0, false), object(10, false), object(11, true)],
+                ),
+                frame(3, false, vec![object(0, false)]),
+                // Drawn nothing, so neither a drop nor a draw.
+                frame(4, true, vec![object(11, false), object(12, true)]),
+            ],
+        };
+        assert_eq!(
+            log.drops(),
+            OamDrops {
+                frames: 2,
+                dropped: vec![10, 11],
+                never_drawn: vec![11],
+            }
+        );
     }
 
     #[test]

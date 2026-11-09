@@ -54,3 +54,123 @@ pub struct RasterMade {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub unsupported: Vec<String>,
 }
+
+/// One instruction's writes to one register over a raster timeline, counted
+/// by the PPU mode each landed in: whether every scroll or palette write
+/// lands in HBlank, answered in a row per writer however long the run.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct RasterWriter {
+    pub reg: String,
+    pub pc: u16,
+    pub writes: u64,
+    pub hblank: u64,
+    pub vblank: u64,
+    pub oam_scan: u64,
+    pub drawing: u64,
+    /// Writes whose mode the core couldn't know (`mode` null).
+    pub unknown: u64,
+}
+
+impl RasterMade {
+    /// Every write counted by register and writer PC, in the order each
+    /// pair first wrote.
+    pub fn writers(&self) -> Vec<RasterWriter> {
+        let mut writers: Vec<RasterWriter> = Vec::new();
+        for w in self.rows.iter().flat_map(|r| &r.writes) {
+            let at = match writers.iter().position(|x| x.pc == w.pc && x.reg == w.reg) {
+                Some(at) => at,
+                None => {
+                    writers.push(RasterWriter {
+                        reg: w.reg.clone(),
+                        pc: w.pc,
+                        ..RasterWriter::default()
+                    });
+                    writers.len() - 1
+                }
+            };
+            let writer = &mut writers[at];
+            writer.writes += 1;
+            *match w.mode {
+                Some(PpuModeView::Hblank) => &mut writer.hblank,
+                Some(PpuModeView::Vblank) => &mut writer.vblank,
+                Some(PpuModeView::OamScan) => &mut writer.oam_scan,
+                Some(PpuModeView::Drawing) => &mut writer.drawing,
+                None => &mut writer.unknown,
+            } += 1;
+        }
+        writers
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RasterLineRow, RasterMade, RasterWriteRow, RasterWriter};
+    use crate::PpuModeView;
+
+    fn write(reg: &str, pc: u16, mode: Option<PpuModeView>) -> RasterWriteRow {
+        RasterWriteRow {
+            reg: reg.into(),
+            value: 0,
+            pc,
+            ticks_into_line: None,
+            mode,
+        }
+    }
+
+    fn line(line: u8, writes: Vec<RasterWriteRow>) -> RasterLineRow {
+        RasterLineRow {
+            frame: 0,
+            line: Some(line),
+            start: None,
+            writes,
+        }
+    }
+
+    #[test]
+    fn writes_count_by_register_and_pc_and_by_the_mode_they_landed_in() {
+        let made = RasterMade {
+            frames: 1,
+            lines: 154,
+            rows: vec![
+                line(
+                    40,
+                    vec![
+                        write("rSCX", 0x16B, Some(PpuModeView::Hblank)),
+                        write("rBGP", 0x17D, None),
+                    ],
+                ),
+                line(41, vec![write("rSCX", 0x16B, Some(PpuModeView::Drawing))]),
+                line(42, vec![write("rSCX", 0x200, Some(PpuModeView::Vblank))]),
+                line(43, vec![write("rSCX", 0x16B, Some(PpuModeView::Hblank))]),
+            ],
+            unsupported: Vec::new(),
+        };
+        assert_eq!(
+            made.writers(),
+            vec![
+                RasterWriter {
+                    reg: "rSCX".into(),
+                    pc: 0x16B,
+                    writes: 3,
+                    hblank: 2,
+                    drawing: 1,
+                    ..RasterWriter::default()
+                },
+                RasterWriter {
+                    reg: "rBGP".into(),
+                    pc: 0x17D,
+                    writes: 1,
+                    unknown: 1,
+                    ..RasterWriter::default()
+                },
+                RasterWriter {
+                    reg: "rSCX".into(),
+                    pc: 0x200,
+                    writes: 1,
+                    vblank: 1,
+                    ..RasterWriter::default()
+                },
+            ]
+        );
+    }
+}

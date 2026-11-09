@@ -2,7 +2,7 @@
 
 use gbcli_protocol::{AudioMade, ImageMade};
 
-use super::row::{Row, addr};
+use super::row::{Row, addr, capped};
 use super::stop::since;
 
 /// The channels a log was filtered to, `noise,square2`; none when unfiltered.
@@ -19,8 +19,11 @@ pub fn rows(audio: &AudioMade) -> String {
             .field("writes", log.len())
             .opt("channels", channels(audio))
             .line();
-        for line in log {
-            out += &Row::new("apu")
+        // Capped: a song writes every frame, so a long run's log is
+        // thousands of rows; `--audio-summary` sums them and `--json` has
+        // every one.
+        out += &capped("apu", log, |line| {
+            Row::new("apu")
                 .field("elapsed", line.elapsed)
                 .field("frame", line.frame)
                 .field(
@@ -29,8 +32,8 @@ pub fn rows(audio: &AudioMade) -> String {
                 )
                 .field("pc", addr(line.pc))
                 .field("text", &line.text)
-                .line();
-        }
+                .line()
+        });
     }
     if let Some(summary) = &audio.summary {
         out += &Row::new("audio_summary")

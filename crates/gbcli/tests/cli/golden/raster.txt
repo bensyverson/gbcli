@@ -3,6 +3,14 @@ exit 0
 stop budget_exhausted kind=frames pc=$0199 bank=0 symbol=BgpHBlank.ly_u8 frame=2 t=140272 since=boot ticks=12042760 ly=144 shown=2 vblank=normal
 budget frames=2/2 instructions=15997 ticks=280544
 raster frames=3 lines=307 written=8
+raster_writer reg=rLCDC pc=$0159 writes=1 vblank=1
+raster_writer reg=rSCX pc=$016B writes=2 drawing=2
+raster_writer reg=rBGP pc=$017D writes=2 drawing=2
+raster_writer reg=rBGP pc=$0197 writes=2 hblank=2
+raster_writer reg=rSCX pc=$01A0 writes=1 vblank=1
+raster_writer reg=rLYC pc=$01A4 writes=1 vblank=1
+raster_writer reg=rSTAT pc=$01A8 writes=1 vblank=1
+raster_writer reg=rIF pc=$01AF writes=1 vblank=1
 raster_line frame=0 line=144
 raster_write reg=rLCDC value=$91 pc=$0159 mode=vblank
 raster_line frame=1 line=40 start=11807448

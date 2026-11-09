@@ -57,6 +57,24 @@ fn quoted(text: &str) -> String {
     }
 }
 
+/// The most rows a per-frame or per-event list prints in text; `--json`
+/// carries every item (design §12, "Bounded rows").
+pub const CAP: usize = 20;
+
+/// Each item's rows, for the first [`CAP`] items, then one
+/// `more kind=KIND count=N see=--json` row for the rest.
+pub fn capped<T>(kind: &str, items: &[T], rows: impl Fn(&T) -> String) -> String {
+    let mut out: String = items.iter().take(CAP).map(rows).collect();
+    if items.len() > CAP {
+        out += &Row::new("more")
+            .field("kind", kind)
+            .field("count", items.len() - CAP)
+            .field("see", "--json")
+            .line();
+    }
+    out
+}
+
 /// `$0163`: a CPU address.
 pub fn addr(a: u16) -> String {
     format!("${a:04X}")
@@ -120,6 +138,26 @@ mod tests {
             line,
             "read expr=\"u16[wFrame] >= 60\" value=1 pc=$0163 empty=\"\"\n"
         );
+    }
+
+    #[test]
+    fn a_capped_list_prints_its_first_rows_then_how_many_more() {
+        let row = |n: &usize| Row::new("item").field("n", n).line();
+        let few: Vec<usize> = (0..CAP).collect();
+        assert_eq!(capped("item", &few, row).lines().count(), CAP);
+        assert!(!capped("item", &few, row).contains("more"));
+        let many: Vec<usize> = (0..CAP + 7).collect();
+        let text = capped("item", &many, row);
+        assert_eq!(text.lines().count(), CAP + 1);
+        assert!(text.starts_with("item n=0\n"), "{text}");
+        assert!(
+            text.ends_with(&format!(
+                "item n={}\nmore kind=item count=7 see=--json\n",
+                CAP - 1
+            )),
+            "{text}"
+        );
+        assert_eq!(capped("item", &[] as &[usize], row), "");
     }
 
     #[test]

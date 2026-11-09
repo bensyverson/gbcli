@@ -75,7 +75,8 @@ What does my music do?
 Look at tiles, the background map, sprites or the palettes
   gbcli view tiles, gbcli view map --map window, gbcli view oam, gbcli view palettes
 Is every sprite drawn in some frame? (a multiplexer, the 10-per-line limit)
-  gbcli run --frames 120 --oam-log (a row per frame: objects on screen, dropped=)
+  gbcli run --frames 120 --oam-log (the first row's never_drawn= names any object
+  dropped in every frame it was on screen; then a row per frame, at most 20)
 Which code writes one sound channel?
   gbcli run --frames 600 --audio-summary --audio-channel 4 (writes per register
   and per writer PC; add --audio-log for every write)
@@ -97,8 +98,9 @@ Does every scroll or palette write land in HBlank?
   in: hblank, oam_scan, drawing or vblank; none where the emulator can't
   tell). Over a whole run from boot, mode= is the proof:
   gbcli run game.gb --session hb --frames 3000 --keys-file play.txt --raster
-  (every write to the register reads mode=hblank, or vblank; any other row
-  names its instruction with pc=, and a row with no mode= proves nothing).
+  (each raster_writer row counts one instruction's writes to one register by
+  mode: hblank= or vblank= alone passes; any other mode names the instruction
+  with pc=, and unknown= proves nothing).
   To stop at a write that starts outside HBlank and look around, break on it,
   then rerun the same input from boot (gbcli run --session hb --from boot
   --frames 3000 --keys-file play.txt):

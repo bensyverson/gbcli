@@ -39,9 +39,7 @@ profile total_t=210664 idle_t=0 routines=2 unwound=0 mismatched=0 ret_jumps=0 op
 routine name=Work bank=0 addr=$0163 calls=1879 exclusive_t=143008 idle_t=0 inclusive_t=143008
 routine name=Main.loop+$3 bank=0 addr=$0161 calls=0 exclusive_t=67656 idle_t=0 inclusive_t=210664
 frame_budget frames=3 lag=3 lcd_off=0 active_min=70208 active_max=70232 active_mean=70221.3 busiest=2
-frame_cost index=0 frame=2 active_t=70208 idle_t=0 lag=1
-frame_cost index=1 frame=3 active_t=70224 idle_t=0 lag=1
-frame_cost index=2 frame=4 active_t=70232 idle_t=0 lag=1
+frame_lag from=2 to=4 count=3 active_max=70232 index=0
 rev s2
 $ gbcli run --frames 1 --top 2 --session demo
 exit 2
@@ -53,11 +51,7 @@ exit 0
 stop budget_exhausted kind=instructions pc=$0168 bank=0 symbol=Work+$5 frame=10 t=724168 since=boot ticks=13210552 ly=38 shown=10 vblank=normal
 budget frames=5 instructions=30000/30000 ticks=746432
 frame_budget frames=5 partial=1 lag=5 lcd_off=0 active_min=70216 active_max=70232 active_mean=70222.4 busiest=2
-frame_cost index=0 frame=5 active_t=70216 idle_t=0 lag=1
-frame_cost index=1 frame=6 active_t=70224 idle_t=0 lag=1
-frame_cost index=2 frame=7 active_t=70232 idle_t=0 lag=1
-frame_cost index=3 frame=8 active_t=70220 idle_t=0 lag=1
-frame_cost index=4 frame=9 active_t=70220 idle_t=0 lag=1
+frame_lag from=5 to=9 count=5 active_max=70232 index=0
 rev s3
 $ gbcli run --instructions 10000 --frame-budget --json --session demo
 exit 0

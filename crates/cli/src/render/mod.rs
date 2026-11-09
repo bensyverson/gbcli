@@ -3,6 +3,8 @@
 
 mod audio;
 mod battery;
+#[cfg(test)]
+mod bounded_tests;
 mod equiv;
 mod font;
 mod images;

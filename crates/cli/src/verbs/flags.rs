@@ -234,7 +234,8 @@ pub const RUN: &[FlagSpec] = &[
         "print every write the run made to the sound registers, decoded into notes and \
          settings, at elapsed 2^23 Hz ticks since --since, with the frame (counted as the \
          stop's frame=) and the line (ly) it fell on: the cheap sibling of --wav. Only \
-         this run's: writes made before the run (a sound engine's setup) aren't listed",
+         this run's: writes made before the run (a sound engine's setup) aren't listed. \
+         The rows stop at 20 with a more row; --json has every write",
     ),
     switch(
         "audio-summary",
@@ -292,20 +293,25 @@ pub const RUN: &[FlagSpec] = &[
          frames in which the CPU never halted with the LCD on (LCD-off frames, as at \
          startup or a screen change, count as lcd_off instead); the first row sums up the \
          whole LCD-on frames' active T-cycles (min, max, mean) and the busiest one (a row \
-         index), then a row per lag frame with its index and frame (counted as the stop's \
-         frame=) (--json has every frame, each with its frame; gbcli help budgets)",
+         index), then a frame_lag row per run of consecutive lag frames: from= and to= \
+         (counted as the stop's frame=), count=, active_max= and index= (its first row in \
+         --json), at most 20 rows (--json has every frame, each with its frame; gbcli help \
+         budgets)",
     ),
     switch(
         "oam-log",
-        "OAM at every vblank the run passes: a row per frame with the objects on screen and \
-         the OAM indices the 10-per-line limit dropped (--json has every object's fields); \
-         each frame's OAM is the one it was drawn from",
+        "OAM at every vblank the run passes: a first row naming the objects the 10-per-line \
+         limit dropped in any frame (dropped=) and in every frame they were on screen \
+         (never_drawn=), then a row per frame, at most 20, with the objects on screen and \
+         the ones dropped (--json has every frame and object); each frame's OAM is the one \
+         it was drawn from",
     ),
     switch(
         "raster",
-        "each IO-register write the run made, by frame and line: register, value, writer's \
-         PC, ticks into the line (912 per line) and the PPU mode it landed in (mode=, absent \
-         where the emulator can't tell)",
+        "each IO-register write the run made: first a raster_writer row per register and \
+         writer PC counting its writes by the PPU mode they landed in (unknown= where the \
+         emulator can't tell), then by frame and line, at most 20 lines: register, value, \
+         writer's PC, ticks into the line (912 per line) and mode= (--json has every line)",
     ),
     value(
         "keys",

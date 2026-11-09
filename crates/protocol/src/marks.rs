@@ -15,7 +15,8 @@
 //! is not composed as NFC would; nor is a pair whose letter lies outside the
 //! table's scope (A and U+030C, which NFC composes to U+01CD); and the
 //! singletons it maps are only those onto its own letters, bases and marks
-//! (U+2126 OHM SIGN is not mapped, so it stays a character of its own). Data and lookups only: no I/O, no allocation.
+//! (U+2126 OHM SIGN is not mapped, so it stays a character of its own).
+//! Data and lookups only: no I/O, no allocation.
 
 mod table;
 

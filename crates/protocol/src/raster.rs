@@ -75,10 +75,11 @@ pub struct RasterWriter {
 
 impl RasterMade {
     /// Every write counted by register and writer PC, riskiest first: by
-    /// writes that landed in drawing, then of unknown mode, then in OAM
-    /// scan, most first (a write with the LCD off is safe, `lcd_off`). A big game has hundreds of writers and a reader
-    /// sees the first few, so those that may have changed a line being drawn
-    /// lead; the safe ones keep the order each pair first wrote.
+    /// writes that landed in drawing, then of unknown mode, then in OAM scan,
+    /// most first (a write with the LCD off is safe, `lcd_off`). A big game
+    /// has hundreds of writers and a reader sees the first few, so those that
+    /// may have changed a line being drawn lead; the safe ones keep the order
+    /// each pair first wrote.
     pub fn writers(&self) -> Vec<RasterWriter> {
         let mut writers: Vec<RasterWriter> = Vec::new();
         for (r, w) in self

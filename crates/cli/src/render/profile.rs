@@ -104,19 +104,18 @@ pub fn frame_budget(b: &FrameBudgetMade) -> String {
 /// big the program.
 pub const RASTER_TIMELINE_ROWS: usize = 2 * CAP;
 
-/// `raster frames= lines= written=`, then a `raster_writer reg= pc=
-/// writes=` row per register and writer PC counting its writes by the mode
-/// they landed in (`unknown=` where the core couldn't tell, `lcd_off=` with
-/// the LCD off), riskiest first
-/// and capped: the `more` row counts the writers left out and, by mode, any
-/// of their writes that didn't land in HBlank or VBlank, so a whole run's
-/// answer survives the cap. Then the timeline: each line with writes and
-/// its writes under it, at most [`CAP`] lines and [`CAP`] writes to a line,
-/// and at most [`RASTER_TIMELINE_ROWS`] rows in all (an LCD-off stretch is
-/// one line holding every write made while the LCD was off). A line with the
-/// LCD off reads `line=off`; a line with no reported start has no `start=`
-/// and its writes no `into=`; a write whose mode the core can't know has no
-/// `mode=`. `--json` has every line and write.
+/// `raster frames= lines= written=`, then a `raster_writer reg= pc= writes=`
+/// row per register and writer PC counting its writes by the mode they landed
+/// in (`unknown=` where the core couldn't tell, `lcd_off=` with the LCD off),
+/// riskiest first and capped: the `more` row counts the writers left out and,
+/// by mode, any of their writes that landed in OAM scan, drawing or an
+/// unknown mode, so a whole run's answer survives the cap. Then the timeline:
+/// each line with writes and its writes under it, at most [`CAP`] lines and
+/// [`CAP`] writes to a line, and at most [`RASTER_TIMELINE_ROWS`] rows in all
+/// (an LCD-off stretch is one line holding every write made while the LCD was
+/// off). A line with the LCD off reads `line=off`; a line with no reported
+/// start has no `start=` and its writes no `into=`; a write whose mode the
+/// core can't know has no `mode=`. `--json` has every line and write.
 pub fn raster(t: &RasterMade) -> String {
     let mut out = Row::new("raster")
         .field("frames", t.frames)

@@ -100,8 +100,8 @@ Does every scroll or palette write land in HBlank?
   tell). Over a whole run from boot, mode= is the proof:
   gbcli run game.gb --session hb --frames 3000 --keys-file play.txt --raster
   (each raster_writer row counts one instruction's writes to one register by
-  mode: hblank= or vblank= alone passes; any other mode names the instruction
-  with pc=, and unknown= proves nothing).
+  mode: hblank=, vblank= or lcd_off= alone passes; any other mode names the
+  instruction with pc=, and unknown= proves nothing).
   To stop at a write that starts outside HBlank and look around, break on it,
   then rerun the same input from boot (gbcli run --session hb --from boot
   --frames 3000 --keys-file play.txt):

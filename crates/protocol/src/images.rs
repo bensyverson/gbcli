@@ -126,6 +126,13 @@ pub enum ImageLimit {
     /// a color image, isn't the color image's size; `count` and `max` are
     /// its width and the color image's when they differ, else the heights.
     DmgOverrideSize,
+    /// GBC: the project has indexed art and `assets/palettes.txt` has no
+    /// `dmg` line, so its shades are chosen from every color in the project
+    /// and other art can recolor it: a sheet's OBP, and so its reordered OBJ
+    /// palette, or a background's tile data and so the palette entries it
+    /// draws. A warning, once for the project (no `image`); `count` is the
+    /// indexed images, `max` 0; the message names them.
+    ShadesUnpinned,
 }
 
 impl ImageLimit {
@@ -152,6 +159,7 @@ impl ImageLimit {
             ImageLimit::GbcPalettes => "gbc_palettes",
             ImageLimit::GbcTileColors => "gbc_tile_colors",
             ImageLimit::DmgOverrideSize => "dmg_override_size",
+            ImageLimit::ShadesUnpinned => "shades_unpinned",
         }
     }
 }

@@ -128,12 +128,14 @@ fn every_limit_name_matches_the_wire() {
         GbcPalettes,
         GbcTileColors,
         DmgOverrideSize,
+        ShadesUnpinned,
     ] {
         assert_eq!(serde_json::to_value(limit).unwrap(), limit.name());
     }
     assert_eq!(GbcPalettes.name(), "gbc_palettes");
     assert_eq!(GbcTileColors.name(), "gbc_tile_colors");
     assert_eq!(DmgOverrideSize.name(), "dmg_override_size");
+    assert_eq!(ShadesUnpinned.name(), "shades_unpinned");
     assert_eq!(ImageKind::Tiles.dir(), "tiles");
     for kind in [ImageKind::Bg, ImageKind::Sprites, ImageKind::Tiles] {
         assert_eq!(serde_json::to_value(kind).unwrap(), kind.dir());

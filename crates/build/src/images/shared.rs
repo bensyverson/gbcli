@@ -37,7 +37,7 @@ pub(crate) struct Shared {
 }
 
 /// The rule as a warning words it.
-fn rule(choice: ShadeChoice) -> String {
+pub(crate) fn rule(choice: ShadeChoice) -> String {
     match (choice.rule, choice.palette) {
         (ShadeRule::Declared, _) => "declared (the dmg line of assets/palettes.txt)".into(),
         (ShadeRule::Known, Some(p)) => format!("known ({})", p.name()),

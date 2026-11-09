@@ -217,6 +217,19 @@ pub(crate) fn convert(
     });
     made.problems
         .extend(indexed.as_ref().and_then(|i| i.problem(&palette_shown)));
+    if target == BuildTarget::Gbc {
+        let assigned: Vec<(String, ImageKind)> = sources
+            .iter()
+            .filter(|s| indexed::assigned(&named_palettes, &s.name).is_some())
+            .map(|s| (shown(&s.path), s.kind))
+            .collect();
+        made.problems.extend(indexed::unpinned(
+            &named_palettes,
+            &assigned,
+            shading.choice,
+            &palette_shown,
+        ));
+    }
     if made.first_error().is_some() {
         return Ok(Some(Converted { made, ..stopped }));
     }

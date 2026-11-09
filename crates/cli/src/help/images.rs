@@ -74,6 +74,8 @@ the image's 8x8 grid; --json lists them all), message and remedy.
   gbc_tile_colors     build --gbc: over 4 colors in a tile, or over 3
                       opaque colors in an object
   dmg_override_size   build --gbc: town.dmg.png isn't town.png's size
+  shades_unpinned     build --gbc, a warning once for the project: indexed
+                      art and no dmg line, so other art can recolor it
   rgbgfx_agrees       not a limit: rgbgfx drew other indices than gbcli
                       planned (a gbcli bug; re-save the PNG as 8-bit)
 
@@ -113,7 +115,11 @@ one of two kinds of art:
                 swap. A background's (or tileset's) index i draws entry
                 i. A sheet's OBJ palette is its palette reordered by its
                 OBP (sheets of one palette in different shades take one
-                OBJ palette each).
+                OBJ palette each). Without a dmg line its shades come
+                from every color in the project, so adding or changing
+                other art can move them: a sheet's OBP and so its OBJ
+                palette, a background's index and so the entry it draws.
+                shades_unpinned warns; a dmg line pins the shades.
 To draw a color image's DMG version yourself, put town.dmg.png beside
 town.png (hero.16x16.dmg.png beside hero.16x16.png): the same size, drawn
 as DMG art, its colors shaded with the project's. A .dmg.png is an error

@@ -20,11 +20,12 @@
 //! so a program swapping palettes finds them where they were.
 
 use gbcli_protocol::{
-    GbcImage, GbcImagesMade, GbcPalette, ImageArt, ImageAsset, ImageLimit, ImageProblem,
-    NamedPalette, NamedPalettes, PaletteSlot, TileEntry,
+    GbcImage, GbcImagesMade, GbcPalette, ImageArt, ImageAsset, ImageKind, ImageLimit, ImageProblem,
+    NamedPalette, NamedPalettes, PaletteSlot, Severity, ShadeChoice, TileEntry,
 };
 
 use super::census::error;
+use super::shared::{and, rule};
 use super::sheet::SheetPlan;
 
 /// A GBC build's indexed art: the project's named palettes and the OBJ
@@ -80,6 +81,66 @@ impl<'a> Indexed<'a> {
             obj_palettes: self.slots.colors(),
         }
     }
+}
+
+/// One project-level `shades_unpinned` warning (no image) when `images`
+/// (the indexed art, as shown, each with its kind) is not empty and `named`
+/// has no `dmg` line (Ben's ruling, plan question 3, leaf d8FHRl). The
+/// cascade then chooses the shades from every color in the project, even
+/// when today's rule is known (a new color can make it stretched), so other
+/// art can move them: a sheet's OBP, and with it its reordered OBJ palette;
+/// a background's (or tileset's) tile data, whose index is its shade, and
+/// with it the entries of its palette it draws. `choice` is today's rule;
+/// `shown` names where the palettes came from. Only a GBC build asks:
+/// without --gbc indexed art is DMG art (plan question 10), its shades
+/// moving as all DMG art's do, with no GBC palette to recolor.
+pub(crate) fn unpinned(
+    named: &NamedPalettes,
+    images: &[(String, ImageKind)],
+    choice: ShadeChoice,
+    shown: &str,
+) -> Option<ImageProblem> {
+    if images.is_empty() || named.dmg.is_some() {
+        return None;
+    }
+    let one = images.len() == 1;
+    let mut how = Vec::new();
+    if images.iter().any(|(_, k)| *k == ImageKind::Sprites) {
+        how.push("a sheet's OBP, and with it its OBJ palette (its palette reordered by OBP)");
+    }
+    if images.iter().any(|(_, k)| *k != ImageKind::Sprites) {
+        how.push(
+            "a background's or tileset's tile data (its index is its shade), and with it the \
+             entries of its palette it draws",
+        );
+    }
+    let names: Vec<String> = images.iter().map(|(n, _)| n.clone()).collect();
+    let message = format!(
+        "{} {} indexed art with no dmg line in {shown}, so {} shades are chosen from every \
+         color in the project (today's rule: {}); adding or changing other art can change \
+         them, and so recolor {} on the GBC: {}",
+        and(&names),
+        if one { "is" } else { "are" },
+        if one { "its" } else { "their" },
+        rule(choice),
+        if one { "it" } else { "them" },
+        how.join("; "),
+    );
+    Some(ImageProblem {
+        image: None,
+        severity: Severity::Warning,
+        ..error(
+            "",
+            ImageLimit::ShadesUnpinned,
+            images.len(),
+            0,
+            message,
+            &format!(
+                "add a dmg line to {shown} to pin the shades: the colors of shades 0-3, \
+                 each color taking its nearest entry's shade (gbcli help images)"
+            ),
+        )
+    })
 }
 
 /// The palette `named` assigns the image at `path` (under `assets/`), if

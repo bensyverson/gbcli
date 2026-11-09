@@ -26,6 +26,7 @@ mod images_shades;
 mod images_sprites;
 mod images_swap_palettes;
 mod images_tiles;
+mod images_unpinned;
 mod music;
 mod music_equiv;
 mod music_regressions;

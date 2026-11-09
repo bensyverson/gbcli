@@ -1,7 +1,8 @@
 $ gbcli assets --manifest font.json --gbc --keep kept
 exit 0
 image kind=tiles source=art/glyphs.png label=Font size=4x1 tiles=3 preview=kept/tiles/font.preview.png
-images converted=1 errors=0 warnings=0 shades=known palette=dmg_grays
+problem limit=shades_unpinned severity=warning count=1 max=0 message="art/glyphs.png is indexed art with no dmg line in the manifest's palettes, so its shades are chosen from every color in the project (today's rule: known (dmg_grays)); adding or changing other art can change them, and so recolor it on the GBC: a background's or tileset's tile data (its index is its shade), and with it the entries of its palette it draws" remedy="add a dmg line to the manifest's palettes to pin the shades: the colors of shades 0-3, each color taking its nearest entry's shade (gbcli help images)"
+images converted=1 errors=0 warnings=1 shades=known palette=dmg_grays
 assets target=gbc errors=0 warnings=0
 $ gbcli assets game
 exit 0

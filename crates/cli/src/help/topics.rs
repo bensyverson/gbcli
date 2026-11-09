@@ -311,6 +311,7 @@ mod tests {
             GbcPalettes,
             GbcTileColors,
             DmgOverrideSize,
+            ShadesUnpinned,
         ] {
             assert!(text.contains(limit.name()), "{} missing", limit.name());
         }

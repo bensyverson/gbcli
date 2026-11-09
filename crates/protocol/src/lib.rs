@@ -71,8 +71,8 @@ pub use request::{
     RestoreArgs, RmArgs, RunArgs, Start, StepArgs, WatchArgs, WriteArg, WriteArgs, WriteKind,
 };
 pub use response::{
-    BreakpointMade, CheckpointMade, Deleted, OamEntryRead, ReadValue, Response, Restored,
-    ResultBody, WatchMade, WriteMade,
+    BreakpointMade, CheckpointMade, Deleted, OamEntryRead, ReadFailed, ReadValue, Response,
+    Restored, ResultBody, WatchMade, WriteMade,
 };
 pub use rev::Rev;
 pub use session::{

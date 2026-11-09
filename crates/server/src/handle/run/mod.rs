@@ -20,7 +20,7 @@ use gbcli_protocol::{
 };
 
 use super::history::write_checkpoint;
-use super::reads::{CompiledRead, compile_reads, eval_reads, warning_text};
+use super::reads::{CompiledRead, compile_reads, eval_reads_each, warning_text};
 use super::writes::{apply_writes, parse_location};
 use super::{Failure, Handler, HeadChange, Need, save_head, shot};
 use crate::convert;
@@ -68,7 +68,7 @@ impl Handler {
             failure.body.message += &format!("; checkpoint `{name}` was not saved");
         }
         if let Some(stop) = &failure.body.stop {
-            failure.body.keys_unapplied = unapplied(&args.keys, stop, warnings);
+            failure.body.keys_unapplied = unapplied(&args.keys, stop);
         }
         Err(failure)
     }
@@ -102,13 +102,13 @@ impl Handler {
             validate_checkpoint_name(name).map_err(|e| Failure::from_store(&e))?;
         }
         if let Some(shot) = &args.shot {
-            shot::check(shot)?;
+            shot::check(shot, &self.host)?;
         }
         if let Some(strip) = &args.filmstrip {
-            filmstrip::check(strip)?;
+            filmstrip::check(strip, &self.host)?;
         }
         if let Some(sound) = &args.audio {
-            audio::check(sound)?;
+            audio::check(sound, &self.host)?;
         }
 
         // What needs the machine's symbols and sizes. A refusal here hands
@@ -142,7 +142,11 @@ impl Handler {
         };
         let (budget, limits, defaulted) = budget_of(args);
         let interrupt = self.interrupt.clone();
-        let collector = args.filmstrip.as_deref().map(filmstrip::Collector::new);
+        let host = self.host.clone();
+        let collector = args
+            .filmstrip
+            .as_deref()
+            .map(|strip| filmstrip::Collector::new(strip, &host));
         let oam_log = args.oam_log.then(oam_log::Collector::default);
         let sinks = plan.probes.sinks.as_ref();
         let sink = |m: &Machine, done: u64| {
@@ -153,7 +157,7 @@ impl Handler {
                 o.on_frame(m);
             }
             if let Some(s) = sinks {
-                s.borrow_mut().cut();
+                s.borrow_mut().cut(m);
             }
         };
         let mut opts = RunOptions::new(budget);
@@ -200,9 +204,19 @@ impl Handler {
             ..HeadChange::default()
         };
         save_head(store, meta, &mut machine, change)?;
-        let reads = eval_reads(&machine, &plan.reads, &since, args.allow_uninit, warnings);
+        let reads = eval_reads_each(
+            &machine,
+            &plan.reads,
+            &since,
+            args.allow_uninit,
+            warnings,
+            &mut self.gaps_found,
+        );
         // After the reads (design §11 step 6); capturing only reads the core.
-        let shot = args.shot.as_ref().map(|s| shot::take(&machine, s, &since));
+        let shot = args
+            .shot
+            .as_ref()
+            .map(|s| shot::take(&machine, s, &since, &host));
         let answered = self.answered(args, defaulted, guarded, &stop);
         warnings.extend(short_of_target(args, &stop));
         // Step 5, on a copy of the stop; and what the run's sinks collected.
@@ -217,8 +231,7 @@ impl Handler {
         // The files after the shot are written only when everything before
         // them succeeded: the filmstrip, then the audio, whose per-channel
         // replays run the request four more times.
-        let so_far = reads.is_ok()
-            && shot.as_ref().is_none_or(Result::is_ok)
+        let so_far = shot.as_ref().is_none_or(Result::is_ok)
             && answered.is_ok()
             && measured.as_ref().is_none_or(Result::is_ok);
         let strip = match &collector {
@@ -230,7 +243,7 @@ impl Handler {
             (Some(a), Some(collected)) if so_far => Some(collected.and_then(|c| {
                 let guard = self.wall_guard;
                 let drive = |m: &mut Machine| replay(m, &plan.target, &replay_opts, guard);
-                audio::deliver(a, c, &machine, &since, || {
+                audio::deliver(a, c, &machine, &since, &host, || {
                     audio::takes(replay_from.as_mut(), drive)
                 })
             })),
@@ -253,7 +266,6 @@ impl Handler {
             f.with_stop(stop.clone())
                 .with_flash_notes(flash_notes.clone())
         };
-        let reads = reads.map_err(with_stop)?;
         let shot = shot.transpose().map_err(with_stop)?;
         answered.map_err(|f| f.with_flash_notes(flash_notes.clone()))?;
         let measured = measured.transpose().map_err(with_stop)?;
@@ -261,7 +273,7 @@ impl Handler {
         let sound = sound.transpose().map_err(with_stop)?;
         let oam_made = oam_made.transpose().map_err(with_stop)?;
         let checkpoint = checkpoint.map_err(with_stop)?;
-        let keys_unapplied = unapplied(&args.keys, &stop, warnings);
+        let keys_unapplied = unapplied(&args.keys, &stop);
         Ok(ResultBody {
             stop: Some(stop),
             reads: Some(reads),
@@ -485,25 +497,12 @@ fn plan_of(machine: &Machine, args: &RunArgs) -> Result<Plan, Failure> {
     })
 }
 
-/// The key events past the stop, as a warning and for the result: never
-/// silently dropped (design §11 step 3).
-fn unapplied(
-    keys: &[KeyEvent],
-    stop: &StopRecord,
-    warnings: &mut Vec<String>,
-) -> Option<Vec<KeyEvent>> {
+/// The key events past the stop, for the result: never silently dropped
+/// (design §11 step 3). No warning repeats them: a long keys file would
+/// bury the stop.
+fn unapplied(keys: &[KeyEvent], stop: &StopRecord) -> Option<Vec<KeyEvent>> {
     let late = unapplied_keys(keys, stop.budget.frames);
-    if late.is_empty() {
-        return None;
-    }
-    let tokens: Vec<String> = late.iter().map(KeyEvent::to_string).collect();
-    warnings.push(format!(
-        "the run stopped after {} frames, before {} key event(s): {}",
-        stop.budget.frames,
-        late.len(),
-        tokens.join(" ")
-    ));
-    Some(late)
+    (!late.is_empty()).then_some(late)
 }
 
 fn stop_of(error: &DebugError) -> Option<&StopRecord> {

@@ -1,10 +1,11 @@
 use gbcli_bundle::SessionStore;
+use gbcli_core::Gap;
 use gbcli_engine::cond::{Condition, EvalCtx, EvalWarning, ExprError, oam_entry};
 use gbcli_engine::inspect::video::{ObjectAttributes, ObjectPalette, object_attributes};
 use gbcli_engine::{Area, Machine, Since};
 use gbcli_protocol::{
-    EventsArgs, OamEntryRead, PpuView, ReadArgs, ReadValue, RegistersView, ResultBody, SessionFile,
-    TimeBase, TimeMark,
+    EventsArgs, OamEntryRead, PpuView, ReadArgs, ReadFailed, ReadValue, RegistersView, ResultBody,
+    SessionFile, TimeBase, TimeMark,
 };
 
 use super::{Failure, Handler, Need};
@@ -172,44 +173,90 @@ pub(super) fn eval_reads(
     warnings: &mut Vec<String>,
 ) -> Result<Vec<ReadValue>, Failure> {
     let base = machine.time_base(since);
+    reads
+        .iter()
+        .map(|read| eval_read(machine, read, base, allow_uninit, warnings))
+        .collect()
+}
+
+/// A run's reads: one that fails says why in its own row, and the stop and
+/// the other reads stand. The gap of a read the core can't answer goes to
+/// `gaps`, for the ledger.
+pub(super) fn eval_reads_each(
+    machine: &Machine,
+    reads: &[CompiledRead],
+    since: &Since,
+    allow_uninit: bool,
+    warnings: &mut Vec<String>,
+    gaps: &mut Vec<Gap>,
+) -> Vec<ReadValue> {
+    let base = machine.time_base(since);
     let mut values = Vec::new();
-    for CompiledRead { text, form } in reads {
-        let condition = match form {
-            ReadForm::Value(condition) => condition,
-            ReadForm::OamEntry(index) => {
-                let entry = object_attributes(machine.core(), *index)
-                    .map_err(|e| Failure::from_core(&e))?;
-                values.push(ReadValue {
-                    expr: text.clone(),
-                    value: None,
-                    oam: Some(oam_view(&entry)),
-                });
-                continue;
-            }
-        };
-        let ctx = EvalCtx {
-            core: machine.core(),
-            symbols: machine.symbols(),
-            access: None,
-            base,
-            allow_uninit,
-        };
-        let mut eval_warnings: Vec<EvalWarning> = Vec::new();
-        let value = condition
-            .eval(&ctx, &mut eval_warnings)
-            .map_err(|e| Failure {
-                body: Box::new(convert::eval(&e)),
-                gap: convert::gap_of_eval(&e),
-            })?;
-        warnings.extend(eval_warnings.iter().map(warning_text));
-        warnings.extend(bare_ram_symbol(machine, text));
-        values.push(ReadValue {
-            expr: text.clone(),
-            value: Some(value),
-            oam: None,
-        });
+    for read in reads {
+        values.push(
+            match eval_read(machine, read, base, allow_uninit, warnings) {
+                Ok(value) => value,
+                Err(Failure { body, gap }) => {
+                    gaps.extend(gap);
+                    ReadValue {
+                        expr: read.text.clone(),
+                        value: None,
+                        oam: None,
+                        error: Some(ReadFailed {
+                            code: body.code,
+                            message: body.message,
+                            remedy: body.remedy,
+                        }),
+                    }
+                }
+            },
+        );
     }
-    Ok(values)
+    values
+}
+
+fn eval_read(
+    machine: &Machine,
+    CompiledRead { text, form }: &CompiledRead,
+    base: TimeMark,
+    allow_uninit: bool,
+    warnings: &mut Vec<String>,
+) -> Result<ReadValue, Failure> {
+    let condition = match form {
+        ReadForm::Value(condition) => condition,
+        ReadForm::OamEntry(index) => {
+            let entry =
+                object_attributes(machine.core(), *index).map_err(|e| Failure::from_core(&e))?;
+            return Ok(ReadValue {
+                expr: text.clone(),
+                value: None,
+                oam: Some(oam_view(&entry)),
+                error: None,
+            });
+        }
+    };
+    let ctx = EvalCtx {
+        core: machine.core(),
+        symbols: machine.symbols(),
+        access: None,
+        base,
+        allow_uninit,
+    };
+    let mut eval_warnings: Vec<EvalWarning> = Vec::new();
+    let value = condition
+        .eval(&ctx, &mut eval_warnings)
+        .map_err(|e| Failure {
+            body: Box::new(convert::eval(&e)),
+            gap: convert::gap_of_eval(&e),
+        })?;
+    warnings.extend(eval_warnings.iter().map(warning_text));
+    warnings.extend(bare_ram_symbol(machine, text));
+    Ok(ReadValue {
+        expr: text.clone(),
+        value: Some(value),
+        oam: None,
+        error: None,
+    })
 }
 
 #[cfg(test)]

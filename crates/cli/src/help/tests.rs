@@ -164,6 +164,32 @@ fn measure_help_offers_the_key_timeline() {
     assert!(text.contains("--keys-file FILE"), "{text}");
 }
 
+/// Both example games' agents found that held keys carry across runs, and
+/// built a closed-loop bot on it; neither was documented (leaf emtFvQ).
+#[test]
+fn the_help_says_held_keys_carry_over_and_offers_the_bot_recipe() {
+    let run = verb(crate::verbs::by_name("run").unwrap());
+    assert!(run.contains("stays held into the next run"), "{run}");
+    let recipes = RECIPES;
+    let bot = recipes
+        .lines()
+        .position(|l| l.contains("closed-loop bot"))
+        .expect("the bot recipe");
+    let body: Vec<&str> = recipes.lines().skip(bot + 1).take(6).collect();
+    let body = body.join(" ");
+    for needed in ["--read", "--json", "--keys-file", "--at start"] {
+        assert!(body.contains(needed), "{needed}: {body}");
+    }
+}
+
+/// The budgets topic says how the frame budget counts LCD-off frames.
+#[test]
+fn the_budgets_topic_explains_lcd_off_frames() {
+    let text = Topic::Budgets.text();
+    assert!(text.contains("lcd_off"), "{text}");
+    assert!(text.contains("busiest"), "{text}");
+}
+
 #[test]
 fn wrap_breaks_at_the_width() {
     assert_eq!(wrap("aa bb cc", 5), "aa bb\ncc");

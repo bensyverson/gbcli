@@ -7,6 +7,11 @@
 //! that wait in HALT, as most homebrew does. A game that busy-waits (polling
 //! LY or a flag) never halts, so every one of its frames reads as lag; for
 //! those, `measure` from the top of the main loop to its wait is the tool.
+//!
+//! **An LCD-off frame** is one the LCD was off for some of: off at its start
+//! or its end, or turned off during it. Games turn the LCD off on purpose, at
+//! startup and to change screens, and work through those frames without
+//! halting; such a frame shows nothing, so it is never lag.
 
 use gbcli_core::{CoreError, CpuStep, Event, EventKinds, EventSink, RunRequest, StopReason};
 
@@ -18,22 +23,55 @@ pub struct FrameBudget {
     pub active_t: u64,
     /// CPU T-cycles spent in HALT or STOP.
     pub idle_t: u64,
+    /// The CPU never halted, with the LCD on throughout.
     pub lag: bool,
+    /// The LCD was off for some of the frame.
+    pub lcd_off: bool,
+}
+
+/// The LCD at a frame's edge: on or off, and how many times the machine
+/// had turned it off by then.
+#[derive(Clone, Copy, Debug)]
+struct LcdAt {
+    on: bool,
+    offs: u64,
+}
+
+impl LcdAt {
+    fn of(m: &Machine) -> LcdAt {
+        LcdAt {
+            on: m.core().ppu().lcd_on,
+            offs: m.lcd_offs(),
+        }
+    }
 }
 
 /// The sink behind [`Machine::frame_budget`]: it adds each step to the frame
 /// in progress until [`FrameSplit::cut`] ends it. Usable on any run whose
-/// request takes a sink, cut at each vblank.
-#[derive(Default)]
+/// request takes a sink, cut at each vblank. Its LCD-off verdict needs the
+/// machine's LCD-off count, which a drive (or `frame_budget`) keeps.
 pub struct FrameSplit {
     frame: FrameBudget,
+    start: LcdAt,
 }
 
 impl FrameSplit {
-    /// Ends the frame in progress and returns it, lag decided.
-    pub fn cut(&mut self) -> FrameBudget {
+    /// A split whose first frame starts where `m` is now.
+    pub fn starting(m: &Machine) -> FrameSplit {
+        FrameSplit {
+            frame: FrameBudget::default(),
+            start: LcdAt::of(m),
+        }
+    }
+
+    /// Ends the frame in progress where `m` is now and returns it, LCD-off
+    /// and lag decided; the next frame starts here.
+    pub fn cut(&mut self, m: &Machine) -> FrameBudget {
+        let end = LcdAt::of(m);
         let mut frame = std::mem::take(&mut self.frame);
-        frame.lag = frame.idle_t == 0;
+        frame.lcd_off = !self.start.on || !end.on || end.offs > self.start.offs;
+        frame.lag = frame.idle_t == 0 && !frame.lcd_off;
+        self.start = end;
         frame
     }
 }
@@ -69,14 +107,26 @@ impl Machine {
     /// first counts from where the machine is; each ends at the end of the
     /// step its vblank fell in. The machine moves, as a run does.
     pub fn frame_budget(&mut self, frames: u32) -> Result<Vec<FrameBudget>, CoreError> {
+        // The LCD-off log feeds the LCD-off verdict; a core without it
+        // reports only the LCD's state at each vblank.
+        let _ = self.core_mut().set_lcd_off_log(true);
+        let out = self.split_frames(frames);
+        let _ = self.core_mut().set_lcd_off_log(false);
+        out
+    }
+
+    fn split_frames(&mut self, frames: u32) -> Result<Vec<FrameBudget>, CoreError> {
         let mut out = Vec::new();
+        let mut split = FrameSplit::starting(self);
         while out.len() < frames as usize {
-            let mut split = FrameSplit::default();
             let mut req = RunRequest::new(gbcli_core::Budget::frames(1));
             req.stop_at_frame = true;
             req.sink = Some(&mut split);
             let stop = self.core_mut().run(&mut req)?;
-            out.push(split.cut());
+            if let Ok(offs) = self.core_mut().take_lcd_offs() {
+                self.count_lcd_offs(offs.len());
+            }
+            out.push(split.cut(self));
             if matches!(stop.reason, StopReason::Locked { .. } | StopReason::Stopped) {
                 break;
             }

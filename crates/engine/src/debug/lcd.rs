@@ -57,11 +57,13 @@ pub(super) fn watch(m: &mut Machine, on: bool) {
     let _ = m.core_mut().set_lcd_off_log(on);
 }
 
-/// Takes what the core logged since the last call into `found`.
+/// Takes what the core logged since the last call into `found`, and counts
+/// every LCD-off on the machine ([`Machine::lcd_offs`]).
 pub(super) fn collect(m: &mut Machine, since: &Since, found: &mut Option<LcdOffOutsideVblank>) {
     let Ok(offs) = m.core_mut().take_lcd_offs() else {
         return;
     };
+    m.count_lcd_offs(offs.len());
     for off in offs.iter().filter(|o| o.line < VBLANK_FIRST_LINE) {
         match found {
             Some(first) => first.more += 1,

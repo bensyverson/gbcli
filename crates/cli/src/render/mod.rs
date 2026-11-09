@@ -126,7 +126,10 @@ pub fn rows(r: &ResultBody) -> String {
         let row = Row::new("read")
             .field("expr", &read.expr)
             .opt("value", read.value)
-            .opt("hex", read.value.and_then(hex));
+            .opt("hex", read.value.and_then(hex))
+            .opt("error", read.error.as_ref().map(|e| e.code))
+            .opt("message", read.error.as_ref().map(|e| &e.message))
+            .opt("remedy", read.error.as_ref().map(|e| &e.remedy));
         out += &match &read.oam {
             Some(o) => row
                 .field("y", o.y)

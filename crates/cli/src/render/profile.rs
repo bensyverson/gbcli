@@ -60,11 +60,11 @@ pub fn profile(p: &ProfileMade) -> String {
     out
 }
 
-/// `frame_budget frames= [partial=N] lag= active_min= active_max=
+/// `frame_budget frames= [partial=N] lag= lcd_off= active_min= active_max=
 /// active_mean= busiest=`: the whole frames, how many partial ones the run
 /// saw the end or start of (the frame it started in, the one it stopped in),
-/// and the whole frames' summary; then a `frame_cost` row for each lag
-/// frame. The frames that made their budget differ only by a few cycles, so
+/// the lag and LCD-off frames among the whole ones, and the whole LCD-on
+/// frames' summary; then a `frame_cost` row for each lag frame. The frames that made their budget differ only by a few cycles, so
 /// their rows would bury the ones that didn't; `--json` carries every frame,
 /// the partial ones too.
 pub fn frame_budget(b: &FrameBudgetMade) -> String {
@@ -73,6 +73,7 @@ pub fn frame_budget(b: &FrameBudgetMade) -> String {
         .field("frames", b.frames.len() - partial)
         .opt("partial", (partial > 0).then_some(partial))
         .field("lag", b.lag)
+        .field("lcd_off", b.lcd_off)
         .opt("active_min", b.active_t.map(|s| s.min))
         .opt("active_max", b.active_t.map(|s| s.max))
         .opt(
@@ -141,35 +142,43 @@ mod tests {
             active_t,
             idle_t: 70224 - active_t,
             lag,
+            lcd_off: false,
             partial,
         }
     }
 
     /// Only the lag frames get a row: sixty near-identical rows for sixty
     /// healthy frames were the flood two agent evals complained of, and the
-    /// header already sums them up (leaf k22J86).
+    /// header already sums them up (leaf k22J86). An LCD-off frame is
+    /// counted in the header, apart from lag, and gets no row (leaf emtFvQ).
     #[test]
     fn rows_list_only_the_lag_frames_under_the_summary() {
+        let loading = FrameBudgetRow {
+            lcd_off: true,
+            ..frame(70224, Some(false), false)
+        };
         let made = FrameBudgetMade {
             frames: vec![
+                loading,
                 frame(30000, Some(false), false),
                 frame(70224, Some(true), false),
                 frame(31000, Some(false), false),
                 frame(1000, None, true),
             ],
             lag: 1,
+            lcd_off: 1,
             active_t: Some(CycleStats {
                 min: 30000,
                 max: 70224,
                 mean: Real(43741.3),
             }),
-            busiest: Some(1),
+            busiest: Some(2),
         };
         assert_eq!(
             frame_budget(&made),
-            "frame_budget frames=3 partial=1 lag=1 active_min=30000 active_max=70224 \
-             active_mean=43741.3 busiest=1\n\
-             frame_cost index=1 active_t=70224 idle_t=0 lag=1\n"
+            "frame_budget frames=4 partial=1 lag=1 lcd_off=1 active_min=30000 \
+             active_max=70224 active_mean=43741.3 busiest=2\n\
+             frame_cost index=2 active_t=70224 idle_t=0 lag=1\n"
         );
     }
 }

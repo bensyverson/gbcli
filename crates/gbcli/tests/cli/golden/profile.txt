@@ -38,7 +38,7 @@ frame_pct min=0.034 max=0.034 mean=0.034
 profile total_t=210664 idle_t=0 routines=2 unwound=0 mismatched=0 ret_jumps=0 open=0
 routine name=Work bank=0 addr=$0163 calls=1879 exclusive_t=143008 inclusive_t=143008
 routine name=Main.loop+$3 bank=0 addr=$0161 calls=0 exclusive_t=67656 inclusive_t=210664
-frame_budget frames=3 lag=3 active_min=70208 active_max=70232 active_mean=70221.3 busiest=2
+frame_budget frames=3 lag=3 lcd_off=0 active_min=70208 active_max=70232 active_mean=70221.3 busiest=2
 frame_cost index=0 active_t=70208 idle_t=0 lag=1
 frame_cost index=1 active_t=70224 idle_t=0 lag=1
 frame_cost index=2 active_t=70232 idle_t=0 lag=1
@@ -52,7 +52,7 @@ $ gbcli run --instructions 30000 --frame-budget --session demo
 exit 0
 stop budget_exhausted kind=instructions pc=$0168 bank=0 symbol=Work+$5 frame=10 t=724168 since=boot ticks=13210552 ly=38 shown=10 vblank=normal
 budget frames=5 instructions=30000/30000 ticks=746432
-frame_budget frames=5 partial=1 lag=5 active_min=70216 active_max=70232 active_mean=70222.4 busiest=2
+frame_budget frames=5 partial=1 lag=5 lcd_off=0 active_min=70216 active_max=70232 active_mean=70222.4 busiest=2
 frame_cost index=0 active_t=70216 idle_t=0 lag=1
 frame_cost index=1 active_t=70224 idle_t=0 lag=1
 frame_cost index=2 active_t=70232 idle_t=0 lag=1
@@ -61,4 +61,4 @@ frame_cost index=4 active_t=70220 idle_t=0 lag=1
 rev s3
 $ gbcli run --instructions 10000 --frame-budget --json --session demo
 exit 0
-{"id":"cli","ok":true,"rev":"s4","result":{"stop":{"reason":"budget_exhausted","kind":"instructions","pc":364,"bank":0,"symbol":"Work+$9","time":{"ticks":13459368,"t":848576,"since":{"kind":"boot"},"frame":12,"ly":3,"dot":null},"frame_shown":{"n":12,"vblank":"normal"},"budget":{"ticks":248816,"instructions":10000,"frames":2,"limits":{"instructions":10000},"defaulted":false}},"reads":[],"frame_budget":{"frames":[{"active_t":48128,"idle_t":0,"lag":null,"partial":true},{"active_t":70220,"idle_t":0,"lag":true},{"active_t":6060,"idle_t":0,"lag":null,"partial":true}],"lag":1,"active_t":{"min":70220,"max":70220,"mean":70220.0},"busiest":1}},"warnings":[]}
+{"id":"cli","ok":true,"rev":"s4","result":{"stop":{"reason":"budget_exhausted","kind":"instructions","pc":364,"bank":0,"symbol":"Work+$9","time":{"ticks":13459368,"t":848576,"since":{"kind":"boot"},"frame":12,"ly":3,"dot":null},"frame_shown":{"n":12,"vblank":"normal"},"budget":{"ticks":248816,"instructions":10000,"frames":2,"limits":{"instructions":10000},"defaulted":false}},"reads":[],"frame_budget":{"frames":[{"active_t":48128,"idle_t":0,"lag":null,"lcd_off":false,"partial":true},{"active_t":70220,"idle_t":0,"lag":true,"lcd_off":false},{"active_t":6060,"idle_t":0,"lag":null,"lcd_off":false,"partial":true}],"lag":1,"lcd_off":0,"active_t":{"min":70220,"max":70220,"mean":70220.0},"busiest":1}},"warnings":[]}

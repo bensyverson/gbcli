@@ -215,6 +215,38 @@ fn uninitialized_read_offers_allow_uninit() {
     );
 }
 
+/// A run's read of never-written memory fails in its own row: the run
+/// succeeds, with its stop and its other reads (leaf emtFvQ).
+#[test]
+fn a_runs_uninitialized_read_fails_in_its_row_and_the_run_stands() {
+    let p = Project::with_session("uninit-run");
+    let args = [
+        "run",
+        "--session",
+        "demo",
+        "--frames",
+        "1",
+        "--read",
+        "[wNever]",
+        "--read",
+        "u16[wFrame]",
+    ];
+    let run = p.gbcli(&args);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    assert!(run.stdout.starts_with("stop "), "{}", run.stdout);
+    let row = |prefix: &str| {
+        run.stdout
+            .lines()
+            .find(|l| l.starts_with(prefix))
+            .unwrap_or_else(|| panic!("no {prefix} row: {}", run.stdout))
+            .to_string()
+    };
+    let never = row("read expr=[wNever] ");
+    assert!(never.contains(" error=uninitialized_read "), "{never}");
+    assert!(never.contains("--allow-uninit"), "{never}");
+    assert!(row("read expr=u16[wFrame] ").contains(" value="));
+}
+
 #[test]
 fn rom_unreadable_names_the_path() {
     let p = Project::new("rom-unreadable");

@@ -73,6 +73,7 @@ fn a_whole_entry_reads_as_its_fields() {
             expr: "oam[2]".into(),
             value: None,
             oam: Some(SPRITE),
+            error: None,
         }]
     );
 }

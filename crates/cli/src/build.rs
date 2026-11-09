@@ -338,7 +338,8 @@ pub(crate) fn target(inv: &Invocation, env: &Env, rom: Option<String>) -> Result
             .transpose()?,
         allow_rom_change: inv.has("allow-rom-change"),
         json: inv.has("json"),
-        dir: inv.one("dir").map(|d| env.cwd.join(d)),
+        // `--dir` already moved the working directory there (`Env::anchored`).
+        dir: inv.has("dir").then(|| env.cwd.clone()),
         create,
     })
 }

@@ -7,7 +7,7 @@ use gbcli_protocol::{
 
 use super::Handler;
 use super::test_support::{handler, request};
-use crate::fixture::Fixture;
+use crate::fixture::{Fixture, LCD_OFF, LCD_OFF_SYM};
 
 fn run(h: &mut Handler, args: RunArgs) -> Response {
     h.handle(&request(Op::Run(args)))
@@ -262,4 +262,40 @@ fn profile_top_zero_is_refused() {
     .outcome
     .expect_err("refused");
     assert_eq!(error.code, ErrorCode::BadRequest);
+}
+
+/// A game turns the LCD off on purpose at startup and to change screens, and
+/// doesn't halt while it loads: those frames are LCD-off, not lag, and stay
+/// out of the summary, so a game that makes every frame of play reads lag=0
+/// (leaf emtFvQ; both example games filtered them out in Python).
+#[test]
+fn startup_and_a_screen_change_are_lcd_off_frames_not_lag() {
+    let f = Fixture::with_rom_sym("frame-budget-lcd-off", LCD_OFF, LCD_OFF_SYM);
+    let made = run(
+        &mut handler(&f),
+        RunArgs {
+            frames: Some(16),
+            frame_budget: true,
+            ..RunArgs::default()
+        },
+    )
+    .outcome
+    .expect("ran")
+    .frame_budget
+    .expect("a frame budget");
+    let off: Vec<usize> = (0..made.frames.len())
+        .filter(|&i| made.frames[i].lcd_off)
+        .collect();
+    // Two stretches: startup, and the change after frame 8's vblank.
+    let stretches = off.windows(2).filter(|w| w[1] != w[0] + 1).count() + 1;
+    assert_eq!((off.first(), stretches), (Some(&0), 2), "{:?}", made.frames);
+    assert!(off.len() >= 5, "{off:?}");
+    assert_eq!(made.lcd_off, off.len() as u64);
+    assert_eq!(made.lag, 0, "{:?}", made.frames);
+    assert!(made.frames.iter().all(|r| r.lag == Some(false)));
+    // The summary is play: halting frames, far from a whole frame's cycles.
+    let stats = made.active_t.expect("a summary");
+    assert!(stats.max < 20_000, "{stats:?} {:?}", made.frames);
+    let busiest = made.busiest.expect("a busiest frame") as usize;
+    assert!(!made.frames[busiest].lcd_off, "{busiest}");
 }

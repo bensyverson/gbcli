@@ -41,7 +41,8 @@ pub const JSON: FlagSpec = switch("json", "print the protocol's result object in
 pub const DIR: FlagSpec = value(
     "dir",
     "PATH",
-    "find .gbcli/ from PATH instead of the working directory (beats GBCLI_DIR)",
+    "run as if from PATH: find .gbcli/ from it and read relative paths (the ROM, files \
+     read and written) against it (beats GBCLI_DIR)",
 );
 pub const AS: FlagSpec = value(
     "as",
@@ -191,7 +192,11 @@ pub const RUN: &[FlagSpec] = &[
         "TARGET=BYTES",
         "patch the ROM before the run (recorded in checkpoints)",
     ),
-    repeated("read", "EXPR", "evaluate at the stop; repeat for more"),
+    repeated(
+        "read",
+        "EXPR",
+        "evaluate at the stop; repeat for more (a read that fails says why in its own row)",
+    ),
     value("checkpoint", "NAME", "save the stop state under this name"),
     ALLOW_UNINIT,
     value(
@@ -267,9 +272,10 @@ pub const RUN: &[FlagSpec] = &[
     switch(
         "frame-budget",
         "each frame's active and idle (HALT) T-cycles over the run, and the lag frames: \
-         frames in which the CPU never halted; the first row sums up the whole frames' \
-         active T-cycles (min, max, mean) and the busiest one, then a row per lag frame \
-         (--json has every frame)",
+         frames in which the CPU never halted with the LCD on (LCD-off frames, as at \
+         startup or a screen change, count as lcd_off instead); the first row sums up the \
+         whole LCD-on frames' active T-cycles (min, max, mean) and the busiest one, then a \
+         row per lag frame (--json has every frame; gbcli help budgets)",
     ),
     switch(
         "oam-log",
@@ -286,7 +292,8 @@ pub const RUN: &[FlagSpec] = &[
     value(
         "keys",
         "TOKENS",
-        "press and release buttons: 'A@0 -A@2 START@10' (frame offsets)",
+        "press and release buttons: 'A@0 -A@2 START@10' (frame offsets); a key still \
+         held when the run ends stays held into the next run",
     ),
     value(
         "keys-file",

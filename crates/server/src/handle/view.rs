@@ -2,8 +2,6 @@
 //! as data from `inspect::video`, and as the view crate's PNG when asked.
 //! Neither reads more than the core's memory, so the head stays where it was.
 
-use std::path::Path;
-
 use gbcli_bundle::SessionStore;
 use gbcli_core::{Core, Region};
 use gbcli_engine::Machine;
@@ -17,6 +15,7 @@ use gbcli_protocol::{
 };
 use gbcli_view::{DEFAULT_SCALE, Image, MapChoice, TilePalette, ViewError, map_layout};
 
+use super::build::Host;
 use super::shot::{check_image, view_failure, write_atomically};
 use super::{Failure, Handler, Need};
 
@@ -45,11 +44,11 @@ impl Handler {
             )));
         }
         if let Some(png) = &args.png {
-            check_image(&png.path, png.scale)?;
+            check_image(&png.path, png.scale, &self.host)?;
         }
         let (machine, loaded) = self.machine_for(store, meta, Need::Head, None)?;
         warnings.extend(loaded);
-        let made = view_of(&machine, args);
+        let made = view_of(&machine, args, &self.host);
         self.keep_warm(store, meta, machine);
         Ok(ResultBody {
             view: Some(made?),
@@ -58,7 +57,7 @@ impl Handler {
     }
 }
 
-fn view_of(machine: &Machine, args: &ViewArgs) -> Result<ViewMade, Failure> {
+fn view_of(machine: &Machine, args: &ViewArgs, host: &Host) -> Result<ViewMade, Failure> {
     let core = machine.core();
     let failed = |e: ViewError| view_failure(&e, &|n| n as i64, &TimeBase::PowerOn);
     let choice = match args.map.unwrap_or_default() {
@@ -82,18 +81,28 @@ fn view_of(machine: &Machine, args: &ViewArgs) -> Result<ViewMade, Failure> {
                 ViewKind::Oam => gbcli_view::oam_sheet(core),
                 ViewKind::Palettes => unreachable!("refused before the machine loads"),
             };
-            Some(write_png(image.map_err(failed)?, &out.path, out.scale)?)
+            Some(write_png(
+                image.map_err(failed)?,
+                &out.path,
+                out.scale,
+                host,
+            )?)
         }
     };
     Ok(ViewMade { data, png })
 }
 
-fn write_png(image: Image, path: &str, scale: Option<u32>) -> Result<ImageMade, Failure> {
+fn write_png(
+    image: Image,
+    path: &str,
+    scale: Option<u32>,
+    host: &Host,
+) -> Result<ImageMade, Failure> {
     let failed = |e: ViewError| view_failure(&e, &|n| n as i64, &TimeBase::PowerOn);
     let scale = scale.unwrap_or(DEFAULT_SCALE);
     let image = image.scaled(scale).map_err(failed)?;
     let bytes = image.png().map_err(failed)?;
-    write_atomically(Path::new(path), &bytes)?;
+    write_atomically(&host.resolve(path), &bytes)?;
     Ok(ImageMade {
         path: path.to_string(),
         width: image.width,

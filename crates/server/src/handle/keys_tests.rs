@@ -88,11 +88,9 @@ fn a_key_event_past_the_stop_is_reported_not_dropped() {
     let response = run_keys(&mut h, "A@0 -A@3 START@9", 3);
     assert!(response.is_ok(), "{:?}", response.error());
     let late: Vec<KeyEvent> = parse_keys("START@9").unwrap();
-    assert!(
-        response.warnings.iter().any(|w| w.contains("START@9")),
-        "{:?}",
-        response.warnings
-    );
+    // The result lists them; a warning listing them too buried the stop
+    // under hundreds of events (leaf emtFvQ).
+    assert!(response.warnings.is_empty(), "{:?}", response.warnings);
     let result = response.outcome.unwrap();
     assert_eq!(result.keys_unapplied, Some(late));
     assert_eq!(result.stop.unwrap().budget.frames, 3);

@@ -14,6 +14,7 @@ use gbcli_protocol::{
 };
 use gbcli_view::{DEFAULT_SCALE, FrameChoice, FrameSource, LabelKey, MAX_SCALE, Rect, ViewError};
 
+use super::build::Host;
 use super::{Failure, Handler, Need};
 
 impl Handler {
@@ -24,11 +25,11 @@ impl Handler {
         args: &ShotReadArgs,
         warnings: &mut Vec<String>,
     ) -> Result<ResultBody, Failure> {
-        check(&args.shot)?;
+        check(&args.shot, &self.host)?;
         let since = self.since(store, args.since.as_ref())?;
         let (machine, loaded) = self.machine_for(store, meta, Need::Head, None)?;
         warnings.extend(loaded);
-        let shot = take(&machine, &args.shot, &since);
+        let shot = take(&machine, &args.shot, &since, &self.host);
         self.keep_warm(store, meta, machine);
         Ok(ResultBody {
             shot: Some(shot?),
@@ -39,8 +40,8 @@ impl Handler {
 
 /// What a shot can get wrong before the machine moves: the scale, an empty
 /// crop, and a directory that isn't there.
-pub(super) fn check(args: &ShotArgs) -> Result<(), Failure> {
-    check_image(&args.path, args.scale)?;
+pub(super) fn check(args: &ShotArgs, host: &Host) -> Result<(), Failure> {
+    check_image(&args.path, args.scale, host)?;
     if args.live && args.any_frame {
         // A live shot is the frame being drawn, never a stored one, so
         // any_frame would be ignored.
@@ -60,8 +61,9 @@ pub(super) fn check(args: &ShotArgs) -> Result<(), Failure> {
     Ok(())
 }
 
-/// A PNG's path and scale, checked before anything is drawn.
-pub(super) fn check_image(path_text: &str, scale: Option<u32>) -> Result<(), Failure> {
+/// A PNG's path and scale, checked before anything is drawn; the path is
+/// the request's, resolved by `host`.
+pub(super) fn check_image(path_text: &str, scale: Option<u32>, host: &Host) -> Result<(), Failure> {
     let scale = scale.unwrap_or(DEFAULT_SCALE);
     if !(1..=MAX_SCALE).contains(&scale) {
         return Err(bad(
@@ -77,7 +79,7 @@ pub(super) fn check_image(path_text: &str, scale: Option<u32>) -> Result<(), Fai
         ));
     }
     if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty())
-        && !dir.is_dir()
+        && !host.resolve(dir).is_dir()
     {
         return Err(bad(
             format!("the directory {} doesn't exist", dir.display()),
@@ -89,7 +91,12 @@ pub(super) fn check_image(path_text: &str, scale: Option<u32>) -> Result<(), Fai
 
 /// Captures, crops, scales, encodes and writes; the result names the frame
 /// counted from `since`.
-pub(super) fn take(machine: &Machine, args: &ShotArgs, since: &Since) -> Result<ShotMade, Failure> {
+pub(super) fn take(
+    machine: &Machine,
+    args: &ShotArgs,
+    since: &Since,
+    host: &Host,
+) -> Result<ShotMade, Failure> {
     let (base, mark) = machine.named_base(since);
     let rebase = |n: u64| n as i64 - mark.frame as i64;
     let choice = match (args.live, args.any_frame) {
@@ -141,7 +148,7 @@ pub(super) fn take(machine: &Machine, args: &ShotArgs, since: &Since) -> Result<
         }
     }
     let bytes = image.png().map_err(|e| view_failure(&e, &rebase, &base))?;
-    write_atomically(Path::new(&args.path), &bytes)?;
+    write_atomically(&host.resolve(&args.path), &bytes)?;
     Ok(made)
 }
 

@@ -399,6 +399,35 @@ fn build_restore_reloads_a_checkpoint_unless_what_it_ran_moved() {
     assert!(forced.stderr.starts_with("warning: "), "{}", forced.stderr);
 }
 
+/// `build DIR` takes DIR as the project, so its `--session` is found from
+/// DIR too, not from the cwd (leaf emtFvQ, the racer's `no_session`).
+#[test]
+fn build_dir_finds_the_session_in_dir() {
+    let p = Project::game("rgbds-restore-in-dir");
+    let run = p.rgbds(&[
+        "run",
+        "build/game.gb",
+        "--dir",
+        "game",
+        "--session",
+        "game",
+        "--frames",
+        "30",
+        "--checkpoint",
+        "start",
+    ]);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    assert!(p.path("game/.gbcli/sessions/game").is_dir());
+    assert!(!p.path(".gbcli").exists(), "a bundle in the cwd");
+    let restore = p.rgbds(&["build", "game", "--session", "game", "--restore", "start"]);
+    assert_eq!(restore.code, 0, "{}{}", restore.stdout, restore.stderr);
+    assert!(
+        restore.stdout.contains("restored name=start "),
+        "{}",
+        restore.stdout
+    );
+}
+
 #[test]
 fn build_restore_needs_a_session_over_the_rom_it_built() {
     let p = Project::game("rgbds-restore-errors");

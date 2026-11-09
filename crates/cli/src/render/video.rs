@@ -197,11 +197,33 @@ fn indented(lines: &[String]) -> String {
     lines.iter().map(|l| format!("  {l}\n")).collect()
 }
 
-/// The key events a run stopped before, whether it succeeded or failed.
+/// `keys_unapplied count= first=`: the key events a run stopped before,
+/// whether it succeeded or failed, as one row; `--json` lists them all.
 pub fn unapplied(keys: Option<&[gbcli_protocol::KeyEvent]>) -> String {
-    let mut out = String::new();
-    for key in keys.into_iter().flatten() {
-        out += &Row::new("key_unapplied").field("event", key).line();
+    let Some(keys @ [first, ..]) = keys else {
+        return String::new();
+    };
+    Row::new("keys_unapplied")
+        .field("count", keys.len())
+        .field("first", first)
+        .line()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::unapplied;
+
+    /// A long keys file and a short run left hundreds of events, printed
+    /// one row each and again in a warning (leaf emtFvQ): one row says how
+    /// many and which comes first; `--json` has the list.
+    #[test]
+    fn the_key_events_a_run_stopped_before_are_one_row() {
+        let keys = gbcli_protocol::parse_keys("DOWN@3402 -DOWN@3410 A@3500").unwrap();
+        assert_eq!(
+            unapplied(Some(&keys)),
+            "keys_unapplied count=3 first=DOWN@3402\n"
+        );
+        assert_eq!(unapplied(Some(&[])), "");
+        assert_eq!(unapplied(None), "");
     }
-    out
 }

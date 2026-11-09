@@ -52,7 +52,15 @@ Watch the screen change over a run
 Why is the screen blank?
   gbcli shot blank.png --any-frame, then gbcli read '[rLCDC]' (bit 7: LCD on)
 Press buttons during a run
-  gbcli run --frames 30 --keys 'START@5 -START@7' (or --keys-file keys.txt)
+  gbcli run --frames 30 --keys 'START@5 -START@7' (or --keys-file keys.txt);
+  a key still held when a run ends stays held into the next run
+Play the game from a script (a closed-loop bot), then replay what it did
+  runs are deterministic and held keys carry over, so a script can drive a
+  session a few frames at a time, reading the state and choosing keys:
+  gbcli run --frames 4 --keys 'RIGHT@0' --read '[wPlayerX]' --json, in a loop;
+  it records each key change at its frame counted from the first run (RIGHT@8
+  -RIGHT@12), and gbcli run --at start --frames 3000 --keys-file bot.keys
+  replays the whole game in one run, frame for frame
 What does my music do?
   gbcli run --frames 120 --audio-log (every sound write, decoded into notes), then
   --wav music.wav to hear it, --channels each for one file per channel, --piano
@@ -105,7 +113,8 @@ A write, a HALT or a DMA does nothing, or the code runs wild
   gbcli help traps (VRAM in mode 3, LCD off, the HALT bug, OAM DMA, old RGBDS)
 Where does my frame time go?
   gbcli run --frames 60 --profile --top 10 (cycles per routine), and
-  --frame-budget (each frame's busy and HALT time; lag frames never halted)
+  --frame-budget (each frame's busy and HALT time; lag frames never halted,
+  LCD-off frames are counted apart: gbcli help budgets)
 Does my optimized build still behave?
   gbcli build --out build/fast.gb (not over the session's ROM, which stays the
   baseline), then gbcli equiv build/fast.gb --frames 600 --keys-file walk.txt

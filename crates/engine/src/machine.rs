@@ -104,6 +104,9 @@ pub struct Machine {
     keys: Keys,
     pub(crate) boot: Option<TimeMark>,
     debugger: DebuggerConfig,
+    /// How many times the LCD was turned off during this machine's drives,
+    /// as the core logged it; only differences mean anything.
+    lcd_offs: u64,
 }
 
 impl Machine {
@@ -152,6 +155,7 @@ impl Machine {
             keys: Keys::NONE,
             boot: None,
             debugger: DebuggerConfig::default(),
+            lcd_offs: 0,
         })
     }
 
@@ -195,6 +199,17 @@ impl Machine {
 
     pub fn symbols(&self) -> Option<&Symbols> {
         self.symbols.as_ref().map(|s| s.symbols.as_ref())
+    }
+
+    /// How many times the LCD has been turned off (LCDC bit 7, 1 to 0)
+    /// during this machine's runs and steps: a count to compare between two
+    /// moments, such as two vblanks. Zero on a core without the LCD-off log.
+    pub fn lcd_offs(&self) -> u64 {
+        self.lcd_offs
+    }
+
+    pub(crate) fn count_lcd_offs(&mut self, n: usize) {
+        self.lcd_offs += n as u64;
     }
 
     /// The ROM patches applied since power-on or the last restore, in order.
@@ -447,6 +462,7 @@ impl Machine {
             keys: self.keys,
             boot: self.boot,
             debugger: self.debugger.clone(),
+            lcd_offs: self.lcd_offs,
         })
     }
 

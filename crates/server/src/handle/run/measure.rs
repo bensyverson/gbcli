@@ -51,26 +51,17 @@ impl Handler {
         let (measure, frames) = measured?;
         Ok(ResultBody {
             measure: Some(measure),
-            keys_unapplied: unapplied(&args.keys, frames, warnings),
+            keys_unapplied: unapplied(&args.keys, frames),
             ..ResultBody::default()
         })
     }
 }
 
-/// The key events the measurement ended before, as a warning and for the
-/// result, as a run reports them.
-fn unapplied(keys: &[KeyEvent], frames: u64, warnings: &mut Vec<String>) -> Option<Vec<KeyEvent>> {
+/// The key events the measurement ended before, for the result, as a run
+/// reports them.
+fn unapplied(keys: &[KeyEvent], frames: u64) -> Option<Vec<KeyEvent>> {
     let late = unapplied_keys(keys, frames);
-    if late.is_empty() {
-        return None;
-    }
-    let tokens: Vec<String> = late.iter().map(KeyEvent::to_string).collect();
-    warnings.push(format!(
-        "the measurement ended after {frames} frames, before {} key event(s): {}",
-        late.len(),
-        tokens.join(" ")
-    ));
-    Some(late)
+    (!late.is_empty()).then_some(late)
 }
 
 /// A spec without an interrupt flag or keys: the caller sets the request's.

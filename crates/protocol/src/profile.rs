@@ -139,9 +139,14 @@ pub struct FrameBudgetRow {
     pub active_t: u64,
     /// CPU T-cycles in HALT or STOP.
     pub idle_t: u64,
-    /// The CPU never halted in this frame: its wait for vblank came too late.
-    /// Null for a partial frame, which the run saw only part of.
+    /// The CPU never halted in this frame while the LCD was on: its wait for
+    /// vblank came too late. False for an LCD-off frame, which shows nothing
+    /// to lag; null for a partial frame, which the run saw only part of.
     pub lag: Option<bool>,
+    /// The LCD was off for some of this frame: off at its start or its end,
+    /// or turned off during it. A game does that on purpose, at startup and
+    /// to change screens, so these frames are neither lag nor play.
+    pub lcd_off: bool,
     /// A frame the run saw only part of: the one it started in, when it
     /// started mid-frame (from the start to the vblank), or the one it
     /// stopped in (from its last vblank to the stop).
@@ -159,12 +164,14 @@ pub struct FrameBudgetMade {
     pub frames: Vec<FrameBudgetRow>,
     /// The lag frames among the whole ones.
     pub lag: u64,
-    /// The whole frames' active T-cycles: fewest, most and mean. Absent when
-    /// the run completed no frame.
+    /// The LCD-off frames among the whole ones, counted apart from lag.
+    pub lcd_off: u64,
+    /// The whole LCD-on frames' active T-cycles: fewest, most and mean.
+    /// Absent when the run completed no such frame.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_t: Option<CycleStats>,
-    /// The row index of the whole frame with the most active cycles (the
-    /// first, on a tie).
+    /// The row index of the whole LCD-on frame with the most active cycles
+    /// (the first, on a tie).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub busiest: Option<u64>,
 }

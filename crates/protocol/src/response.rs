@@ -8,7 +8,7 @@ use crate::audio::AudioMade;
 use crate::battery::{FlashNoteRow, PowerCycleMade, SavMade};
 use crate::checkpoint::{Location, WatchAccess};
 use crate::equiv::EquivMade;
-use crate::error::ErrorBody;
+use crate::error::{ErrorBody, ErrorCode};
 use crate::keys::KeyEvent;
 use crate::listing::{CheckpointRow, SymbolRow};
 use crate::opcode::OpcodeRow;
@@ -245,7 +245,8 @@ pub struct ResultBody {
 }
 
 /// One `--read` result: an expression's `value`, or for a whole OAM entry
-/// (`oam[N]`) its fields in `oam`.
+/// (`oam[N]`) its fields in `oam`, or, for a run's read that failed, its
+/// `error`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReadValue {
     pub expr: String,
@@ -253,6 +254,17 @@ pub struct ReadValue {
     pub value: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub oam: Option<OamEntryRead>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<ReadFailed>,
+}
+
+/// Why a run's read has no value: the error the `read` op would fail with,
+/// kept in the read's own row so the stop and the other reads stand.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReadFailed {
+    pub code: ErrorCode,
+    pub message: String,
+    pub remedy: String,
 }
 
 /// `oam[N]` as a read (design §7): the entry's four bytes, then what the

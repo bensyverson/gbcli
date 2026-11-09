@@ -33,6 +33,11 @@ pub const RASTER_SYM: &str = include_str!("../../engine/tests/roms/raster.sym");
 pub const STOP_WAKE: &[u8] = include_bytes!("../../sameboy/tests/roms/stop_wake.gb");
 /// Executes an illegal opcode after a few instructions (`illegal.asm`).
 pub const ILLEGAL: &[u8] = include_bytes!("../../sameboy/tests/roms/illegal.gb");
+/// Turns the LCD off for about three frames at startup and two at a screen
+/// change at frame 8, and waits for every other vblank in HALT
+/// (`lcd_off.asm`).
+pub const LCD_OFF: &[u8] = include_bytes!("../../engine/tests/roms/lcd_off.gb");
+pub const LCD_OFF_SYM: &[u8] = include_bytes!("../../engine/tests/roms/lcd_off.sym");
 /// Halts with IE = 0, so nothing can wake it (`halt.asm`).
 pub const HALT: &[u8] = include_bytes!("../../engine/tests/roms/halt.gb");
 /// Executes STOP with neither joypad row selected, so no key wakes it

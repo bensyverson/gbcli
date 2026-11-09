@@ -35,7 +35,7 @@ const SCRIPT: &[&[&str]] = &[
         "--frames",
         "1",
         "--keys",
-        "A@0 -A@1 START@5",
+        "A@0 -A@1 START@5 -START@7",
         "--shot",
         "run.png",
         "--scale",

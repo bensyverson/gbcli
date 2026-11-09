@@ -45,6 +45,15 @@ pub fn build(inv: &Invocation, env: &Env) -> Result<Command, Usage> {
             target.session = None;
         }
     }
+    // DIR is the project, so the session to restore into is found from it,
+    // unless --dir or GBCLI_DIR says where.
+    if let Some(dir) = &args.dir
+        && target.session.is_some()
+        && target.dir.is_none()
+        && env.gbcli_dir.is_none()
+    {
+        target.dir = Some(env.cwd.join(dir));
+    }
     Ok(request(target, Op::Build(args)))
 }
 

@@ -64,10 +64,10 @@ impl EventSink for Sinks {
 }
 
 impl Sinks {
-    /// Ends the frame in progress at a vblank.
-    pub(super) fn cut(&mut self) {
+    /// Ends the frame in progress at a vblank, where `m` is.
+    pub(super) fn cut(&mut self, m: &Machine) {
         if let Some(split) = &mut self.split {
-            self.frames.push(split.cut());
+            self.frames.push(split.cut(m));
         }
     }
 }
@@ -100,7 +100,7 @@ impl Probes {
         let sinks = (args.profile.is_some() || args.frame_budget || args.raster).then(|| {
             RefCell::new(Sinks {
                 routines: args.profile.as_ref().map(|_| Routines::new()),
-                split: args.frame_budget.then(FrameSplit::default),
+                split: args.frame_budget.then(|| FrameSplit::starting(machine)),
                 started_mid_frame: !machine.at_frame_start(),
                 frames: Vec::new(),
                 raster: args.raster.then(|| Raster::new(machine.core())),
@@ -144,9 +144,9 @@ impl Probes {
             .routines
             .map(|r| profile_made(r.finish(machine.symbols()), self.top));
         let frames = &sinks.frames;
-        let frame_budget = sinks
-            .split
-            .map(|mut split| frame_budget_made(frames, split.cut(), sinks.started_mid_frame));
+        let frame_budget = sinks.split.map(|mut split| {
+            frame_budget_made(frames, split.cut(machine), sinks.started_mid_frame)
+        });
         let timeline = sinks.raster.map(Raster::finish);
         let gaps = timeline.as_ref().map_or(Vec::new(), |t| t.gaps.clone());
         Collected {
@@ -200,7 +200,9 @@ fn profile_made(p: Profile, top: Option<u32>) -> ProfileMade {
 /// stopped in, as a partial row if it has any cycles: a run that stops at a
 /// vblank has none. When the run `started_mid_frame`, its first ended frame
 /// is only that frame's tail, so it is partial too. Only the whole frames
-/// make the summary, the lag count and the busiest; `busiest` is a row index.
+/// are counted as lag or LCD-off, and only the whole LCD-on frames make the
+/// summary and the busiest (a loading frame isn't play); `busiest` is a row
+/// index.
 fn frame_budget_made(
     frames: &[FrameBudget],
     rest: FrameBudget,
@@ -210,6 +212,7 @@ fn frame_budget_made(
         active_t: f.active_t,
         idle_t: f.idle_t,
         lag: (!partial).then_some(f.lag),
+        lcd_off: f.lcd_off,
         partial,
     };
     let first_whole = usize::from(started_mid_frame && !frames.is_empty());
@@ -219,23 +222,27 @@ fn frame_budget_made(
         .map(|(i, f)| row(f, i < first_whole))
         .chain((rest.active_t + rest.idle_t > 0).then(|| row(&rest, true)));
     let whole = &frames[first_whole..];
-    let active = || whole.iter().map(|f| f.active_t);
-    let busiest = active()
-        .enumerate()
-        .rev()
-        .max_by_key(|&(_, t)| t)
-        .map(|(i, _)| (first_whole + i) as u64);
+    let shown = || {
+        whole
+            .iter()
+            .enumerate()
+            .filter(|(_, f)| !f.lcd_off)
+            .map(|(i, f)| (first_whole + i, f.active_t))
+    };
+    let busiest = shown().rev().max_by_key(|&(_, t)| t).map(|(i, _)| i as u64);
+    let active = || shown().map(|(_, t)| t);
     let active_t = active()
         .min()
         .zip(active().max())
         .map(|(min, max)| CycleStats {
             min,
             max,
-            mean: Real(active().sum::<u64>() as f64 / whole.len() as f64),
+            mean: Real(active().sum::<u64>() as f64 / active().count() as f64),
         });
     FrameBudgetMade {
         frames: rows.collect(),
         lag: whole.iter().filter(|f| f.lag).count() as u64,
+        lcd_off: whole.iter().filter(|f| f.lcd_off).count() as u64,
         active_t,
         busiest,
     }
@@ -245,11 +252,14 @@ fn frame_budget_made(
 mod tests {
     use super::*;
 
-    fn raster() -> Raster {
+    fn machine() -> Machine {
         let config =
             gbcli_core::CoreConfig::new(gbcli_core::Model::DmgB, crate::fixture::V1.to_vec());
-        let machine = Machine::new(gbcli_engine::Backend::sameboy(), config, None).expect("core");
-        Raster::new(machine.core())
+        Machine::new(gbcli_engine::Backend::sameboy(), config, None).expect("core")
+    }
+
+    fn raster() -> Raster {
+        Raster::new(machine().core())
     }
 
     #[test]
@@ -269,7 +279,7 @@ mod tests {
     #[test]
     fn the_kinds_are_those_of_the_sinks_present() {
         let split = Sinks {
-            split: Some(FrameSplit::default()),
+            split: Some(FrameSplit::starting(&machine())),
             ..Sinks::default()
         };
         assert!(split.kinds().exec && !split.kinds().raster);
@@ -288,6 +298,7 @@ mod tests {
             active_t,
             idle_t: 70_224 - active_t,
             lag,
+            lcd_off: false,
         }
     }
 
@@ -298,6 +309,7 @@ mod tests {
             active_t: 9_000,
             idle_t: 0,
             lag: false,
+            lcd_off: false,
         };
         let made = frame_budget_made(&frames, rest, false);
         // The partial frame (9,000 T) is in the rows, not the summary.
@@ -331,8 +343,39 @@ mod tests {
             active_t: 9_000,
             idle_t: 0,
             lag: false,
+            lcd_off: false,
         };
         let made = frame_budget_made(&[], rest, false);
         assert_eq!((made.active_t, made.busiest), (None, None));
+    }
+
+    #[test]
+    fn lcd_off_frames_are_counted_apart_and_left_out_of_the_summary() {
+        let off = |active_t| FrameBudget {
+            lcd_off: true,
+            ..frame(active_t, false)
+        };
+        let frames = [
+            off(70_224),
+            off(60_000),
+            frame(100, false),
+            frame(300, false),
+        ];
+        let made = frame_budget_made(&frames, FrameBudget::default(), false);
+        assert_eq!((made.lag, made.lcd_off), (0, 2));
+        assert_eq!(made.active_t.map(|s| (s.min, s.max)), Some((100, 300)));
+        assert_eq!(made.busiest, Some(3), "a frame of play, not a loading one");
+        assert!(made.frames[0].lcd_off && !made.frames[2].lcd_off);
+        assert_eq!(made.frames[0].lag, Some(false));
+    }
+
+    #[test]
+    fn a_budget_of_only_lcd_off_frames_has_no_summary() {
+        let off = FrameBudget {
+            lcd_off: true,
+            ..frame(70_224, false)
+        };
+        let made = frame_budget_made(&[off, off], FrameBudget::default(), false);
+        assert_eq!((made.active_t, made.busiest, made.lcd_off), (None, None, 2));
     }
 }

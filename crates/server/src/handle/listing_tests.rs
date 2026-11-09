@@ -116,11 +116,11 @@ fn a_named_checkpoints_rev_is_the_one_it_was_saved_at_not_a_failed_runs() {
     assert!(saved.is_ok());
     let failed = h.handle(&request(Op::Run(RunArgs {
         frames: Some(1),
-        read: vec!["[$C003]".into()],
+        until: Some("[$C000] == $1234".into()),
         checkpoint: Some("foo".into()),
         ..RunArgs::default()
     })));
-    assert!(!failed.is_ok(), "the read fails");
+    assert!(!failed.is_ok(), "the target is missed");
     let rows = checkpoints(&mut h);
     assert_eq!(rows[0].at, "foo");
     assert_eq!(rows[0].rev, Some(Rev(1)), "{rows:?}");

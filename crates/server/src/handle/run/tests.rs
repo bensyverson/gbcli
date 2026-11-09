@@ -114,18 +114,38 @@ fn a_predicate_reading_never_written_memory_waits_and_points_at_allow_uninit() {
     );
 }
 
+/// A read of never-written memory is a fair question with a fair answer:
+/// its row says so, and the run, its stop and its other reads stand (leaf
+/// emtFvQ; it used to fail the whole run with exit 3).
 #[test]
-fn a_read_of_never_written_memory_still_fails() {
+fn a_failing_read_keeps_the_stop_and_the_other_reads() {
     let f = Fixture::new("read-uninit");
     let mut h = handler(&f);
     let response = h.handle(&request(Op::Run(RunArgs {
-        read: vec!["[$C003]".into()],
+        read: vec!["[$C003]".into(), "[$FEA0]".into(), "pc".into()],
         frames: Some(1),
         ..RunArgs::default()
     })));
-    let error = response.outcome.expect_err("an uninitialized read fails");
-    assert_eq!(error.code, ErrorCode::UninitializedRead);
+    let result = response.outcome.expect("the run stands");
+    assert!(result.stop.is_some());
+    let reads = result.reads.expect("reads");
+    let [never, unbacked, pc] = &reads[..] else {
+        panic!("{reads:?}")
+    };
+    let error = never.error.as_ref().expect("its own error");
+    assert_eq!(
+        (error.code, never.value),
+        (ErrorCode::UninitializedRead, None)
+    );
     assert!(error.remedy.contains("--allow-uninit"), "{}", error.remedy);
+    assert!(error.message.contains("$C003"), "{}", error.message);
+    let error = unbacked.error.as_ref().expect("its own error");
+    assert_eq!(error.code, ErrorCode::Unsupported);
+    assert!(pc.value.is_some() && pc.error.is_none(), "{pc:?}");
+    // The core's gap still reaches the ledger.
+    let gaps = f.bundle.gap_counts().unwrap();
+    assert_eq!(gaps.len(), 1, "{gaps:?}");
+    assert_eq!(gaps[0].feature, "extra_oam");
 }
 
 #[test]
@@ -182,9 +202,10 @@ fn a_failed_read_after_the_run_keeps_the_run() {
         },
     );
     assert_eq!(response.rev, Some(Rev(1)), "the run was thrown away");
-    let error = response.outcome.expect_err("the read fails");
+    let result = response.outcome.expect("the read fails in its row");
+    let error = result.reads.unwrap()[0].error.clone().expect("its error");
     assert_eq!(error.code, ErrorCode::UninitializedRead);
-    assert!(error.stop.is_some(), "the stop rides on the read error");
+    assert!(result.stop.is_some(), "the stop stands beside the read");
 }
 
 /// A request refused before emulating leaves the session and the warm

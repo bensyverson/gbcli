@@ -84,15 +84,13 @@ stop predicate cadence=writes pc=$016C bank=0 symbol=Work+$9 frame=3 t=280192 si
 budget frames=0/600 instructions=5593 ticks=139168 defaulted
 read expr=u16[wFrame] value=2500 hex=$09C4
 rev s11
-$ gbcli run --frames 1 --keys A@0 -A@1 START@5 --shot run.png --scale 1 --session demo
+$ gbcli run --frames 1 --keys A@0 -A@1 START@5 -START@7 --shot run.png --scale 1 --session demo
 exit 0
 stop budget_exhausted kind=frames pc=$0166 bank=0 symbol=Work+$3 frame=4 t=280720 since=boot ticks=12323656 ly=144 shown=4 vblank=normal
 budget frames=1/1 instructions=41 ticks=1056
 shot path=run.png width=160 height=144 scale=1 frame="complete frame 4 since boot (vblank normal)"
-key_unapplied event=START@5
+keys_unapplied count=2 first=START@5
 rev s12
---- stderr
-warning: the run stopped after 1 frames, before 1 key event(s): START@5
 $ gbcli shot shot.png --scale 1 --crop 0,0,16,8 --session demo
 exit 0
 shot path=shot.png width=16 height=8 scale=1 frame="complete frame 4 since boot (vblank normal)"

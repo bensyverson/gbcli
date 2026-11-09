@@ -31,8 +31,10 @@ fn assert_not_saved(response: &Response, name: &str) {
     );
 }
 
+/// A read that fails is that read's answer, not the run's failure (leaf
+/// emtFvQ), so the run's checkpoint is saved as on any run that succeeds.
 #[test]
-fn a_run_whose_read_fails_saves_no_checkpoint_and_says_so() {
+fn a_run_whose_read_fails_still_saves_its_checkpoint() {
     let f = Fixture::new("cp-read-fails");
     let mut h = handler(&f);
     assert!(run_frames(&mut h, 1).is_ok());
@@ -44,12 +46,9 @@ fn a_run_whose_read_fails_saves_no_checkpoint_and_says_so() {
         checkpoint: Some("foo".into()),
         ..RunArgs::default()
     })));
-    assert_eq!(
-        response.error().map(|e| e.code),
-        Some(ErrorCode::UninitializedRead)
-    );
-    assert_not_saved(&response, "foo");
-    assert_eq!(saved_frame(&f, "foo"), before, "foo was replaced");
+    let result = response.outcome.expect("the run stands");
+    assert!(result.reads.unwrap()[0].error.is_some());
+    assert_eq!(saved_frame(&f, "foo"), before + 2, "foo is the new stop");
 }
 
 #[test]
@@ -106,9 +105,9 @@ fn a_failed_run_still_returns_the_key_events_it_did_not_reach() {
     let response = h.handle(&request(Op::Run(RunArgs {
         frames: Some(2),
         keys: parse_keys("A@0 START@9").unwrap(),
-        read: vec!["[$D123]".into()],
+        until: Some("[$C000] == $1234".into()),
         ..RunArgs::default()
     })));
-    let error = response.outcome.expect_err("the read fails");
+    let error = response.outcome.expect_err("the target is missed");
     assert_eq!(error.keys_unapplied, Some(parse_keys("START@9").unwrap()));
 }

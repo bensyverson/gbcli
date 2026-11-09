@@ -319,9 +319,29 @@ fn a_frame_that_halts_is_not_a_lag_frame_and_a_busy_one_is() {
         // A whole frame, give or take the step the vblank fell in.
         assert!((f.active_t + f.idle_t).abs_diff(70_224) <= 24, "{f:?}");
     }
+    // The quick boot ROM leaves the LCD off, and a frame with the LCD off
+    // is never lag; on, as the real boot ROM leaves it, a busy frame is.
     let mut busy = at_main_loop();
+    busy.core_mut().bus_write(0xFF40, 0x91).unwrap();
     let frames = busy.frame_budget(2).unwrap();
     assert!(frames.iter().all(|f| f.lag && f.idle_t == 0), "{frames:?}");
+}
+
+/// Startup and a screen change turn the LCD off and work without halting
+/// (`roms/lcd_off.asm`): those frames are LCD-off, not lag.
+#[test]
+fn frames_with_the_lcd_off_are_marked_and_not_lag() {
+    let rom = include_bytes!("../roms/lcd_off.gb");
+    let mut m = common::machine(rom, None);
+    let frames = m.frame_budget(16).unwrap();
+    assert!(frames.iter().all(|f| !f.lag), "{frames:?}");
+    let off: Vec<usize> = (0..frames.len()).filter(|&i| frames[i].lcd_off).collect();
+    let stretches = off.windows(2).filter(|w| w[1] != w[0] + 1).count() + 1;
+    assert_eq!((off.first(), stretches), (Some(&0), 2), "{frames:?}");
+    assert!(
+        frames.iter().any(|f| !f.lcd_off && f.idle_t > 0),
+        "{frames:?}"
+    );
 }
 
 #[test]

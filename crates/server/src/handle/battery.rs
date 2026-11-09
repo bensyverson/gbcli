@@ -13,6 +13,7 @@ use gbcli_protocol::{
     ResultBody, SavArgs, SavClockState, SavMade, SessionFile,
 };
 
+use super::build::Host;
 use super::shot::write_all_atomically;
 use super::{Failure, Handler, HeadChange, Need, save_head};
 
@@ -41,8 +42,8 @@ impl Handler {
         let flash_session = meta.flash.is_some();
         let (file, image) = match args.sav.as_deref() {
             None => (None, None),
-            Some(path) if flash_session => read_flash_pair(path, warnings)?,
-            Some(path) => (Some(read_sav(path)?), None),
+            Some(path) if flash_session => read_flash_pair(path, &self.host, warnings)?,
+            Some(path) => (Some(read_sav(path, &self.host)?), None),
         };
         self.forget_warm(store.name());
         let stored = |e| Failure::from_store(&e);
@@ -213,14 +214,17 @@ impl Handler {
         // batteryless saves do), so the chip image goes beside the `.sav`;
         // both are written or neither, as one alone is half a save (short
         // of a kill between the two renames: `write_all_atomically`).
-        let sav_path = Path::new(&args.path);
-        let image_path = flash_image_path(sav_path);
+        let image_path = flash_image_path(Path::new(&args.path));
+        let (sav_at, image_at) = (
+            self.host.resolve(&args.path),
+            self.host.resolve(&image_path),
+        );
         let mut files: Vec<(&Path, &[u8])> = Vec::new();
         if let Some(sav) = &sav {
-            files.push((sav_path, sav));
+            files.push((&sav_at, sav));
         }
         if let Some(image) = &image {
-            files.push((&image_path, image));
+            files.push((&image_at, image));
         }
         write_all_atomically(&files)?;
         let flash = image.as_ref().map(|image| FlashFileMade {
@@ -281,9 +285,16 @@ type SavFiles = (Option<Vec<u8>>, Option<Vec<u8>>);
 /// A flash session's `--sav PATH`: the `.sav` and the chip image beside it
 /// (`flash_image_path`), each read if it exists, at least one of them. A
 /// half that is missing keeps the head's own, with a warning.
-fn read_flash_pair(path: &str, warnings: &mut Vec<String>) -> Result<SavFiles, Failure> {
+fn read_flash_pair(
+    path: &str,
+    host: &Host,
+    warnings: &mut Vec<String>,
+) -> Result<SavFiles, Failure> {
     let image_path = flash_image_path(Path::new(path));
-    let (sav_there, image_there) = (Path::new(path).exists(), image_path.exists());
+    let (sav_there, image_there) = (
+        host.resolve(path).exists(),
+        host.resolve(&image_path).exists(),
+    );
     if !sav_there && !image_there {
         return Err(Failure::new(ErrorBody::new(
             ErrorCode::IoFailed,
@@ -294,9 +305,9 @@ fn read_flash_pair(path: &str, warnings: &mut Vec<String>) -> Result<SavFiles, F
             "check the path; `gbcli sav <file>` writes both from a flash session",
         )));
     }
-    let sav = sav_there.then(|| read_sav(path)).transpose()?;
+    let sav = sav_there.then(|| read_sav(path, host)).transpose()?;
     let image = image_there
-        .then(|| read_sav(&image_path.display().to_string()))
+        .then(|| read_sav(&image_path.display().to_string(), host))
         .transpose()?;
     if sav.is_none() {
         warnings.push(format!("no .sav at {path}: the cart RAM is the head's"));
@@ -310,8 +321,8 @@ fn read_flash_pair(path: &str, warnings: &mut Vec<String>) -> Result<SavFiles, F
     Ok((sav, image))
 }
 
-fn read_sav(path: &str) -> Result<Vec<u8>, Failure> {
-    fs::read(path).map_err(|e| {
+fn read_sav(path: &str, host: &Host) -> Result<Vec<u8>, Failure> {
+    fs::read(host.resolve(path)).map_err(|e| {
         Failure::new(ErrorBody::new(
             ErrorCode::IoFailed,
             format!("couldn't read the .sav {path}: {e}"),

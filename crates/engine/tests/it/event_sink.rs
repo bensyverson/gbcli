@@ -72,9 +72,9 @@ fn a_split_cut_at_each_vblank_is_the_frame_budget() {
     let expected = budgeted.frame_budget(4).unwrap();
 
     let mut run = machine(V1, Some(V1_SYM));
-    let split = RefCell::new(FrameSplit::default());
+    let split = RefCell::new(FrameSplit::starting(&run));
     let frames = RefCell::new(Vec::new());
-    let cut = |_: &Machine, _: u64| frames.borrow_mut().push(split.borrow_mut().cut());
+    let cut = |m: &Machine, _: u64| frames.borrow_mut().push(split.borrow_mut().cut(m));
     let mut opts = RunOptions::new(Budget::frames(4));
     opts.on_event = Some(EventTap(&split));
     opts.on_frame = Some(FrameSink(&cut));

@@ -241,14 +241,8 @@ fn measure_reports_the_key_events_it_never_reached() {
     let mut args = main_loop(1);
     args.keys = gbcli_protocol::parse_keys("A@0 START@500").unwrap();
     let response = measure(&mut h, args);
-    assert!(
-        response
-            .warnings
-            .iter()
-            .any(|w| w.contains("before 1 key event(s): START@500")),
-        "{:?}",
-        response.warnings
-    );
+    // The result lists it, as a run's does, and no warning repeats it.
+    assert!(response.warnings.is_empty(), "{:?}", response.warnings);
     let result = response.outcome.expect("measured");
     let late: Vec<String> = result
         .keys_unapplied

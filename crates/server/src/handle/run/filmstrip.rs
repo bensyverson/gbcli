@@ -4,7 +4,6 @@
 //! Frames that aren't normal (LCD off) are kept and say so.
 
 use std::cell::{Cell, RefCell};
-use std::path::Path;
 
 use gbcli_engine::{Machine, Since};
 use gbcli_protocol::{
@@ -13,6 +12,7 @@ use gbcli_protocol::{
 use gbcli_view::{Frame, FrameChoice, FrameSource, LabelKey, ViewError};
 
 use super::super::Failure;
+use super::super::build::Host;
 use super::super::shot::{check_image, view_failure, write_atomically};
 
 /// A filmstrip's scale when the request gives none: 16 frames already make
@@ -20,7 +20,7 @@ use super::super::shot::{check_image, view_failure, write_atomically};
 const FILMSTRIP_SCALE: u32 = 1;
 
 /// What can be refused before anything loads.
-pub(super) fn check(args: &FilmstripArgs) -> Result<(), Failure> {
+pub(super) fn check(args: &FilmstripArgs, host: &Host) -> Result<(), Failure> {
     if args.every == 0 {
         return Err(Failure::new(ErrorBody::new(
             ErrorCode::BadRequest,
@@ -28,21 +28,27 @@ pub(super) fn check(args: &FilmstripArgs) -> Result<(), Failure> {
             "pass --every N with N at least 1, e.g. --every 10",
         )));
     }
-    check_image(&args.path, Some(args.scale.unwrap_or(FILMSTRIP_SCALE)))
+    check_image(
+        &args.path,
+        Some(args.scale.unwrap_or(FILMSTRIP_SCALE)),
+        host,
+    )
 }
 
 /// Collects frames as the run passes vblanks.
 pub(super) struct Collector<'a> {
     args: &'a FilmstripArgs,
+    host: &'a Host,
     frames: RefCell<Vec<Frame>>,
     beyond_cap: Cell<u64>,
     error: RefCell<Option<ViewError>>,
 }
 
 impl<'a> Collector<'a> {
-    pub(super) fn new(args: &'a FilmstripArgs) -> Self {
+    pub(super) fn new(args: &'a FilmstripArgs, host: &'a Host) -> Self {
         Collector {
             args,
+            host,
             frames: RefCell::new(Vec::new()),
             beyond_cap: Cell::new(0),
             error: RefCell::new(None),
@@ -119,7 +125,7 @@ impl<'a> Collector<'a> {
             }
         }
         let bytes = image.png().map_err(fail)?;
-        write_atomically(Path::new(&self.args.path), &bytes)?;
+        write_atomically(&self.host.resolve(&self.args.path), &bytes)?;
         let beyond_cap = self.beyond_cap.get();
         if beyond_cap > 0 {
             warnings.push(format!(

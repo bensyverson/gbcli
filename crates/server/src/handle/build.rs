@@ -34,6 +34,12 @@ impl Host {
             path: std::env::var_os("PATH"),
         }
     }
+
+    /// A path a request gave, where the server reads or writes it: a
+    /// relative one starts at `cwd`.
+    pub fn resolve(&self, path: impl AsRef<std::path::Path>) -> PathBuf {
+        self.cwd.join(path)
+    }
 }
 
 /// Answers the ops that need no project bundle, for a client with no

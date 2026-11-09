@@ -123,9 +123,11 @@ bus, so evaluating one has no side effects.
   operators   + - * / % & | ^ ~ << >>  == != < <= > >=  && || !  (C precedence)
 
 A bare RAM symbol is its address: write [wFrame] >= 60, not wFrame >= 60.
-Reading a byte the program never wrote is an error (exit 3) in --read and
-`gbcli read`; pass --allow-uninit to see its power-on value. In --until and
---if it means \"not yet\": the run keeps going.
+Reading a byte the program never wrote is an error: `gbcli read` fails with
+exit 3, and a run's --read says so in that read's row (error=, message=,
+remedy=) while the run, its stop and its other reads stand. Pass
+--allow-uninit to see its power-on value. In --until and --if it means
+\"not yet\": the run keeps going.
 
   gbcli run --session dx --until 'u16[wFrame] >= 60 && ly == 0'
 ";
@@ -191,6 +193,13 @@ If a breakpoint or watch you set stops it first, it succeeds with a warning.
 `run --frames N` alone succeeds when the frames are done. A 60 s wall-clock
 guard backs every request up; a stop it causes says wall_guard and is not
 reproducible.
+
+The frame budget (run --frame-budget) is the other kind: how much of each
+frame the CPU worked. A lag frame never halted with the LCD on. A frame the
+LCD was off for (startup, a screen change) counts as lcd_off, not lag, and
+stays out of active_min/max/mean and busiest; --json marks each frame's
+lcd_off. A game that busy-waits instead of halting lags every frame: measure
+its loop with gbcli measure.
 ";
 
 const EXIT_CODES: &str = "\

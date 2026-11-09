@@ -153,6 +153,46 @@ fn the_watch_recipe_works_as_written() {
     assert!(run.stdout.starts_with("stop watchpoint"), "{}", run.stdout);
 }
 
+/// `--dir` runs the command as if from PATH: the ROM path, the shot's and
+/// the keys file's resolve there, and the session is made there (leaf
+/// emtFvQ; the racer's agent gave `--dir` on every call and still had to
+/// spell the ROM path from the cwd).
+#[test]
+fn dir_anchors_the_paths_the_command_is_given() {
+    let p = Project::new("dir-anchors");
+    let game = p.path("game");
+    fs::create_dir_all(game.join("build")).unwrap();
+    fs::rename(p.path("demo.gb"), game.join("build/demo.gb")).unwrap();
+    fs::rename(p.path("demo.sym"), game.join("build/demo.sym")).unwrap();
+    fs::write(game.join("keys.txt"), "START@0 -START@1 A@90").unwrap();
+    let run = p.gbcli(&args(&[
+        "run",
+        "build/demo.gb",
+        "--dir",
+        "game",
+        "--frames",
+        "2",
+        "--keys-file",
+        "keys.txt",
+        "--shot",
+        "two.png",
+        "--read",
+        "u16[wFrame]",
+    ]));
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    assert!(
+        run.stdout.contains("keys_unapplied count=1 first=A@90"),
+        "{}",
+        run.stdout
+    );
+    assert!(game.join("two.png").is_file(), "the shot went elsewhere");
+    assert!(
+        game.join(".gbcli/sessions/demo").is_dir(),
+        "no session in game/"
+    );
+    assert!(!p.path(".gbcli").exists(), "a bundle in the cwd");
+}
+
 #[test]
 fn dir_beats_gbcli_dir() {
     let p = Project::with_session("dir-beats-env");

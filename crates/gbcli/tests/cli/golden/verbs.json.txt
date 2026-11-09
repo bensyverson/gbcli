@@ -52,9 +52,9 @@ exit 0
 $ gbcli run --until u16[wFrame] >= 2500 --read u16[wFrame] --session demo --json
 exit 0
 {"id":"cli","ok":true,"rev":"s11","result":{"stop":{"reason":"predicate","text":"u16[wFrame] >= 2500","cadence":"writes","pc":364,"bank":0,"symbol":"Work+$9","time":{"ticks":12322600,"t":280192,"since":{"kind":"boot"},"frame":3,"ly":142,"dot":null},"frame_shown":{"n":3,"vblank":"normal"},"budget":{"ticks":139168,"instructions":5593,"frames":0,"limits":{"frames":600},"defaulted":true}},"reads":[{"expr":"u16[wFrame]","value":2500}]},"warnings":[]}
-$ gbcli run --frames 1 --keys A@0 -A@1 START@5 --shot run.png --scale 1 --session demo --json
+$ gbcli run --frames 1 --keys A@0 -A@1 START@5 -START@7 --shot run.png --scale 1 --session demo --json
 exit 0
-{"id":"cli","ok":true,"rev":"s12","result":{"stop":{"reason":"budget_exhausted","kind":"frames","pc":358,"bank":0,"symbol":"Work+$3","time":{"ticks":12323656,"t":280720,"since":{"kind":"boot"},"frame":4,"ly":144,"dot":null},"frame_shown":{"n":4,"vblank":"normal"},"budget":{"ticks":1056,"instructions":41,"frames":1,"limits":{"frames":1},"defaulted":false}},"reads":[],"shot":{"path":"run.png","width":160,"height":144,"scale":1,"since":{"kind":"boot"},"frame":{"kind":"complete","n":4,"vblank":"normal"}},"keys_unapplied":["START@5"]},"warnings":["the run stopped after 1 frames, before 1 key event(s): START@5"]}
+{"id":"cli","ok":true,"rev":"s12","result":{"stop":{"reason":"budget_exhausted","kind":"frames","pc":358,"bank":0,"symbol":"Work+$3","time":{"ticks":12323656,"t":280720,"since":{"kind":"boot"},"frame":4,"ly":144,"dot":null},"frame_shown":{"n":4,"vblank":"normal"},"budget":{"ticks":1056,"instructions":41,"frames":1,"limits":{"frames":1},"defaulted":false}},"reads":[],"shot":{"path":"run.png","width":160,"height":144,"scale":1,"since":{"kind":"boot"},"frame":{"kind":"complete","n":4,"vblank":"normal"}},"keys_unapplied":["START@5","-START@7"]},"warnings":[]}
 $ gbcli shot shot.png --scale 1 --crop 0,0,16,8 --session demo --json
 exit 0
 {"id":"cli","ok":true,"rev":"s12","result":{"shot":{"path":"shot.png","width":16,"height":8,"scale":1,"since":{"kind":"boot"},"frame":{"kind":"complete","n":4,"vblank":"normal"}}},"warnings":[]}

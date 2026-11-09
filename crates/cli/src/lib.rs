@@ -32,7 +32,8 @@ pub struct Env {
     pub actor: Option<String>,
     /// `GBCLI_DIR`: the bundle directory, overriding the search.
     pub gbcli_dir: Option<PathBuf>,
-    /// The working directory: relative paths and the `.gbcli/` search start here.
+    /// The working directory: relative paths and the `.gbcli/` search start
+    /// here. `--dir PATH` moves it to PATH for the invocation.
     pub cwd: PathBuf,
     /// `PATH`: where `build` and `doctor` look for RGBDS.
     pub path: Option<OsString>,
@@ -51,6 +52,15 @@ impl Env {
             path: std::env::var_os("PATH"),
         }
     }
+
+    /// This environment as seen from `dir` (relative to the working
+    /// directory): what `--dir` makes of it.
+    fn anchored(&self, dir: &str) -> Env {
+        Env {
+            cwd: self.cwd.join(dir),
+            ..self.clone()
+        }
+    }
 }
 
 /// The process's streams.
@@ -63,7 +73,15 @@ pub struct Io<'a> {
 /// Runs one invocation (`args` without the program name) and returns the
 /// exit code (cli-design ▸ Exit codes).
 pub fn run(args: Vec<OsString>, env: &Env, io: Io) -> u8 {
-    let command = argv::parse(args).and_then(|parsed| match parsed {
+    let parsed = argv::parse(args);
+    // `--dir` runs the whole invocation from PATH: the `.gbcli/` search and
+    // every relative path it is given, the server's included.
+    let anchored = match &parsed {
+        Ok(argv::Parsed::Verb(inv)) => inv.one("dir").map(|dir| env.anchored(dir)),
+        _ => None,
+    };
+    let env = anchored.as_ref().unwrap_or(env);
+    let command = parsed.and_then(|parsed| match parsed {
         argv::Parsed::Primer => Ok(Command::Primer),
         argv::Parsed::VerbHelp(spec) => Ok(Command::VerbHelp(spec)),
         argv::Parsed::Verb(inv) => build::build(inv, env),

@@ -42,7 +42,8 @@ show    —
 read    reads: [EXPR]  since?  allow_uninit?
         (each read is {expr, value}; "oam[N]" is {expr, oam: {index, y, x,
         tile, attr, priority, yflip, xflip, palette?, cgb_bank?, cgb_palette?}}:
-        palette outside CGB mode, cgb_bank and cgb_palette in it)
+        palette outside CGB mode, cgb_bank and cgb_palette in it; a run's
+        read that fails is {expr, error: {code, message, remedy}})
 break   at: ADDR  condition?: EXPR
 watch   access: "read"|"write"|"access"  at: ADDR  condition?: EXPR  once?: bool
 delete  id: N

@@ -122,3 +122,14 @@ Eval run 5 asked for axis labels or a legend on the image too; `help music` now 
 **Why parked:** no eval run hit it, and the expressions topic already says a bare symbol is its address.
 
 **Un-park when:** an agent writes a condition on a bare RAM symbol and the run never stops, or stops at once.
+
+## 2026-11-08 — A bespoke Rust emulator core
+
+**What:** a Rust core implementing the same core trait as the SameBoy backend: DMG first, no APU, judged by blargg, mooneye, dmg-acid2 and lockstep with SameBoy. It would answer what the wrapper reports as *unsupported*: side-effect-free reads, sub-instruction stepping, saved cycle counters. The spike plan is in [2026-11-06-backend-evaluation.md](2026-11-06-backend-evaluation.md) ▸ The bespoke core question.
+
+**Why parked:** Ben's ruling, 2026-11-08, on the evidence in [2026-11-07-bespoke-core-decision-brief.md](2026-11-07-bespoke-core-decision-brief.md). Across five eval runs the gap ledger stayed empty, no stumble came from a core limit, and SameBoy's only DMG failures are mid-mode-3 LCDC and SCY writes judged against another emulator's screenshots. The spike costs about 6 agent sessions.
+
+**Un-park when** any one holds:
+- an agent's real work (an eval run or a LoadHigh session) records an `unsupported` that blocks its task, and no adapter work can serve it;
+- SameBoy disagrees with hardware truth (a hardware-verified test ROM or a hardware capture) in a way that affects programs gbcli users write, and upstream won't take a fix;
+- an eval task class that needs mid-mode-3 effects is added, and it fails on SameBoy where docboy passes.

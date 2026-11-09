@@ -168,6 +168,8 @@ Measured on this machine (Go 1.27.3, Apple clang 21, arm64), `scripts/bench/`:
 
 ## The bespoke core question
 
+> **Decided (Ben, 2026-11-08): parked** after the scheduled decision point, with an un-park condition. Evidence: [2026-11-07-bespoke-core-decision-brief.md](2026-11-07-bespoke-core-decision-brief.md); entry: [backlog.md](backlog.md) ▸ A bespoke Rust emulator core.
+
 The user asked to keep a from-scratch (or ported) core on the table. Findings:
 
 - **For:** every wrapper limitation above — side-effecting reads, instruction-only stepping, no layer identity, no saved cycle counter, global RNG — disappears in a core designed for agents. DMG+CGB without SGB, camera and printer is roughly 12–15k lines (SameBoy's whole `Core/` is 22,467 lines including a 3,099-line debugger; measured with `wc -l`). docboy and SameBoy are MIT, so behavior can be ported, and a large test corpus exists.

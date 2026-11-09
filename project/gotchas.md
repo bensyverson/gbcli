@@ -52,7 +52,7 @@ In an isolated worktree, `cat crates/engine/data/gb-opcodes/SOURCE` was refused 
 
 ## 2026-11-07 — the hook's suite time is noise under low-power mode or parallel agents
 
-The pre-commit hook warned 103–142 s against the 30 s budget all session, while the Mac was in low-power mode and several agents (and other sessions' Go builds, load average 48–167) were compiling. No single test was slow (largest about 6 s alone). Don't chase a hook warning taken under load; re-time with `python3 -I scripts/bench/test-times.py` on an idle machine, out of low-power mode (`pmset -g | grep lowpowermode`), before moving tests to the pre-release suite.
+The pre-commit hook warned 103–142 s against the 30 s budget all session, while the Mac was in low-power mode and several agents (and other sessions' Go builds, load average 48–167) were compiling. No single test was slow (largest about 6 s alone). Don't chase a hook warning taken under load; re-time with `python3 -I scripts/bench/test-times.py` on an idle machine, out of low-power mode (`pmset -g | grep lowpowermode`), before moving tests to the pre-release suite. Even idle, the first run after a rebuild read 36 s against 24 s warm, with the same CPU time (fourteenth session; project/2026-11-06-test-suite-speed.md): time twice and take the second.
 
 ## 2026-11-07 — `git add -A` after a squash conflict commits the markers in files you didn't resolve
 

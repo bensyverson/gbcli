@@ -1,5 +1,7 @@
 # Decision brief: spike a bespoke Rust core now, or park it
 
+> **Decided (Ben, 2026-11-08): park it**, with the un-park condition below. The entry is in [backlog.md](backlog.md) ▸ A bespoke Rust emulator core.
+
 2026-11-07, thirteenth session. **This is the evidence for leaf qfXJij, with a recommendation; the decision is Ben's.** The question and both options are in [2026-11-06-backend-evaluation.md](2026-11-06-backend-evaluation.md) ▸ The bespoke core question. The leaf names four inputs, each below with its source.
 
 ## The evidence
@@ -39,4 +41,4 @@ Park the spike in `project/backlog.md`, with this un-park condition. Un-park whe
 
 **What would make "spike now" right instead:** a judgment that the spike is worth doing for its own sake, as a long-run hedge, or for the agent-designed core's ergonomics (no side-effecting reads, layer identity, a saved cycle counter), before any user hits those limits. That's a values call, not something this evidence settles. It's the reason to ask rather than decide.
 
-**Not done here:** the decision itself and the backlog entry. If Ben parks it, the entry is the un-park condition above, and qfXJij closes with a pointer to this brief.
+**Done 2026-11-08:** Ben parked it; the backlog entry carries the un-park condition above, and qfXJij closed with a pointer to this brief.

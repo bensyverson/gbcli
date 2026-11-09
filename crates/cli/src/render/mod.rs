@@ -48,18 +48,21 @@ pub fn response(response: &Response, json: bool, out: &mut dyn Write, err: &mut 
             0
         }
         Err(body) => {
-            if let Some(result) = &body.result {
-                // An assertion's answer: what it read when it said no. A
-                // run's (--expect) moved the head, so it names the rev.
+            // An assertion's answer: what it read when it said no. A run's
+            // (--expect) moved the head, so it names the rev.
+            let answered_stop = body.result.as_deref().and_then(|result| {
                 emit(out, &rows(result));
-                if result.stop.is_some() && body.stop.is_none() {
-                    emit(out, &rev());
-                }
-            }
+                result.stop.as_ref()
+            });
             if let Some(stop) = &body.stop {
-                // The state the failure left is still the answer's data.
-                emit(out, &stop::rows(stop));
-                emit(out, &video::unapplied(body.keys_unapplied.as_deref()));
+                // The state the failure left is still the answer's data,
+                // printed once when the answer already showed it.
+                if answered_stop != Some(stop) {
+                    emit(out, &stop::rows(stop));
+                    emit(out, &video::unapplied(body.keys_unapplied.as_deref()));
+                }
+                emit(out, &rev());
+            } else if answered_stop.is_some() {
                 emit(out, &rev());
             }
             error(err, body)

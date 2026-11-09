@@ -207,7 +207,9 @@ pub const RUN: &[FlagSpec] = &[
         "a condition that must hold at the stop, evaluated beside --read (same grammar, same \
          never-written rule); prints an expect row (expr, value, ok) for each, and if any is \
          false the run fails with exit 1 (predicate_false), still saved as the head, without \
-         --checkpoint; one that can't be evaluated fails with its own error; repeat for more",
+         --checkpoint; one that can't be evaluated fails with its own error; a run that fails \
+         on its own first (--until not reached, the wall guard) reports that error, without \
+         expect rows; repeat for more",
     ),
     value("checkpoint", "NAME", "save the stop state under this name"),
     ALLOW_UNINIT,
@@ -324,7 +326,8 @@ pub const RUN: &[FlagSpec] = &[
          names them (default: the run's start). So a file recorded from boot replays from a \
          mid-run checkpoint: --at floor5 --keys-file win.keys --keys-since boot applies only \
          the events from floor5's frame on (the earlier ones are in floor5 already, and \
-         aren't reported as unapplied)",
+         aren't reported as unapplied). boot is refused on a run that starts inside the \
+         boot ROM, before the handoff",
     ),
 ];
 

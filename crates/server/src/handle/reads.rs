@@ -135,11 +135,26 @@ pub(super) fn compile_reads(
 }
 
 /// Compiles conditions that must have a truth value (`run --expect`): a
-/// whole OAM entry, which a read prints as fields, has none.
+/// whole OAM entry, which a read prints as fields, has none; a bare RAM
+/// symbol is its address, never zero, so it would always hold. That one is
+/// refused as `--until` refuses a bare RAM symbol compared.
 pub(super) fn compile_conditions(
     machine: &Machine,
     exprs: &[String],
 ) -> Result<Vec<CompiledRead>, Failure> {
+    if let Some((text, name)) = exprs
+        .iter()
+        .find_map(|text| Some((text, bare_ram_symbol_name(machine, text)?)))
+    {
+        let error = ExprError::Syntax {
+            at: text.find(name).unwrap_or(0),
+            message: format!("{name} is an address, not the value stored there"),
+            hint: Some(format!(
+                "[{name}] or u16[{name}]? A bare symbol is its address, so it always holds"
+            )),
+        };
+        return Err(Failure::new(convert::expr(&error)));
+    }
     let compiled = compile_reads(machine, exprs)?;
     if let Some(read) = compiled
         .iter()
@@ -184,14 +199,18 @@ fn oam_view(e: &ObjectAttributes) -> OamEntryRead {
 /// a symbol is its address, which is right for a ROM label, but a reader who
 /// names a variable almost always wants what it holds.
 fn bare_ram_symbol(machine: &Machine, text: &str) -> Option<String> {
+    let name = bare_ram_symbol_name(machine, text)?;
+    let addr = machine.symbols()?.get(name)?.addr;
+    Some(format!(
+        "{name} is the address ${addr:04X}; [{name}] reads its byte, u16[{name}] two"
+    ))
+}
+
+/// The symbol, when the whole expression is one RAM symbol.
+fn bare_ram_symbol_name<'a>(machine: &Machine, text: &'a str) -> Option<&'a str> {
     let name = text.trim();
     let symbol = machine.symbols()?.get(name)?;
-    Area::of(symbol.addr).is_ram().then(|| {
-        format!(
-            "{name} is the address ${:04X}; [{name}] reads its byte, u16[{name}] two",
-            symbol.addr
-        )
-    })
+    Area::of(symbol.addr).is_ram().then_some(name)
 }
 
 /// Evaluates compiled reads; `allow_uninit` reads a never-written byte's

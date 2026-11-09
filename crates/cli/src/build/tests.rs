@@ -137,6 +137,52 @@ fn an_expression_taken_as_the_rom_is_refused_with_the_repeat_remedy() {
     assert_eq!(args.read, vec!["u16[wNow]", "[wMiss]"]);
 }
 
+/// Arithmetic, parentheses and the bitwise operators reached the old "another
+/// ROM" error (review of 634c8d0); `-` and `/` stay allowed, as paths hold them.
+#[test]
+fn an_expression_of_arithmetic_or_parentheses_taken_as_the_rom_is_refused() {
+    for stray in ["wB+1", "wB + 1", "(wB)", "~[wB]", "wB*2", "wB^1"] {
+        let refused = command(&["run", "--read", "[wA]", stray]).unwrap_err();
+        assert!(refused.message.contains(stray), "{stray}: {refused:?}");
+    }
+    for rom in ["my-game", "build/out/game", "Tetris [!].gb"] {
+        let (target, _) = request(&["run", rom, "--read", "[wA]"]);
+        assert!(target.create.is_some(), "{rom}");
+    }
+}
+
+/// The refusal names the flag the stray followed: `--expect` sent the user
+/// to `--read` before.
+#[test]
+fn an_expression_taken_as_the_rom_names_the_flag_typed() {
+    let expect = command(&["run", "--expect", "[wA] == 1", "[wB] == 2"]).unwrap_err();
+    assert!(
+        expect.message.contains("--expect") && !expect.message.contains("--read"),
+        "{expect:?}"
+    );
+    assert!(
+        expect.remedy.contains("--expect '[wB] == 2'") && !expect.remedy.contains("--read"),
+        "{expect:?}"
+    );
+    let read = command(&["run", "--read", "[wA]", "[wB]"]).unwrap_err();
+    assert!(!read.message.contains("--expect"), "{read:?}");
+    assert!(
+        read.remedy.contains("--read '[wB]'") && !read.remedy.contains("--expect"),
+        "{read:?}"
+    );
+    // With both flags (or neither) it can't tell, so it names both.
+    for line in [
+        &["run", "--read", "[wA]", "--expect", "[wA] == 1", "[wB]"][..],
+        &["run", "[wB]"][..],
+    ] {
+        let both = command(line).unwrap_err();
+        assert!(
+            both.remedy.contains("--read '[wB]'") && both.remedy.contains("--expect '[wB]'"),
+            "{line:?}: {both:?}"
+        );
+    }
+}
+
 #[test]
 fn an_existing_rom_named_like_an_expression_still_runs() {
     let dir = std::env::temp_dir().join(format!("gbcli-rom-named-{}", std::process::id()));

@@ -378,6 +378,23 @@ fn a_run_that_errors_reports_the_notes_it_took() {
     );
 }
 
+/// A false `--expect` fails after the run, as a failed shot does: its flash
+/// notes ride on the error, not only in the result inside it.
+#[test]
+fn a_false_expectation_reports_the_notes_the_run_took() {
+    let f = Fixture::with_flash("flash-expect-false", FLASH_SAVE, "generic-wr-aaa-aa");
+    let mut h = handler(&f);
+    let response = h.handle(&request(Op::Run(RunArgs {
+        frames: Some(SAVE_FRAMES),
+        expect: vec!["1 == 0".into()],
+        ..RunArgs::default()
+    })));
+    let err = response.outcome.unwrap_err();
+    assert_eq!(err.code, ErrorCode::PredicateFalse, "{err:?}");
+    let rows = err.flash_notes.expect("rows on the error");
+    assert_eq!(rows[0].kind, FlashNoteKind::DataLines);
+}
+
 /// `game.sav` can't be written (a directory has its name), so neither file
 /// is: a lone chip image would pass for a whole save.
 #[test]

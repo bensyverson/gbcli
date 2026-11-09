@@ -2,7 +2,8 @@
 //! the reads with the same grammar and never-written rules. One false fails
 //! the run with `predicate_false` (exit 1); one that can't be evaluated fails
 //! it with its own error, since how it was asked comes before its answer.
-//! Either way the run is saved and its whole result rides on the error.
+//! Either way the run is saved and its whole result rides on the error,
+//! beside the stop and flash notes every failure after a run carries.
 
 use gbcli_core::Gap;
 use gbcli_engine::{Machine, Since};

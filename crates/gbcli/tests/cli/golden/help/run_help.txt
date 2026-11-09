@@ -31,7 +31,7 @@ FLAGS
   --poke TARGET=BYTES     write backing memory before the run, no side effects; repeat for more
   --patch TARGET=BYTES    patch the ROM before the run (recorded in checkpoints); repeat for more
   --read EXPR             evaluate one expression at the stop; repeat --read for more (a read that fails says why in its own row)
-  --expect EXPR           a condition that must hold at the stop, evaluated beside --read (same grammar, same never-written rule); prints an expect row (expr, value, ok) for each, and if any is false the run fails with exit 1 (predicate_false), still saved as the head, without --checkpoint; one that can't be evaluated fails with its own error; repeat for more
+  --expect EXPR           a condition that must hold at the stop, evaluated beside --read (same grammar, same never-written rule); prints an expect row (expr, value, ok) for each, and if any is false the run fails with exit 1 (predicate_false), still saved as the head, without --checkpoint; one that can't be evaluated fails with its own error; a run that fails on its own first (--until not reached, the wall guard) reports that error, without expect rows; repeat for more
   --checkpoint NAME       save the stop state under this name
   --allow-uninit          read never-written bytes as their power-on values, with a warning
   --shot PATH             save a PNG of the screen at the stop (see the shot flags)
@@ -52,7 +52,7 @@ FLAGS
   --raster                each IO-register write the run made, by frame and line: register, value, writer's PC, ticks into the line (912 per line) and the PPU mode it landed in (mode=, absent where the emulator can't tell)
   --keys TOKENS           press and release buttons: 'A@0 -A@2 START@10' (frame offsets); a key still held when the run ends stays held into the next run; K@N lands as frame N's VBlank begins (gbcli help time)
   --keys-file FILE        key tokens from a file, after --keys; # starts a comment
-  --keys-since BASE       what the key offsets count from: boot, power-on or a checkpoint name, as --since names them (default: the run's start). So a file recorded from boot replays from a mid-run checkpoint: --at floor5 --keys-file win.keys --keys-since boot applies only the events from floor5's frame on (the earlier ones are in floor5 already, and aren't reported as unapplied)
+  --keys-since BASE       what the key offsets count from: boot, power-on or a checkpoint name, as --since names them (default: the run's start). So a file recorded from boot replays from a mid-run checkpoint: --at floor5 --keys-file win.keys --keys-since boot applies only the events from floor5's frame on (the earlier ones are in floor5 already, and aren't reported as unapplied). boot is refused on a run that starts inside the boot ROM, before the handoff
 
 SHOT FLAGS (how the PNG is taken)
   --scale N               pixels per Game Boy pixel in the PNG, 1 to 16 (default 4); on run, also pixels per image pixel in --filmstrip, --piano and --spectrogram (default 2 for --piano, 1 for the others: try --scale 4 for a short clip's spectrogram)

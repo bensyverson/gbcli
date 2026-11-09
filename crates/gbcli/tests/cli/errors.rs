@@ -213,6 +213,29 @@ fn a_false_expect_exits_1_with_the_stop_and_an_expect_row() {
     );
 }
 
+/// A false `--expect` carries its stop on the error as well as in the result
+/// inside it; the rows print the stop, the late keys and the rev once each.
+#[test]
+fn a_false_expect_prints_its_stop_once() {
+    let p = Project::with_session("expect-once");
+    let run = p.gbcli(&[
+        "run",
+        "--session",
+        "demo",
+        "--frames",
+        "2",
+        "--keys",
+        "A@9",
+        "--expect",
+        "[wSpeed] == 3",
+    ]);
+    run.fails(1, "predicate_false", "expect");
+    let count = |head: &str| run.stdout.lines().filter(|l| l.starts_with(head)).count();
+    assert_eq!(count("stop "), 1, "{}", run.stdout);
+    assert_eq!(count("rev "), 1, "{}", run.stdout);
+    assert!(run.stdout.contains("A@9"), "the late key: {}", run.stdout);
+}
+
 /// A second expression after `--read` became the ROM argument, and the
 /// error was that the session runs another ROM (review item E-3).
 #[test]

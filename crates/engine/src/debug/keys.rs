@@ -81,10 +81,17 @@ impl KeyTimeline {
     /// Offsets that count from `since`, for a run starting where `m` is:
     /// frames counted as a stop record counts them, so an offset is the
     /// `frame=` a stop at its vblank would print with `--since` that base.
-    pub fn from_base(events: &[KeyEvent], m: &Machine, since: &Since) -> KeyTimeline {
+    ///
+    /// `None` when the base is the boot handoff and `m` hasn't reached it:
+    /// where the game's frame 0 falls isn't known until the boot ROM ends,
+    /// and counting from power-on instead would land every event early.
+    pub fn from_base(events: &[KeyEvent], m: &Machine, since: &Since) -> Option<KeyTimeline> {
+        if matches!(since, Since::Boot) && m.boot().is_none() {
+            return None;
+        }
         let base = m.time_base(since).frame as i64;
         let now = frame_number(m.core()) as i64;
-        KeyTimeline::rebased(events, now - base)
+        Some(KeyTimeline::rebased(events, now - base))
     }
 
     /// Offsets whose `start` is the run's frame 0. The events before it are

@@ -122,6 +122,52 @@ fn a_never_written_byte_fails_the_expectation_with_its_own_code_unless_allowed()
     assert!(allowed.outcome.expect("allowed").expect.unwrap()[0].ok);
 }
 
+/// A bare RAM symbol is its address, so as an expectation it always held
+/// (review of 634c8d0); refused as `--until` refuses one compared.
+#[test]
+fn a_bare_ram_symbol_expected_is_refused_suggesting_a_read() {
+    let f = Fixture::with_sym("expect-bare-symbol");
+    let mut h = handler(&f);
+    let response = run_expecting(&mut h, &["wSpeed"], RunArgs::default());
+    let error = response.outcome.expect_err("wSpeed is an address");
+    assert_eq!(error.code, ErrorCode::BadExpression, "{}", error.message);
+    assert!(error.message.contains("address"), "{}", error.message);
+    assert!(
+        error.remedy.contains("[wSpeed]") && error.remedy.contains("u16[wSpeed]"),
+        "{}",
+        error.remedy
+    );
+    assert!(
+        error.stop.is_none() && error.result.is_none(),
+        "nothing ran"
+    );
+    // Read, it is an expectation.
+    let ran = run_expecting(&mut h, &["[wSpeed] == 0"], RunArgs::default());
+    assert_eq!(ran.outcome.expect("ran").stop.unwrap().time.frame, 2);
+}
+
+/// A false expectation fails after the run is saved, so it carries the stop
+/// (and the key events past it) as every other post-run failure does.
+#[test]
+fn a_false_expectation_carries_the_stop_and_the_unapplied_keys() {
+    let f = Fixture::with_sym("expect-false-stop");
+    let response = run_expecting(
+        &mut handler(&f),
+        &["[wSpeed] == 1"],
+        RunArgs {
+            keys: gbcli_protocol::parse_keys("A@9").unwrap(),
+            ..RunArgs::default()
+        },
+    );
+    let error = response.outcome.expect_err("false");
+    let stop = error.stop.as_ref().expect("the stop on the error");
+    assert_eq!(Some(stop), error.result.as_ref().unwrap().stop.as_ref());
+    assert_eq!(
+        error.keys_unapplied,
+        Some(gbcli_protocol::parse_keys("A@9").unwrap())
+    );
+}
+
 #[test]
 fn a_bad_expectation_is_refused_before_the_machine_moves() {
     let f = Fixture::with_sym("expect-bad");

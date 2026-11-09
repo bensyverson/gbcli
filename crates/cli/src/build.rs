@@ -194,7 +194,7 @@ pub fn build(inv: Invocation, env: &Env) -> Result<Command, Usage> {
         _ => None,
     };
     if let Some(rom) = &rom {
-        refuse_expression_as_rom(rom, env)?;
+        refuse_expression_as_rom(rom, &inv, env)?;
     }
     if rom.is_some() && inv.has("rom") {
         return Err(Usage::new(
@@ -283,22 +283,41 @@ const ROM_EXTENSIONS: [&str; 4] = ["gb", "gbc", "cgb", "sgb"];
 /// cause. So an argument that names no file, has no ROM's extension and
 /// holds an expression's brackets or operators is refused here. A real ROM
 /// named `Tetris [!].gb` still runs, as does any file that exists.
-fn refuse_expression_as_rom(rom: &str, env: &Env) -> Result<(), Usage> {
+fn refuse_expression_as_rom(rom: &str, inv: &Invocation, env: &Env) -> Result<(), Usage> {
     let path = std::path::Path::new(rom);
     let rom_like = path
         .extension()
         .and_then(|e| e.to_str())
         .is_some_and(|e| ROM_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()));
-    let expression_like = rom.contains(['[', ']', '=', '<', '>', '!', '&', '|']);
+    // Not `-` or `/`, which real paths hold.
+    let expression_like = rom.contains([
+        '[', ']', '=', '<', '>', '!', '&', '|', '+', '*', '(', ')', '~', '^',
+    ]);
     if rom_like || !expression_like || env.cwd.join(path).is_file() {
         return Ok(());
     }
-    Err(Usage::new(
-        format!("`{rom}` looks like an expression, not a ROM: --read takes one expression"),
-        format!(
-            "repeat --read for each expression (and --expect for each condition), e.g. \
-             --read '{rom}'"
+    let (read, expect) = (inv.has("read"), inv.has("expect"));
+    let (message, remedy) = match (read, expect) {
+        (true, false) => (
+            "--read takes one expression".to_string(),
+            format!("repeat --read for each expression, e.g. --read '{rom}'"),
         ),
+        (false, true) => (
+            "--expect takes one condition".to_string(),
+            format!("repeat --expect for each condition, e.g. --expect '{rom}'"),
+        ),
+        // Both, or neither: it can't tell which the stray followed.
+        _ => (
+            "--read and --expect each take one".to_string(),
+            format!(
+                "repeat --read for each expression and --expect for each condition, e.g. \
+                 --read '{rom}' or --expect '{rom}'"
+            ),
+        ),
+    };
+    Err(Usage::new(
+        format!("`{rom}` looks like an expression, not a ROM: {message}"),
+        remedy,
     ))
 }
 

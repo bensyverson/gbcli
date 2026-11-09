@@ -189,6 +189,67 @@ fn keys_since_reports_a_late_event_in_the_files_own_offsets() {
     assert_eq!(result.keys_unapplied, Some(parse_keys("START@9").unwrap()));
 }
 
+/// Before the boot handoff there is no boot to count from: `time_base(Boot)`
+/// fell back to power-on, so the keys landed about 85 frames early, silently
+/// (review of 634c8d0). Refused wherever the run starts inside the boot ROM:
+/// from power-on, at a checkpoint taken there, or from a head still there.
+#[test]
+fn keys_since_boot_before_the_boot_handoff_is_refused_naming_the_way_out() {
+    use gbcli_protocol::{ErrorCode, Start, TimeBase};
+    let f = Fixture::with_rom("keys-since-boot-early", JOYPAD);
+    let mut h = handler(&f);
+    let keys = parse_keys("A@3 -A@4").unwrap();
+    let in_boot = h.handle(&request(Op::Run(RunArgs {
+        from: Some(Start::PowerOn),
+        frames: Some(10),
+        checkpoint: Some("inboot".into()),
+        ..RunArgs::default()
+    })));
+    assert!(in_boot.is_ok(), "{:?}", in_boot.error());
+    let since_boot = |from, at: Option<&str>| RunArgs {
+        from,
+        at: at.map(str::to_string),
+        frames: Some(100),
+        keys: keys.clone(),
+        keys_since: Some(TimeBase::Boot),
+        ..RunArgs::default()
+    };
+    for (case, args) in [
+        ("from power-on", since_boot(Some(Start::PowerOn), None)),
+        (
+            "at a checkpoint in the boot ROM",
+            since_boot(None, Some("inboot")),
+        ),
+        ("from a head in the boot ROM", since_boot(None, None)),
+    ] {
+        let response = h.handle(&request(Op::Run(args)));
+        let error = response.outcome.expect_err(case);
+        assert_eq!(
+            error.code,
+            ErrorCode::BadRequest,
+            "{case}: {}",
+            error.message
+        );
+        assert!(
+            error.message.contains("handoff"),
+            "{case}: {}",
+            error.message
+        );
+        assert!(
+            error.remedy.contains("--keys-since power-on") && error.remedy.contains("boot"),
+            "{case}: {}",
+            error.remedy
+        );
+        assert!(error.stop.is_none(), "{case}: nothing ran");
+    }
+    // Counted from power-on instead, the run goes ahead.
+    let ok = h.handle(&request(Op::Run(RunArgs {
+        keys_since: Some(TimeBase::PowerOn),
+        ..since_boot(Some(Start::PowerOn), None)
+    })));
+    assert!(ok.is_ok(), "{:?}", ok.error());
+}
+
 #[test]
 fn keys_since_an_unknown_checkpoint_is_refused_before_the_run() {
     use gbcli_protocol::{ErrorCode, TimeBase};

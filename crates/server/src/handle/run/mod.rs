@@ -125,18 +125,22 @@ impl Handler {
         let (mut machine, loaded) =
             self.machine_for(store, meta, Need::Start(args.from), args.at.as_deref())?;
         warnings.extend(loaded);
-        let plan = match plan_of(&machine, args) {
-            Ok(plan) => plan,
+        let planned = plan_of(&machine, args).and_then(|plan| {
+            let timeline = match &keys_since {
+                Some(base) => KeyTimeline::from_base(&args.keys, &machine, base)
+                    .ok_or_else(keys_before_the_handoff)?,
+                None => KeyTimeline::from_run_start(&args.keys),
+            };
+            Ok((plan, timeline))
+        });
+        let (plan, timeline) = match planned {
+            Ok(planned) => planned,
             Err(failure) => {
                 if args.at.is_none() && args.from.is_none() {
                     self.keep_warm(store, meta, machine);
                 }
                 return Err(failure);
             }
-        };
-        let timeline = match &keys_since {
-            Some(base) => KeyTimeline::from_base(&args.keys, &machine, base),
-            None => KeyTimeline::from_run_start(&args.keys),
         };
         let timeline = &*keys.insert(timeline);
 
@@ -298,7 +302,7 @@ impl Handler {
         let checkpoint = checkpoint.map_err(with_stop)?;
         let keys_unapplied = unapplied(timeline, &stop);
         let result = ResultBody {
-            stop: Some(stop),
+            stop: Some(stop.clone()),
             reads: Some(reads),
             expect: expected.rows(),
             shot,
@@ -312,10 +316,10 @@ impl Handler {
             keys_unapplied,
             checkpoint,
             writes: (!writes.is_empty()).then_some(writes),
-            flash_notes,
+            flash_notes: flash_notes.clone(),
             ..ResultBody::default()
         };
-        expected.verdict(result)
+        expected.verdict(result).map_err(with_stop)
     }
 
     /// Whether the run reached what it was asked for: not stopped by the
@@ -522,6 +526,17 @@ fn plan_of(machine: &Machine, args: &RunArgs) -> Result<Plan, Failure> {
         target,
         probes,
     })
+}
+
+/// `--keys-since boot` on a run that starts inside the boot ROM.
+fn keys_before_the_handoff() -> Failure {
+    Failure::new(ErrorBody::new(
+        ErrorCode::BadRequest,
+        "--keys-since boot counts from the boot handoff, which hasn't happened where this run \
+         starts (inside the boot ROM)",
+        "count the keys from power-on with --keys-since power-on, or start the run from boot \
+         (--from boot, or --at a checkpoint after the handoff)",
+    ))
 }
 
 /// The key events past the stop, for the result: never silently dropped

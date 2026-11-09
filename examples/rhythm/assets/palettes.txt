@@ -1,0 +1,8 @@
+# Lantern Drum's palettes (gbcli help images). Every image is indexed art
+# in palette ui, so one set of tiles serves both machines; on a GBC the
+# program loads its own colors (src/main.asm, ColorGbc).
+dmg: #ffffff #aaaaaa #555555 #000000
+ui: #ffffff #aaaaaa #555555 #000000
+tiles/font.pixels = ui
+tiles/play.pixels = ui
+bg/title.pixels = ui

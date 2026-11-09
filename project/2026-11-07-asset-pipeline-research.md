@@ -21,6 +21,8 @@ Every check below is a **warning**; none stops a build.
 
 **192 is an engine budget, not hardware.** gbvm puts its UI and font tiles at `0xC4`–`0xCB` (gbvm include/ui.h:29–34), so reserving 192–255 for UI is inferred, strongly. The hardware has 384 tiles of VRAM (768 on CGB), shared with sprites.
 
+> **Corrected (2026-11-09, leaf 5UVSjE):** `0xC4`–`0xCB` was only part of the range. gbvm's UI holds all of `0xC0`–`0xFF`, 64 tiles: the frame at `0xC0`–`0xC8` (src/core/ui.c:22–30), the fills and cursor at `0xC9`–`0xCB`, and the text ring at `0xCC`–`0xFF` (include/ui.h:13–15). That is observed, not inferred, and it is exactly the 64 tiles above 192 ([2026-11-09-pixel-fonts-design.md](2026-11-09-pixel-fonts-design.md)).
+
 **Wording worth borrowing** (src/lang/en.json:2135–2174): count, limit, consequence, remedy.
 - "Background contains too many unique 8x8px tiles ({tilesetLength} where limit is {maxTilesetLength}) meaning it may not display correctly. Consider reducing the amount of detail in this image."
 - "Background contains too many unique four color palettes ({paletteLength} where limit is {maxPaletteLength}) … Consider reducing the amount of colors used in this image."

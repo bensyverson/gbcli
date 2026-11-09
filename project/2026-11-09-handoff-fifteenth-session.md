@@ -30,18 +30,20 @@ Ben was around and ruled as things came up. The gbcli fixes from the first wave 
 
 ## In flight
 
-Two game agents, each one chain of four session leaves in its own harness worktree, using the pinned binary `/Users/ben/.cache/gbcli-examples/target/release/gbcli` built from `c38cd29` (it has the big-PNG `gbcli pixels` regression fixed in `08752b0`; unlikely to matter at Game Boy sizes):
-- **rogue15**: D, the roguelike (`QdPmrv`, `JQiBBs`, `H1Fbvm`, `RRqjrZ`), worktree `.claude/worktrees/agent-a5923bad21ab961aa`, DX doc `project/2026-11-09-dx-rogue.md`.
-- **rhythm15**: E, the rhythm game (`Uw6Adb`, `LM71mY`, `e5Arro`, `ahhhvb`), worktree `.claude/worktrees/agent-a9a8e774f1e46ea56`, DX doc `project/2026-11-09-dx-rhythm.md`.
+**Landed since this handoff was first written:** E, the rhythm game **Lantern Drum** (`examples/rhythm/`, `lantern-drum.gb`, DX doc [2026-11-09-dx-rhythm.md](2026-11-09-dx-rhythm.md); wired into `scripts/examples/build-roms.sh`), and the **pixel fonts design** ([2026-11-09-pixel-fonts-design.md](2026-11-09-pixel-fonts-design.md), leaf `5UVSjE`): ten questions for Ben, each with a recommendation; nothing is built until he decides.
 
-If this session ends before they report: each worktree holds the agent's uncommitted work and job notes on its leaves say where it stopped. Integrate as usual (snapshot with `write-tree`/`commit-tree`, `git merge --squash`, read the diff, commit through the hook, close the finished leaves, push). A leaf left unfinished goes to a fresh agent with the same brief (below) and a summary of the state. When both games are in, add them to `examples/README.md`'s table and to `scripts/examples/build-roms.sh` if the agents didn't, then do the DX review for D and E as `review-ab` did for A and B, before C (`uI1JDB`).
+Still in flight: **rogue15**, D, the roguelike (`QdPmrv`, `JQiBBs`, `H1Fbvm`, `RRqjrZ`), worktree `.claude/worktrees/agent-a5923bad21ab961aa`, DX doc `project/2026-11-09-dx-rogue.md`, on the pinned binary `/Users/ben/.cache/gbcli-examples/target/release/gbcli` built from `c38cd29`.
+
+If this session ends before it reports: the worktree holds the agent's uncommitted work and job notes on its leaves say where it stopped. Integrate as usual (snapshot with `write-tree`/`commit-tree`, `git merge --squash`, read the diff, commit through the hook, close the finished leaves, push). A leaf left unfinished goes to a fresh agent with the same brief (below) and a summary of the state. When it is in, add it to `examples/README.md`'s table and to `scripts/examples/build-roms.sh` if the agent didn't (game agents may not read `scripts/`), then do the DX review for D and E as `review-ab` did for A and B, before C (`uI1JDB`).
 
 ## Next, in order
 
-1. Integrate the two games (above).
+1. Integrate the roguelike (above). Bring Ben the fonts design's ten questions, and the embedded-scripting question below.
 2. Read both DX docs and `gbcli gaps`; bring Ben a ranked list (the shape of [2026-11-08-examples-dx-review.md](2026-11-08-examples-dx-review.md)).
 3. Re-time the warm suite on an idle machine: every hook run this session warned 43-51 s against 30 s, all taken with agents compiling (load average 17-25). `python3 -I scripts/bench/test-times.py`, twice, take the second; only then move tests to pre-release.
 4. Then C, the raycaster: detail `uI1JDB` after D and E.
+
+**Ben asked (2026-11-09) about embedding a JS interpreter** so agents script inside gbcli instead of writing Python. The main thread's answer: most of the Python is art (now `.pixels`), build-time tables, or output post-processing (now features); the real case is closed-loop input bots (the shooter's made 1,150 `gbcli run` calls). Recommendation: wait for the D/E DX docs; if bots dominate again, choose between a bot client over `serve` and one embedded engine on every platform (QuickJS via `rquickjs`), not JavaScriptCore (macOS-only, so a second engine on Linux, which threatens determinism). Ben's lean: QuickJS, since a `serve` bot is harder to fit in an agent loop. Recorded in [backlog.md](backlog.md) ▸ Embedded scripting for input bots, with the un-park condition. Lantern Drum's agent also wrote Python (song composer, chart, sync and key-file tools): read its DX doc with this question in mind.
 
 ## Reusable briefs
 

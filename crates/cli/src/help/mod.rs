@@ -55,7 +55,7 @@ pub fn primer() -> String {
         \x20       gbcli recipes (goal → command)\n\
         \x20       gbcli help TOPIC: addresses expressions time checkpointing writes\n\
         \x20                         budgets exit-codes hardware traps optimize rgbds\n\
-        \x20                         music images flash\n\
+        \x20                         music images pixels flash\n\
         \x20       gbcli schema (the JSON request grammar for serve and batch)\n\
         Exit:   0 ok, 1 no, 2 usage, 3 budget/conflict, 4 unreadable, 5 environment\n";
     out

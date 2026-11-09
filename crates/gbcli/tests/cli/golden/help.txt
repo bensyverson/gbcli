@@ -32,7 +32,7 @@ Help:   gbcli VERB --help (one worked example each)
         gbcli recipes (goal → command)
         gbcli help TOPIC: addresses expressions time checkpointing writes
                           budgets exit-codes hardware traps optimize rgbds
-                          music images flash
+                          music images pixels flash
         gbcli schema (the JSON request grammar for serve and batch)
 Exit:   0 ok, 1 no, 2 usage, 3 budget/conflict, 4 unreadable, 5 environment
 $ gbcli run --help

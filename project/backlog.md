@@ -161,3 +161,13 @@ Eval run 5 asked for axis labels or a legend on the image too; `help music` now 
 ## 2026-11-08 — Tile and frame names as program constants
 
 What: let pixel text (or a sheet's name) name its tiles and frames so `images.inc` defines constants for them (`FONT_TILE_A`, `HERO_FRAME_STEP`), instead of programs hard-coding tile numbers as the shooter's `include/game.inc` did. Why parked: the pixel text design's open question 7, which Ben ruled on 2026-11-08 ([2026-11-08-pixel-text-design.md](2026-11-08-pixel-text-design.md)): it changes `images.inc`, the LoadHigh seam, and the dedupe question (a merged tile would have two names), and only one game needed it. Un-park when: a third game hard-codes tile or frame numbers again.
+
+## 2026-11-09 — Embedded scripting for input bots (QuickJS)
+
+**What:** a JavaScript interpreter inside gbcli, so an agent's closed-loop input bot (read RAM, decide, press keys, every frame) runs in the session's own loop instead of as an outside Python script driving `gbcli run` call by call (the shooter's bot made 1,150 calls, four frames each). Scripts would see only the emulator: reads, key presses, run-until, never the filesystem or network, so a bot run stays deterministic and replays as a key file.
+
+**Ben's lean (2026-11-09):** QuickJS (through the `rquickjs` crate), one engine on every platform; not a bot client over `serve` ("it could be harder to embed a `serve` bot in an agent loop"), and not JavaScriptCore (macOS only, so Linux would need a second engine, which threatens determinism). The dependency still needs Ben's go-ahead when un-parked.
+
+**Why parked:** most of the games' Python was art (now `.pixels`), build-time data tables (normal), or post-processing gbcli output (since made features); only the bots argue for in-process scripting, and the script API is a second interface to design and keep stable beside the JSONL protocol. The examples DX review (2026-11-08) set the bar: a built-in input driver when a third game shows it's needed.
+
+**Un-park when:** the D (roguelike) or E (rhythm) DX doc shows an input bot, or another per-frame script, costing real time or calls again. Lantern Drum's agent (E) wrote Python tools for its song, chart, sync check and key files: check its DX doc ([2026-11-09-dx-rhythm.md](2026-11-09-dx-rhythm.md)) first.

@@ -18,3 +18,4 @@ build() {
 
 build racer switchback
 build shooter vesper-swarm
+build rhythm lantern-drum

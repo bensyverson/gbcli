@@ -1,5 +1,30 @@
 use super::*;
 
+/// Every topic is on the primer's TOPIC lines, not merely somewhere in the
+/// primer: `pixels` is also a verb, so a bare `contains` passed without it
+/// (rhythm15's report, fifteenth session).
+#[test]
+fn the_primers_topic_lines_list_every_topic() {
+    let primer = primer();
+    let topics: Vec<&str> = primer
+        .lines()
+        .skip_while(|l| !l.contains("gbcli help TOPIC:"))
+        .take_while(|l| !l.contains("gbcli schema"))
+        .flat_map(|l| {
+            l.split_once(':')
+                .map_or(l, |(_, rest)| rest)
+                .split_whitespace()
+        })
+        .collect();
+    for topic in Topic::ALL {
+        assert!(
+            topics.contains(&topic.name()),
+            "{}: {topics:?}",
+            topic.name()
+        );
+    }
+}
+
 #[test]
 fn the_primer_fits_in_40_lines_and_names_every_verb_and_topic() {
     let primer = primer();

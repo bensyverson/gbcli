@@ -1,0 +1,83 @@
+$ gbcli run --help
+exit 0
+gbcli run — advance the machine to a stop, then read and save
+
+USAGE
+  gbcli run [ROM] [--frames N | --until EXPR | --to ADDR] [--keys TOKENS] [--read EXPR]… [--shot PATH] [--audio-log] [--wav PATH] [--measure FROM..TO] [--profile] [--oam-log] [flags]
+
+The experiment verb. In this order, whatever the order of the flags: start
+from --at, the head, or the boot handoff; apply --patch, --poke and --write in
+the order given; schedule --keys; run until --until holds, --to is reached, a
+breakpoint or watch fires, or the budget ends (--profile, --frame-budget,
+--raster and --oam-log collect during the run); --measure on a copy of the
+stop; evaluate --read and --expect; save --shot; save the audio (--audio-log,
+--audio-summary, --wav, --piano, --spectrogram); save --checkpoint (not when
+an --expect is false). The stop becomes the session's new head, whatever
+--expect says. A ROM argument is the same as --rom.
+
+CLASS
+  act: advances or changes the machine and saves the new head; needs a session (name one with a ROM to create it).
+
+FLAGS
+  --at NAME|~N            start from a named checkpoint or the head N changes back
+  --from boot|power-on    start at the boot handoff (the default with no head) or at power-on; given, either skips the head, so --from boot restarts the session on a rebuilt ROM, keeping its breakpoints and watches (moved with their labels); the old head stays in history; not with --at
+  --since BASE            what frame and t count from: boot (default), power-on or a checkpoint name
+  --until EXPR            stop when this condition holds
+  --to ADDR               stop before the instruction at this address executes
+  --frames N              frame budget; any run without a budget gets 600 frames, and using them all up without another stop is budget_exhausted; it stops as VBlank begins, before the handler runs (gbcli help time)
+  --instructions N        instruction budget
+  --ticks N               tick budget
+  --write TARGET=BYTES    bus write before the run, as the CPU would; repeat for more
+  --poke TARGET=BYTES     write backing memory before the run, no side effects; repeat for more
+  --patch TARGET=BYTES    patch the ROM before the run (recorded in checkpoints); repeat for more
+  --read EXPR             evaluate one expression at the stop; repeat --read for more (a read that fails says why in its own row)
+  --expect EXPR           a condition that must hold at the stop, evaluated beside --read (same grammar, same never-written rule); prints an expect row (expr, value, ok) for each, and if any is false the run fails with exit 1 (predicate_false), still saved as the head, without --checkpoint; one that can't be evaluated fails with its own error; repeat for more
+  --checkpoint NAME       save the stop state under this name
+  --allow-uninit          read never-written bytes as their power-on values, with a warning
+  --shot PATH             save a PNG of the screen at the stop (see the shot flags)
+  --filmstrip PATH        save a PNG of the frames the run passed, in a row, each labeled (LCD-off frames kept); at most 16, more are counted and warned about
+  --every N               with --filmstrip: keep a frame every N frames of the run (default 1)
+  --audio-log             print every write the run made to the sound registers, decoded into notes and settings, at elapsed 2^23 Hz ticks since --since, with the frame (counted as the stop's frame=) and the line (ly) it fell on: the cheap sibling of --wav. Only this run's: writes made before the run (a sound engine's setup) aren't listed
+  --audio-summary         print the run's sound-register writes counted by register (wave RAM as WAVE) and by writer PC (and its symbol, Label+$n), most first, with the registers each wrote: the log in a few rows
+  --audio-channel N       with --audio-log or --audio-summary: only channel N's writes, 1-4 or square1, square2, wave, noise (its NRxy registers; wave RAM is the wave channel's; NR50-NR52 are no channel's and are left out); repeat for more
+  --wav PATH              save what the run played as a WAV (16-bit stereo, 32,768 Hz)
+  --channels mixed|each   with --wav: each also saves every channel alone beside it (PATH's stem with -square1, -square2, -wave, -noise) by replaying the run muted
+  --piano PATH            save a piano roll PNG of the notes the run's sound writes played
+  --spectrogram PATH      save a spectrogram PNG of what the run played
+  --measure FROM..TO      after the stop, on a copy of it: cycles from the first arrival at FROM to the next arrival at TO (one iteration; `gbcli measure` for more)
+  --profile               cycles per routine over the run, by .sym, most exclusive cycles first; idle_t is the HALT share of a routine's exclusive cycles, a HALT reached by `jp` included
+  --top N                 with --profile: only the N routines with the most exclusive cycles
+  --frame-budget          each frame's active and idle (HALT) T-cycles over the run, and the lag frames: frames in which the CPU never halted with the LCD on (LCD-off frames, as at startup or a screen change, count as lcd_off instead); the first row sums up the whole LCD-on frames' active T-cycles (min, max, mean) and the busiest one (a row index), then a row per lag frame with its index and frame (counted as the stop's frame=) (--json has every frame, each with its frame; gbcli help budgets)
+  --oam-log               OAM at every vblank the run passes: a row per frame with the objects on screen and the OAM indices the 10-per-line limit dropped (--json has every object's fields); each frame's OAM is the one it was drawn from
+  --raster                each IO-register write the run made, by frame and line: register, value, writer's PC, ticks into the line (912 per line) and the PPU mode it landed in (mode=, absent where the emulator can't tell)
+  --keys TOKENS           press and release buttons: 'A@0 -A@2 START@10' (frame offsets); a key still held when the run ends stays held into the next run; K@N lands as frame N's VBlank begins (gbcli help time)
+  --keys-file FILE        key tokens from a file, after --keys; # starts a comment
+  --keys-since BASE       what the key offsets count from: boot, power-on or a checkpoint name, as --since names them (default: the run's start). So a file recorded from boot replays from a mid-run checkpoint: --at floor5 --keys-file win.keys --keys-since boot applies only the events from floor5's frame on (the earlier ones are in floor5 already, and aren't reported as unapplied)
+
+SHOT FLAGS (how the PNG is taken)
+  --scale N               pixels per Game Boy pixel in the PNG, 1 to 16 (default 4); on run, also pixels per image pixel in --filmstrip, --piano and --spectrogram (default 2 for --piano, 1 for the others: try --scale 4 for a short clip's spectrogram)
+  --crop X,Y,W,H          only this rectangle of the 160x144 screen, in Game Boy pixels
+  --live                  the pixels drawn so far this frame, not the last complete frame
+  --any-frame             take the last frame even if it isn't a normal one (LCD off, blank)
+
+SESSION FLAGS (every session verb)
+  -s, --session NAME      the session to use (default: GBCLI_SESSION); naming a new one with a ROM creates it
+  --rom FILE              the ROM a new session is created from; an existing session refuses another ROM
+  --sym FILE              the .sym for a new session (default: the ROM's name with .sym, if it exists); an existing session refuses another
+  --model MODEL           the model for a new session: dmg-b (default, also dmg), gbc (cgb-e, a GBC in CGB mode for a $80 or $C0 ROM), cgb0, …; an existing session refuses another
+  --seed N                the RAM seed for a new session (default 0); an existing session refuses another
+  --flash BOARD           a new session's cart is a flash-save board (`gbcli help flash` lists them; default: mask ROM); an existing session refuses another
+  --allow-rom-change      load a stored state even though the ROM was rebuilt and the check refuses it
+
+CHANGE FLAGS (every verb that changes the session)
+  --rev sN                refuse the change if the session is no longer at this revision
+
+OUTPUT FLAGS (every verb that sends a request)
+  --json                  print the protocol's result object instead of rows
+  --dir PATH              run as if from PATH: find .gbcli/ from it and read relative paths (the ROM, files read and written) against it (beats GBCLI_DIR)
+  --as NAME               who is asking, for the event log (default: GBCLI_AS)
+
+EXAMPLE
+  gbcli run game.gb --session dx --until 'u16[wFrame] >= 60' --read '[wSpriteX]'
+    creates session dx from game.gb, runs to the frame where wFrame reaches
+    60, and prints the stop and the byte in wSpriteX

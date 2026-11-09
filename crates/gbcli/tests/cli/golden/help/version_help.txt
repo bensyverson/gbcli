@@ -1,0 +1,22 @@
+$ gbcli version --help
+exit 0
+gbcli version — gbcli's, the protocol's and the core's versions
+
+USAGE
+  gbcli version [--json]
+
+Prints gbcli's version and the SameBoy commit and patch set it was built with,
+the line `gbcli --version` prints. --json adds the protocol version:
+result.version is {gbcli, protocol, sameboy, patch_set}, the `version` op's
+answer, which a program driving `gbcli serve` reads by sending
+{"op":"version"} (`gbcli schema`).
+
+CLASS
+  help: no preconditions: works with no session, no ROM and no network.
+
+MORE FLAGS
+  --json                  print the protocol's result object instead of rows
+
+EXAMPLE
+  gbcli version --json
+    prints the versions, the protocol's among them, as the response line

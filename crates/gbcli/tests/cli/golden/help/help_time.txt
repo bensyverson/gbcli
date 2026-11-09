@@ -1,0 +1,26 @@
+$ gbcli help time
+exit 0
+Time — every frame and cycle count says what it counts from.
+
+  boot        the default: the boot ROM's handoff to the cartridge (PC=$0100).
+              Before it, counts come from power-on and say so.
+  power-on    tick 0
+  NAME        a named checkpoint
+
+--since BASE changes the base for run and read; stop rows print since=.
+The first run of a ROM runs the real boot ROM once and caches the handoff in
+.gbcli/cache/; later runs start there. --from power-on starts cold instead.
+Either --from skips the head: --from boot is how a session starts over on a
+rebuilt ROM, keeping its breakpoints and watches.
+
+Frames and keys. A frame begins as VBlank does (ly=144). A run --frames N
+stops there, at the VBlank interrupt vector ($0040, ly=144), before the
+handler runs: the stop shows the frame just drawn, but what the handler does
+for it (OAM DMA, a frame counter, a joypad read) happens in the next run, so
+run one more frame to see it. A key token K@N changes the buttons at the
+start of the run's frame N (offsets count from the run's start), so every
+joypad read the program makes after that VBlank sees it, and none before.
+With --keys-since BASE (boot, power-on or a checkpoint) offsets count from
+that base instead, as the frame= a stop prints with --since BASE: a key
+file recorded from boot replays from a mid-run checkpoint with
+--at floor5 --keys-since boot, applying only the events from floor5 on.

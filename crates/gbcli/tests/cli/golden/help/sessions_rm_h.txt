@@ -1,0 +1,24 @@
+$ gbcli sessions rm -h
+exit 0
+gbcli sessions rm — remove one session
+
+USAGE
+  gbcli sessions rm NAME [--with-checkpoints] [flags]
+
+Remove a session and its history. A session with named checkpoints is refused
+unless --with-checkpoints.
+
+CLASS
+  project: lists or removes the sessions in this project's .gbcli/, or reads what they share; takes no session.
+
+FLAGS
+  --with-checkpoints      remove the session even though it holds named checkpoints
+
+OUTPUT FLAGS (every verb that sends a request)
+  --json                  print the protocol's result object instead of rows
+  --dir PATH              run as if from PATH: find .gbcli/ from it and read relative paths (the ROM, files read and written) against it (beats GBCLI_DIR)
+  --as NAME               who is asking, for the event log (default: GBCLI_AS)
+
+EXAMPLE
+  gbcli sessions rm dx
+    removes the session dx

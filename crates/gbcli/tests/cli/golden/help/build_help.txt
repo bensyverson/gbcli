@@ -1,0 +1,45 @@
+$ gbcli build --help
+exit 0
+gbcli build — assemble, link and fix a project with RGBDS; errors with file and line
+
+USAGE
+  gbcli build [DIR] [--src DIR]… [--include DIR]… [--out FILE] [--gbc] [--session NAME --restore NAME] [flags]
+
+Builds the project in DIR (default: here) by convention: rgbasm assembles
+every .asm under src/ with include/ on the include path, rgblink links them
+into build/<DIR's name>.gb with a .sym and a .map (--gbc: build/gbc/<DIR's
+name>.gbc, so both builds' outputs stay), and rgbfix fixes the header. Each
+step's outputs must exist and be non-empty. Every diagnostic is a `diagnostic`
+row with its file and line (a message repeated on lines in a row is one row,
+with lines= and count=); any error fails with build_failed (exit 4) and leaves
+the last good ROM in place. With --session and --restore, a good build is
+reloaded: the checkpoint is restored into the rebuilt ROM, which loads only if
+nothing it was running moved (rom_changed, exit 3, says what did; `gbcli run
+--from boot` then starts the session over on the new ROM).
+
+CLASS
+  build: runs RGBDS from PATH, checked against the pinned version (`gbcli doctor`); a session only to reload the build into; `new`, `song` and `pixels` need neither, and `assets` only rgbgfx.
+
+FLAGS
+  --src DIR               assemble every .asm under DIR instead of src/ (relative to the project); repeat for more
+  --include DIR           put DIR on rgbasm's include path instead of include/; repeat for more
+  --out FILE              the ROM to write, with its .sym and .map beside it (default build/<project>.gb; with --gbc, build/gbc/<project>.gbc)
+  --gbc                   build for the GBC in dual mode: rgbfix -c sets $0143 to $80, and the ROM still runs on the DMG
+  --restore NAME          after a good build, restore this checkpoint into --session, under the rebuilt-ROM check
+
+MORE FLAGS
+  -s, --session NAME      the session to use (default: GBCLI_SESSION); naming a new one with a ROM creates it
+  --allow-rom-change      load a stored state even though the ROM was rebuilt and the check refuses it
+
+CHANGE FLAGS (every verb that changes the session)
+  --rev sN                refuse the change if the session is no longer at this revision
+
+OUTPUT FLAGS (every verb that sends a request)
+  --json                  print the protocol's result object instead of rows
+  --dir PATH              run as if from PATH: find .gbcli/ from it and read relative paths (the ROM, files read and written) against it (beats GBCLI_DIR)
+  --as NAME               who is asking, for the event log (default: GBCLI_AS)
+
+EXAMPLE
+  gbcli build --session game --restore start
+    rebuilds the project here, then restores checkpoint start of session game
+    into the new ROM

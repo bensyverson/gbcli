@@ -14,7 +14,7 @@ How to set up a checkout, run the tests, and keep the suite fast.
 
 ## The test suites
 
-- **Warm suite:** `cargo test --workspace`. **It must stay under 30 s.** The hook times it and warns past that. `python3 -I scripts/bench/test-times.py` finds the slow tests; wall time under load (parallel agents, low-power mode) is noise, so compare CPU seconds and check the load average it prints.
+- **Warm suite:** `cargo test --workspace`. **It must stay under 30 s.** The hook times it: on a quiet machine (load average at most half the CPUs) a run past 30 s fails the commit; under load it only warns past 60 s. `python3 -I scripts/bench/test-times.py` finds the slow tests; wall time under load (parallel agents, low-power mode) is noise, so compare CPU seconds and check the load average it prints.
 - **Pre-release suite:** a test too slow to keep warm gets `#[ignore = "pre-release: <why>"]`; run them all with `cargo test --workspace -- --ignored`. Policy and figures: [project/2026-11-06-test-suite-speed.md](../project/2026-11-06-test-suite-speed.md).
 - **One integration-test binary per crate:** `crates/<crate>/tests/it/main.rs` (the `gbcli` crate's is `tests/cli/`), each test file a module of it and each helper (`common/`, …) a module once, so a crate's tests link once and share one process. Run one crate's with `cargo test -p <crate> --test it`. A test that needs a process of its own (it redirects stdout, counts the process's threads, or holds a wall-clock bound) is a file beside `it/` and says why at its top.
 - The dev profile builds at `opt-level = 1` (`Cargo.toml`), because the tests drive the emulator for thousands of frames.

@@ -6,7 +6,8 @@ use crate::common::{Project, golden};
 fn help_works_with_no_preconditions_and_leaves_no_trace() {
     let p = Project::new("help");
     std::fs::remove_file(p.path("demo.gb")).unwrap();
-    let mut out = String::new();
+    // One golden per command, so parallel work on different help texts
+    // doesn't collide in one file.
     for args in [
         &[][..],
         &["run", "--help"],
@@ -21,9 +22,8 @@ fn help_works_with_no_preconditions_and_leaves_no_trace() {
     ] {
         let run = p.gbcli(args);
         assert_eq!(run.code, 0, "{args:?}: {}", run.stderr);
-        out += &run.transcript(args, &p.dir);
+        golden(&help_golden(args), &run.transcript(args, &p.dir));
     }
-    golden("help.txt", &out);
     for args in [
         &["help", "addresses"][..],
         &["help", "expressions"],
@@ -90,4 +90,20 @@ fn version_json_is_the_ops_answer_and_the_text_is_drawn_from_it() {
         )
     );
     assert!(!p.path(".gbcli").exists(), "version made a bundle");
+}
+
+/// `help/<the args, dashes dropped, joined by _>.txt`; the bare primer is
+/// `help/primer.txt`.
+fn help_golden(args: &[&str]) -> String {
+    let name = args
+        .iter()
+        .map(|a| a.trim_start_matches('-'))
+        .collect::<Vec<_>>()
+        .join("_");
+    let name = if name.is_empty() {
+        "primer".into()
+    } else {
+        name
+    };
+    format!("help/{name}.txt")
 }

@@ -1,0 +1,37 @@
+$ gbcli 
+exit 0
+gbcli — a headless, deterministic Game Boy emulator for agents.
+
+Each command opens a named session (.gbcli/sessions/NAME/), does one thing to
+its machine, saves it and prints rows; --json prints the response line.
+
+  act        run, step, checkpoint, restore, undo, power-cycle, write, poke,
+             patch
+             advance or change the machine; the stop becomes the head
+  read       show, read, measure, equiv, shot, view, sym, checkpoints, sav,
+             events
+             look without changing the head
+  configure  break, watch, delete
+             change the session's settings
+  project    gaps, sessions, sessions prune, sessions rm
+             every session in .gbcli/, and what they share; no session needed
+  build      new, build, assets, song, pixels
+             RGBDS from PATH: edit, build, restore, measure; song and pixel text
+  server     serve, batch
+             the JSON Lines protocol, for harnesses
+  help       help, recipes, schema, doctor, opcode, version
+             no session, ROM or network needed
+
+First:  gbcli run game.gb --session demo --frames 120 --shot first.png
+Then:   gbcli show --session demo    gbcli read pc frame --session demo
+New:    gbcli doctor, then gbcli new game (a starter that builds and runs)
+Learn:  gbcli help hardware (the DMG on one page), gbcli help traps,
+        gbcli opcode 'jr nz, .loop' (bytes, cycles, flags)
+
+Help:   gbcli VERB --help (one worked example each)
+        gbcli recipes (goal → command)
+        gbcli help TOPIC: addresses expressions time checkpointing writes
+                          budgets exit-codes hardware traps optimize rgbds
+                          music images pixels flash
+        gbcli schema (the JSON request grammar for serve and batch)
+Exit:   0 ok, 1 no, 2 usage, 3 budget/conflict, 4 unreadable, 5 environment

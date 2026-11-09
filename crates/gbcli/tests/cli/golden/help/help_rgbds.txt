@@ -1,0 +1,43 @@
+$ gbcli help rgbds
+exit 0
+RGBDS — the loop: edit, build, restore, measure, with RGBDS from PATH.
+
+  gbcli doctor                 RGBDS at the pinned version? (exit 5 names the
+                               install command)
+  gbcli new game               a starter: header, VBlank handler, OAM DMA in
+                               HRAM, hardware.inc, a sprite on screen
+  gbcli build game             rgbasm every src/**/*.asm (include/ on the
+                               path), rgblink to build/game.gb + .sym + .map,
+                               rgbfix -v -p 0xFF. No build file: the layout
+                               is the build; --src, --include, --out change it;
+                               PNGs in assets/ too (gbcli help images)
+  gbcli build game --gbc       the same, for the GBC in dual mode, to
+                               build/gbc/game.gbc + .sym + .map (its own
+                               folder, so the plain build's stay): rgbfix -c
+                               sets $0143 = $80, so the ROM is GBC-enhanced
+                               and still runs on the DMG. (Pan Docs calls
+                               the GBC the CGB.) rgbfix -C (GBC only, $C0)
+                               isn't offered. A session runs it on the DMG
+                               unless made with --model gbc (a GBC in CGB
+                               mode), so check a dual ROM in two sessions
+  gbcli assets game --json     the images alone, converted as build would,
+                               with rgbgfx alone and nothing written: tile
+                               maps and palettes; --manifest FILE instead
+                               of a project (gbcli help images)
+  The loop, from inside game/:
+    gbcli run build/game.gb --session game --frames 60 --checkpoint start
+    (edit src/)
+    gbcli build --session game --restore start
+    gbcli measure VBlank..VBlank.done --session game
+
+Each error is a `diagnostic` row with file= and line=; the same message on the
+same or the next line, back to back, is one row with lines=FIRST-LAST and
+count=N, even when that is two typos; errors= counts rows. build_failed
+exits 4 and leaves the last good ROM in place. --restore loads the checkpoint
+into the rebuilt ROM only if nothing it was running moved; rom_changed (exit
+3) lists what did, and --allow-rom-change loads it anyway. To start over on
+the new ROM instead, `gbcli run --session game --from boot` (breakpoints and
+watches kept, following their labels).
+
+Constants other files assemble against (in ds, IF, REPT) belong in include/:
+an EXPORTed symbol is resolved only at link time, so it isn't constant there.

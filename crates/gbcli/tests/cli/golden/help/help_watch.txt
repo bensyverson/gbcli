@@ -1,0 +1,39 @@
+$ gbcli help watch
+exit 0
+gbcli watch — add a watchpoint on reads, writes or both
+
+USAGE
+  gbcli watch read|write|access ADDR [--if EXPR] [--once] [flags]
+
+Stop every later run at an access to ADDR. In --if, `old` and `new` are the
+byte before and after a write. --once deletes it after it fires. Set by a
+symbol, it follows that symbol when the ROM is rebuilt, and is disarmed while
+a rebuild lacks the symbol.
+
+CLASS
+  configure: changes the session's settings, not the machine; needs a session.
+
+FLAGS
+  --if EXPR               stop only when this condition holds
+  --once                  delete the watch after it fires once
+
+SESSION FLAGS (every session verb)
+  -s, --session NAME      the session to use (default: GBCLI_SESSION); naming a new one with a ROM creates it
+  --rom FILE              the ROM a new session is created from; an existing session refuses another ROM
+  --sym FILE              the .sym for a new session (default: the ROM's name with .sym, if it exists); an existing session refuses another
+  --model MODEL           the model for a new session: dmg-b (default, also dmg), gbc (cgb-e, a GBC in CGB mode for a $80 or $C0 ROM), cgb0, …; an existing session refuses another
+  --seed N                the RAM seed for a new session (default 0); an existing session refuses another
+  --flash BOARD           a new session's cart is a flash-save board (`gbcli help flash` lists them; default: mask ROM); an existing session refuses another
+  --allow-rom-change      load a stored state even though the ROM was rebuilt and the check refuses it
+
+CHANGE FLAGS (every verb that changes the session)
+  --rev sN                refuse the change if the session is no longer at this revision
+
+OUTPUT FLAGS (every verb that sends a request)
+  --json                  print the protocol's result object instead of rows
+  --dir PATH              run as if from PATH: find .gbcli/ from it and read relative paths (the ROM, files read and written) against it (beats GBCLI_DIR)
+  --as NAME               who is asking, for the event log (default: GBCLI_AS)
+
+EXAMPLE
+  gbcli watch write rDMA --session dx --once
+    stops the next run when OAM DMA starts

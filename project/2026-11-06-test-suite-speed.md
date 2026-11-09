@@ -60,6 +60,8 @@ opt-level 1 keeps debug info and debug assertions, including overflow checks. St
 ## The policy going forward
 
 - The pre-commit hook builds the tests, then times the run and warns when it passes 30 s. It warns rather than fails because host load alone can push a run over.
+
+  > **Changed, 2026-11-09 (Ben):** a warning on every commit had become noise (31-72 s under load all session, against 27 s idle). The hook now reads the load average first. On a quiet machine (load at most half the CPUs) a run past 30 s **fails** the commit. Under load it only warns past 60 s. The budget itself is unchanged.
 - `python3 -I scripts/bench/test-times.py` gives the per-binary and per-test breakdown, with CPU seconds beside wall.
 - A test that is valuable but too slow for every commit is marked `#[ignore = "pre-release: <why>"]` and runs with `cargo test --workspace -- --ignored` before a release. Prefer making it faster first, e.g. by sampling fewer points or using a smaller ROM. Moving a test out of the loop means it runs rarely, so it catches regressions late.
 

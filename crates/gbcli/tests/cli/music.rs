@@ -149,7 +149,9 @@ fn fundamental_hz(wav: &[u8]) -> f64 {
 /// Probe for `help music` (leaf qjAObe): hUGEDriver writes one period table
 /// to every tone channel, so A-3 is period 854 on square 1 and on the wave
 /// channel alike; the wave channel steps through 32 samples where a square
-/// steps through 8 duty steps, so at one period it sounds an octave lower:
+/// steps through 8 duty steps, at twice the clock, so at one period it
+/// sounds an octave lower (32 at twice the clock against 8, not 32 against
+/// 8 alone, which would be two):
 /// A2 (110 Hz) on square 1, A1 (55 Hz) on the wave. The audio log names
 /// each by the pitch heard, and SameBoy's own output agrees.
 #[test]

@@ -106,7 +106,8 @@ pub const RASTER_TIMELINE_ROWS: usize = 2 * CAP;
 
 /// `raster frames= lines= written=`, then a `raster_writer reg= pc=
 /// writes=` row per register and writer PC counting its writes by the mode
-/// they landed in (`unknown=` where the core couldn't tell), riskiest first
+/// they landed in (`unknown=` where the core couldn't tell, `lcd_off=` with
+/// the LCD off), riskiest first
 /// and capped: the `more` row counts the writers left out and, by mode, any
 /// of their writes that didn't land in HBlank or VBlank, so a whole run's
 /// answer survives the cap. Then the timeline: each line with writes and
@@ -146,6 +147,7 @@ fn raster_writers(t: &RasterMade) -> String {
             .opt("oam_scan", count(w.oam_scan))
             .opt("drawing", count(w.drawing))
             .opt("unknown", count(w.unknown))
+            .opt("lcd_off", count(w.lcd_off))
             .line();
     }
     let rest = writers.get(CAP..).unwrap_or_default();

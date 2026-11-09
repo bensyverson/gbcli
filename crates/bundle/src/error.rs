@@ -299,8 +299,8 @@ impl StoreError {
                 "pass --from power-on, which runs without the boot cache".into()
             }
             StoreError::BootInterrupted => {
-                "retry, or raise --wall-guard SECONDS: the boot run takes well under a second \
-                 unless the host is starved; nothing was cached"
+                "retry (run, step, measure and equiv also take --wall-guard SECONDS): the boot \
+                 run takes well under a second unless the host is starved; nothing was cached"
                     .into()
             }
             StoreError::Checkpoint(e) => e.remedy(),

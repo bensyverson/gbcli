@@ -1234,3 +1234,7 @@
 {"v":1,"rep":"Z7rGfP","seq":1234,"ts":1794253044946,"actor":"rgbweb","type":"released","task":"LMjWWK","data":{"was_claimed_by":"rgbweb","was_expires_at":1794254748}}
 {"v":1,"rep":"Z7rGfP","seq":1235,"ts":1794253044988,"actor":"claude","type":"done","task":"LMjWWK","data":{"note":"Findings in project/2026-11-09-web-spike-rgbds.md; build and test scripts in scripts/web/. RGBDS 1.0.4 builds unpatched with Emscripten and runs in Node through MEMFS (-sEXIT_RUNTIME=1 needed for exit codes); ~0.37 MB gzip for three tools; rgbgfx not shipped anywhere, Rust image pipeline is the web path (Ben's call).","cascade":false,"criteria_bulk_state":"passed","was_status":"available"}}
 {"v":1,"rep":"Z7rGfP","seq":1236,"ts":1794253044989,"actor":"claude","type":"unblocked","task":"ebY3mZ","data":{"blocked_id":"ebY3mZ","blocker_id":"LMjWWK","reason":"blocker_done"}}
+{"v":1,"rep":"Z7rGfP","seq":1237,"ts":1794253283842,"actor":"claude","type":"labeled","task":"xdES5r","data":{"names":["reviewed"],"existing":[]}}
+{"v":1,"rep":"Z7rGfP","seq":1238,"ts":1794253283843,"actor":"claude","type":"labeled","task":"qjAObe","data":{"names":["reviewed"],"existing":[]}}
+{"v":1,"rep":"Z7rGfP","seq":1239,"ts":1794253283844,"actor":"claude","type":"labeled","task":"VrZPr5","data":{"names":["reviewed"],"existing":[]}}
+{"v":1,"rep":"Z7rGfP","seq":1240,"ts":1794253283845,"actor":"claude","type":"labeled","task":"l0RPkf","data":{"names":["reviewed"],"existing":[]}}

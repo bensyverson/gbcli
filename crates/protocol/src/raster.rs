@@ -67,19 +67,25 @@ pub struct RasterWriter {
     pub vblank: u64,
     pub oam_scan: u64,
     pub drawing: u64,
-    /// Writes whose mode the core couldn't know (`mode` null).
+    /// Writes whose mode the core couldn't know (`mode` null, LCD on).
     pub unknown: u64,
+    /// Writes made while the LCD was off (`line` null): no mode, and safe.
+    pub lcd_off: u64,
 }
 
 impl RasterMade {
     /// Every write counted by register and writer PC, riskiest first: by
     /// writes that landed in drawing, then of unknown mode, then in OAM
-    /// scan, most first. A big game has hundreds of writers and a reader
+    /// scan, most first (a write with the LCD off is safe, `lcd_off`). A big game has hundreds of writers and a reader
     /// sees the first few, so those that may have changed a line being drawn
     /// lead; the safe ones keep the order each pair first wrote.
     pub fn writers(&self) -> Vec<RasterWriter> {
         let mut writers: Vec<RasterWriter> = Vec::new();
-        for w in self.rows.iter().flat_map(|r| &r.writes) {
+        for (r, w) in self
+            .rows
+            .iter()
+            .flat_map(|r| r.writes.iter().map(move |w| (r, w)))
+        {
             let at = match writers.iter().position(|x| x.pc == w.pc && x.reg == w.reg) {
                 Some(at) => at,
                 None => {
@@ -94,6 +100,7 @@ impl RasterMade {
             let writer = &mut writers[at];
             writer.writes += 1;
             *match w.mode {
+                _ if r.line.is_none() => &mut writer.lcd_off,
                 Some(PpuModeView::Hblank) => &mut writer.hblank,
                 Some(PpuModeView::Vblank) => &mut writer.vblank,
                 Some(PpuModeView::OamScan) => &mut writer.oam_scan,
@@ -203,5 +210,31 @@ mod tests {
         };
         let order: Vec<u16> = made.writers().iter().map(|w| w.pc).collect();
         assert_eq!(order, vec![0xE, 0xD, 0xC, 0x10, 0xB, 0xA, 0xF]);
+    }
+
+    /// From rev-wg's review: a write made with the LCD off has no mode, but
+    /// the core knows why, and it is safe, so it counts as `lcd_off`, not
+    /// `unknown`, and an init writer doesn't rank above one that wrote in
+    /// OAM scan.
+    #[test]
+    fn writes_with_the_lcd_off_count_apart_and_rank_as_safe() {
+        let off = RasterLineRow {
+            frame: 0,
+            line: None,
+            start: None,
+            writes: vec![write("rLCDC", 0x150, None), write("rLCDC", 0x150, None)],
+        };
+        let made = RasterMade {
+            frames: 1,
+            lines: 154,
+            rows: vec![
+                off,
+                line(20, vec![write("rSCX", 0x200, Some(PpuModeView::OamScan))]),
+            ],
+            unsupported: Vec::new(),
+        };
+        let writers = made.writers();
+        assert_eq!(writers[0].pc, 0x200);
+        assert_eq!((writers[1].lcd_off, writers[1].unknown), (2, 0));
     }
 }

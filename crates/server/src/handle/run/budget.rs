@@ -40,8 +40,8 @@ pub(super) fn budget_from(
 
 /// What every wall-guard error tells the caller to do.
 pub(in crate::handle) const WALL_GUARD_REMEDY: &str = "host time ran out, not the emulated budget: \
-     raise --wall-guard SECONDS (up to 3600), or split the run with --checkpoint and \
-     continue it with --at";
+     raise --wall-guard SECONDS (up to 3600), or split the work into shorter requests \
+     (run --checkpoint NAME, then continue with --at NAME)";
 
 /// The wall guard's answer to a run or step: `wall_guard`, and not
 /// reproducible.

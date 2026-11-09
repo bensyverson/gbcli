@@ -12,6 +12,8 @@ mod images;
 mod opcode;
 mod pixels;
 mod profile;
+#[cfg(test)]
+mod raster_property_tests;
 mod row;
 mod song;
 mod stop;

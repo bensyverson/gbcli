@@ -129,6 +129,8 @@ bus, so evaluating one has no side effects.
   operators   + - * / % & | ^ ~ << >>  == != < <= > >=  && || !  (C precedence)
 
 A bare RAM symbol is its address: write [wFrame] >= 60, not wFrame >= 60.
+An address is never zero, so a condition refuses one compared or taken as
+true or false (wDone, wDone && ..., !wDone): write [wDone].
 Reading a byte the program never wrote is an error: `gbcli read` fails with
 exit 3, and a run's --read says so in that read's row (error=, message=,
 remedy=) while the run, its stop and its other reads stand. Pass

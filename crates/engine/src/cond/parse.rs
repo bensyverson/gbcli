@@ -355,22 +355,9 @@ fn check_bare_ram_symbols(e: &Expr, text: &str) -> Result<(), ExprError> {
                 op,
                 BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge | BinOp::Eq | BinOp::Ne
             );
-            for side in [l, r] {
-                if let (true, Expr::Sym { name, addr, .. }) = (comparison, &**side)
-                    && Area::of(*addr).is_ram()
-                {
-                    let read = |prefix: &str| {
-                        text.replacen(name.as_str(), &format!("{prefix}[{name}]"), 1)
-                    };
-                    return Err(ExprError::Syntax {
-                        at: text.find(name.as_str()).unwrap_or(0),
-                        message: format!("{name} is an address, not the value stored there"),
-                        hint: Some(format!(
-                            "{} or {}? A bare symbol is its address",
-                            read(""),
-                            read("u16")
-                        )),
-                    });
+            if comparison {
+                for side in [l, r] {
+                    refuse_ram_symbol(side, text)?;
                 }
             }
             check_bare_ram_symbols(l, text)?;
@@ -379,4 +366,70 @@ fn check_bare_ram_symbols(e: &Expr, text: &str) -> Result<(), ExprError> {
         Expr::Unary(_, inner) => check_bare_ram_symbols(inner, text),
         _ => Ok(()),
     }
+}
+
+/// A RAM symbol read as true or false always holds, being its address:
+/// refuse one as the whole condition or an operand of `&&`, `||` or `!`.
+pub fn check_truth_positions(e: &Expr, text: &str) -> Result<(), ExprError> {
+    match e {
+        Expr::Binary(BinOp::And | BinOp::Or, l, r) => {
+            check_truth_positions(l, text)?;
+            check_truth_positions(r, text)
+        }
+        Expr::Unary(UnOp::LogicalNot, inner) => check_truth_positions(inner, text),
+        _ => refuse_ram_symbol(e, text),
+    }
+}
+
+/// Refuses `e` when it is a bare RAM symbol, suggesting the reads.
+fn refuse_ram_symbol(e: &Expr, text: &str) -> Result<(), ExprError> {
+    let Expr::Sym { name, addr, .. } = e else {
+        return Ok(());
+    };
+    if !Area::of(*addr).is_ram() {
+        return Ok(());
+    }
+    let at = bare_occurrence(text, name).unwrap_or(0);
+    let read = |prefix: &str| {
+        if text[at..].starts_with(name.as_str()) {
+            format!(
+                "{}{prefix}[{name}]{}",
+                &text[..at],
+                &text[at + name.len()..]
+            )
+        } else {
+            format!("{prefix}[{name}]")
+        }
+    };
+    Err(ExprError::Syntax {
+        at,
+        message: format!("{name} is an address, not the value stored there"),
+        hint: Some(format!(
+            "{} or {}? A bare symbol is its address",
+            read(""),
+            read("u16")
+        )),
+    })
+}
+
+/// Where `name` appears as a whole word outside any `[...]`, so the hint
+/// rewrites that occurrence and not one already read.
+fn bare_occurrence(text: &str, name: &str) -> Option<usize> {
+    let word = |c: char| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '#' | '@');
+    let mut depth = 0i32;
+    for (i, c) in text.char_indices() {
+        match c {
+            '[' => depth += 1,
+            ']' => depth -= 1,
+            _ => {}
+        }
+        if depth == 0
+            && text[i..].starts_with(name)
+            && !text[..i].chars().next_back().is_some_and(word)
+            && !text[i + name.len()..].chars().next().is_some_and(word)
+        {
+            return Some(i);
+        }
+    }
+    None
 }

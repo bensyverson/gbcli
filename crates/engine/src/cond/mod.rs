@@ -30,8 +30,17 @@ pub struct Condition {
 }
 
 impl Condition {
-    /// Parses `text`, resolving symbols in `symbols` (design §7).
+    /// Parses `text` as a predicate, resolving symbols in `symbols` (design
+    /// §7). A RAM symbol taken as true or false is refused: it is its
+    /// address, so it would always hold.
     pub fn compile(text: &str, symbols: Option<&Symbols>) -> Result<Condition, ExprError> {
+        let condition = Condition::compile_value(text, symbols)?;
+        parse::check_truth_positions(&condition.expr, text)?;
+        Ok(condition)
+    }
+
+    /// Parses `text` as a value to print, where a bare symbol is its address.
+    pub fn compile_value(text: &str, symbols: Option<&Symbols>) -> Result<Condition, ExprError> {
         let expr = parse::parse(text, symbols)?;
         Ok(Condition {
             source: text.to_string(),

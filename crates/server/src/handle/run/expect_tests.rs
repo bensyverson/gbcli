@@ -185,3 +185,28 @@ fn a_bad_expectation_is_refused_before_the_machine_moves() {
     let ran = run_expecting(&mut h, &["[wSpeed] == 0"], RunArgs::default());
     assert_eq!(ran.outcome.expect("ran").stop.unwrap().time.frame, 2);
 }
+
+/// A RAM symbol as an operand of && || ! is its address too, so it always
+/// held (lDEWkI): refused in --expect and --until alike, before anything runs.
+#[test]
+fn a_bare_ram_symbol_in_a_logical_operator_is_refused() {
+    let f = Fixture::with_sym("expect-bare-logical");
+    let mut h = handler(&f);
+    for expect in ["wSpeed && [wSpeed] == 0", "!wSpeed"] {
+        let response = run_expecting(&mut h, &[expect], RunArgs::default());
+        let error = response.outcome.expect_err(expect);
+        assert_eq!(error.code, ErrorCode::BadExpression, "{}", error.message);
+        assert!(error.remedy.contains("[wSpeed]"), "{}", error.remedy);
+    }
+    let response = h.handle(&request(Op::Run(RunArgs {
+        frames: Some(2),
+        until: Some("pc == 0 || wSpeed".into()),
+        ..RunArgs::default()
+    })));
+    let error = response.outcome.expect_err("--until");
+    assert_eq!(error.code, ErrorCode::BadExpression, "{}", error.message);
+    assert!(error.remedy.contains("[wSpeed]"), "{}", error.remedy);
+    // Read, the same operand is an expectation.
+    let ran = run_expecting(&mut h, &["[wSpeed] == 0 || ![wSpeed]"], RunArgs::default());
+    assert!(ran.outcome.is_ok());
+}

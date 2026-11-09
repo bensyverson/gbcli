@@ -118,13 +118,33 @@ pub(super) fn compile_reads(
     machine: &Machine,
     reads: &[String],
 ) -> Result<Vec<CompiledRead>, Failure> {
+    compile_as(machine, reads, Wanted::Value)
+}
+
+/// What a compiled expression is for: a value prints a bare symbol as its
+/// address; a truth refuses a RAM symbol taken as true or false.
+#[derive(Clone, Copy)]
+enum Wanted {
+    Value,
+    Truth,
+}
+
+fn compile_as(
+    machine: &Machine,
+    exprs: &[String],
+    wanted: Wanted,
+) -> Result<Vec<CompiledRead>, Failure> {
     let bad = |e: ExprError| Failure::new(convert::expr(&e));
-    reads
+    let compile = match wanted {
+        Wanted::Value => Condition::compile_value,
+        Wanted::Truth => Condition::compile,
+    };
+    exprs
         .iter()
         .map(|text| {
             let form = match oam_entry(text).map_err(bad)? {
                 Some(index) => ReadForm::OamEntry(index),
-                None => ReadForm::Value(Condition::compile(text, machine.symbols()).map_err(bad)?),
+                None => ReadForm::Value(compile(text, machine.symbols()).map_err(bad)?),
             };
             Ok(CompiledRead {
                 text: text.clone(),
@@ -135,27 +155,13 @@ pub(super) fn compile_reads(
 }
 
 /// Compiles conditions that must have a truth value (`run --expect`): a
-/// whole OAM entry, which a read prints as fields, has none; a bare RAM
-/// symbol is its address, never zero, so it would always hold. That one is
-/// refused as `--until` refuses a bare RAM symbol compared.
+/// whole OAM entry, which a read prints as fields, has none, and a RAM
+/// symbol taken as true or false is refused by the engine, as `--until`'s.
 pub(super) fn compile_conditions(
     machine: &Machine,
     exprs: &[String],
 ) -> Result<Vec<CompiledRead>, Failure> {
-    if let Some((text, name)) = exprs
-        .iter()
-        .find_map(|text| Some((text, bare_ram_symbol_name(machine, text)?)))
-    {
-        let error = ExprError::Syntax {
-            at: text.find(name).unwrap_or(0),
-            message: format!("{name} is an address, not the value stored there"),
-            hint: Some(format!(
-                "[{name}] or u16[{name}]? A bare symbol is its address, so it always holds"
-            )),
-        };
-        return Err(Failure::new(convert::expr(&error)));
-    }
-    let compiled = compile_reads(machine, exprs)?;
+    let compiled = compile_as(machine, exprs, Wanted::Truth)?;
     if let Some(read) = compiled
         .iter()
         .find(|r| matches!(r.form, ReadForm::OamEntry(_)))

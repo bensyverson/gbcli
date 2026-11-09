@@ -522,3 +522,65 @@ fn region_names_match_the_address_grammar() {
         "the region is `bootrom` everywhere"
     );
 }
+
+/// The hint a refused condition carries.
+fn refusal_hint(text: &str) -> String {
+    let err = Condition::compile(text, Some(&syms())).unwrap_err();
+    let ExprError::Syntax {
+        message,
+        hint: Some(hint),
+        ..
+    } = &err
+    else {
+        panic!("{text}: {err:?}")
+    };
+    assert!(
+        message.contains("wFrame is an address"),
+        "{text}: {message}"
+    );
+    hint.clone()
+}
+
+/// A RAM symbol read as true or false is its address, so it always holds
+/// (lDEWkI, Ben 2026-11-09): refused wherever a condition takes its truth.
+#[test]
+fn a_bare_ram_symbol_as_a_truth_value_suggests_a_read() {
+    let hint = refusal_hint("wFrame");
+    assert!(
+        hint.contains("[wFrame]") && hint.contains("u16[wFrame]"),
+        "{hint}"
+    );
+    let hint = refusal_hint("wFrame && pc == Main");
+    assert!(hint.contains("[wFrame] && pc == Main"), "{hint}");
+    let hint = refusal_hint("pc == Main || wFrame");
+    assert!(hint.contains("pc == Main || [wFrame]"), "{hint}");
+    let hint = refusal_hint("!wFrame");
+    assert!(hint.contains("![wFrame]"), "{hint}");
+    let hint = refusal_hint("(wFrame)");
+    assert!(hint.contains("([wFrame])"), "{hint}");
+    // The hint rewrites the bare occurrence, not one already read.
+    let hint = refusal_hint("[wFrame] == 0 || wFrame");
+    assert!(hint.starts_with("[wFrame] == 0 || [wFrame] or"), "{hint}");
+}
+
+/// The refusal leaves alone what is right: reads, ROM labels compared, and
+/// a symbol as an operand of arithmetic or a value read.
+#[test]
+fn truth_positions_still_take_reads_and_rom_labels() {
+    parse("[wFrame] && pc == Main");
+    parse("![wFrame] || pc == Main.loop");
+    parse("[wFrame + 1]");
+    parse("Main");
+    assert_eq!(
+        Condition::compile_value("wFrame", Some(&syms()))
+            .unwrap()
+            .expr,
+        Expr::Sym {
+            name: "wFrame".into(),
+            bank: 0,
+            addr: 0xC000
+        }
+    );
+    // A value read still refuses a comparison, which is a truth either way.
+    assert!(Condition::compile_value("wFrame >= 60", Some(&syms())).is_err());
+}

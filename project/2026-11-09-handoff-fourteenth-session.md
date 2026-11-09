@@ -4,7 +4,7 @@ This handoff is current until the next commit after the one that adds it. Start 
 
 ## State of play
 
-Ben was around all session and ruled as things came up. The original plan (root `9b5RBA`, Stages 0-10) closed. Stage 11 (`7Dap6M`), example games built by agents, is under way: two games done, their feedback reviewed, and most of the resulting gbcli changes landed. **Nothing from this session is pushed.** Ben said to push after review (see Next).
+Ben was around all session and ruled as things came up. The original plan (root `9b5RBA`, Stages 0-10) closed. Stage 11 (`7Dap6M`), example games built by agents, is under way: two games done, their feedback reviewed, and most of the resulting gbcli changes landed. **Origin is at `1f1588f`** (the playable ROMs), pushed outside this session; the seven commits after it, from `a95722e` on, are not pushed. Ben said to push after review (see Next).
 
 **Ben's rulings this session**, each recorded where it applies:
 - **The bespoke core is parked,** with an un-park condition ([backlog.md](backlog.md) ▸ A bespoke Rust emulator core). The PPU-mode spike re-checked that condition, and it still doesn't hold.

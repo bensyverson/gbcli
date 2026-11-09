@@ -256,6 +256,9 @@ unsafe extern "C" {
     pub fn gbcli_set_rom_size(gb: *mut GB_gameboy_t, size: usize) -> bool;
     pub fn gbcli_clear_rtc_epoch(gb: *mut GB_gameboy_t);
     pub fn gbcli_ppu_batched(gb: *mut GB_gameboy_t) -> bool;
+    /// The mode STAT would read now (0-3) without running the display, or -1
+    /// when only running it could tell (late in a mode 3 batched by a bound).
+    pub fn gbcli_ppu_mode(gb: *mut GB_gameboy_t) -> c_int;
     /// Re-converts the CGB color holding palette-RAM byte `index` (0-63) into
     /// the cache the PPU draws from; a no-op on DMG.
     pub fn gbcli_refresh_palette_color(gb: *mut GB_gameboy_t, background: bool, index: u8);

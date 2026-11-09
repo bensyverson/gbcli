@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::PpuModeView;
+
 /// One IO-register write on a line.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RasterWriteRow {
@@ -14,6 +16,12 @@ pub struct RasterWriteRow {
     /// Emulated ticks (2^23 Hz; 912 per line) from the line's start; null
     /// when the core reported no start for the line. Not a dot.
     pub ticks_into_line: Option<u64>,
+    /// The PPU's mode as the write landed, as a CPU read of STAT then would
+    /// report it; null while the LCD is off, and where the core can't know
+    /// it without running the PPU ahead (on SameBoy: late in a mode 3 it
+    /// batched by an upper bound).
+    #[serde(default)]
+    pub mode: Option<PpuModeView>,
 }
 
 /// One line the run passed through that has writes on it, or a stretch with

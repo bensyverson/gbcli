@@ -262,7 +262,8 @@ pub const RUN: &[FlagSpec] = &[
     switch(
         "raster",
         "each IO-register write the run made, by frame and line: register, value, writer's \
-         PC and ticks into the line (912 per line)",
+         PC, ticks into the line (912 per line) and the PPU mode it landed in (mode=, absent \
+         where the emulator can't tell)",
     ),
     value(
         "keys",

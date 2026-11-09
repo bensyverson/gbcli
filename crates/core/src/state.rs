@@ -101,6 +101,7 @@ impl IoReg {
     pub const KEY1: IoReg = IoReg(0x4D);
     pub const VBK: IoReg = IoReg(0x4F);
     pub const BANK: IoReg = IoReg(0x50);
+    pub const HDMA5: IoReg = IoReg(0x55);
     pub const SVBK: IoReg = IoReg(0x70);
 }
 

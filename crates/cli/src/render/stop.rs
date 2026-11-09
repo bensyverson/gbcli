@@ -11,7 +11,7 @@ pub fn rows(stop: &StopRecord) -> String {
     let mut row = Row::new("stop").word(&wire("reason"));
     let mut text = None;
     row = match &stop.reason {
-        StopReason::Breakpoint { id } => row.field("id", id),
+        StopReason::Breakpoint { id } | StopReason::ConditionError { id } => row.field("id", id),
         StopReason::Watchpoint {
             id,
             addr: at,

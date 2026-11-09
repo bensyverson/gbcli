@@ -195,3 +195,74 @@ fn the_scale_flag_states_each_run_images_default() {
     assert!(text.contains("default 2 for --piano"), "{text}");
     assert!(text.contains("1 for the others"), "{text}");
 }
+
+/// The words of a recipe's command line, as a shell would split them: single
+/// quotes group, and a note in parentheses after the command is dropped.
+fn shell_words(line: &str) -> Vec<String> {
+    let line = line.split(" (").next().unwrap_or(line);
+    let (mut words, mut word, mut quoted) = (Vec::new(), String::new(), false);
+    for c in line.chars() {
+        match c {
+            '\'' => quoted = !quoted,
+            ' ' if !quoted => {
+                if !word.is_empty() {
+                    words.push(std::mem::take(&mut word));
+                }
+            }
+            c => word.push(c),
+        }
+    }
+    assert!(!quoted, "unclosed quote: {line}");
+    words.extend((!word.is_empty()).then_some(word));
+    words
+}
+
+/// The HBlank check both example games invented (examples DX review, item
+/// 1): the recipe exists, and each of its commands parses into a request.
+#[test]
+fn the_hblank_recipes_commands_parse() {
+    let title = "Does every scroll or palette write land in HBlank?";
+    let block = RECIPES
+        .split_once(title)
+        .unwrap_or_else(|| panic!("no recipe titled {title:?}"))
+        .1;
+    let commands: Vec<Vec<String>> = block
+        .lines()
+        .skip(1)
+        .take_while(|l| l.starts_with("  "))
+        .filter_map(|l| l.trim().strip_prefix("gbcli "))
+        .map(shell_words)
+        .collect();
+    let verbs: Vec<&str> = commands.iter().map(|c| c[0].as_str()).collect();
+    assert_eq!(verbs, ["run", "break", "run"], "{block}");
+    assert!(commands[0].iter().any(|w| w == "--raster"), "{commands:?}");
+    assert!(
+        commands[1].iter().any(|w| w == "([rSTAT] & 3) != 0"),
+        "{commands:?}"
+    );
+    // The run reads its keys file as it parses.
+    let cwd = std::env::temp_dir().join(format!("gbcli-hblank-{}", std::process::id()));
+    std::fs::create_dir_all(&cwd).unwrap();
+    std::fs::write(cwd.join("play.txt"), "A@0 -A@2\n").unwrap();
+    let env = crate::Env {
+        // As the recipes say: --session on each, or GBCLI_SESSION.
+        session: Some("dx".into()),
+        actor: None,
+        gbcli_dir: None,
+        cwd: cwd.clone(),
+        path: None,
+    };
+    for words in commands {
+        let args = words.iter().map(std::ffi::OsString::from).collect();
+        let parsed = crate::argv::parse(args).unwrap_or_else(|e| panic!("{words:?}: {e:?}"));
+        let crate::argv::Parsed::Verb(inv) = parsed else {
+            panic!("{words:?}: {parsed:?}")
+        };
+        let command = crate::build::build(inv, &env).unwrap_or_else(|e| panic!("{words:?}: {e:?}"));
+        assert!(
+            matches!(command, crate::build::Command::Request { .. }),
+            "{words:?}: {command:?}"
+        );
+    }
+    std::fs::remove_dir_all(&cwd).unwrap();
+}

@@ -56,8 +56,10 @@ pub(crate) fn support(feature: Feature) -> Support {
              stops on lines 144-153 (design §2.2)"
         }
         Feature::SideEffectFreeIo => {
-            "NR52, PCM12/PCM34 and wave RAM during playback need the APU synced; PPU \
-             registers are unavailable while mode-3 cycles are batched"
+            "NR52, PCM12/PCM34 and wave RAM during playback need the APU synced; STAT \
+             and IF are unknown late in a mode 3 SameBoy batches by an upper bound \
+             (objects on the line, no HBlank interrupt), and HDMA5, palette data, \
+             VRAM and OAM while the PPU has cycles it hasn't run"
         }
         Feature::ExtraOam => "FEA0-FEFF reads are model-specific bus behavior, not storage",
         Feature::ApuInternals => "only SameBoy's per-channel getters are public",
@@ -71,8 +73,8 @@ pub(crate) fn support(feature: Feature) -> Support {
         Feature::EventSinks => return Support::Yes,
         Feature::RasterEvents => return Support::Yes,
         Feature::PpuModeEvents => {
-            "SameBoy has no PPU mode callback, and STAT's mode bits lag while mode-3 cycles \
-             are batched, so a transition can't be timed"
+            "SameBoy has no PPU mode callback, so a mode change can't be timed; each \
+             raster write carries the mode it landed in instead"
         }
     };
     Support::No { reason }

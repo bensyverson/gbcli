@@ -232,6 +232,11 @@ pub enum Event {
         /// The dot within that line, if the core can place it
         /// ([`Feature::PpuDot`](crate::Feature::PpuDot)).
         dot: Option<u16>,
+        /// The PPU's mode when the write landed, as a CPU read of STAT then
+        /// would report it; `None` while the LCD is off, and where the core
+        /// can't know it without running the PPU ahead, which would change
+        /// the emulation.
+        mode: Option<PpuMode>,
     },
     /// The PPU changed mode
     /// ([`Feature::PpuModeEvents`](crate::Feature::PpuModeEvents)).

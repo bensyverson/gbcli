@@ -95,16 +95,22 @@ impl PpuModeView {
     }
 }
 
+impl From<gbcli_core::PpuMode> for PpuModeView {
+    fn from(mode: gbcli_core::PpuMode) -> Self {
+        match mode {
+            gbcli_core::PpuMode::HBlank => PpuModeView::Hblank,
+            gbcli_core::PpuMode::VBlank => PpuModeView::Vblank,
+            gbcli_core::PpuMode::OamScan => PpuModeView::OamScan,
+            gbcli_core::PpuMode::Drawing => PpuModeView::Drawing,
+        }
+    }
+}
+
 impl PpuView {
     pub fn of(p: &gbcli_core::PpuStatus) -> Self {
         PpuView {
             ly: p.ly,
-            mode: match p.mode {
-                gbcli_core::PpuMode::HBlank => PpuModeView::Hblank,
-                gbcli_core::PpuMode::VBlank => PpuModeView::Vblank,
-                gbcli_core::PpuMode::OamScan => PpuModeView::OamScan,
-                gbcli_core::PpuMode::Drawing => PpuModeView::Drawing,
-            },
+            mode: p.mode.into(),
             lcd_on: p.lcd_on,
             dot: p.dot,
         }

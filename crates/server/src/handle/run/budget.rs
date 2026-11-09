@@ -114,11 +114,12 @@ fn ending(stop: &StopRecord) -> Ending {
                      row selected in rP1, or check why STOP ran",
         },
         // The target itself, the budget (`budget_exhausted` below), the wall
-        // guard and a predicate error each answer on their own; a step's
-        // units never end a run.
+        // guard and a predicate or condition error each answer on their own;
+        // a step's units never end a run.
         StopReason::StepDone { .. }
         | StopReason::Predicate { .. }
         | StopReason::PredicateError { .. }
+        | StopReason::ConditionError { .. }
         | StopReason::BudgetExhausted { .. }
         | StopReason::UserBreak
         | StopReason::WallGuard => Ending::Answered,

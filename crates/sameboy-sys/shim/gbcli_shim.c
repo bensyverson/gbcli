@@ -84,9 +84,34 @@ void gbcli_refresh_palette_color(GB_gameboy_t *gb, bool background, uint8_t inde
     GB_palette_changed(gb, background, index);
 }
 
-// Whether the PPU has batched cycles it hasn't run yet (mode 3 batching), in
-// which case PPU-synced registers in the IO array may lag.
+// Whether the PPU has batched cycles it hasn't run yet (the OAM scan or mode 3
+// batched; see gbcli_ppu_mode), in which case PPU-synced registers in the IO
+// array may lag.
 bool gbcli_ppu_batched(GB_gameboy_t *gb) { return gb->display_cycles > 0; }
+
+// The mode STAT would read now (0-3), without running the display, or -1 when
+// that can't be known without running it. The display only batches at two
+// points (GB_BATCHPOINT in display.c), and returns from either only while the
+// cycles it holds are fewer than the batch's length:
+//   - state 5, the OAM scan: 80 dots of mode 2, so it is still mode 2;
+//   - state 3, mode 3's start, by mode3_batching_length: that length is
+//     exact (167 + SCX % 8, no objects or window), so it is still mode 3;
+//     or 300, an upper bound where mode 3 has objects but no HBlank interrupt
+//     can be seen, so it is mode 3 only before the shortest mode 3 could end.
+// No PPU register write happens inside a batch: each one syncs the display.
+int gbcli_ppu_mode(GB_gameboy_t *gb)
+{
+    if (!gbcli_ppu_batched(gb)) return gb->io_registers[GB_IO_STAT] & 3;
+    switch (gb->display_state) {
+        case 5: return 2;
+        case 3: {
+            if (gb->mode3_batching_length != 300) return 3;
+            int32_t shortest = 2 * (167 + (gb->io_registers[GB_IO_SCX] & 7));
+            return gb->display_cycles < shortest ? 3 : -1;
+        }
+        default: return -1;
+    }
+}
 
 static uint16_t rom_bank(GB_gameboy_t *gb, uint16_t bank)
 {
@@ -239,13 +264,27 @@ static int apu_peek(GB_gameboy_t *gb, uint8_t reg)
 int gbcli_io_peek(GB_gameboy_t *gb, uint8_t reg)
 {
     switch (reg) {
-        // The PPU syncs before these reads; without a sync they may lag.
+        // The PPU syncs before these reads; without a sync they may lag. The
+        // display writes IF, STAT and LY, and nothing else of these. No batch
+        // spans a line's end, so LY is current; IF and STAT are wherever the
+        // mode is known (gbcli_ppu_mode). The rest change only by CPU writes,
+        // which sync it, except HDMA5 and palette data, which are refused:
+        // HDMA's progress and the palette block move inside a batch.
         case GB_IO_IF: case GB_IO_LCDC: case GB_IO_STAT: case GB_IO_SCY:
         case GB_IO_SCX: case GB_IO_LY: case GB_IO_LYC: case GB_IO_BGP:
         case GB_IO_OBP0: case GB_IO_OBP1: case GB_IO_WY: case GB_IO_WX:
         case GB_IO_HDMA5: case GB_IO_BGPI: case GB_IO_BGPD: case GB_IO_OBPI:
         case GB_IO_OBPD: case GB_IO_OPRI:
-            if (gbcli_ppu_batched(gb)) return -1;
+            if (gbcli_ppu_batched(gb)) {
+                switch (reg) {
+                    case GB_IO_IF: case GB_IO_STAT:
+                        if (gbcli_ppu_mode(gb) < 0) return -1;
+                        break;
+                    case GB_IO_HDMA5: case GB_IO_BGPD: case GB_IO_OBPD:
+                        return -1;
+                    default: break;
+                }
+            }
             switch (reg) {
                 case GB_IO_IF: return gb->io_registers[reg] | 0xE0;
                 case GB_IO_STAT: return gb->io_registers[reg] | 0x80;

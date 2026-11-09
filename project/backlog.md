@@ -149,3 +149,11 @@ Eval run 5 asked for axis labels or a legend on the image too; `help music` now 
 **Why parked:** the racer hit 32 KB under `--gbc` and shrank its data instead; no game has needed MBC yet. A help note that `--gbc` color art roughly doubles image ROM covers the surprise for now.
 
 **Un-park when:** an example game or LoadHigh needs more than 32 KB with generated data read every frame.
+
+## 2026-11-08 — STAT late in a batched mode 3, from a scratch copy
+
+**What:** read STAT (and give a raster write its mode) in the one window SameBoy's display state can't answer: late in a mode 3 batched by its 300-dot bound, on a line with objects and no HBlank interrupt. The way to do it is to run the display on a scratch copy of the state, never the live instance, or, for a write to a PPU register only, to sync early in the write callback, which the write does a moment later anyway ([2026-11-08-ppu-mode-spike.md](2026-11-08-ppu-mode-spike.md)).
+
+**Why parked:** neither example game hit the window on a PPU write: the racer's 162,660 scroll writes over 900 frames and the shooter's 8,973 split writes all had a mode. Only 95 of the shooter's sound writes did. A condition that hits it now says `condition_error`, so nothing is hidden. Both ways cost real care: a scratch copy is a second instance or a raw copy of SameBoy's state, and the early sync must be shown to leave the state byte-identical.
+
+**Un-park when:** an agent's real check hits `condition_error` or a missing `mode=` on a write it needs to judge.

@@ -113,6 +113,29 @@ fn a_vram_write_in_mode_3_is_dropped_and_one_in_hblank_lands() {
     assert_eq!(reads(&r), [0, 0xFF], "mode 3 dropped, HBlank kept");
 }
 
+/// The trap's mode check, as the topic gives it: a breakpoint that stops
+/// only where STAT says mode 3 stops before the dropped write, and never
+/// before the one in HBlank.
+#[test]
+fn a_breakpoint_on_stat_stops_before_the_mode_3_write_only() {
+    let check = "gbcli break Dropped --if '([rSTAT] & 3) == 3'";
+    let topic = Project::new("traps-mode-check").gbcli(&["help", "traps"]);
+    assert!(topic.stdout.contains(check), "{}", topic.stdout);
+    let p = demo_in("vram_mode3", "trap-vram_mode3-break");
+    for (label, stops) in [("Dropped", true), ("Kept", false)] {
+        let session = label.to_lowercase();
+        let rom = ["--rom", "vram_mode3.gb", "--session", &session];
+        let args: Vec<&str> = ["break", label, "--if", "([rSTAT] & 3) == 3"]
+            .into_iter()
+            .chain(rom)
+            .collect();
+        json(&p, &args, 0);
+        let r = json(&p, &["run", "--session", &session, "--frames", "2"], 0);
+        let reason = r["result"]["stop"]["reason"].as_str().unwrap();
+        assert_eq!(reason == "breakpoint", stops, "{label}: {reason}");
+    }
+}
+
 #[test]
 fn raster_shows_the_lcd_turned_off_mid_frame_and_in_vblank() {
     let p = demo("lcd_off");

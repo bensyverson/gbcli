@@ -50,6 +50,10 @@ pub enum StopReason {
     /// say); the error that comes with this record says why. The predicate
     /// did not hold. `cadence` is as for `Predicate`.
     PredicateError { text: String, cadence: Cadence },
+    /// A breakpoint's or watch's condition couldn't be evaluated where it
+    /// hit; the error that comes with this record says why. The condition
+    /// did not hold, so this is not a breakpoint or watchpoint stop.
+    ConditionError { id: u32 },
 }
 
 /// The costliest trigger a predicate is evaluated on, from cheapest to

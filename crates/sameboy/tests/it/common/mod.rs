@@ -12,6 +12,8 @@ use gbcli_sameboy::SameBoy;
 
 pub const BUSY: &[u8] = include_bytes!("../../roms/busy.gb");
 pub const ILLEGAL: &[u8] = include_bytes!("../../roms/illegal.gb");
+/// Writes SCX while the display is batched, in each mode (see ppu_mode.asm).
+pub const PPU_MODE: &[u8] = include_bytes!("../../roms/ppu_mode.gb");
 pub const STOP: &[u8] = include_bytes!("../../roms/stop.gb");
 pub const STOP_WAKE: &[u8] = include_bytes!("../../roms/stop_wake.gb");
 /// Hands over in four instructions; not a faithful boot (see quick_boot.asm).

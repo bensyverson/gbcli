@@ -181,7 +181,9 @@ pub(super) fn remove_once(m: &mut Machine, compiled: &Compiled, id: u32) {
 
 /// Whether a candidate is a real stop: a goal reached, or a breakpoint or
 /// watch whose condition holds. A condition that fails is an error whose
-/// stop is where the breakpoint or watch hit.
+/// stop is where the breakpoint or watch hit, with reason `condition_error`:
+/// the condition did not hold, so the record never claims a breakpoint or
+/// watchpoint stop.
 pub(super) fn decide(
     m: &mut Machine,
     compiled: &Compiled,
@@ -197,27 +199,31 @@ pub(super) fn decide(
             frame: frame_number(m.core()),
         });
     }
-    let failed = |m: &Machine, id: u32, reason: StopReason, error: EvalError| DebugError::Eval {
+    let failed = |m: &Machine, id: u32, error: EvalError| DebugError::Eval {
         id,
         error,
-        stop: Box::new(record(m, reason, used, &opts.since)),
+        stop: Box::new(record(
+            m,
+            StopReason::ConditionError { id },
+            used,
+            &opts.since,
+        )),
     };
     let time_base = base(m, &opts.since).1;
-    let mut holds =
-        |m: &Machine, id: u32, reason: &StopReason, cond: &Option<Condition>, access| {
-            let Some(cond) = cond else { return Ok(true) };
-            let ctx = EvalCtx {
-                core: m.core(),
-                symbols: m.symbols(),
-                access,
-                base: time_base,
-                allow_uninit: opts.allow_uninit,
-            };
-            match cond.verdict(&ctx, &mut notes.warnings) {
-                Ok(verdict) => Ok(notes.holds(id, verdict)),
-                Err(error) => Err(failed(m, id, reason.clone(), error)),
-            }
+    let mut holds = |m: &Machine, id: u32, cond: &Option<Condition>, access| {
+        let Some(cond) = cond else { return Ok(true) };
+        let ctx = EvalCtx {
+            core: m.core(),
+            symbols: m.symbols(),
+            access,
+            base: time_base,
+            allow_uninit: opts.allow_uninit,
         };
+        match cond.verdict(&ctx, &mut notes.warnings) {
+            Ok(verdict) => Ok(notes.holds(id, verdict)),
+            Err(error) => Err(failed(m, id, error)),
+        }
+    };
     match hit.access {
         Access::Exec => {
             let reached = match goal {
@@ -233,7 +239,7 @@ pub(super) fn decide(
             }
             for (id, at, cond) in &compiled.breakpoints {
                 let reason = StopReason::Breakpoint { id: *id };
-                if bank_matches(at, hit.addr, hit.bank) && holds(m, *id, &reason, cond, None)? {
+                if bank_matches(at, hit.addr, hit.bank) && holds(m, *id, cond, None)? {
                     return Ok(Some(reason));
                 }
             }
@@ -259,7 +265,7 @@ pub(super) fn decide(
                 };
                 if wanted(*access)
                     && bank_matches(at, hit.addr, hit.bank)
-                    && holds(m, *id, &reason, cond, values)?
+                    && holds(m, *id, cond, values)?
                 {
                     return Ok(Some(reason));
                 }

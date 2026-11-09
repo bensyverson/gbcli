@@ -3,7 +3,7 @@
 //! to three; `--json` carries them whole.
 
 use gbcli_protocol::{
-    CycleStats, FrameBudgetMade, MeasureMade, PercentStats, ProfileMade, RasterMade,
+    CycleStats, FrameBudgetMade, MeasureMade, PercentStats, PpuModeView, ProfileMade, RasterMade,
 };
 
 use super::row::{Row, addr, byte};
@@ -97,7 +97,8 @@ pub fn frame_budget(b: &FrameBudgetMade) -> String {
 
 /// `raster frames= lines= written=`, then each line with writes and its
 /// writes under it. A line with the LCD off reads `line=off`; a line with no
-/// reported start has no `start=` and its writes no `into=`.
+/// reported start has no `start=` and its writes no `into=`; a write whose
+/// mode the core can't know has no `mode=`.
 pub fn raster(t: &RasterMade) -> String {
     let mut out = Row::new("raster")
         .field("frames", t.frames)
@@ -117,6 +118,7 @@ pub fn raster(t: &RasterMade) -> String {
                 .field("value", byte(w.value))
                 .field("pc", addr(w.pc))
                 .opt("into", w.ticks_into_line)
+                .opt("mode", w.mode.map(PpuModeView::name))
                 .line();
         }
     }

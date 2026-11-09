@@ -66,6 +66,83 @@ fn decoded_registers_match_bus_reads_on_a_cgb() {
     sweep(&mut core, 0xC6B0, 20);
 }
 
+/// Per line (50, 100): boundaries where the display was batched, PPU
+/// registers decoded, and PPU registers refused.
+type BatchedSweep = ([usize; 2], [usize; 2], [usize; 2]);
+
+/// Every instruction boundary on lines 50 and 100 of two frames of
+/// ppu_mode.asm, where the display is batched in modes 2 and 3: STAT, LY,
+/// IF and the registers only the CPU writes decode wherever the core can
+/// know them, and each decoded value is what a CPU read returns.
+fn sweep_batched(core: &mut dyn Core) -> BatchedSweep {
+    let regs = [
+        IoReg::STAT,
+        IoReg::LY,
+        IoReg::IF,
+        IoReg::LCDC,
+        IoReg::SCX,
+        IoReg::SCY,
+        IoReg::LYC,
+        IoReg::BGP,
+        IoReg::WY,
+        IoReg::WX,
+    ];
+    run(core, Budget::frames(2));
+    let start = core.now();
+    let (mut batched, mut decoded, mut refused) = ([0usize; 2], [0usize; 2], [0usize; 2]);
+    while core.now().0 - start.0 < 2 * 70224 {
+        run(core, Budget::instructions(1));
+        let side = match core.ppu().ly {
+            50 => 0,
+            100 => 1,
+            _ => continue,
+        };
+        // HDMA5 is refused exactly while the display is batched.
+        batched[side] += usize::from(core.io_register(IoReg::HDMA5).is_err());
+        for reg in regs {
+            match core.io_register(reg) {
+                Ok(value) => {
+                    let state = core.save();
+                    let read = core.bus_read(0xFF00 | u16::from(reg.0)).unwrap();
+                    core.load(&state).unwrap();
+                    assert_eq!(value, read, "io {:#04x}, side {side}", reg.0);
+                    decoded[side] += 1;
+                }
+                Err(CoreError::Unsupported {
+                    feature: Feature::SideEffectFreeIo,
+                    ..
+                }) => {
+                    // Only STAT and IF depend on where a batched mode 3 ends.
+                    assert!(reg == IoReg::STAT || reg == IoReg::IF, "io {:#04x}", reg.0);
+                    refused[side] += 1;
+                }
+                Err(err) => panic!("io {:#04x}: {err:?}", reg.0),
+            }
+        }
+    }
+    (batched, decoded, refused)
+}
+
+fn assert_batched_sweep((batched, decoded, refused): BatchedSweep) {
+    assert!(batched[0] > 0 && batched[1] > 0, "{batched:?}");
+    assert!(decoded[0] > 0 && decoded[1] > 0);
+    // Line 50 has no objects, so every batch there is exact.
+    assert_eq!(refused[0], 0);
+    // Line 100's late window: the mode 3 SameBoy batched by its bound.
+    assert!(refused[1] > 0);
+}
+
+#[test]
+fn ppu_registers_decode_while_the_display_is_batched_on_a_dmg() {
+    assert_batched_sweep(sweep_batched(&mut quick_dmg(PPU_MODE)));
+}
+
+#[test]
+fn ppu_registers_decode_while_the_display_is_batched_on_a_cgb() {
+    let mut core = quick_boot(CoreConfig::new(Model::CgbE, PPU_MODE.to_vec()));
+    assert_batched_sweep(sweep_batched(&mut core));
+}
+
 #[test]
 fn apu_registers_decode_while_the_apu_is_synced() {
     let mut core = quick_dmg(BUSY);

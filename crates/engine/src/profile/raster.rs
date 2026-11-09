@@ -23,6 +23,8 @@ pub struct RasterWrite {
     pub pc: u16,
     /// The dot within the line, where the core can place it.
     pub dot: Option<u16>,
+    /// The PPU's mode as the write landed, where the core knows it.
+    pub mode: Option<PpuMode>,
 }
 
 /// A PPU mode change, where the core reports them.
@@ -163,12 +165,14 @@ impl EventSink for Raster {
                 pc,
                 line,
                 dot,
+                mode,
             } => self.row_for(line).writes.push(RasterWrite {
                 reg: IoReg(reg),
                 value,
                 at,
                 pc,
                 dot,
+                mode,
             }),
             Event::PpuMode { mode, ly, at } => {
                 self.row_for(Some(ly)).modes.push(ModeChange { mode, at })
@@ -216,6 +220,7 @@ mod tests {
             pc: 0x150,
             line,
             dot: None,
+            mode: None,
         }
     }
 

@@ -205,9 +205,10 @@ fn with_objects_off_no_pixel_is_tagged_as_an_object() {
 
 #[test]
 fn busy_rom_takes_the_per_pixel_path() {
-    // While the PPU batches mode 3, its cycles pile up unrun (STAT and LY can't
-    // be read without a sync) until render_line draws the whole line at once;
-    // at most the instant the batch begins reads as synced. On the per-pixel
+    // While the PPU batches mode 3, its cycles pile up unrun (HDMA5 can't be
+    // read without a sync; STAT can, since the batch's mode is known) until
+    // render_line draws the whole line at once; at most the instant the batch
+    // begins reads as synced. On the per-pixel
     // path every instruction boundary in mode 3 reads as synced. So a line
     // with several synced mode-3 observations was drawn pixel by pixel.
     // Lines from WINDOW_CUT_LINE on are left out: the LCDC write there syncs
@@ -219,7 +220,7 @@ fn busy_rom_takes_the_per_pixel_path() {
         while core.now().0 - start.0 < 140_448 {
             run(&mut core, Budget::instructions(1));
             let ppu = core.ppu();
-            let synced = core.io_register(IoReg::STAT).is_ok();
+            let synced = core.io_register(IoReg::HDMA5).is_ok();
             if synced && ppu.mode == PpuMode::Drawing && usize::from(ppu.ly) < WINDOW_CUT_LINE {
                 synced_in_mode_3[usize::from(ppu.ly)] += 1;
             }

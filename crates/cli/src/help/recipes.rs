@@ -70,6 +70,14 @@ Find who writes a variable
   with budget_exhausted if none comes in 600 frames)
 Stop at a routine only in some cases
   gbcli break Main.loop --if 'a == 3', then gbcli run
+Does every scroll or palette write land in HBlank?
+  gbcli run --frames 2 --raster (mode= on each IO write: hblank, oam_scan,
+  drawing or vblank; none where the emulator can't tell). To prove it over a
+  whole run from boot, break on each write instruction if STAT isn't mode 0:
+  gbcli break YourWrite --if '([rSTAT] & 3) != 0' --rom game.gb --session hb
+  gbcli run --session hb --frames 3000 --keys-file play.txt (no stop is the
+  proof; STAT is read as the instruction starts, just before it writes; a
+  condition_error stop means STAT couldn't be read there, so it proves nothing)
 Try a value without rebuilding (what if wSpeed were 2?)
   gbcli run --at before --poke wSpeed=2 --until 'u16[wFrame] >= 60' --read '[wSpriteX]'
 Turn the LCD on as the program would

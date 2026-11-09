@@ -11,7 +11,11 @@ gbcli's repository, run by its tests. Rules behind them: gbcli help hardware.
 VRAM write during mode 3
   Symptom  a tile or map byte keeps its old value: the PPU owns VRAM in mode
            3 and ignores the write
-  See it   gbcli run --frames 2 --read '[$8000]' (the byte you wrote)
+  See it   gbcli run --frames 2 --read '[$8000]' (the byte you wrote). To
+           catch it, break on the write only if STAT says mode 3:
+           gbcli break Dropped --if '([rSTAT] & 3) == 3', then gbcli run
+           (IO writes: gbcli run --raster prints each one's mode=; gbcli
+           recipes, HBlank)
   Fix      write VRAM in VBlank or with the LCD off; mid-frame, wait for STAT
            mode 0 or 1 first, and keep the write within that mode
   Docs     https://gbdev.io/pandocs/Accessing_VRAM_and_OAM.html#accessing-vram-and-oam

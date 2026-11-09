@@ -19,9 +19,12 @@
 //! them still carries its line, read from the display's own line counter. It
 //! fires one with line 0 as the LCD turns off, which is not a line start and
 //! is dropped. No dot (design §2.2) and no mode events: SameBoy has no mode
-//! callback, and STAT's mode bits lag while mode-3 cycles are batched.
+//! callback. A write does carry the mode it landed in, read from the display's
+//! state without running it, except late in a mode 3 SameBoy batched by an
+//! upper bound, where only running the display could tell
+//! (`gbcli_ppu_mode` in the shim).
 
-use gbcli_core::{Event, Ticks};
+use gbcli_core::{Event, PpuMode, Ticks};
 use sameboy_sys as sb;
 
 use crate::audio::tap_time;
@@ -63,9 +66,24 @@ pub(crate) fn log_write(gb: *mut sb::GB_gameboy_t, hooks: &mut Hooks, addr: u16,
         pc: hooks.step_pc,
         line,
         dot: None,
+        // With the LCD off STAT reads mode 0, which is no HBlank.
+        mode: line.and_then(|_| ppu_mode(gb)),
     };
     if let Some(events) = &mut hooks.raster {
         events.push(event);
+    }
+}
+
+/// The mode STAT would read now, where SameBoy's display state says it
+/// without being run.
+fn ppu_mode(gb: *mut sb::GB_gameboy_t) -> Option<PpuMode> {
+    // SAFETY: a side-effect-free accessor on the live instance.
+    match unsafe { sb::gbcli_ppu_mode(gb) } {
+        0 => Some(PpuMode::HBlank),
+        1 => Some(PpuMode::VBlank),
+        2 => Some(PpuMode::OamScan),
+        3 => Some(PpuMode::Drawing),
+        _ => None,
     }
 }
 

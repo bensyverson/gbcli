@@ -219,9 +219,10 @@ fn a_frame_diff_counts_and_bounds_the_changed_pixels() {
 fn debug_views_draw_while_the_ppu_has_batched_cycles() {
     let mut core = dmg_scene();
     core.bus_write(0xFF47, 0x1B).unwrap();
-    // Step into a stretch where the core won't decode BGP without a sync.
+    // Step into a stretch where the PPU has batched cycles: the core won't
+    // decode HDMA5 then without a sync (BGP it decodes: only the CPU writes it).
     let mut steps = 0;
-    while core.io_register(IoReg::BGP).is_ok() {
+    while core.io_register(IoReg::HDMA5).is_ok() {
         assert!(steps < 100_000, "the PPU never batched");
         core.step(StepUnit::Instruction).unwrap();
         steps += 1;

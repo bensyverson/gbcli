@@ -43,6 +43,7 @@ fn row(l: &RasterLine) -> RasterLineRow {
                     value: w.value,
                     pc: w.pc,
                     ticks_into_line: l.ticks_into_line(w),
+                    mode: w.mode.map(Into::into),
                 }
             })
             .collect(),

@@ -322,8 +322,10 @@ impl Core for SameBoy {
         memory::io_register(self, reg)
     }
 
-    /// LY and the mode come from the IO array, which can lag by the cycles of
-    /// a batched mode-3 stretch (see `Feature::SideEffectFreeIo`).
+    /// LY and the mode come from the IO array. LY is always current; the
+    /// mode is too, except late in a mode 3 SameBoy batched by an upper
+    /// bound, where it reads mode 3 whatever the PPU would say
+    /// (`gbcli_ppu_mode` in the shim).
     fn ppu(&self) -> PpuStatus {
         let io = memory::region(self, Region::Io)
             .expect("the IO region always exists")

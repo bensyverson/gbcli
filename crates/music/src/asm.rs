@@ -27,6 +27,10 @@
 //!   waves, and hUGEDriver plays that channel from past the tables
 //!   (Ben's ruling, 2026-11-09). A song where no two channel kinds share a
 //!   pattern exports as hUGETracker's does.
+//! - Waves stop at wave 15. A 9xx above 15 makes hUGETracker's export
+//!   write waves past its 16-entry array (Tempest's Kekri: waves 16-112,
+//!   whatever memory follows); gbcli writes none of those (found by
+//!   rev-bld, 2026-11-09; the whole-song register comparison is Same).
 //! - Every data label is scoped to the descriptor (`song_theme.P0`, where
 //!   hUGETracker writes `P0`), so the `.sym` has no name twice:
 //!   hUGETracker's `order1` and `waves` are also hUGEDriver's own WRAM

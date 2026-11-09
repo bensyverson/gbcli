@@ -108,8 +108,8 @@ impl Rgbgfx<'_> {
         Ok(Some(BgData { tiles, map }))
     }
 
-    /// Converts a sprite sheet and keeps the plan's units: each 32 bytes,
-    /// top tile then bottom.
+    /// Converts a sprite sheet and keeps the plan's units: each its tiles
+    /// (`ObjectSize::tiles`), top first, 16 bytes a tile.
     pub fn sheet(
         &mut self,
         image: &str,
@@ -140,12 +140,13 @@ impl Rgbgfx<'_> {
             );
             return Ok(None);
         }
-        let mut kept = Vec::with_capacity(plan.kept.len() * 32);
+        let size = 16 * plan.object.tiles() as usize;
+        let mut kept = Vec::with_capacity(plan.kept.len() * size);
         let mut off = Vec::new();
         for (&(ux, uy), planned) in plan.kept.iter().zip(&plan.drawn) {
             // Column-major: down each 8-pixel column, top to bottom.
             let index = (ux / 8) as usize * rows + (uy / 8) as usize;
-            let unit = &raw[index * 16..index * 16 + 32];
+            let unit = &raw[index * 16..index * 16 + size];
             if let Some(d) = agree::first_difference(planned, unit) {
                 off.push(Disagreement {
                     tile: TileAt {

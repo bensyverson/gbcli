@@ -51,8 +51,8 @@ pub use equiv::{
 pub use error::{ErrorBody, ErrorCode};
 pub use images::{
     Flip, GbcImage, GbcImagesMade, ImageArt, ImageAsset, ImageKind, ImageLimit, ImageProblem,
-    ImagesMade, KnownPalette, NotPaletteSlot, PaletteSlot, ShadeChoice, ShadeRule, TileAt,
-    TileEntry,
+    ImagesMade, KnownPalette, NotPaletteSlot, ObjectSize, PaletteSlot, ShadeChoice, ShadeRule,
+    TileAt, TileEntry,
 };
 pub use keys::{Button, KEY_GRAMMAR, KeyAction, KeyError, KeyEvent, parse_keys};
 pub use listing::{CheckpointRow, SymArgs, SymbolArea, SymbolRow};

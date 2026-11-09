@@ -1,7 +1,10 @@
-//! Color art's DMG version under `build --gbc` (the GBC images plan,
-//! questions 2, 3 and 9): derived from the color image, each color taking
-//! the shade the project's rule gives it (`shades::choose`, Ben's rulings of
-//! 2026-11-07), unless `name.dmg.png` beside it overrides it.
+//! Color art's DMG version (the GBC images plan, questions 2 and 3):
+//! derived from the color image, each color taking the shade the project's
+//! rule gives it (`shades::choose`, Ben's rulings of 2026-11-07), unless
+//! `name.dmg.png` beside it overrides it. A plain build derives it exactly
+//! as `--gbc` does, and honors the override (Ben's ruling, 2026-11-08,
+//! superseding question 9), so one project builds both ways; only `--gbc`
+//! goes on to make the GBC version.
 //!
 //! The derived version is drawn in the four DMG grays, one gray a shade, so
 //! the DMG checks and rgbgfx see a 4-shade image. Color art maps many
@@ -12,10 +15,11 @@
 
 use std::path::Path;
 
-use gbcli_protocol::{BuildTarget, ImageKind, ImageLimit, ImageProblem, Severity, TileAt};
+use gbcli_protocol::{ImageKind, ImageLimit, ImageProblem, ObjectSize, Severity, TileAt};
 
 use super::census::{Key, error, key, tiles_where};
 use super::find::Source;
+use super::input::PaletteSource;
 use super::pixels::{Pixels, Rgba, hex};
 use super::shades::{self, Shading, name};
 use super::shared::{self, and};
@@ -41,40 +45,41 @@ pub(crate) struct Derived {
 
 /// The shading a derived version is checked and converted with: each gray
 /// its own shade.
-pub(crate) fn gray_shading() -> Shading {
-    shades::choose(None, &GRAYS)
+pub(crate) fn gray_shading(source: &PaletteSource) -> Shading {
+    shades::choose(source, None, &GRAYS)
 }
 
-/// Where an image's DMG version comes from.
+/// Where an image's DMG version comes from, in every build.
 pub(crate) enum Version {
-    /// The image is DMG art: a DMG build's every image, and indexed art.
+    /// The image is DMG art: indexed art.
     Art,
-    /// Color art under `--gbc`: derived from its colors (`derive`).
+    /// Color art: derived from its colors (`derive`).
     Derived,
-    /// Color art under `--gbc` with `name.dmg.png` beside it: that image.
+    /// Color art with `name.dmg.png` beside it: that image.
     Override(Pixels),
 }
 
-/// The DMG version of `s` (shown as `image`) for `target`: `assigned` is
-/// the palette `assets/palettes.txt` assigns it, `over` its override's
-/// pixels. An override beside indexed art is a layout error.
+/// The DMG version of `s` (shown as `image`): `assigned` is the palette
+/// `palettes` (where the conversion's came from) assigns it, `over` its
+/// override's pixels. An override beside indexed art is a layout error.
 pub(crate) fn version(
-    target: BuildTarget,
     assigned: Option<&String>,
+    palettes: &PaletteSource,
     over: Option<Pixels>,
     s: &Source,
     image: &str,
     shown: &dyn Fn(&Path) -> String,
 ) -> Result<Version, BuildError> {
-    Ok(match (target, assigned, over) {
-        (BuildTarget::Dmg, _, _) | (BuildTarget::Gbc, Some(_), None) => Version::Art,
-        (BuildTarget::Gbc, Some(palette), Some(_)) => {
+    Ok(match (assigned, over) {
+        (Some(_), None) => Version::Art,
+        (Some(palette), Some(_)) => {
             let dmg = s.dmg.as_deref().expect("an override has a path");
             return Err(BuildError::Layout {
                 message: format!(
-                    "{} is a DMG version, but {image} is indexed art (assets/palettes.txt \
-                     assigns it `{palette}`): its shades already are its DMG version",
-                    shown(dmg)
+                    "{} is a DMG version, but {image} is indexed art ({}): its shades already \
+                     are its DMG version",
+                    shown(dmg),
+                    palettes.assigns(palette)
                 ),
                 remedy: format!(
                     "remove {} and draw {image} in its 4 shades; or drop the assignment \
@@ -83,18 +88,19 @@ pub(crate) fn version(
                 ),
             });
         }
-        (BuildTarget::Gbc, None, None) => Version::Derived,
-        (BuildTarget::Gbc, None, Some(o)) => Version::Override(o),
+        (None, None) => Version::Derived,
+        (None, Some(o)) => Version::Override(o),
     })
 }
 
-/// The DMG version of the color image `image` (a `kind`), its colors
-/// shaded by the project's `shading`; `dmg` names the override that would
-/// replace it, for remedies.
+/// The DMG version of the color image `image` (a `kind`; a sheet of
+/// `object`s), its colors shaded by the project's `shading`; `dmg` names
+/// the override that would replace it, for remedies.
 pub(crate) fn derive(
     image: &str,
     dmg: &str,
     kind: ImageKind,
+    object: ObjectSize,
     pixels: &Pixels,
     shading: &Shading,
 ) -> Result<Derived, ImageProblem> {
@@ -121,7 +127,10 @@ pub(crate) fn derive(
     {
         return Err(p);
     }
-    let unit_height = if kind == ImageKind::Sprites { 16 } else { 8 };
+    let unit_height = match kind {
+        ImageKind::Sprites => object.height(),
+        ImageKind::Bg | ImageKind::Tiles => 8,
+    };
     let mut warnings: Vec<ImageProblem> = shared_in_units(image, dmg, pixels, unit_height, &shade)
         .into_iter()
         .collect();
@@ -178,7 +187,7 @@ fn four_shades(
 }
 
 /// One `shared_shade` warning when any 8x`unit_height` unit (a background
-/// tile, or a sheet's 8x16 object) holds two or more colors that fall to
+/// tile, or a sheet's object) holds two or more colors that fall to
 /// one shade, listing each such unit by its top tile.
 fn shared_in_units(
     image: &str,
@@ -360,8 +369,12 @@ mod tests {
         }
     }
 
+    fn file() -> PaletteSource {
+        PaletteSource::File("assets/palettes.txt".into())
+    }
+
     fn shading(colors: &[Rgba]) -> Shading {
-        shades::choose(None, colors)
+        shades::choose(&file(), None, colors)
     }
 
     /// Each pixel becomes its shade's gray, and transparency stays.
@@ -373,6 +386,7 @@ mod tests {
             "a.png",
             "a.dmg.png",
             ImageKind::Sprites,
+            ObjectSize::Tall,
             &p,
             &shading(&colors),
         );
@@ -381,7 +395,7 @@ mod tests {
             d.pixels.rgba,
             [GRAYS[0], GRAYS[1], GRAYS[3], GRAYS[3], CLEAR]
         );
-        let s = gray_shading();
+        let s = gray_shading(&file());
         assert_eq!(s.shades(&GRAYS), [0, 1, 2, 3]);
     }
 

@@ -48,11 +48,14 @@ fn tools_with(temp: &common::Temp, rgbgfx: &str) -> gbcli_build::Toolchain {
     gbcli_build::Toolchain::discover(Some(&path), &temp.0).unwrap()
 }
 
+/// Indexed art (`indexed`), so it is its own DMG version and its colors
+/// sharing a shade warn for the whole image, as DMG art's do.
 fn shared_bg(temp: &common::Temp) {
     // White, black and near-black: near-black shares black's shade.
     write_png(&temp.path("demo/assets/bg/cave.png"), 24, 8, |x, _| {
         [WHITE, BLACK, NEAR_BLACK][(x / 8) as usize]
     });
+    indexed(&temp.path("demo"), &["bg/cave.png"]);
 }
 
 #[test]
@@ -243,6 +246,8 @@ fn colors_sharing_a_shade_only_across_images_warn_for_the_project() {
     write_png(&temp.path("demo/assets/sprites/bug.png"), 8, 16, |x, _| {
         if x < 4 { NEAR_BLACK } else { CLEAR }
     });
+    // Indexed art of one palette: color art's sharing is within a tile.
+    indexed(&temp.path("demo"), &["bg/sky.png", "sprites/bug.png"]);
     let made = build(&rgbds(), &options).unwrap();
     let inc = fs::read_to_string(temp.path("demo/build/images/images.inc")).unwrap();
     let obp = binary_constant(&inc, "BUG_OBP");
@@ -278,6 +283,7 @@ fn colors_sharing_a_shade_within_an_image_warn_only_for_that_image() {
     write_png(&temp.path("demo/assets/sprites/bug.png"), 8, 16, |x, _| {
         if x < 4 { NEAR_BLACK } else { CLEAR }
     });
+    indexed(&temp.path("demo"), &["sprites/bug.png"]);
     let made = build(&rgbds(), &options).unwrap();
     let shared = problems(&made, ImageLimit::SharedShade);
     let images: Vec<_> = shared.iter().map(|p| p.image.clone()).collect();
@@ -438,6 +444,7 @@ fn the_project_warning_groups_colors_an_image_already_names_together() {
     write_png(&temp.path("demo/assets/sprites/bug.png"), 8, 16, |x, _| {
         if x < 4 { nb2 } else { CLEAR }
     });
+    indexed(&temp.path("demo"), &["bg/cave.png", "sprites/bug.png"]);
     let made = build(&rgbds(), &options).unwrap();
     let shared = problems(&made, ImageLimit::SharedShade);
     let images: Vec<_> = shared.iter().map(|p| p.image.clone()).collect();

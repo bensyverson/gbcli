@@ -3,8 +3,9 @@
 //! case), each named after its
 //! file so the program can address it (`town.png` is `TownTiles`,
 //! `TOWN_WIDTH`). A sprite sheet's name may carry its frame size:
-//! `hero.16x24.png`. `<name>.dmg.png` beside `<name>.png` is not an image
-//! of its own but that image's DMG version for `build --gbc` (plan
+//! `hero.16x24.png` (8x8 objects when it is a multiple of 8 high but not
+//! 16, `sheet::object_size`). `<name>.dmg.png` beside `<name>.png` is not
+//! an image of its own but that image's DMG version, in every build (plan
 //! question 3); one with no color image beside it is a layout error.
 
 use std::collections::BTreeMap;

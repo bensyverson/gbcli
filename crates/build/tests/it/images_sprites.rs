@@ -139,9 +139,9 @@ fn an_object_palette_holds_three_shades_and_a_sheet_rows_sixteen_high() {
     let p = problem(&made, ImageLimit::DmgPalette);
     assert_eq!(p.image.as_deref(), Some("demo/assets/sprites/gem.png"));
     assert_eq!((p.count, p.max), (4, 3));
-    // The extra: four colors used alike, so the last by color, and its
-    // tiles.
-    assert!(p.message.contains("#ffffff"), "{}", p.message);
+    // Its DMG version is derived, in a plain build too (leaf GQFHVi): the
+    // four shades used alike, so the lightest, and its tiles.
+    assert!(p.message.contains("shade 0 (white"), "{}", p.message);
     assert_eq!(p.tiles, [TileAt { x: 0, y: 0 }, TileAt { x: 0, y: 1 }]);
     let p = problem(&made, ImageLimit::ObjPair8x16);
     assert_eq!(p.image.as_deref(), Some("demo/assets/sprites/short.png"));

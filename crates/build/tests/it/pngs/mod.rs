@@ -34,6 +34,27 @@ pub fn write_png(path: &Path, width: u32, height: u32, pixel: impl Fn(u32, u32) 
     writer.write_image_data(&data).unwrap();
 }
 
+/// Makes `images` (paths under `assets/`) of the project at `project`
+/// indexed art, assigned one gray palette, added to its
+/// `assets/palettes.txt`. Indexed art is its own DMG version in every
+/// build, so it keeps DMG art's checks: over 4 colors is `dmg_palette`, and
+/// colors sharing a shade warn for the whole image and across images (Ben's
+/// rulings, 2026-11-07). Color art, any image without a palette, has its
+/// DMG version derived in a plain build too (leaf GQFHVi), and warns only
+/// within a tile or object.
+pub fn indexed(project: &Path, images: &[&str]) {
+    let path = project.join("assets/palettes.txt");
+    let mut text = fs::read_to_string(&path).unwrap_or_default();
+    if !text.contains("\ngrays:") && !text.starts_with("grays:") {
+        text += "grays: #ffffff #aaaaaa #555555 #000000\n";
+    }
+    for image in images {
+        text += &format!("{image} = grays\n");
+    }
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, text).unwrap();
+}
+
 /// A PNG's size and pixels as 0xRRGGBB.
 pub fn read_png(path: &Path) -> (u32, u32, Vec<u32>) {
     let mut decoder = png::Decoder::new(fs::File::open(path).unwrap());

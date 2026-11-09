@@ -182,7 +182,9 @@ pub(crate) fn background(
 pub(crate) fn sheet(source: &str, units: &[u8], plan: &SheetPlan, look: &Look) -> Image {
     let (w, h) = (plan.width * 8, plan.height * 8);
     let count = plan.kept.len() as u32;
-    let (mut image, grid_x) = canvas(w, h, count, 8, 16);
+    let oh = plan.object.height();
+    let bytes = 16 * plan.object.tiles() as usize;
+    let (mut image, grid_x) = canvas(w, h, count, 8, oh);
     for y in 0..h {
         for x in 0..w {
             put(&mut image, x, y, TRANSPARENT);
@@ -191,7 +193,7 @@ pub(crate) fn sheet(source: &str, units: &[u8], plan: &SheetPlan, look: &Look) -
     let shade =
         |unit: usize, i: u8| look.color(unit, i, DMG_GRAYS[usize::from((plan.obp >> (2 * i)) & 3)]);
     let unit_pixel = |unit: usize, x: u32, y: u32| -> u8 {
-        let data = &units[unit * 32..][..32];
+        let data = &units[unit * bytes..][..bytes];
         index(&data[(y / 8) as usize * 16..][..16], x, y % 8)
     };
     let (fw, fh) = plan.frame;
@@ -199,10 +201,10 @@ pub(crate) fn sheet(source: &str, units: &[u8], plan: &SheetPlan, look: &Look) -
     for (f, objects) in plan.frames.iter().enumerate() {
         let (fx, fy) = ((f as u32 % per_row) * fw, (f as u32 / per_row) * fh);
         for o in objects {
-            for y in 0..16 {
+            for y in 0..oh {
                 for x in 0..8 {
                     let sx = if o.flip.x() { 7 - x } else { x };
-                    let sy = if o.flip.y() { 15 - y } else { y };
+                    let sy = if o.flip.y() { oh - 1 - y } else { y };
                     let i = unit_pixel(o.unit, sx, sy);
                     if i != 0 {
                         put(&mut image, fx + o.x + x, fy + o.y + y, shade(o.unit, i));
@@ -213,20 +215,21 @@ pub(crate) fn sheet(source: &str, units: &[u8], plan: &SheetPlan, look: &Look) -
     }
     for (slot, unit) in by_use(&plan.uses).into_iter().enumerate() {
         let (cx, cy) = (slot as u32 % GRID_COLUMNS, slot as u32 / GRID_COLUMNS);
-        for y in 0..16 {
+        for y in 0..oh {
             for x in 0..8 {
                 let i = unit_pixel(unit, x, y);
                 let color = if i == 0 { TRANSPARENT } else { shade(unit, i) };
-                put(&mut image, grid_x + cx * 9 + x, cy * 17 + y, color);
+                put(&mut image, grid_x + cx * 9 + x, cy * (oh + 1) + y, color);
             }
         }
     }
     finish(
         image,
         format!(
-            "{source}: {} frame(s) of {fw}x{fh} as shown, then its {count} unique 8x16 objects \
+            "{source}: {} frame(s) of {fw}x{fh} as shown, then its {count} unique {} objects \
              by use, most used first",
-            plan.frames.len()
+            plan.frames.len(),
+            plan.object.name()
         ),
         look,
     )

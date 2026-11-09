@@ -33,7 +33,7 @@ type Colors = BTreeSet<Rgb555>;
 pub(crate) enum Layer {
     /// Background tiles, 8x8, with 4 colors a palette.
     Bg,
-    /// Objects, 8x16 units, with 3 opaque colors a palette (index 0 is
+    /// Objects, 8x8 or 8x16, with 3 opaque colors a palette (index 0 is
     /// transparent).
     Obj,
 }
@@ -44,14 +44,6 @@ impl Layer {
         match self {
             Layer::Bg => 4,
             Layer::Obj => 3,
-        }
-    }
-
-    /// A cell's height in pixels: a tile or an 8x16 unit.
-    fn cell_height(self) -> u32 {
-        match self {
-            Layer::Bg => 8,
-            Layer::Obj => 16,
         }
     }
 
@@ -70,10 +62,13 @@ impl Layer {
     }
 }
 
-/// One image to pack: its path (for problems) and pixels.
+/// One image to pack: its path (for problems), pixels, and the height of
+/// a cell in pixels: 8 for a background's tile, its objects' height for a
+/// sheet.
 pub(crate) struct Source<'a> {
     pub image: &'a str,
     pub pixels: &'a Pixels,
+    pub cell_height: u32,
 }
 
 /// Palettes that fit, in slot order, and the slot of every cell.
@@ -87,7 +82,7 @@ pub(crate) struct Packing {
     /// The slot of `palettes[0]`: the reserved slots come first (the
     /// assigned slots of indexed sheets, `GbcImagesMade::obj_palettes`).
     pub first_slot: u8,
-    /// Per source, the slot of each cell (tile or 8x16 unit, rows top to
+    /// Per source, the slot of each cell (tile or object, rows top to
     /// bottom); none for an object with no opaque pixel. The joint
     /// conversion puts each in its `TileEntry`.
     pub cell_palettes: Vec<Vec<Option<PaletteSlot>>>,
@@ -111,11 +106,10 @@ impl Packing {
     }
 }
 
-/// Each cell's opaque colors, rows top to bottom, left to right in each;
-/// none for a cell with no opaque pixel.
-pub(crate) fn census(pixels: &Pixels, layer: Layer) -> Vec<Option<Colors>> {
+/// Each cell's opaque colors, cells `tall` pixels high, rows top to
+/// bottom, left to right in each; none for a cell with no opaque pixel.
+pub(crate) fn census(pixels: &Pixels, tall: u32) -> Vec<Option<Colors>> {
     let (w, h) = (pixels.width, pixels.height);
-    let tall = layer.cell_height();
     let mut cells = Vec::new();
     for cy in (0..h).step_by(tall as usize) {
         for cx in (0..w).step_by(8) {
@@ -151,8 +145,10 @@ pub(crate) fn pack(
     reserved: usize,
 ) -> Result<Packing, Vec<ImageProblem>> {
     let cap = layer.colors();
-    let per_source: Vec<Vec<Option<Colors>>> =
-        sources.iter().map(|s| census(s.pixels, layer)).collect();
+    let per_source: Vec<Vec<Option<Colors>>> = sources
+        .iter()
+        .map(|s| census(s.pixels, s.cell_height))
+        .collect();
     let mut cells = Vec::new();
     for (source, (s, found)) in sources.iter().zip(&per_source).enumerate() {
         let columns = s.pixels.width.div_ceil(8).max(1);
@@ -161,7 +157,7 @@ pub(crate) fn pack(
             let (col, row) = (i as u32 % columns, i as u32 / columns);
             let at = TileAt {
                 x: col,
-                y: row * layer.cell_height() / 8,
+                y: row * s.cell_height / 8,
             };
             cells.push(Cell {
                 source,

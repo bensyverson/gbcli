@@ -48,6 +48,7 @@ pub(super) fn packed(checked: &[Checked], reserved: usize) -> Result<Packed, Vec
                 let source = pack::Source {
                     image: &c.image,
                     pixels: color,
+                    cell_height: 8,
                 };
                 match pack::pack(&[source], Layer::Bg, 0) {
                     Ok(p) => Some(p),
@@ -69,6 +70,10 @@ pub(super) fn packed(checked: &[Checked], reserved: usize) -> Result<Packed, Vec
         .map(|&i| pack::Source {
             image: &checked[i].image,
             pixels: checked[i].color.as_ref().expect("a color sheet"),
+            cell_height: match &checked[i].plan {
+                Plan::Sheet(p) => p.object.height(),
+                Plan::Bg(_) => 8,
+            },
         })
         .collect();
     let obj = if sources.is_empty() {
@@ -247,7 +252,8 @@ impl Output<'_> {
                 }
                 let picture = preview::sheet(image, &units, p, &Look::Dmg);
                 let gbc_picture = asset.gbc.as_ref().map(|_| {
-                    let slots = per_tile(&asset.tile_map, p.kept.len(), |e| e.index / 2);
+                    let per = p.object.tiles();
+                    let slots = per_tile(&asset.tile_map, p.kept.len(), |e| e.index / per);
                     let look = Look::Gbc {
                         palettes: self.obj_palettes,
                         slots: &slots,
@@ -326,6 +332,10 @@ fn asset(
         tiles,
         frames,
         objects,
+        object_size: match &c.plan {
+            Plan::Sheet(p) => Some(p.object),
+            Plan::Bg(_) => None,
+        },
         preview: String::new(),
         tile_map: Vec::new(),
         gbc: None,

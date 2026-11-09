@@ -16,15 +16,21 @@
 use std::fs;
 use std::path::Path;
 
-use gbcli_protocol::{ImageLimit, ImageProblem, Severity, ShadeChoice, ShadeRule};
+use gbcli_protocol::{ImageLimit, ImageProblem, Severity, ShadeRule};
 
 use super::census::{self, Key, error, key, tiles_where};
+use super::input::PaletteSource;
 use super::pixels::{Pixels, Rgba, hex};
 use super::shades::{Moved, Shading, name};
 
-const REMEDY: &str = "make them distinct if the difference matters: recolor one, or declare \
-                      each shade's color on the dmg line of assets/palettes.txt (gbcli help images); if it \
-                      doesn't, draw them in one color";
+/// The remedy for colors in one shade; `source` holds the `dmg` setting.
+fn remedy(source: &PaletteSource) -> String {
+    format!(
+        "make them distinct if the difference matters: recolor one, or declare each shade's \
+         color in {} (gbcli help images); if it doesn't, draw them in one color",
+        source.dmg()
+    )
+}
 
 /// What sharing means for one image.
 #[derive(Debug, Default)]
@@ -37,9 +43,9 @@ pub(crate) struct Shared {
 }
 
 /// The rule as a warning words it.
-pub(crate) fn rule(choice: ShadeChoice) -> String {
-    match (choice.rule, choice.palette) {
-        (ShadeRule::Declared, _) => "declared (the dmg line of assets/palettes.txt)".into(),
+pub(crate) fn rule(shading: &Shading) -> String {
+    match (shading.choice.rule, shading.choice.palette) {
+        (ShadeRule::Declared, _) => format!("declared ({})", shading.source.dmg()),
         (ShadeRule::Known, Some(p)) => format!("known ({})", p.name()),
         (ShadeRule::Known, None) => "known".into(),
         (ShadeRule::Stretched, _) => {
@@ -51,13 +57,13 @@ pub(crate) fn rule(choice: ShadeChoice) -> String {
 }
 
 /// The shared shades among `colors` (most used first, as `census::colors`
-/// gives them), whose shades are `shades`, chosen by `choice`.
+/// gives them), whose shades are `shades`, chosen by `shading`.
 pub(crate) fn find(
     image: &str,
     pixels: &Pixels,
     colors: &[(Rgba, u32)],
     shades: &[u8],
-    choice: ShadeChoice,
+    shading: &Shading,
 ) -> Shared {
     let mut shared = Shared::default();
     for shade in 0..4u8 {
@@ -89,7 +95,7 @@ pub(crate) fn find(
              {}, so they look alike. {} {} in {} tile(s) (listed)",
             and(&listed),
             name(shade),
-            rule(choice),
+            rule(shading),
             and(&others),
             if others.len() == 1 { "is" } else { "are" },
             tiles.len()
@@ -103,7 +109,7 @@ pub(crate) fn find(
                 group.len(),
                 1,
                 message,
-                REMEDY,
+                &remedy(&shading.source),
             )
         });
     }
@@ -143,12 +149,23 @@ pub(crate) fn stretched(
                     usize::from(nearest.abs_diff(given)),
                     1,
                     message,
-                    "declare the dmg line of assets/palettes.txt to pick the shades yourself \
-                     (gbcli help images); or add colors that span the shades, so the stretch has less to do",
+                    &format!(
+                        "declare {} to pick the shades yourself (gbcli help images); or add \
+                         colors that span the shades, so the stretch has less to do",
+                        shading.source.dmg()
+                    ),
                 )
             })
         })
         .collect()
+}
+
+/// An image `across` compares: its name, its pixels and the named palette
+/// assigned to it, if any.
+pub(crate) struct Held<'a> {
+    pub name: &'a str,
+    pub pixels: &'a Pixels,
+    pub palette: Option<&'a str>,
 }
 
 /// One project-level `shared_shade` warning (no image) a shade whose colors
@@ -156,51 +173,70 @@ pub(crate) fn stretched(
 /// Colors one image holds together, or chained through shared colors, are
 /// one group, which the images' own warnings (`find`) already name; colors
 /// in different groups draw alike yet no image's warning names them
-/// together. The warning lists each group (colors joined by `/`) with the
-/// images holding it, and counts the groups. `images` are every image read with its name, `colors`
-/// the project's colors as `shades::choose` was given them.
-pub(crate) fn across(
-    images: &[(&str, &Pixels)],
-    colors: &[Rgba],
-    shading: &Shading,
-) -> Vec<ImageProblem> {
+/// together. Only images of one named palette (or of none) are compared:
+/// on the DMG every palette's lightest color is white, so colors of
+/// different palettes sharing a shade is how a DMG version of many
+/// palettes works (leaf GQFHVi). The warning, one a shade, lists each
+/// group (colors joined by `/`) with the images holding it, and counts the
+/// groups. `images` are every image read, `colors` the project's colors as
+/// `shades::choose` was given them.
+pub(crate) fn across(images: &[Held], colors: &[Rgba], shading: &Shading) -> Vec<ImageProblem> {
     let held: Vec<Vec<Key>> = images
         .iter()
-        .map(|(_, p)| census::colors(p).iter().map(|&(c, _)| key(c)).collect())
+        .map(|i| {
+            census::colors(i.pixels)
+                .iter()
+                .map(|&(c, _)| key(c))
+                .collect()
+        })
         .collect();
+    // The palettes, in the order the images first name them.
+    let mut palettes: Vec<Option<&str>> = Vec::new();
+    for i in images {
+        if !palettes.contains(&i.palette) {
+            palettes.push(i.palette);
+        }
+    }
     let shade_of = shading.shades(colors);
     let mut warnings = Vec::new();
     for shade in 0..4u8 {
-        let group: Vec<Rgba> = colors
-            .iter()
-            .zip(&shade_of)
-            .filter(|&(_, &s)| s == shade)
-            .map(|(&c, _)| c)
-            .collect();
-        let clusters = clusters(&group, &held);
-        if clusters.len() < 2 {
-            continue;
-        }
-        let listed: Vec<String> = clusters
-            .iter()
-            .map(|cluster| {
-                let names: Vec<&str> = images
+        let mut listed: Vec<String> = Vec::new();
+        for &palette in &palettes {
+            let of: Vec<usize> = (0..images.len())
+                .filter(|&i| images[i].palette == palette)
+                .collect();
+            let group: Vec<Rgba> = colors
+                .iter()
+                .zip(&shade_of)
+                .filter(|&(&c, &s)| s == shade && of.iter().any(|&i| held[i].contains(&key(c))))
+                .map(|(&c, _)| c)
+                .collect();
+            let mine: Vec<Vec<Key>> = of.iter().map(|&i| held[i].clone()).collect();
+            let clusters = clusters(&group, &mine);
+            if clusters.len() < 2 {
+                continue;
+            }
+            listed.extend(clusters.iter().map(|cluster| {
+                let names: Vec<&str> = of
                     .iter()
-                    .zip(&held)
-                    .filter(|(_, k)| cluster.iter().any(|&c| k.contains(&key(c))))
-                    .map(|((name, _), _)| *name)
+                    .filter(|&&i| cluster.iter().any(|&c| held[i].contains(&key(c))))
+                    .map(|&i| images[i].name)
                     .collect();
                 let hexes: Vec<String> = cluster.iter().map(|&c| hex(c)).collect();
                 format!("{} ({})", hexes.join("/"), names.join(", "))
-            })
-            .collect();
+            }));
+        }
+        if listed.is_empty() {
+            continue;
+        }
         let message = format!(
             "the project draws {} in one shade, shade {shade} ({}), by its shade rule, {}, so \
              they look alike on screen; no image holds colors from two of these groups, so no \
-             image's own shared_shade warning names them together",
+             image's own shared_shade warning names them together (images of different named \
+             palettes aren't compared)",
             and(&listed),
             name(shade),
-            rule(shading.choice),
+            rule(shading),
         );
         warnings.push(ImageProblem {
             image: None,
@@ -208,10 +244,10 @@ pub(crate) fn across(
             ..error(
                 "",
                 ImageLimit::SharedShade,
-                clusters.len(),
+                listed.len(),
                 1,
                 message,
-                REMEDY,
+                &remedy(&shading.source),
             )
         });
     }
@@ -283,10 +319,23 @@ mod tests {
     const W: Rgba = [255, 255, 255, 255];
     const B: Rgba = [0, 0, 0, 255];
     const NEAR_B: Rgba = [0x10, 0x10, 0x10, 255];
-    const STRETCHED: ShadeChoice = ShadeChoice {
-        rule: ShadeRule::Stretched,
-        palette: None,
-    };
+
+    fn file() -> PaletteSource {
+        PaletteSource::File("assets/palettes.txt".into())
+    }
+
+    /// A stretched shading, for the rule a warning names.
+    fn stretched() -> Shading {
+        super::super::shades::choose(&file(), None, &[W, NEAR_B])
+    }
+
+    fn held<'a>(name: &'a str, pixels: &'a Pixels) -> Held<'a> {
+        Held {
+            name,
+            pixels,
+            palette: None,
+        }
+    }
 
     fn pixels(rgba: Vec<Rgba>, width: u32) -> Pixels {
         let height = rgba.len() as u32 / width;
@@ -300,7 +349,7 @@ mod tests {
     #[test]
     fn a_lone_color_per_shade_shares_nothing() {
         let p = pixels(vec![W; 64], 8);
-        let s = find("a.png", &p, &[(W, 60), (B, 4)], &[0, 3], STRETCHED);
+        let s = find("a.png", &p, &[(W, 60), (B, 4)], &[0, 3], &stretched());
         assert!(s.merges.is_empty() && s.warnings.is_empty(), "{s:?}");
     }
 
@@ -311,7 +360,7 @@ mod tests {
             .map(|i| if i % 16 < 8 { B } else { NEAR_B })
             .collect();
         let p = pixels(rgba, 16);
-        let s = find("a.png", &p, &[(B, 64), (NEAR_B, 64)], &[3, 3], STRETCHED);
+        let s = find("a.png", &p, &[(B, 64), (NEAR_B, 64)], &[3, 3], &stretched());
         assert_eq!(s.merges, [(key(NEAR_B), B)]);
         let [w] = &s.warnings[..] else {
             panic!("{s:?}")
@@ -330,11 +379,9 @@ mod tests {
 
     #[test]
     fn the_warning_names_a_known_palette_by_its_wire_name() {
-        let choice = ShadeChoice {
-            rule: ShadeRule::Known,
-            palette: Some(gbcli_protocol::KnownPalette::PeaGreens),
-        };
-        assert_eq!(rule(choice), "known (pea_greens)");
+        let pea = [[0x9B, 0xBC, 0x0F, 0xFF], [0x0F, 0x38, 0x0F, 0xFF]];
+        let shading = super::super::shades::choose(&file(), None, &pea);
+        assert_eq!(rule(&shading), "known (pea_greens)");
     }
 
     #[test]
@@ -351,10 +398,14 @@ mod tests {
     #[test]
     fn colors_in_one_shade_only_across_images_are_one_project_warning() {
         let colors = [W, B, NEAR_B];
-        let shading = super::super::shades::choose(None, &colors);
+        let shading = super::super::shades::choose(&file(), None, &colors);
         let sky = pixels(vec![W, B], 2);
         let bug = pixels(vec![NEAR_B, NEAR_B], 2);
-        let [w] = &across(&[("sky.png", &sky), ("bug.png", &bug)], &colors, &shading)[..] else {
+        let [w] = &across(
+            &[held("sky.png", &sky), held("bug.png", &bug)],
+            &colors,
+            &shading,
+        )[..] else {
             panic!("one warning")
         };
         assert_eq!((w.image.as_deref(), w.count, w.max), (None, 2, 1));
@@ -366,7 +417,14 @@ mod tests {
             w.message
         );
         let cave = pixels(vec![B, NEAR_B], 2);
-        assert!(across(&[("cave.png", &cave), ("bug.png", &bug)], &colors, &shading).is_empty());
+        assert!(
+            across(
+                &[held("cave.png", &cave), held("bug.png", &bug)],
+                &colors,
+                &shading
+            )
+            .is_empty()
+        );
     }
 
     /// X and Y in a, Y and Z in b, W in c, one shade: the chain through Y
@@ -375,13 +433,13 @@ mod tests {
     fn colors_chained_through_a_shared_color_are_one_group() {
         let (x, y, z, w) = (B, NEAR_B, [0x18, 0x18, 0x18, 255], [0x08, 0x08, 0x08, 255]);
         let colors = [W, x, y, z, w];
-        let shading = super::super::shades::choose(None, &colors);
+        let shading = super::super::shades::choose(&file(), None, &colors);
         assert_eq!(shading.shades(&colors)[1..], [3, 3, 3, 3]);
         let a = pixels(vec![W, x, y, y], 2);
         let b = pixels(vec![y, z], 2);
         let c = pixels(vec![w, w], 2);
         let [warning] = &across(
-            &[("a.png", &a), ("b.png", &b), ("c.png", &c)],
+            &[held("a.png", &a), held("b.png", &b), held("c.png", &c)],
             &colors,
             &shading,
         )[..] else {
@@ -400,9 +458,16 @@ mod tests {
     #[test]
     fn a_shade_held_whole_by_one_image_is_no_project_warning() {
         let colors = [W, B, NEAR_B];
-        let shading = super::super::shades::choose(None, &colors);
+        let shading = super::super::shades::choose(&file(), None, &colors);
         let bug = pixels(vec![NEAR_B, NEAR_B], 2);
         let cave = pixels(vec![B, NEAR_B], 2);
-        assert!(across(&[("cave.png", &cave), ("bug.png", &bug)], &colors, &shading).is_empty());
+        assert!(
+            across(
+                &[held("cave.png", &cave), held("bug.png", &bug)],
+                &colors,
+                &shading
+            )
+            .is_empty()
+        );
     }
 }

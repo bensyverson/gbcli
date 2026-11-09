@@ -139,16 +139,18 @@ fn a_frame_width_that_doesnt_tile_the_sheet_is_frame_grid_offering_one_that_does
 #[test]
 fn a_frame_height_that_isnt_whole_objects_is_obj_pair_8x16() {
     let (temp, options) = starter("edges-frame-pair");
+    // 20 isn't whole 8x16 objects, nor whole 8x8 ones (a height a multiple
+    // of 8 but not 16, as 8x24, makes 8x8 objects: leaf GQFHVi).
     write_png(
-        &temp.path("demo/assets/sprites/hero.8x24.png"),
+        &temp.path("demo/assets/sprites/hero.8x20.png"),
         8,
-        48,
+        80,
         stroke,
     );
     let made = refused(&options);
     let p = problem(&made, ImageLimit::ObjPair8x16);
-    assert_eq!((p.count, p.max), (24, 16));
-    assert!(!p.remedy.contains("hero.8x24.png"), "{}", p.remedy);
+    assert_eq!((p.count, p.max), (20, 16));
+    assert!(!p.remedy.contains("hero.8x20.png"), "{}", p.remedy);
 }
 
 /// Three tiles in white, #040404 and black: two colors to rgbgfx and to

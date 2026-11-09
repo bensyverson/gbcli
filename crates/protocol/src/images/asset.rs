@@ -8,7 +8,7 @@
 
 use serde::Deserialize;
 
-use super::{GbcImage, ImageArt, ImageAsset, ImageKind, PaletteSlot, TileEntry};
+use super::{GbcImage, ImageArt, ImageAsset, ImageKind, ObjectSize, PaletteSlot, TileEntry};
 
 /// [`ImageAsset`] as sent, before its tile map is checked.
 #[derive(Deserialize)]
@@ -23,6 +23,8 @@ pub(super) struct Unchecked {
     frames: Option<u32>,
     #[serde(default)]
     objects: Option<u32>,
+    #[serde(default)]
+    object_size: Option<ObjectSize>,
     #[serde(default)]
     preview: String,
     #[serde(default)]
@@ -44,6 +46,7 @@ impl TryFrom<Unchecked> for ImageAsset {
             tiles: u.tiles,
             frames: u.frames,
             objects: u.objects,
+            object_size: u.object_size,
             preview: u.preview,
             tile_map: u.tile_map,
             gbc: u.gbc,
@@ -57,10 +60,17 @@ impl TryFrom<Unchecked> for ImageAsset {
 fn check(asset: &ImageAsset) -> Result<(), String> {
     let sheet = asset.kind == ImageKind::Sprites;
     let gbc = asset.gbc.is_some();
-    if sheet && asset.height % 2 == 1 {
+    if !sheet && asset.object_size.is_some() {
+        return Err("object_size is set, but only a sheet has objects".into());
+    }
+    // A unit is a cell of the map: a tile, or a sheet's object.
+    let size = asset.object_size.unwrap_or(ObjectSize::Tall);
+    let unit = if sheet { size.tiles() } else { 1 };
+    if !asset.height.is_multiple_of(unit) {
         return Err(format!(
-            "the sheet is {} tiles high, but a sheet is whole 8x16 units, an even number",
-            asset.height
+            "the sheet is {} tiles high, but a sheet is whole {} objects, {unit} tiles high",
+            asset.height,
+            size.name()
         ));
     }
     // The BG palettes a background's slots index; none for a sheet.
@@ -87,14 +97,10 @@ fn check(asset: &ImageAsset) -> Result<(), String> {
             .as_ref()
             .is_some_and(|g| matches!(g.art, ImageArt::Indexed { .. }));
     let mut sheet_slot: Option<PaletteSlot> = None;
-    // A cell is an 8x8 tile, or a sheet's 8x16 unit.
-    let cells = u64::from(asset.width)
-        * u64::from(if sheet {
-            asset.height / 2
-        } else {
-            asset.height
-        });
-    let what = if sheet { "8x16 units" } else { "tiles" };
+    // A cell is an 8x8 tile, or a sheet's object.
+    let cells = u64::from(asset.width) * u64::from(asset.height / unit);
+    let objects = format!("{} objects", size.name());
+    let what = if sheet { objects.as_str() } else { "tiles" };
     match asset.tile_map.len() as u64 {
         0 if gbc => {
             return Err(format!(
@@ -122,12 +128,13 @@ fn check(asset: &ImageAsset) -> Result<(), String> {
             ));
         };
         let index = u64::from(entry.index);
-        if sheet && index % 2 == 1 {
+        let unit = u64::from(unit);
+        if !index.is_multiple_of(unit) {
             return Err(format!(
-                "tile_map[{i}] is tile {index}, but a sheet unit's index is its top tile, even"
+                "tile_map[{i}] is tile {index}, but an 8x16 object's index is its top tile, even"
             ));
         }
-        let last = if sheet { index + 1 } else { index };
+        let last = index + unit - 1;
         if last >= tiles {
             return Err(format!(
                 "tile_map[{i}] needs tile {last}, but the image has {tiles} tiles"

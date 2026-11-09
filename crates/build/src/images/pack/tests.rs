@@ -51,6 +51,7 @@ fn pack_bg(pixels: &Pixels, reserved: usize) -> Result<Packing, Vec<ImageProblem
     let sources = [Source {
         image: "assets/bg/town.png",
         pixels,
+        cell_height: 8,
     }];
     pack(&sources, Layer::Bg, reserved)
 }
@@ -75,7 +76,8 @@ fn over_budget(result: Result<Packing, Vec<ImageProblem>>) -> ImageProblem {
 
 /// Every cell's colors are in the palette of its slot.
 fn assert_covers(packing: &Packing, pixels: &Pixels, layer: Layer) {
-    let cells = census(pixels, layer);
+    let tall = if layer == Layer::Bg { 8 } else { 16 };
+    let cells = census(pixels, tall);
     for (i, (cell, slot)) in cells.iter().zip(&packing.cell_palettes[0]).enumerate() {
         let (Some(colors), Some(slot)) = (cell, slot) else {
             assert_eq!(cell.is_none(), slot.is_none(), "cell {i}");
@@ -150,6 +152,7 @@ fn four_opaque_colors_in_an_object_are_named_by_its_top_tile() {
     let sources = [Source {
         image: "assets/sprites/hero.png",
         pixels: &pixels,
+        cell_height: 16,
     }];
     let problems = pack(&sources, Layer::Obj, 0).expect_err("4 opaque colors");
     assert_eq!(problems.len(), 1, "{problems:?}");
@@ -237,10 +240,12 @@ fn sheets_share_the_obj_palettes() {
         Source {
             image: "assets/sprites/hero.png",
             pixels: &hero,
+            cell_height: 16,
         },
         Source {
             image: "assets/sprites/coin.png",
             pixels: &coin,
+            cell_height: 16,
         },
     ];
     let packing = pack(&sources, Layer::Obj, 0).expect("one palette");
@@ -270,10 +275,12 @@ fn nine_three_color_objects_across_sheets_overflow_with_the_sprite_bound() {
         Source {
             image: "assets/sprites/hero.png",
             pixels: &hero,
+            cell_height: 16,
         },
         Source {
             image: "assets/sprites/coin.png",
             pixels: &coin,
+            cell_height: 16,
         },
     ];
     let p = over_budget(pack(&sources, Layer::Obj, 0));
@@ -298,6 +305,7 @@ fn a_packing_fills_the_protocols_gbc_image() {
     let sources = [Source {
         image: "assets/sprites/hero.png",
         pixels: &hero,
+        cell_height: 16,
     }];
     let packing = pack(&sources, Layer::Obj, 0).unwrap();
     let image = packing.gbc_image(Layer::Obj);
@@ -317,6 +325,7 @@ fn packed_slots_follow_the_reserved_ones() {
     let sources = [Source {
         image: "assets/sprites/hero.png",
         pixels: &hero,
+        cell_height: 16,
     }];
     let packing = pack(&sources, Layer::Obj, 2).unwrap();
     assert_eq!(packing.palettes.len(), 1);
@@ -331,10 +340,10 @@ fn the_census_truncates_to_rgb555_and_skips_empty_objects() {
     pixels.rgba[0] = [0x0F, 0, 0, 0xFF];
     pixels.rgba[1] = [0x08, 0, 0, 0xFF];
     assert_eq!(
-        census(&pixels, Layer::Obj),
+        census(&pixels, 16),
         vec![Some(BTreeSet::from([c(1)])), None]
     );
-    assert_eq!(census(&pixels, Layer::Bg).len(), 4);
+    assert_eq!(census(&pixels, 8).len(), 4);
 }
 
 /// rgbgfx's `-c` form: a BG palette as its four colors; an OBJ palette's

@@ -85,7 +85,7 @@ pub(crate) fn check(
         "#none".into(),
     ];
     let shade_of = shading.shades(&list);
-    let mut shared = shared::find(image, pixels, &colors, &shade_of, shading.choice);
+    let mut shared = shared::find(image, pixels, &colors, &shade_of, shading);
     shared
         .warnings
         .extend(shared::stretched(image, pixels, &colors, shading));
@@ -263,7 +263,7 @@ mod tests {
     #[test]
     fn a_color_backgrounds_gbc_section_must_fit_a_bank_too() {
         let pixels = full_bank();
-        let shading = gray_shading();
+        let shading = gray_shading(&crate::images::input::PaletteSource::Manifest);
         let plan =
             check("town.png", ImageKind::Bg, &pixels, &shading, None).expect("fits the DMG bank");
         assert_eq!(plan.tiles, 256);

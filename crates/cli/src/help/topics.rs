@@ -414,6 +414,32 @@ mod tests {
         assert!(text.lines().all(|l| l.chars().count() <= 80), "{text}");
     }
 
+    /// The examples' stumbles (leaves GQFHVi, zqarpL): color art in a plain
+    /// build, shared shades across named palettes, 8x8 sheets, a
+    /// manifest's palettes.dmg, --gbc's ROM cost, and what each summary
+    /// row counts.
+    #[test]
+    fn the_images_topic_says_what_the_example_games_needed() {
+        let text = Topic::from_name("images").expect("an images topic").text();
+        for needle in [
+            "a plain build derives",
+            "both builds",
+            "different named palettes",
+            "shot.8x8.png",
+            "8x8 objects",
+            "palettes.dmg",
+            "roughly doubles",
+            "toolchain diagnostics",
+        ] {
+            assert!(text.contains(needle), "{needle} missing:\n{text}");
+        }
+        assert!(
+            !text.contains("error\nwithout --gbc") && !text.contains("an error without --gbc"),
+            "{text}"
+        );
+        assert!(text.lines().all(|l| l.chars().count() <= 80), "{text}");
+    }
+
     /// "GBC" is the user-facing name (Ben, 2026-11-07); the topic maps it to
     /// Pan Docs' CGB and to rgbfix's -c (dual mode) and -C (GBC only).
     #[test]

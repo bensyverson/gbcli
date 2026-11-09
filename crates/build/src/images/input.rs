@@ -19,13 +19,71 @@ pub(crate) enum Origin {
     Manifest,
 }
 
+/// Where a conversion's palettes came from, which decides how a problem
+/// names them and the setting a remedy points at (leaf zqarpL): a
+/// project's file has a `dmg` line, a manifest a `palettes.dmg` field.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum PaletteSource {
+    /// A project's `assets/palettes.txt`, as shown.
+    File(String),
+    /// An `assets` manifest's `palettes`.
+    Manifest,
+}
+
+impl PaletteSource {
+    /// The palettes as a problem names them.
+    pub fn shown(&self) -> &str {
+        match self {
+            PaletteSource::File(shown) => shown,
+            PaletteSource::Manifest => "the manifest's palettes",
+        }
+    }
+
+    /// The setting that declares the shades' colors: "the dmg line of
+    /// assets/palettes.txt".
+    pub fn dmg(&self) -> String {
+        match self {
+            PaletteSource::File(shown) => format!("the dmg line of {shown}"),
+            PaletteSource::Manifest => {
+                "the manifest's palettes.dmg (four RGB555 colors, shades 0-3)".into()
+            }
+        }
+    }
+
+    /// The words saying that setting is missing.
+    pub fn no_dmg(&self) -> String {
+        match self {
+            PaletteSource::File(shown) => format!("no dmg line in {shown}"),
+            PaletteSource::Manifest => "no palettes.dmg in the manifest".into(),
+        }
+    }
+
+    /// The remedy's words for adding that setting.
+    pub fn add_dmg(&self) -> String {
+        match self {
+            PaletteSource::File(shown) => format!("add a dmg line to {shown}"),
+            PaletteSource::Manifest => "set the manifest's palettes.dmg".into(),
+        }
+    }
+
+    /// The words saying where an image is assigned `palette`.
+    pub fn assigns(&self, palette: &str) -> String {
+        match self {
+            PaletteSource::File(shown) => format!("{shown} assigns it `{palette}`"),
+            PaletteSource::Manifest => {
+                format!("the manifest's palettes.assignments give it `{palette}`")
+            }
+        }
+    }
+}
+
 /// The images to convert and the palettes they are converted with.
 pub(crate) struct Input {
     pub origin: Origin,
     pub sources: Vec<Source>,
     pub named: NamedPalettes,
-    /// Where the palettes came from, as problems name it.
-    pub palette_shown: String,
+    /// Where the palettes came from.
+    pub palettes: PaletteSource,
     /// What was found before any image was read: the old palette file's
     /// warning, or a bad palette file, an error that stops the conversion.
     pub problems: Vec<ImageProblem>,
@@ -51,7 +109,7 @@ pub(crate) fn project(
         origin: Origin::Project,
         sources,
         named,
-        palette_shown,
+        palettes: PaletteSource::File(palette_shown),
         problems,
     })
 }
@@ -94,7 +152,7 @@ pub(crate) fn manifest(
         origin: Origin::Manifest,
         sources,
         named: m.palettes.clone(),
-        palette_shown: "the manifest's palettes".into(),
+        palettes: PaletteSource::Manifest,
         problems: Vec::new(),
     })
 }

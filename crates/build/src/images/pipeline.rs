@@ -43,27 +43,9 @@ pub(crate) fn convert(
         origin,
         sources,
         named: named_palettes,
-        palette_shown,
+        palettes,
         problems,
     } = input;
-    // Plan question 9: a DMG version a DMG build would ignore is an error.
-    if target == BuildTarget::Dmg
-        && let Some((s, dmg)) = sources.iter().find_map(|s| Some((s, s.dmg.as_ref()?)))
-    {
-        return Err(BuildError::Layout {
-            message: format!(
-                "{} is the DMG version of {} for a GBC build, but this build is for the DMG, \
-                 where the image itself is the DMG art",
-                shown(dmg),
-                shown(&s.path)
-            ),
-            remedy: format!(
-                "build with --gbc to use it, or remove {} to build {} as DMG art",
-                shown(dmg),
-                shown(&s.path)
-            ),
-        });
-    }
     let mut made = ImagesMade {
         problems,
         ..ImagesMade::default()
@@ -111,14 +93,16 @@ pub(crate) fn convert(
     if made.first_error().is_some() {
         return Ok(Some(Converted { made, ..stopped }));
     }
-    find::palette_collision(&sources, &named_palettes, &palette_shown, shown)?;
-    // Each image's DMG version. In a DMG build every image is DMG art; with
-    // or without --gbc (plan question 10) `dmg` drives the cascade, the
-    // named palettes are checked, and an assigned image builds as DMG art.
+    find::palette_collision(&sources, &named_palettes, palettes.shown(), shown)?;
+    // Each image's DMG version, the same in every build (Ben's ruling,
+    // 2026-11-08): color art's derived or overridden, indexed art's its
+    // own. With or without --gbc (plan question 10) `dmg` drives the
+    // cascade and the named palettes are checked.
+    let gbc = target == BuildTarget::Gbc;
     let mut versioned = Vec::with_capacity(all.len());
     for (s, image, pixels, over) in all {
         let assigned = named_palettes.assignments.get(&s.name);
-        let version = derive::version(target, assigned, over, s, &image, shown)?;
+        let version = derive::version(assigned, &palettes, over, s, &image, shown)?;
         versioned.push((s, image, pixels, version));
     }
     // One color, one shade, in every image, overrides included.
@@ -126,22 +110,32 @@ pub(crate) fn convert(
         Version::Override(o) => vec![p, o],
         _ => vec![p],
     }));
-    let shading = shades::choose(named_palettes.dmg.as_ref(), &colors);
+    let shading = shades::choose(&palettes, named_palettes.dmg.as_ref(), &colors);
     made.shades = Some(shading.choice);
     // Colors shared across images are named only among DMG art: a derived
     // version's shares are scoped to its tiles and objects (plan question 2).
-    let dmg_art: Vec<(String, &Pixels)> = versioned
+    let dmg_art: Vec<(String, &Pixels, Option<&str>)> = versioned
         .iter()
-        .filter_map(|(s, image, p, v)| match v {
-            Version::Art => Some((image.clone(), p)),
-            Version::Override(o) => Some((shown(s.dmg.as_deref()?), o)),
-            Version::Derived => None,
+        .filter_map(|(s, image, p, v)| {
+            let palette = named_palettes.assignments.get(&s.name).map(String::as_str);
+            match v {
+                Version::Art => Some((image.clone(), p, palette)),
+                Version::Override(o) => Some((shown(s.dmg.as_deref()?), o, palette)),
+                Version::Derived => None,
+            }
         })
         .collect();
-    let dmg_colors = project_colors(dmg_art.iter().map(|(_, p)| *p));
-    let dmg_named: Vec<(&str, &Pixels)> = dmg_art.iter().map(|(i, p)| (i.as_str(), *p)).collect();
-    let across = shared::across(&dmg_named, &dmg_colors, &shading);
-    let grays = derive::gray_shading();
+    let dmg_colors = project_colors(dmg_art.iter().map(|(_, p, _)| *p));
+    let held: Vec<shared::Held> = dmg_art
+        .iter()
+        .map(|(name, pixels, palette)| shared::Held {
+            name,
+            pixels,
+            palette: *palette,
+        })
+        .collect();
+    let across = shared::across(&held, &dmg_colors, &shading);
+    let grays = derive::gray_shading(&palettes);
 
     let mut plans: Vec<Checked> = Vec::new();
     // Each plan's DMG version, for rgbgfx: its pixels, and the file that
@@ -151,7 +145,8 @@ pub(crate) fn convert(
         // A manifest's `dmg` is any file; name the one given.
         let dmg_shown = shown(&s.dmg.clone().unwrap_or_else(|| find::dmg_path(&s.path)));
         // The DMG version the checks read, under the name they give it,
-        // and color art's color image, whose tiles pair with it.
+        // and color art's color image, whose tiles pair with it under
+        // --gbc.
         let (checked_name, dmg, file, shading, color) = match version {
             Version::Art => (image.clone(), pixels, Some(s.path.clone()), &shading, None),
             Version::Override(o) => {
@@ -164,7 +159,8 @@ pub(crate) fn convert(
                 (dmg_shown, o, s.dmg.clone(), &shading, Some(pixels))
             }
             Version::Derived => {
-                match derive::derive(&image, &dmg_shown, s.kind, &pixels, &shading) {
+                let object = sheet::object_size(s.frame);
+                match derive::derive(&image, &dmg_shown, s.kind, object, &pixels, &shading) {
                     Ok(d) => {
                         made.problems.extend(d.warnings);
                         (image.clone(), d.pixels, None, &grays, Some(pixels))
@@ -176,7 +172,9 @@ pub(crate) fn convert(
                 }
             }
         };
-        let joint = color.as_ref().map(|pixels| Color {
+        let drawn = color.as_ref().unwrap_or(&dmg);
+        // Only --gbc makes a GBC version.
+        let joint = color.as_ref().filter(|_| gbc).map(|pixels| Color {
             image: &image,
             pixels,
         });
@@ -185,9 +183,11 @@ pub(crate) fn convert(
                 bg::check(&checked_name, s.kind, &dmg, shading, joint).map(Plan::Bg)
             }
             ImageKind::Sprites => {
-                sheet::check(&checked_name, &s.stem, &dmg, s.frame, shading, joint).map(Plan::Sheet)
+                let name = &checked_name;
+                sheet::check(name, &s.stem, &dmg, s.frame, shading, drawn, joint).map(Plan::Sheet)
             }
         };
+        let color = color.filter(|_| gbc);
         match checked {
             Ok(plan) => {
                 made.problems.extend(plan.warnings().iter().cloned());
@@ -216,19 +216,15 @@ pub(crate) fn convert(
         indexed::Indexed::new(&named_palettes, &sheets)
     });
     made.problems
-        .extend(indexed.as_ref().and_then(|i| i.problem(&palette_shown)));
+        .extend(indexed.as_ref().and_then(|i| i.problem(palettes.shown())));
     if target == BuildTarget::Gbc {
         let assigned: Vec<(String, ImageKind)> = sources
             .iter()
             .filter(|s| indexed::assigned(&named_palettes, &s.name).is_some())
             .map(|s| (shown(&s.path), s.kind))
             .collect();
-        made.problems.extend(indexed::unpinned(
-            &named_palettes,
-            &assigned,
-            shading.choice,
-            &palette_shown,
-        ));
+        made.problems
+            .extend(indexed::unpinned(&named_palettes, &assigned, &shading));
     }
     if made.first_error().is_some() {
         return Ok(Some(Converted { made, ..stopped }));

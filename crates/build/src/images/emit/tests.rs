@@ -22,6 +22,7 @@ fn symbols_lists_what_each_kind_defines_but_frame_labels() {
         [gbcli_protocol::Rgb555::WHITE; 4],
     )];
     let plan = SheetPlan {
+        object: gbcli_protocol::ObjectSize::Tall,
         spec: String::new(),
         merges: Vec::new(),
         obp: 0,
@@ -109,6 +110,7 @@ fn an_indexed_sheet_defines_its_swap_symbols() {
         colors: GbcPalette(colors),
     }];
     let plan = SheetPlan {
+        object: gbcli_protocol::ObjectSize::Tall,
         spec: String::new(),
         merges: Vec::new(),
         obp: 0b11_10_00_00,

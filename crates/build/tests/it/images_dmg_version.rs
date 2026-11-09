@@ -1,9 +1,10 @@
-//! Color art's DMG version under `build --gbc` (the GBC images plan,
-//! questions 2, 3 and 9; leaf tzEhz3): derived from the color image, each
-//! color taking the shade the project's rule gives it (`shades::choose`),
-//! unless a `name.dmg.png` beside it overrides it. Two colors in one tile
-//! or object that fall to one shade warn, naming it; across tiles they
-//! don't.
+//! Color art's DMG version (the GBC images plan, questions 2, 3 and 9;
+//! leaf tzEhz3): derived from the color image, each color taking the shade
+//! the project's rule gives it (`shades::choose`), unless a `name.dmg.png`
+//! beside it overrides it. Two colors in one tile or object that fall to
+//! one shade warn, naming it; across tiles they don't. A plain build
+//! derives it exactly as `--gbc` does (Ben's ruling, 2026-11-08,
+//! superseding question 9; leaf GQFHVi), so one project builds both ways.
 
 use crate::common;
 use crate::pngs;
@@ -26,6 +27,15 @@ const BLUE: Rgba = [0x00, 0x00, 0xFF, 0xFF]; // shade 3
 fn gbc(name: &str) -> (Temp, BuildOptions) {
     let (temp, mut options) = starter(name);
     options.target = BuildTarget::Gbc;
+    (temp, options)
+}
+
+const BOTH: [BuildTarget; 2] = [BuildTarget::Dmg, BuildTarget::Gbc];
+
+/// A project for `target`, named after it.
+fn for_target(name: &str, target: BuildTarget) -> (Temp, BuildOptions) {
+    let (temp, mut options) = starter(&format!("{name}-{}", target.name()));
+    options.target = target;
     (temp, options)
 }
 
@@ -226,35 +236,138 @@ fn an_override_of_another_size_is_dmg_override_size() {
     }
 }
 
+/// The racer's and the shooter's first art (the examples' DX review, item
+/// 2): a background in six colors, which a plain build refused as
+/// `dmg_palette` while `--gbc` derived its DMG version.
 #[test]
-fn an_override_without_gbc_is_an_error_naming_gbc() {
-    let (temp, options) = starter("dmg-override-no-gbc");
-    write_png(&temp.path("demo/assets/bg/town.png"), 8, 8, |_, _| WHITE);
+fn a_color_background_over_four_colors_builds_clean_both_ways() {
+    for target in BOTH {
+        let (temp, options) = for_target("dmg-derived-both", target);
+        let tiles = [WHITE, YELLOW, GREEN, RED, BLUE, BLACK];
+        write_png(&temp.path("demo/assets/bg/town.png"), 48, 8, |x, _| {
+            tiles[(x / 8) as usize]
+        });
+        let made = build(&rgbds(), &options).unwrap();
+        let images = made.images.unwrap();
+        assert!(
+            images.problems.is_empty(),
+            "{target:?}: {:#?}",
+            images.problems
+        );
+        assert_eq!(
+            cell_shades(&temp, "town"),
+            [0, 0, 1, 2, 3, 3].map(Some),
+            "{target:?}"
+        );
+        // Only --gbc makes a GBC version.
+        let gbc = images.images[0].gbc.is_some();
+        assert_eq!(gbc, target == BuildTarget::Gbc, "{target:?}");
+    }
+}
+
+/// A color sheet in four colors that fall to three shades: as DMG art, a
+/// plain build refused it, over an object palette's 3 colors.
+#[test]
+fn a_color_sheet_whose_colors_fall_to_three_shades_builds_both_ways() {
+    for target in BOTH {
+        let (temp, options) = for_target("dmg-derived-sheet", target);
+        // White and yellow are both shade 0, in different objects.
+        write_png(
+            &temp.path("demo/assets/sprites/bat.png"),
+            16,
+            16,
+            |x, _| match x {
+                0 => WHITE,
+                1 | 9 => GREEN,
+                2 | 10 => BLACK,
+                8 => YELLOW,
+                _ => CLEAR,
+            },
+        );
+        let made = build(&rgbds(), &options).unwrap();
+        let images = made.images.unwrap();
+        assert!(
+            images.problems.is_empty(),
+            "{target:?}: {:#?}",
+            images.problems
+        );
+        let inc = String::from_utf8(read(&temp, "images.inc")).unwrap();
+        // Index 1 white, 2 light gray, 3 black.
+        assert_eq!(
+            binary_constant(&inc, "BAT_OBP"),
+            0b11_01_00_00,
+            "{target:?}"
+        );
+    }
+}
+
+#[test]
+fn an_override_is_used_by_a_plain_build_too() {
+    for target in BOTH {
+        let (temp, options) = for_target("dmg-override-both", target);
+        write_png(
+            &temp.path("demo/assets/bg/town.png"),
+            24,
+            8,
+            |x, _| match x / 8 {
+                0 => RED,
+                1 => GREEN,
+                _ if x % 8 < 4 => BLUE,
+                _ => BLACK,
+            },
+        );
+        write_png(&temp.path("demo/assets/bg/town.dmg.png"), 24, 8, |x, _| {
+            [WHITE, BLACK, DARK][(x / 8) as usize]
+        });
+        let made = build(&rgbds(), &options).unwrap();
+        assert_eq!(
+            cell_shades(&temp, "town"),
+            [Some(0), Some(3), Some(2)],
+            "{target:?}"
+        );
+        let images = made.images.unwrap();
+        assert!(
+            images.problems.is_empty(),
+            "{target:?}: {:#?}",
+            images.problems
+        );
+        assert_eq!(images.images.len(), 1, "{target:?}");
+    }
+}
+
+#[test]
+fn an_override_of_another_size_is_dmg_override_size_in_a_plain_build_too() {
+    let (temp, options) = starter("dmg-override-size-plain");
+    write_png(&temp.path("demo/assets/bg/town.png"), 16, 8, |x, _| {
+        [RED, GREEN][(x / 8) as usize]
+    });
     write_png(&temp.path("demo/assets/bg/town.dmg.png"), 8, 8, |_, _| {
         WHITE
     });
-    let (message, remedy) = layout_error(build(&rgbds(), &options));
-    assert!(message.contains("demo/assets/bg/town.dmg.png"), "{message}");
-    assert!(remedy.contains("--gbc"), "{remedy}");
+    let made = refused(&options);
+    let p = problem(&made, ImageLimit::DmgOverrideSize);
+    assert_eq!(p.image.as_deref(), Some("demo/assets/bg/town.dmg.png"));
 }
 
 #[test]
 fn an_override_beside_indexed_art_is_an_error() {
-    let (temp, options) = gbc("dmg-override-indexed");
-    write_png(&temp.path("demo/assets/bg/town.png"), 8, 8, |x, _| {
-        [WHITE, BLACK][(x / 4) as usize]
-    });
-    write_png(&temp.path("demo/assets/bg/town.dmg.png"), 8, 8, |_, _| {
-        WHITE
-    });
-    fs::write(
-        temp.path("demo/assets/palettes.txt"),
-        "forest: #fff #8c4 #363 #021\nbg/town.png = forest\n",
-    )
-    .unwrap();
-    let (message, remedy) = layout_error(build(&rgbds(), &options));
-    for part in ["demo/assets/bg/town.dmg.png", "forest"] {
-        assert!(message.contains(part), "{part:?} in {message}");
+    for target in BOTH {
+        let (temp, options) = for_target("dmg-override-indexed", target);
+        write_png(&temp.path("demo/assets/bg/town.png"), 8, 8, |x, _| {
+            [WHITE, BLACK][(x / 4) as usize]
+        });
+        write_png(&temp.path("demo/assets/bg/town.dmg.png"), 8, 8, |_, _| {
+            WHITE
+        });
+        fs::write(
+            temp.path("demo/assets/palettes.txt"),
+            "forest: #fff #8c4 #363 #021\nbg/town.png = forest\n",
+        )
+        .unwrap();
+        let (message, remedy) = layout_error(build(&rgbds(), &options));
+        for part in ["demo/assets/bg/town.dmg.png", "forest"] {
+            assert!(message.contains(part), "{target:?}: {part:?} in {message}");
+        }
+        assert!(remedy.contains("remove"), "{target:?}: {remedy}");
     }
-    assert!(remedy.contains("remove"), "{remedy}");
 }

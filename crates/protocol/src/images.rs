@@ -25,8 +25,8 @@ pub use map::{Flip, NotPaletteSlot, PaletteSlot, TileEntry};
 pub enum ImageKind {
     /// `assets/bg/*.png`: a background, as unique tiles and a tilemap.
     Bg,
-    /// `assets/sprites/*.png`: a sheet of 8x16 objects, as unique 8x16 units
-    /// and one object list per frame.
+    /// `assets/sprites/*.png`: a sheet of objects ([`ObjectSize`]), as
+    /// unique objects and one object list per frame.
     Sprites,
     /// `assets/tiles/*.png`: a tileset, as unique 8x8 background tiles and
     /// no map; the program (or a client such as LoadHigh) builds its own
@@ -41,6 +41,43 @@ impl ImageKind {
             ImageKind::Bg => "bg",
             ImageKind::Sprites => "sprites",
             ImageKind::Tiles => "tiles",
+        }
+    }
+}
+
+/// The size of a sheet's objects, as LCDC bit 2 sets it for every object
+/// on screen. A sheet's name gives it: a frame size whose height is a
+/// multiple of 8 but not 16 (`shot.8x8.png`, `ship.16x8.png`) makes 8x8
+/// objects; any other sheet makes 8x16.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ObjectSize {
+    /// 8x8: one tile an object (LCDC_OBJ_16 clear).
+    #[serde(rename = "8x8")]
+    Square,
+    /// 8x16: two tiles an object, top over bottom (LCDC_OBJ_16 set).
+    #[serde(rename = "8x16")]
+    Tall,
+}
+
+impl ObjectSize {
+    /// An object's height in pixels.
+    pub fn height(self) -> u32 {
+        match self {
+            ObjectSize::Square => 8,
+            ObjectSize::Tall => 16,
+        }
+    }
+
+    /// The tiles one object takes.
+    pub fn tiles(self) -> u32 {
+        self.height() / 8
+    }
+
+    /// The name on the wire and in the include's comments.
+    pub fn name(self) -> &'static str {
+        match self {
+            ObjectSize::Square => "8x8",
+            ObjectSize::Tall => "8x16",
         }
     }
 }
@@ -65,7 +102,8 @@ pub enum ImageLimit {
     #[serde(rename = "size_multiple_8")]
     SizeMultiple8,
     /// 8x16 objects pair tiles vertically: a sheet's height is a multiple
-    /// of 16.
+    /// of 16, and so is a frame's unless it is 8x8 objects' (a multiple of
+    /// 8 but not 16; [`ObjectSize`]).
     #[serde(rename = "obj_pair_8x16")]
     ObjPair8x16,
     /// Color 0 of an object never draws; a sheet with no transparent pixel
@@ -95,8 +133,12 @@ pub enum ImageLimit {
     /// Two or more colors take one DMG shade, by the project's shade rule
     /// (`ShadeChoice`), and draw alike. A warning: BGP and OBP map indices
     /// to shades, and the hardware is content to show two colors as one.
-    /// With `image`, the colors are in that image; without, they share the
-    /// shade only across images, and `message` names the images each is in.
+    /// With `image`, the colors are in that image (color art's: in one tile
+    /// or object of it); without, they share the shade only across images
+    /// of one named palette (or of none), one problem a shade, and
+    /// `message` names the images each is in. Colors of different named
+    /// palettes sharing a shade aren't a problem: on the DMG every
+    /// palette's lightest color is white.
     SharedShade,
     /// `assets/palettes.txt` doesn't read: a line that is neither a
     /// palette nor an assignment, a palette without four colors, a
@@ -107,8 +149,8 @@ pub enum ImageLimit {
     /// the project still has the old `assets/palette.txt`, which isn't read.
     PaletteFile,
     /// The stretched shade rule put a color two or more shades from its
-    /// plain nearest shade. A warning: a `dmg` line in `assets/palettes.txt` picks
-    /// the shades instead.
+    /// plain nearest shade. A warning: a `dmg` line in `assets/palettes.txt`
+    /// (a manifest's `palettes.dmg`) picks the shades instead.
     ShadeStretched,
     /// GBC: 8 palettes. Per background, its packed palettes (or its one
     /// assigned palette); across all sheets, the packed OBJ palettes plus
@@ -123,11 +165,12 @@ pub enum ImageLimit {
     /// transparent) in one object; `tiles` names the tiles at fault.
     GbcTileColors,
     /// `name.dmg.png`, the DMG version that overrides the one derived from
-    /// a color image, isn't the color image's size; `count` and `max` are
+    /// a color image (in every build), isn't the color image's size; `count` and `max` are
     /// its width and the color image's when they differ, else the heights.
     DmgOverrideSize,
-    /// GBC: the project has indexed art and `assets/palettes.txt` has no
-    /// `dmg` line, so its shades are chosen from every color in the project
+    /// GBC: the project has indexed art and its palettes have no `dmg`
+    /// (the `dmg` line of `assets/palettes.txt`, or an `assets` manifest's
+    /// `palettes.dmg`), so its shades are chosen from every color in the project
     /// and other art can recolor it: a sheet's OBP, and so its reordered OBJ
     /// palette, or a background's tile data and so the palette entries it
     /// draws. A warning, once for the project (no `image`); `count` is the
@@ -291,14 +334,19 @@ pub struct ImageAsset {
     pub frames: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub objects: Option<u32>,
+    /// A sheet's object size; a sheet read without one (a document from
+    /// before 8x8 sheets) is 8x16, and an image that isn't a sheet has
+    /// none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub object_size: Option<ObjectSize>,
     /// The converted data drawn as the hardware shows it, then its unique
     /// tiles by use, most used first. Every build writes one; empty, and
     /// left off the wire, when an `assets` request kept no previews.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub preview: String,
     /// Where each source tile went ([`TileEntry`]: its tile, its flip and
-    /// its GBC palette slot), one entry per 8x8 tile of the image (8x16
-    /// unit of a sheet), rows top to bottom, left to right in each. None
+    /// its GBC palette slot), one entry per 8x8 tile of the image (object
+    /// of a sheet), rows top to bottom, left to right in each. None
     /// for a sheet's fully transparent unit, which takes no tile. A
     /// tileset's result is this map; a background's is also its tilemap
     /// and, on the GBC, its attribute map; a sheet's matches its frame

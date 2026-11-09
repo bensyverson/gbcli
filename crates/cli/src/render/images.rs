@@ -31,6 +31,7 @@ pub fn rows(m: &ImagesMade) -> String {
             .field("tiles", i.tiles)
             .opt("frames", i.frames)
             .opt("objects", i.objects)
+            .opt("object_size", i.object_size.map(|o| o.name()))
             .opt(
                 "preview",
                 (!i.preview.is_empty()).then_some(i.preview.as_str()),

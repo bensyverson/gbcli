@@ -171,9 +171,10 @@ pub(super) fn image(out: &mut String, e: &Entry, named: &[NamedPalette]) {
             let _ = write!(
                 out,
                 "\nSECTION \"image {label} GBC\", ROMX\n\n\
-                 ; {source} on the GBC: its 8x16 objects, in {label}Tiles' order; its\n\
+                 ; {source} on the GBC: its {} objects, in {label}Tiles' order; its\n\
                  ; palettes are ObjPalettesGbc, and each object's slot is in its frame list.\n\
-                 {label}TilesGbc::\n"
+                 {label}TilesGbc::\n",
+                plan.object.name()
             );
             if plan.kept.is_empty() {
                 out.push_str("\t; (no object: the sheet is transparent)\n");

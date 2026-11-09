@@ -129,6 +129,7 @@ mod tests {
             tiles: 2,
             frames: None,
             objects: None,
+            object_size: None,
             preview: "build/images/bg/town.preview.png".into(),
             tile_map: Vec::new(),
             gbc: None,

@@ -1,7 +1,7 @@
 //! Images by convention (design §12, Build): every PNG in `assets/bg/` is
-//! a background, every PNG in `assets/sprites/` a sheet of 8x16 objects,
-//! and every PNG in `assets/tiles/` a tileset (a background's tiles with
-//! no map). Each is checked against the DMG's hardware limits first, so a
+//! a background, every PNG in `assets/sprites/` a sheet of objects (8x16,
+//! or 8x8: `sheet::object_size`), and every PNG in `assets/tiles/` a
+//! tileset (a background's tiles with no map). Each is checked against the DMG's hardware limits first, so a
 //! problem comes back as the limit, the count, the tiles to look at and a
 //! remedy; one that fits is converted by rgbgfx into `build/images/`, with
 //! a preview, and `images.asm` and `images.inc` give the program its labels

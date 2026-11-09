@@ -21,10 +21,11 @@
 
 use gbcli_protocol::{
     GbcImage, GbcImagesMade, GbcPalette, ImageArt, ImageAsset, ImageKind, ImageLimit, ImageProblem,
-    NamedPalette, NamedPalettes, PaletteSlot, Severity, ShadeChoice, TileEntry,
+    NamedPalette, NamedPalettes, PaletteSlot, Severity, TileEntry,
 };
 
 use super::census::error;
+use super::shades::Shading;
 use super::shared::{and, rule};
 use super::sheet::SheetPlan;
 
@@ -90,15 +91,14 @@ impl<'a> Indexed<'a> {
 /// when today's rule is known (a new color can make it stretched), so other
 /// art can move them: a sheet's OBP, and with it its reordered OBJ palette;
 /// a background's (or tileset's) tile data, whose index is its shade, and
-/// with it the entries of its palette it draws. `choice` is today's rule;
-/// `shown` names where the palettes came from. Only a GBC build asks:
+/// with it the entries of its palette it draws. `shading` is today's rule,
+/// and names where the palettes came from. Only a GBC build asks:
 /// without --gbc indexed art is DMG art (plan question 10), its shades
 /// moving as all DMG art's do, with no GBC palette to recolor.
 pub(crate) fn unpinned(
     named: &NamedPalettes,
     images: &[(String, ImageKind)],
-    choice: ShadeChoice,
-    shown: &str,
+    shading: &Shading,
 ) -> Option<ImageProblem> {
     if images.is_empty() || named.dmg.is_some() {
         return None;
@@ -116,13 +116,14 @@ pub(crate) fn unpinned(
     }
     let names: Vec<String> = images.iter().map(|(n, _)| n.clone()).collect();
     let message = format!(
-        "{} {} indexed art with no dmg line in {shown}, so {} shades are chosen from every \
+        "{} {} indexed art with {}, so {} shades are chosen from every \
          color in the project (today's rule: {}); adding or changing other art can change \
          them, and so recolor {} on the GBC: {}",
         and(&names),
         if one { "is" } else { "are" },
+        shading.source.no_dmg(),
         if one { "its" } else { "their" },
-        rule(choice),
+        rule(shading),
         if one { "it" } else { "them" },
         how.join("; "),
     );
@@ -136,8 +137,9 @@ pub(crate) fn unpinned(
             0,
             message,
             &format!(
-                "add a dmg line to {shown} to pin the shades: the colors of shades 0-3, \
-                 each color taking its nearest entry's shade (gbcli help images)"
+                "{} to pin the shades: the colors of shades 0-3, each color taking its \
+                 nearest entry's shade (gbcli help images)",
+                shading.source.add_dmg()
             ),
         )
     })

@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use gbcli_protocol::{GbcPalette, KnownPalette, ShadeChoice, ShadeRule};
 
 use super::census::{Key, key};
+use super::input::PaletteSource;
 use super::pixels::Rgba;
 
 /// Lightness as rgbgfx weighs it: 2126 R + 7152 G + 722 B.
@@ -47,6 +48,8 @@ fn rgba(hex: u32) -> Rgba {
 #[derive(Debug)]
 pub(crate) struct Shading {
     pub choice: ShadeChoice,
+    /// Where the palettes came from, whose `dmg` setting a remedy names.
+    pub source: PaletteSource,
     by_key: HashMap<Key, u8>,
 }
 
@@ -89,11 +92,16 @@ fn nearest(c: Rgba) -> u8 {
 }
 
 /// Chooses the shades of `colors`, every color in the project (fully
-/// transparent pixels aside), under `declared` when `assets/palettes.txt`
-/// has a `dmg` line.
-pub(crate) fn choose(declared: Option<&GbcPalette>, colors: &[Rgba]) -> Shading {
+/// transparent pixels aside), under `declared` when the palettes (from
+/// `source`) have a `dmg` line.
+pub(crate) fn choose(
+    source: &PaletteSource,
+    declared: Option<&GbcPalette>,
+    colors: &[Rgba],
+) -> Shading {
     let shading = |rule, palette, shade: &dyn Fn(Rgba) -> u8| Shading {
         choice: ShadeChoice { rule, palette },
+        source: source.clone(),
         by_key: colors.iter().map(|&c| (key(c), shade(c))).collect(),
     };
     if let Some(entries) = declared {
@@ -150,6 +158,10 @@ mod tests {
     use super::*;
     use gbcli_protocol::Rgb555;
 
+    fn file() -> PaletteSource {
+        PaletteSource::File("assets/palettes.txt".into())
+    }
+
     const W: Rgba = [255, 255, 255, 255];
     const L: Rgba = [170, 170, 170, 255];
     const D: Rgba = [85, 85, 85, 255];
@@ -171,7 +183,7 @@ mod tests {
     fn chosen(declared: Option<[Rgba; 4]>, colors: &[Rgba]) -> (ShadeChoice, Vec<u8>) {
         let declared =
             declared.map(|d| GbcPalette(d.map(|c| Rgb555::from_rgb888(c[0], c[1], c[2]))));
-        let s = choose(declared.as_ref(), colors);
+        let s = choose(&file(), declared.as_ref(), colors);
         (s.choice, s.shades(colors))
     }
 
@@ -265,7 +277,7 @@ mod tests {
     /// (Ben's ruling: the build warns, `shade_stretched`).
     #[test]
     fn two_near_colors_alone_are_stretched_apart_and_the_far_move_is_named() {
-        let s = choose(None, &[B, NEAR_B]);
+        let s = choose(&file(), None, &[B, NEAR_B]);
         assert_eq!(s.shades(&[B, NEAR_B]), [3, 0]);
         assert_eq!(
             s.moved(NEAR_B),
@@ -281,7 +293,7 @@ mod tests {
     #[test]
     fn a_dim_palette_stretched_by_one_shade_names_no_move() {
         let dim = [0x808080, 0x666666, 0x4D4D4D, 0x333333].map(rgb);
-        let s = choose(None, &dim);
+        let s = choose(&file(), None, &dim);
         assert!(dim.iter().all(|&c| s.moved(c).is_none()), "{s:?}");
     }
 
@@ -289,7 +301,7 @@ mod tests {
     #[test]
     fn only_the_stretched_rule_names_moves() {
         let declared = GbcPalette([B, D, L, W].map(|c| Rgb555::from_rgb888(c[0], c[1], c[2])));
-        let s = choose(Some(&declared), &[W, B]);
+        let s = choose(&file(), Some(&declared), &[W, B]);
         assert_eq!((s.moved(W), s.moved(B)), (None, None));
     }
 

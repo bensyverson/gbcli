@@ -2,7 +2,10 @@
 //! takes the shade the project's rule gives it even when another already
 //! has it, both draw in that shade, and the build warns, naming the colors,
 //! the shade, the rule and the tiles, so an artist who meant the difference
-//! can redraw or declare the `dmg` line of `assets/palettes.txt`.
+//! can redraw or declare the `dmg` line of `assets/palettes.txt`. The art
+//! here is indexed (`pngs::indexed`), its own DMG version, whose sharing
+//! warns for the whole image; color art's warns within a tile or object
+//! (`images_dmg_version.rs`).
 
 use crate::common;
 use crate::pngs;
@@ -34,6 +37,7 @@ fn black_and_near_black_build_both_black_with_a_warning_naming_both() {
             _ => NEAR_BLACK,
         },
     );
+    indexed(&temp.path("demo"), &["bg/cave.png"]);
     let made = build(&rgbds(), &options).unwrap();
     let images = made.images.as_ref().unwrap();
     assert_eq!(images.images[0].tiles, 2, "white and black: {images:?}");
@@ -104,6 +108,7 @@ fn a_sheet_draws_colors_sharing_a_shade_in_one_index_with_a_warning() {
             _ => CLEAR,
         },
     );
+    indexed(&temp.path("demo"), &["bg/sky.png", "sprites/bat.png"]);
     let made = build(&rgbds(), &options).unwrap();
     let data = fs::read(temp.path("demo/build/images/sprites/bat.2bpp")).unwrap();
     let (black, near, dark) = (
@@ -137,6 +142,7 @@ fn each_shared_shade_is_its_own_warning() {
             WHITE, WHITE, near_white, BLACK, BLACK, NEAR_BLACK, WHITE, BLACK,
         ][x as usize]
     });
+    indexed(&temp.path("demo"), &["bg/fog.png"]);
     let made = build(&rgbds(), &options).unwrap();
     let found = problems(&made, ImageLimit::SharedShade);
     assert_eq!(found.len(), 2, "{found:#?}");

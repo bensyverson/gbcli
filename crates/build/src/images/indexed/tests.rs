@@ -150,6 +150,7 @@ fn the_slot_count_is_the_packers_reserved() {
     let sources = [Source {
         image: "assets/sprites/c.png",
         pixels: &pixels,
+        cell_height: 16,
     }];
     assert!(pack(&sources, Layer::Obj, 0).is_ok(), "seven fit alone");
     let problems = pack(&sources, Layer::Obj, slots.reserved()).unwrap_err();

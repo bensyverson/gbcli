@@ -178,7 +178,7 @@ fn an_over_budget_background_is_bg_tiles_map_naming_the_tiles_used_once() {
 }
 
 #[test]
-fn a_background_of_more_than_four_colors_is_dmg_palette_naming_the_rarest() {
+fn an_indexed_background_of_more_than_four_colors_is_dmg_palette_naming_the_rarest() {
     let (temp, options) = starter("bg-colors");
     let red: Rgba = [0xFF, 0x00, 0x00, 0xFF];
     write_png(&temp.path("demo/assets/bg/sky.png"), 16, 8, |x, y| {
@@ -187,6 +187,8 @@ fn a_background_of_more_than_four_colors_is_dmg_palette_naming_the_rarest() {
             _ => [WHITE, LIGHT, DARK, BLACK][(x % 4) as usize],
         }
     });
+    // Color art would derive its DMG version instead.
+    indexed(&temp.path("demo"), &["bg/sky.png"]);
     let made = refused(&options);
     let p = problem(&made, ImageLimit::DmgPalette);
     assert_eq!((p.count, p.max), (5, 4));
@@ -325,6 +327,8 @@ fn a_background_with_a_shared_shade_rgbgfx_misdraws_stops_the_build() {
     write_png(&temp.path("demo/assets/bg/haze.png"), 24, 8, |x, _| {
         [WHITE, near_white, BLACK][(x / 8) as usize]
     });
+    // Indexed, so the shade shared across tiles warns and merges.
+    indexed(&temp.path("demo"), &["bg/haze.png"]);
     let tools = tools_whose_rgbgfx_misdraws(&temp);
     let made = match build(&tools, &options) {
         Err(BuildError::Failed { made, .. }) => *made,

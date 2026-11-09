@@ -63,14 +63,17 @@ fn an_opaque_sheet_in_gb_studios_key_green_is_told_to_make_it_transparent() {
     }
 }
 
+/// A plain build derives a color sheet's DMG version as `--gbc` does (leaf
+/// GQFHVi), so this is the `--gbc` case below without the flag: four
+/// colors that fall to four shades.
 #[test]
 fn a_gb_studio_sheet_in_four_colors_is_told_its_green_is_the_fourth() {
     let (temp, options) = starter("key-green-four");
-    // GB Studio's sprite colors on its key green: 4 colors, 3 + the key.
+    // Three sprite colors on the key green: 4 colors in 4 shades.
     let gb_studio = |x: u32, y: u32| match (x, y % 4) {
-        (0, _) => [0xE0, 0xF8, 0xCF, 0xFF],
-        (1, _) => [0x86, 0xC0, 0x6C, 0xFF],
-        (2, _) => [0x07, 0x18, 0x21, 0xFF],
+        (0, _) => WHITE,
+        (1, _) => DARK,
+        (2, _) => BLACK,
         _ => KEY,
     };
     write_png(

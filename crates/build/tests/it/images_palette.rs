@@ -193,7 +193,7 @@ fn a_color_the_stretch_moves_far_is_drawn_as_given_with_a_warning() {
     }
     assert!(
         p.remedy
-            .contains("declare the dmg line of assets/palettes.txt to pick the shades yourself"),
+            .contains("declare the dmg line of demo/assets/palettes.txt to pick the shades"),
         "{}",
         p.remedy
     );

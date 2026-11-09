@@ -104,7 +104,7 @@ pub(crate) fn background(
 }
 
 /// A color sheet's GBC version: each of `plan`'s kept units in its slot
-/// (`slots`, one per 8x16 unit of the sheet, as `pack` gives them).
+/// (`slots`, one per unit of the sheet, as `pack` gives them).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn sheet(
     rgbgfx: &mut Rgbgfx,
@@ -129,10 +129,12 @@ pub(crate) fn sheet(
     let Some(raw) = convert(rgbgfx, image, source, p, grid, out)? else {
         return Ok(None);
     };
+    let per = plan.object.tiles();
     let places = plan.kept.iter().map(|&(ux, uy)| {
         let (x, y) = (ux / 8, uy / 8);
-        let unit = (y / 2 * plan.width + x) as usize;
-        (vec![TileAt { x, y }, TileAt { x, y: y + 1 }], slots[unit])
+        let unit = (y / per * plan.width + x) as usize;
+        let tiles = (0..per).map(|t| TileAt { x, y: y + t }).collect();
+        (tiles, slots[unit])
     });
     joint(rgbgfx, image, color, p, grid, &raw, places)
 }

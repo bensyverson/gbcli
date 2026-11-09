@@ -10,7 +10,7 @@ mod gbc;
 
 use std::fmt::Write;
 
-use gbcli_protocol::{GbcImagesMade, ImageKind, NamedPalette};
+use gbcli_protocol::{GbcImagesMade, ImageKind, NamedPalette, ObjectSize};
 
 use super::sheet::{Object, SheetPlan};
 pub(crate) use gbc::Gbc;
@@ -182,10 +182,14 @@ pub(crate) fn asm(entries: &[Entry], shared: &Shared) -> String {
                 gbc,
                 ..
             } => {
+                let layout = match plan.object {
+                    ObjectSize::Square => "8x8 objects, 16 bytes each (one tile)",
+                    ObjectSize::Tall => "8x16 objects, 32 bytes each (top tile, bottom tile)",
+                };
                 let _ = write!(
                     out,
                     "\nSECTION \"image {label}\", ROMX\n\n\
-                     ; {source}: unique 8x16 objects, 32 bytes each (top tile, bottom tile).\n\
+                     ; {source}: unique {layout}.\n\
                      {label}Tiles::\n"
                 );
                 if plan.kept.is_empty() {
@@ -212,7 +216,7 @@ pub(crate) fn asm(entries: &[Entry], shared: &Shared) -> String {
                 for (name, objects) in names.iter().zip(&plan.frames) {
                     let _ = write!(out, "{name}::\n\tdb {}\n", objects.len());
                     for o in objects {
-                        out += &object(o, slot(o.unit));
+                        out += &object(o, plan.tile(o.unit), slot(o.unit));
                     }
                 }
             }
@@ -237,13 +241,14 @@ pub(crate) fn asm(entries: &[Entry], shared: &Shared) -> String {
     out
 }
 
-/// An object's four bytes; `slot` is its GBC OBJ palette.
-fn object(o: &Object, slot: u8) -> String {
+/// An object's four bytes; `tile` is its (top) tile, `slot` its GBC OBJ
+/// palette.
+fn object(o: &Object, tile: u32, slot: u8) -> String {
     let attr = match o.flip.oam_bits() | slot {
         0 => "0".to_string(),
         a => format!("${a:02X}"),
     };
-    format!("\tdb {}, {}, {}, {attr}\n", o.y, o.x, o.unit * 2)
+    format!("\tdb {}, {}, {tile}, {attr}\n", o.y, o.x)
 }
 
 /// The include: constants only, so any source may include it.
@@ -288,10 +293,14 @@ pub(crate) fn inc(entries: &[Entry], shared: &Shared) -> String {
             } => {
                 let (fw, fh) = plan.frame;
                 let obp = plan.obp;
+                let (objects, per) = match plan.object {
+                    ObjectSize::Square => ("8x8 objects (clear LCDC_OBJ_16)", "one"),
+                    ObjectSize::Tall => ("8x16 objects (set LCDC_OBJ_16)", "two"),
+                };
                 let _ = write!(
                     out,
-                    "\n; {source}: 8x16 objects (set LCDC_OBJ_16), {} frame(s) of {fw}x{fh}.\n\
-                     DEF {c}_TILES EQU {} ; tiles, two per object\n\
+                    "\n; {source}: {objects}, {} frame(s) of {fw}x{fh}.\n\
+                     DEF {c}_TILES EQU {} ; tiles, {per} per object\n\
                      DEF {c}_FRAMES EQU {}\n\
                      DEF {c}_FRAME_WIDTH EQU {fw}\n\
                      DEF {c}_FRAME_HEIGHT EQU {fh}\n\

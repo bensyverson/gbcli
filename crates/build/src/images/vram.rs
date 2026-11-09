@@ -53,7 +53,7 @@ pub(super) fn vram(plans: &[Checked]) -> Vec<ImageProblem> {
                     bg.tiles()
                 ),
                 "cut unique tiles from the background or the sheets (flipped copies of an \
-                 8x16 object are free), or load them at different times as separate images",
+                 object are free), or load them at different times as separate images",
             )
         });
     }

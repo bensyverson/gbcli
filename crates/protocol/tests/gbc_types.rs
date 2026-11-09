@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use gbcli_protocol::{
     BuildMade, BuildTarget, Flip, GbcImage, GbcPalette, ImageArt, ImageAsset, ImageKind,
-    NamedPalette, NamedPalettes, PaletteFault, PaletteSlot, Rgb555, TileEntry,
+    NamedPalette, NamedPalettes, ObjectSize, PaletteFault, PaletteSlot, Rgb555, TileEntry,
 };
 
 /// A BuildMade recorded before `target` existed reads as a DMG build.
@@ -176,7 +176,46 @@ fn sheet(map: Vec<Option<TileEntry>>, gbc: Option<GbcImage>) -> ImageAsset {
         preview: "p".into(),
         tile_map: map,
         gbc,
+        object_size: Some(ObjectSize::Tall),
     }
+}
+
+/// A sheet of 8x8 objects (leaf GQFHVi): one entry an object, each its own
+/// tile, so an odd index and a sheet one tile high are whole objects; the
+/// size is on the wire as the LCDC names it.
+#[test]
+fn an_8x8_sheets_entries_are_one_tile_an_object() {
+    let small = ImageAsset {
+        height: 1,
+        tiles: 3,
+        object_size: Some(ObjectSize::Square),
+        ..sheet(
+            vec![
+                entry(0, Flip::None, None),
+                entry(1, Flip::X, None),
+                entry(2, Flip::None, None),
+            ],
+            None,
+        )
+    };
+    let json = serde_json::to_string(&small).unwrap();
+    assert!(json.contains(r#""object_size":"8x8""#), "{json}");
+    assert_eq!(serde_json::from_str::<ImageAsset>(&json).unwrap(), small);
+    // 8x16: the same odd index is refused, and a document from before the
+    // size was sent reads as 8x16.
+    let tall = ImageAsset {
+        object_size: Some(ObjectSize::Tall),
+        ..small.clone()
+    };
+    let json = serde_json::to_string(&tall).unwrap();
+    assert!(json.contains(r#""object_size":"8x16""#), "{json}");
+    assert!(serde_json::from_str::<ImageAsset>(&json).is_err());
+    let before = json.replace(r#","object_size":"8x16""#, "");
+    assert!(!before.contains("object_size"), "{before}");
+    assert!(serde_json::from_str::<ImageAsset>(&before).is_err());
+    // Only a sheet has objects.
+    let bg = r#"{"kind":"bg","source":"a.png","label":"A","width":1,"height":1,"tiles":1,"object_size":"8x8"}"#;
+    assert!(serde_json::from_str::<ImageAsset>(bg).is_err());
 }
 
 fn entry(index: u32, flip: Flip, slot: Option<u8>) -> Option<TileEntry> {
@@ -244,6 +283,7 @@ fn entries_that_disagree_with_the_target_are_refused_on_read() {
         height: 1,
         frames: None,
         objects: None,
+        object_size: None,
         ..sheet(map, gbc)
     };
     let tile = |slot| entry(0, Flip::None, slot);

@@ -35,6 +35,7 @@ mod toolchain;
 mod version;
 mod video;
 mod views;
+mod wall_guard;
 
 pub use assets::{AssetManifest, AssetsArgs, AssetsMade, ManifestFont, ManifestImage};
 pub use audio::{
@@ -116,3 +117,4 @@ pub use video::{
     ViewKind, ViewMade,
 };
 pub use views::{FlagsView, PpuModeView, PpuView, RegistersView};
+pub use wall_guard::WallGuardSeconds;

@@ -162,6 +162,23 @@ fn the_music_topic_says_song_notes_are_an_octave_above_scientific_pitch() {
     assert!(text.contains("C-3 sounds as C2 (65 Hz)"), "{text}");
 }
 
+/// The wave channel plays a note an octave below the squares, so its names
+/// are two octaves above the pitch heard (leaf qjAObe; the probe is
+/// `music::the_wave_channel_sounds_an_octave_below_a_square_at_the_same_note`
+/// in the binary's tests).
+#[test]
+fn the_music_topic_says_the_wave_channel_sounds_an_octave_lower() {
+    let text = crate::help::Topic::from_name("music").unwrap().text();
+    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    for needle in [
+        "on the wave channel C-3 sounds as C1 (33 Hz)",
+        "two octaves below its name",
+        "names it C1, the pitch heard",
+    ] {
+        assert!(text.contains(needle), "{needle} missing from:\n{text}");
+    }
+}
+
 /// The audio log's filter and summary, and the OAM log, say what they hold.
 #[test]
 fn run_help_describes_the_audio_filter_and_the_oam_log() {
@@ -361,6 +378,21 @@ fn the_de_review_help_items_are_in_place() {
     );
 }
 
+/// The budgets topic says the wall guard is host time, answers its own
+/// code, and how to raise it (leaf xdES5r).
+#[test]
+fn the_budgets_topic_says_how_to_raise_the_wall_guard() {
+    let text = Topic::Budgets.text();
+    for needle in [
+        "--wall-guard SECONDS",
+        "wall_guard (exit 3)",
+        "3600",
+        "wall_guard_s",
+    ] {
+        assert!(text.contains(needle), "{needle} missing from:\n{text}");
+    }
+}
+
 /// The budgets topic says how the frame budget counts LCD-off frames.
 #[test]
 fn the_budgets_topic_explains_lcd_off_frames() {
@@ -381,6 +413,7 @@ fn verb_help_heads_each_flag_group_by_name() {
     for heading in [
         "SHOT FLAGS (how the PNG is taken)",
         "SESSION FLAGS (every session verb)",
+        "GUARD FLAGS (every verb that emulates for as long as you ask)",
         "OUTPUT FLAGS (every verb that sends a request)",
     ] {
         assert!(text.contains(heading), "{heading} missing from:\n{text}");

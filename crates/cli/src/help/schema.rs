@@ -5,13 +5,14 @@
 pub const SCHEMA: &str = r#"Requests — one JSON object per line, for `gbcli serve` and `gbcli batch -F`.
 
   {"id": TEXT, "session"?: NAME, "as"?: NAME, "rev"?: "sN",
-   "allow_rom_change"?: true, "op": OP, "args"?: {…}}
+   "allow_rom_change"?: true, "wall_guard_s"?: 1-3600, "op": OP, "args"?: {…}}
 
 id is yours and is echoed back. session and as default to serve's --session
 and --as. A mutation that passes rev is refused (rev_mismatch) if the session
-moved on. Unknown and repeated fields are refused, naming the nearest field.
+moved on. wall_guard_s replaces the server's 60 s host-time guard for this
+request; a request it ends fails wall_guard (exit 3), not budget_exhausted. Unknown and repeated fields are refused, naming the nearest field.
 Fields marked ? may be left out; an op with no required field may omit args.
-This schema's protocol version is 4, which the version op reports. It goes up
+This schema's protocol version is 5, which the version op reports. It goes up
 on a breaking change to these shapes (a new value of a response's enum among
 them), not for a new op or a new optional request field.
 
@@ -256,6 +257,7 @@ Examples:
   {"id":"42","op":"font_export","args":{"file":"assets/fonts/talk.yaff","bdf":"talk.bdf"}}
   {"id":"43","op":"font_new","args":{"name":"hud","chars":"ascii","guide_sheet":"hud-sheet.png"}}
   {"id":"44","op":"font_diff","args":{"a":"old.yaff","b":"assets/fonts/talk.yaff","png":"diff.png"}}
+  {"id":"45","wall_guard_s":300,"op":"run","args":{"frames":4700,"keys_since":"boot"}}
 "#;
 
 #[cfg(test)]

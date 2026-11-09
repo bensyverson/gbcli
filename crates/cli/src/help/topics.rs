@@ -228,9 +228,16 @@ budget_exhausted (exit 3) and still prints the stop it reached, which becomes
 the head; raise the budget or check the predicate. If the CPU locks up first
 (illegal_opcode, halt_forever), it fails the same way, as target_not_reached.
 If a breakpoint or watch you set stops it first, it succeeds with a warning.
-`run --frames N` alone succeeds when the frames are done. A 60 s wall-clock
-guard backs every request up; a stop it causes says wall_guard and is not
-reproducible.
+`run --frames N` alone succeeds when the frames are done.
+
+A 60 s wall-clock guard backs every request up. It counts host time, not
+emulated time, so a slow or overloaded machine can reach it on a long run
+that would otherwise finish: the request fails with wall_guard (exit 3),
+not budget_exhausted, its stop says wall_guard, and the stop isn't
+reproducible. Raise it for one request with --wall-guard SECONDS (1 to
+3600; run, step, measure, equiv; wall_guard_s on a request line), or split
+the run: --checkpoint NAME, then --at NAME (with --keys-since boot to keep
+one key file).
 
 The frame budget (run --frame-budget) is the other kind: how much of each
 frame the CPU worked. A lag frame never halted with the LCD on. A frame the
@@ -252,6 +259,7 @@ Exit codes — one table for every command; errors print to stderr as
   3  budget or conflict: budget_exhausted rev_mismatch session_busy
      rom_changed uninitialized_read target_not_reached (a run's --to or
      --until ended short: the CPU locked up first; the stop says how)
+     wall_guard (host time ran out, not the budget: --wall-guard SECONDS)
   4  something didn't load: rom_unreadable checkpoint_unreadable
      checkpoint_mismatch symbols_unreadable session_unreadable
      build_failed (RGBDS rejected the sources: see the diagnostic rows)
@@ -352,7 +360,7 @@ mod tests {
                 }
             }
         }
-        assert_eq!(seen, 29, "every code in the closed set");
+        assert_eq!(seen, 30, "every code in the closed set");
     }
 
     #[test]

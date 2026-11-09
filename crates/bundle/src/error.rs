@@ -181,7 +181,7 @@ impl StoreError {
             StoreError::SessionUnreadable { .. } => ErrorCode::SessionUnreadable,
             StoreError::BootFailed(e) => e.code(),
             StoreError::NoHandoff => ErrorCode::Refused,
-            StoreError::BootInterrupted => ErrorCode::BudgetExhausted,
+            StoreError::BootInterrupted => ErrorCode::WallGuard,
             StoreError::Checkpoint(e) => e.code(),
             StoreError::Setup(e) => setup_code(e),
         }
@@ -299,8 +299,8 @@ impl StoreError {
                 "pass --from power-on, which runs without the boot cache".into()
             }
             StoreError::BootInterrupted => {
-                "retry: the boot run takes well under a second unless the host is starved; \
-                 nothing was cached"
+                "retry, or raise --wall-guard SECONDS: the boot run takes well under a second \
+                 unless the host is starved; nothing was cached"
                     .into()
             }
             StoreError::Checkpoint(e) => e.remedy(),

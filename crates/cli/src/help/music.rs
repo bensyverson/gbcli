@@ -81,6 +81,11 @@ A cell is hUGETracker's clipboard spelling: note, instrument, volume, effect.
                    effect: code and parameter in hex, or ... for none
 Note names are hUGETracker's, an octave above scientific pitch:
 C-3 sounds as C2 (65 Hz), and `run --audio-log` names the note it plays C2.
+That is the square channels (1, 2). The wave channel (3) sounds an octave
+lower still: hUGEDriver writes it the same period, and the wave steps
+through 32 samples where a square steps through 8, so on the wave channel
+C-3 sounds as C1 (33 Hz), two octaves below its name, and the audio log
+names it C1, the pitch heard. For a bass that sounds A2, write A-4.
 A pattern several orders play needs its rows written once: write them in
 one block, and name it = (or leave its column off the end) in the others.
 A block that names it again must read the same. A row has one cell per

@@ -1,7 +1,7 @@
 //! The entries. Order within a class is the order the primer lists them.
 
 use super::flags::{
-    BATCH, BREAK, CHANGE, CREATE, EVENTS, OUTPUT, PRUNE, READ, RM, RUN, SERVE, SESSION,
+    BATCH, BREAK, CHANGE, CREATE, EVENTS, GUARD, OUTPUT, PRUNE, READ, RM, RUN, SERVE, SESSION,
     SHOT_OPTIONS, WATCH,
 };
 use super::table_battery::{POWER_CYCLE_VERB, SAV_VERB};
@@ -61,7 +61,7 @@ pub const VERBS: &[VerbSpec] = &[
             name: "ROM",
         },
         flags: RUN,
-        groups: &[SHOT_OPTIONS, SESSION, CHANGE, OUTPUT],
+        groups: &[SHOT_OPTIONS, SESSION, CHANGE, GUARD, OUTPUT],
         about: "The experiment verb. In this order, whatever the order of the flags: start \
                 from --at, the head, or the boot handoff; apply --patch, --poke and --write \
                 in the order given; schedule --keys; run until --until holds, --to is reached, a breakpoint or \
@@ -88,7 +88,7 @@ pub const VERBS: &[VerbSpec] = &[
             name: "UNIT",
         },
         flags: &[],
-        groups: CHANGE_VERB,
+        groups: &[SESSION, CHANGE, GUARD, OUTPUT],
         about: "Advance the head by one unit: an instruction (the default), over a call, out \
                 of the current routine, to the next frame, or to the next scanline. To run to \
                 an address, use `gbcli run --to ADDR`.",

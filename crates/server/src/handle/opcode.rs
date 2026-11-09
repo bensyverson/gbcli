@@ -51,6 +51,7 @@ mod tests {
             actor: None,
             rev: None,
             allow_rom_change: false,
+            wall_guard_s: None,
             op: Op::Opcode(OpcodeArgs {
                 query: query.into(),
             }),

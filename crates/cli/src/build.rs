@@ -9,7 +9,7 @@ use gbcli_protocol::{
     RestoreArgs, Rev, RmArgs, RunArgs, ShotReadArgs, StepArgs, StepKind, SymArgs, WatchAccess,
     WatchArgs, WriteArgs, WriteKind, model_from_name,
 };
-use gbcli_protocol::{PowerCycleArgs, SavArgs};
+use gbcli_protocol::{PowerCycleArgs, SavArgs, WallGuardSeconds};
 
 use crate::Env;
 use crate::argv::Invocation;
@@ -41,6 +41,8 @@ pub struct Target {
     pub actor: Option<String>,
     pub rev: Option<Rev>,
     pub allow_rom_change: bool,
+    /// `--wall-guard`: this request's host-time allowance.
+    pub wall_guard_s: Option<WallGuardSeconds>,
     pub json: bool,
     /// Where to look for `.gbcli/`; it beats `GBCLI_DIR`.
     pub dir: Option<PathBuf>,
@@ -70,6 +72,7 @@ impl Target {
             actor: self.actor.clone(),
             rev: self.rev,
             allow_rom_change: self.allow_rom_change,
+            wall_guard_s: self.wall_guard_s,
             op,
         }
     }
@@ -398,6 +401,14 @@ pub(crate) fn target(inv: &Invocation, env: &Env, rom: Option<String>) -> Result
             })
             .transpose()?,
         allow_rom_change: inv.has("allow-rom-change"),
+        wall_guard_s: inv
+            .one("wall-guard")
+            .map(|s| {
+                s.parse().map_err(|e: String| {
+                    Usage::new(format!("--wall-guard: {e}"), "e.g. `--wall-guard 300`")
+                })
+            })
+            .transpose()?,
         json: inv.has("json"),
         // `--dir` already moved the working directory there (`Env::anchored`).
         dir: inv.has("dir").then(|| env.cwd.clone()),

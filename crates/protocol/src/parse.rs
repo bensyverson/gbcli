@@ -11,6 +11,7 @@ use crate::keys::{KEY_ERROR, KEY_GRAMMAR};
 use crate::request::{Op, Request};
 use crate::rev::Rev;
 use crate::strict::Strict;
+use crate::wall_guard::WallGuardSeconds;
 
 /// A request as read, before its op and args become an [`Op`]. Its own
 /// fields refuse strangers here, which `#[serde(flatten)]` can't do: a
@@ -28,6 +29,8 @@ pub(crate) struct WireRequest {
     rev: Option<Rev>,
     #[serde(default)]
     allow_rom_change: bool,
+    #[serde(default)]
+    wall_guard_s: Option<WallGuardSeconds>,
     op: Value,
     /// `null` reads as absent.
     #[serde(default)]
@@ -69,6 +72,7 @@ impl TryFrom<WireRequest> for Request {
             actor: w.actor,
             rev: w.rev,
             allow_rom_change: w.allow_rom_change,
+            wall_guard_s: w.wall_guard_s,
             op,
         })
     }

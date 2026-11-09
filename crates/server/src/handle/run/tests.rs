@@ -310,7 +310,7 @@ fn the_wall_guard_ends_a_run_and_says_so() {
     h.set_wall_guard(Duration::ZERO);
     let response = run_frames(&mut h, 600);
     let error = response.outcome.expect_err("the guard fired");
-    assert_eq!(error.code, ErrorCode::BudgetExhausted);
+    assert_eq!(error.code, ErrorCode::WallGuard);
     assert_eq!(error.stop.map(|s| s.reason), Some(StopReason::WallGuard));
     assert_eq!(response.rev, Some(Rev(2)), "the state reached is saved");
 }
@@ -324,7 +324,7 @@ fn the_wall_guard_ends_the_boot_run_too() {
     let error = response
         .outcome
         .expect_err("the guard fired during the boot run");
-    assert_eq!(error.code, ErrorCode::BudgetExhausted);
+    assert_eq!(error.code, ErrorCode::WallGuard);
     assert!(error.message.contains("boot"), "{}", error.message);
     let cached = std::fs::read_dir(f.bundle.cache_dir()).map_or(0, |d| d.count());
     assert_eq!(cached, 0, "an interrupted boot isn't a handoff to cache");
@@ -340,7 +340,7 @@ fn the_wall_guard_ends_a_step_and_says_so() {
         unit: StepKind::Over,
     })));
     let error = response.outcome.expect_err("the guard fired");
-    assert_eq!(error.code, ErrorCode::BudgetExhausted);
+    assert_eq!(error.code, ErrorCode::WallGuard);
     assert_eq!(error.stop.map(|s| s.reason), Some(StopReason::WallGuard));
 }
 
@@ -361,7 +361,7 @@ fn the_wall_guard_firing_during_the_replays_is_the_wall_guard_error() {
         replay(m, &Target::Budget, &opts, guard)
     });
     let error = result.expect_err("the guard ended the replays").body;
-    assert_eq!(error.code, ErrorCode::BudgetExhausted);
+    assert_eq!(error.code, ErrorCode::WallGuard);
     assert!(error.message.contains("wall guard"), "{}", error.message);
     assert_eq!(error.stop.map(|s| s.reason), Some(StopReason::WallGuard));
 }

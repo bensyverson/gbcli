@@ -1,6 +1,6 @@
 //! The read verbs for pictures, VRAM and the session's listings.
 
-use super::flags::{CHANGE, EQUIV, MEASURE, OUTPUT, SESSION, SHOT, SHOT_OPTIONS, VIEW};
+use super::flags::{CHANGE, EQUIV, GUARD, MEASURE, OUTPUT, SESSION, SHOT, SHOT_OPTIONS, VIEW};
 use super::{Arity, Class, Verb, VerbSpec};
 
 pub const SHOT_VERB: VerbSpec = VerbSpec {
@@ -120,7 +120,7 @@ pub const MEASURE_VERB: VerbSpec = VerbSpec {
         name: "FROM..TO",
     },
     flags: MEASURE,
-    groups: &[SESSION, OUTPUT],
+    groups: &[SESSION, GUARD, OUTPUT],
     about: "Runs a copy of the head (or --at) and counts the emulated cycles from the first \
             arrival at FROM (the current PC counts) to the next arrival at TO, --iterations \
             times. Prints n, the CPU speed, T- and M-cycles min/max/mean, and the share of a \
@@ -147,7 +147,7 @@ pub const EQUIV_VERB: VerbSpec = VerbSpec {
         name: "ROM_B",
     },
     flags: EQUIV,
-    groups: &[SESSION, CHANGE, OUTPUT],
+    groups: &[SESSION, CHANGE, GUARD, OUTPUT],
     about: "Runs the session's ROM (side A) and ROM_B, or the session's ROM with --patch \
             (side B), from equivalent starts (each side's boot handoff, or --at one \
             checkpoint) under one key timeline, and compares the screen, the --ram bytes \

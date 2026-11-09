@@ -99,6 +99,15 @@ pub const ALLOW_ROM_CHANGE: FlagSpec = switch(
 /// Taken by every verb that works on one session.
 pub const SESSION: &[FlagSpec] = &[SESSION_FLAG, ROM, SYM, MODEL, SEED, FLASH, ALLOW_ROM_CHANGE];
 
+/// Taken by every verb whose emulation the caller sizes: `run`, `step`,
+/// `measure` and `equiv`.
+pub const GUARD: &[FlagSpec] = &[value(
+    "wall-guard",
+    "SECONDS",
+    "end the request after SECONDS of host time instead of the default 60, 1 to 3600; \
+     a stop it causes is wall_guard (exit 3), not the emulated budget",
+)];
+
 /// Taken by every verb that changes the session: its head, checkpoints,
 /// breakpoints or watches. A verb that changes nothing has no `--rev`.
 pub const CHANGE: &[FlagSpec] = &[value(

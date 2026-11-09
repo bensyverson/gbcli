@@ -237,9 +237,10 @@ fn the_wall_guard_ends_the_check() {
     let error = equiv(&mut h, frame_counter(600, false))
         .outcome
         .expect_err("the guard fired");
-    assert_eq!(error.code, ErrorCode::BudgetExhausted);
+    assert_eq!(error.code, ErrorCode::WallGuard);
     assert!(error.message.contains("wall guard"), "{}", error.message);
-    assert_eq!(error.remedy, "compare fewer --frames per call");
+    assert!(error.remedy.contains("--wall-guard"), "{}", error.remedy);
+    assert!(error.remedy.contains("fewer --frames"), "{}", error.remedy);
 }
 
 #[test]

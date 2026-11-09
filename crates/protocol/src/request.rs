@@ -23,6 +23,7 @@ use crate::shot::{FilmstripArgs, ShotArgs, ShotReadArgs};
 use crate::stop::{StepKind, TimeBase};
 use crate::toolchain::{BuildArgs, NewArgs};
 use crate::video::ViewArgs;
+use crate::wall_guard::WallGuardSeconds;
 
 /// A request: who asks, which session and revision it saw, and what to do.
 /// Reading one refuses fields it doesn't know, at the top level and in the
@@ -44,6 +45,11 @@ pub struct Request {
     /// (design §6). One field for every op that loads a state.
     #[serde(default, skip_serializing_if = "is_false")]
     pub allow_rom_change: bool,
+    /// This request's wall-guard allowance (design §3), when the adapter's
+    /// default is too short: whole seconds, 1 to 3600. Any op takes it; only
+    /// emulation can outlive it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wall_guard_s: Option<WallGuardSeconds>,
     #[serde(flatten)]
     pub op: Op,
 }
@@ -531,6 +537,22 @@ mod tests {
             serde_json::from_str::<Request>(old).is_err(),
             "no twin in the args"
         );
+    }
+
+    #[test]
+    fn the_wall_guard_rides_on_the_request_in_whole_seconds() {
+        let line = r#"{"id":"1","wall_guard_s":300,"op":"run","args":{"frames":4700}}"#;
+        let request = parse(line);
+        assert_eq!(request.wall_guard_s.map(|s| s.get()), Some(300));
+        assert_eq!(serde_json::to_string(&request).unwrap(), line);
+        assert_eq!(parse(r#"{"id":"1","op":"show"}"#).wall_guard_s, None);
+        for bad in [
+            r#"{"id":"1","wall_guard_s":0,"op":"show"}"#,
+            r#"{"id":"1","wall_guard_s":3601,"op":"show"}"#,
+            r#"{"id":"1","op":"run","args":{"wall_guard_s":300}}"#,
+        ] {
+            assert!(serde_json::from_str::<Request>(bad).is_err(), "{bad}");
+        }
     }
 
     #[test]

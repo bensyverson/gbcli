@@ -13,7 +13,7 @@ mod table_read;
 mod table_song;
 mod table_version;
 
-pub use flags::{CHANGE, OUTPUT, SESSION, SHOT_OPTIONS};
+pub use flags::{CHANGE, GUARD, OUTPUT, SESSION, SHOT_OPTIONS};
 pub use table::VERBS;
 
 /// What a verb does, and so what it needs before it can run (design §12).

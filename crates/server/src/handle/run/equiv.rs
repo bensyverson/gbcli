@@ -75,7 +75,7 @@ impl Handler {
             EquivError::Interrupted { frames } => Failure::new(wall_guard_ended(
                 self.wall_guard,
                 &format!("after {frames} equivalent frames"),
-                "compare fewer --frames per call",
+                "raise --wall-guard SECONDS (up to 3600), or compare fewer --frames per call",
             )),
             other => equiv_failure(&other),
         })?;
@@ -173,7 +173,7 @@ pub(in crate::handle) fn equiv_failure(e: &EquivError) -> Failure {
         EquivError::Run { error, .. } => Failure::from_debug(error),
         EquivError::Core { error, .. } => Failure::from_core(error),
         EquivError::Interrupted { frames } => Failure::new(ErrorBody::plain(
-            ErrorCode::BudgetExhausted,
+            ErrorCode::WallGuard,
             format!("interrupted after {frames} equivalent frames"),
         )),
     }

@@ -39,14 +39,15 @@ pub(super) fn budget_from(
 }
 
 /// What every wall-guard error tells the caller to do.
-pub(in crate::handle) const WALL_GUARD_REMEDY: &str =
-    "narrow the experiment, or give it a structure that ends";
+pub(in crate::handle) const WALL_GUARD_REMEDY: &str = "host time ran out, not the emulated budget: \
+     raise --wall-guard SECONDS (up to 3600), or split the run with --checkpoint and \
+     continue it with --at";
 
-/// The wall guard's answer to a run or step: `budget_exhausted`, and not
+/// The wall guard's answer to a run or step: `wall_guard`, and not
 /// reproducible.
 pub(super) fn wall_guard_error(guard: Duration, stop: StopRecord) -> ErrorBody {
     ErrorBody::new(
-        ErrorCode::BudgetExhausted,
+        ErrorCode::WallGuard,
         format!("the {guard:?} wall guard ended the request; this stop isn't reproducible"),
         WALL_GUARD_REMEDY,
     )
@@ -62,7 +63,7 @@ pub(in crate::handle) fn wall_guard_ended(
     remedy: &str,
 ) -> ErrorBody {
     ErrorBody::new(
-        ErrorCode::BudgetExhausted,
+        ErrorCode::WallGuard,
         format!("the {guard:?} wall guard ended the request {reached}"),
         remedy,
     )

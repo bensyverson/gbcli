@@ -66,3 +66,32 @@ fn run_scale_scales_the_audio_images_and_the_filmstrip_too() {
         "the server owns the default"
     );
 }
+
+/// `--wall-guard SECONDS` (leaf xdES5r) rides on the request, not the args,
+/// on every verb whose emulation the caller sizes; out of range is a usage
+/// error naming the range, and a verb that never emulates doesn't offer it.
+#[test]
+fn the_verbs_that_emulate_take_wall_guard_on_the_request() {
+    for line in [
+        &["run", "--frames", "4700", "--wall-guard", "300"][..],
+        &["step", "--wall-guard", "300"],
+        &["measure", "A..B", "--wall-guard", "300"],
+        &["equiv", "--frames", "60", "--wall-guard", "300"],
+    ] {
+        let (target, op) = request(line);
+        let sent = target.request(op);
+        assert_eq!(sent.wall_guard_s.map(|s| s.get()), Some(300), "{line:?}");
+    }
+    let (target, op) = request(&["run", "--frames", "1"]);
+    assert_eq!(
+        target.request(op).wall_guard_s,
+        None,
+        "the server's default"
+    );
+    for bad in ["0", "3601", "5m"] {
+        let u = command(&["run", "--wall-guard", bad]).unwrap_err();
+        assert!(u.message.contains("--wall-guard"), "{}", u.message);
+        assert!(u.message.contains("1 to 3600"), "{}", u.message);
+    }
+    assert!(command(&["show", "--wall-guard", "300"]).is_err());
+}

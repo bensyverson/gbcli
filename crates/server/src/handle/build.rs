@@ -182,6 +182,7 @@ impl Handler {
             actor: request.actor.clone(),
             rev: request.rev,
             allow_rom_change: request.allow_rom_change,
+            wall_guard_s: None,
             op: Op::Restore(RestoreArgs { name: name.clone() }),
         };
         let restored = self.session_request(id.clone(), &restore);

@@ -72,6 +72,9 @@ SESSION FLAGS (every session verb)
 CHANGE FLAGS (every verb that changes the session)
   --rev sN                refuse the change if the session is no longer at this revision
 
+GUARD FLAGS (every verb that emulates for as long as you ask)
+  --wall-guard SECONDS    end the request after SECONDS of host time instead of the default 60, 1 to 3600; a stop it causes is wall_guard (exit 3), not the emulated budget
+
 OUTPUT FLAGS (every verb that sends a request)
   --json                  print the protocol's result object instead of rows
   --dir PATH              run as if from PATH: find .gbcli/ from it and read relative paths (the ROM, files read and written) against it (beats GBCLI_DIR)

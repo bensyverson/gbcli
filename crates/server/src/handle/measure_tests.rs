@@ -196,7 +196,7 @@ fn the_wall_guard_ends_a_measurement() {
     args.to = "$0000".into();
     args.frames = Some(3000);
     let error = measure(&mut h, args).outcome.expect_err("the guard fired");
-    assert_eq!(error.code, ErrorCode::BudgetExhausted);
+    assert_eq!(error.code, ErrorCode::WallGuard);
     assert!(error.message.contains("wall guard"), "{}", error.message);
     assert_eq!(error.remedy, WALL_GUARD_REMEDY);
 }
@@ -226,7 +226,7 @@ fn the_wall_guard_ends_a_runs_measurement() {
         StopReason::WallGuard,
         "the run itself finished"
     );
-    assert_eq!(error.code, ErrorCode::BudgetExhausted);
+    assert_eq!(error.code, ErrorCode::WallGuard);
     assert!(error.message.contains("wall guard"), "{}", error.message);
     assert_eq!(error.remedy, WALL_GUARD_REMEDY);
 }

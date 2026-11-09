@@ -15,8 +15,10 @@ use serde::{Deserialize, Serialize};
 /// image limits (`font_text`, `font_glyphs`, `font_missing`) are new values
 /// of enums a response carries. 4 since leaf 2xiOiv: `FontFileKind` gains
 /// `base` (a working copy's record of its font), a new value of an enum a
-/// response carries that was published under 3.
-pub const PROTOCOL_VERSION: u32 = 4;
+/// response carries that was published under 3. 5 since leaf xdES5r: the
+/// wall guard answers its own error code (`wall_guard`), where it answered
+/// `budget_exhausted`; the request's optional `wall_guard_s` raises it.
+pub const PROTOCOL_VERSION: u32 = 5;
 
 /// What `version` answers.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -59,7 +61,7 @@ mod tests {
         };
         assert_eq!(
             serde_json::to_string(&result).unwrap(),
-            r#"{"version":{"gbcli":"0.1.0","protocol":4,"sameboy":"abc","patch_set":"def"}}"#
+            r#"{"version":{"gbcli":"0.1.0","protocol":5,"sameboy":"abc","patch_set":"def"}}"#
         );
     }
 }

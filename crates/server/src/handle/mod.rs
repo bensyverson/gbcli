@@ -49,6 +49,9 @@ pub struct Handler {
     /// How the current request loads a stored state: its `allow_rom_change`.
     load: LoadOptions,
     watchdog: Watchdog,
+    /// The allowance a request gets when it names none (`wall_guard_s`).
+    default_wall_guard: Duration,
+    /// The current request's allowance: its own, else the default.
     wall_guard: Duration,
     /// The current request's interrupt flag, which the watchdog sets when
     /// the request outlives `wall_guard`; runs poll it.
@@ -121,6 +124,7 @@ impl Handler {
             loaded: None,
             load: LoadOptions::default(),
             watchdog: Watchdog::new(),
+            default_wall_guard: WALL_GUARD,
             wall_guard: WALL_GUARD,
             interrupt: Arc::new(AtomicBool::new(false)),
             gaps_found: Vec::new(),
@@ -134,9 +138,10 @@ impl Handler {
         self.host = host;
     }
 
-    /// Sets the wall-clock guard (design §3) for the requests that follow.
+    /// Sets the wall-clock guard (design §3) for the requests that follow
+    /// and don't name their own (`wall_guard_s`).
     pub fn set_wall_guard(&mut self, after: Duration) {
-        self.wall_guard = after;
+        self.default_wall_guard = after;
     }
 
     pub fn bundle(&self) -> &Bundle {
@@ -147,6 +152,9 @@ impl Handler {
     /// processes alternate on one head (design §1).
     pub fn handle(&mut self, request: &Request) -> Response {
         // Armed for every request; only emulation polls the flag.
+        self.wall_guard = request
+            .wall_guard_s
+            .map_or(self.default_wall_guard, |s| Duration::from_secs(s.get()));
         let armed = self.watchdog.arm(self.wall_guard);
         self.interrupt = armed.flag().clone();
         if let Some(response) = self.toolchain_op(request) {
@@ -448,6 +456,8 @@ mod oam_read_tests;
 mod profile_tests;
 #[cfg(test)]
 mod raster_tests;
+#[cfg(test)]
+mod wall_guard_tests;
 #[cfg(test)]
 mod writer_symbol_tests;
 

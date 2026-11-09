@@ -1168,3 +1168,4 @@
 {"v":1,"rep":"Z7rGfP","seq":1168,"ts":1794249209921,"actor":"claude","type":"criteria_added","task":"AjUdpW","data":{"criteria":[{"label":"a budget_exhausted or predicate/condition_error run after a dropped write carries the warning and ignored_writes rows (and LCD-off) in --json","state":"pending","short_id":"nGK","sort_key":"Uzzzzz"},{"label":"help hardware and traps give mode's unknown caveat","state":"pending","short_id":"uWh","sort_key":"V00000"}]}}
 {"v":1,"rep":"Z7rGfP","seq":1169,"ts":1794249209947,"actor":"claude","type":"labeled","task":"si5fnG","data":{"names":["reviewed"],"existing":[]}}
 {"v":1,"rep":"Z7rGfP","seq":1170,"ts":1794249209948,"actor":"claude","type":"labeled","task":"cau1nI","data":{"names":["reviewed"],"existing":[]}}
+{"v":1,"rep":"Z7rGfP","seq":1171,"ts":1794249294636,"actor":"cliffix","type":"claimed","task":"FfmCoY","data":{"duration":"3h","expires_at":1794260094}}

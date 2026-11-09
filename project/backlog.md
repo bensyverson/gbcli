@@ -128,6 +128,8 @@ Eval run 5 asked for axis labels or a legend on the image too; `help music` now 
 - SameBoy disagrees with hardware truth (a hardware-verified test ROM or a hardware capture) in a way that affects programs gbcli users write, and upstream won't take a fix;
 - an eval task class that needs mid-mode-3 effects is added, and it fails on SameBoy where docboy passes.
 
+> **Update, 2026-11-09 (eighteenth session):** gbcli now carries two observation-only SameBoy patches (`layer-identity`, `mode-blocked-writes`), kept as files under `crates/sameboy-sys/patches/` with a hashed patch set, which is the fork: no separate repository is needed while the patches stay small and observation-only. Neither un-park condition moved: the ignored-write count needed only a callback in SameBoy's own blocked branches, and the unknown PPU-mode window late in a batched mode 3 is narrowed by answering what the core does know (it is mode 0 or 3; leaf AjUdpW). **The web ruling adds an argument this entry didn't weigh:** SameBoy is C, so a `wasm32` build needs a C toolchain for that target (Emscripten or wasi-sdk), while a pure-Rust core builds with Cargo alone. **Un-park also when:** the web spike ([2026-11-09-web-target.md](2026-11-09-web-target.md)) finds SameBoy can't be built or run acceptably for `wasm32`.
+
 ## 2026-11-08 — Small run and view refinements from the example games
 
 **What:** two items from [2026-11-08-examples-dx-review.md](2026-11-08-examples-dx-review.md), item 12. First, separate default output names for the DMG and GBC builds (both write `build/NAME.gb` today). Second, `dropped_by_line_limit` saying which lines dropped an object.

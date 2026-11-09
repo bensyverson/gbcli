@@ -48,6 +48,18 @@ const HINTS: &[Hint] = &[
                  banks (write the bank number to $2000) around the code that reads each \
                  section past bank 1",
     },
+    Hint {
+        tool: Tool::Rgblink,
+        // `Section "Fixed" has type `ROMX`, which must be in bank 1 (if any)
+        // with option '-t'`: a ROMX section fixed past bank 1 on a header
+        // with no MBC, which the build links as one bank (`project`).
+        fragment: "must be in bank 1 (if any) with option '-t'",
+        remedy: "the header names no MBC, so the cartridge maps 32 KB (banks 0 and 1) only and \
+                 the build links it as one bank, where no section can sit in bank 2 or later: \
+                 drop the section's `BANK[n]` (or make it `BANK[1]`), or name an MBC in the \
+                 header (the byte at $0147, e.g. $01 for MBC1) and switch banks (write the \
+                 bank number to $2000) around the code that reads it",
+    },
 ];
 
 /// What fixes `d`, ending with where, when its message has a hint.
@@ -153,6 +165,21 @@ mod tests {
             ..d.clone()
         };
         assert_eq!(remedy(&assembler), None);
+    }
+
+    /// A ROMX section fixed past bank 1 can't link as one bank: the hint
+    /// names the bank and an MBC.
+    #[test]
+    fn a_romx_bank_past_1_in_the_one_bank_link_names_the_bank_and_an_mbc() {
+        let d = Diagnostic::new(
+            Tool::Rgblink,
+            Severity::Error,
+            "Section \"Fixed\" has type `ROMX`, which must be in bank 1 (if any) with option '-t'",
+        );
+        let text = remedy(&d).unwrap();
+        for needed in ["BANK[", "MBC", "$0147", "32 KB"] {
+            assert!(text.contains(needed), "{needed}: {text}");
+        }
     }
 
     fn line(file: &str, line: u32, within: Option<&str>) -> gbcli_protocol::SourceLine {

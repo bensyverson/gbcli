@@ -281,3 +281,144 @@ fn every_byte_no_section_holds_is_ff_in_unused_banks_and_gaps_alike() {
     );
     assert_eq!(not_ff(0x1_8000..0x2_0000), 0, "banks 6-7, past the link");
 }
+
+/// The rows of a build, as `tool severity: message` lines.
+fn rows(made: &gbcli_protocol::BuildMade) -> String {
+    made.diagnostics
+        .iter()
+        .map(|d| format!("{:?} {:?}: {}", d.tool, d.severity, d.message))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// The failed build of the starter (without music) with `asm` added as
+/// src/fixed.asm, and its report's message and remedy.
+fn fails_with(name: &str, asm: &str) -> (Box<gbcli_protocol::BuildMade>, String, String) {
+    let (temp, options) = starter(name);
+    let project = temp.path("demo");
+    without_music(&project);
+    fs::write(project.join("src/fixed.asm"), asm).unwrap();
+    let err = build(&rgbds(), &options).unwrap_err();
+    let body = err.body();
+    let BuildError::Failed { made, .. } = err else {
+        panic!("expected a failed build, got {err:?}");
+    };
+    assert!(!project.join("build/demo.gb").exists());
+    (made, body.message, body.remedy)
+}
+
+/// A small ROMX section fixed in bank 2 on a header with no MBC: the first
+/// link puts it past bank 1, and the one-bank link refuses any ROMX bank
+/// but 1. The report leads with rgblink's own refusal, not a size claim it
+/// never checked; the structured overflow (bank 2) is still reported.
+#[test]
+fn a_rom_only_section_fixed_in_bank_2_fails_with_rgblinks_own_error() {
+    let (made, message, remedy) = fails_with(
+        "banks-fixed-bank2",
+        "SECTION \"Fixed\", ROMX, BANK[2]\ndb 1\n",
+    );
+    let rows = rows(&made);
+    assert!(message.contains("must be in bank 1"), "{message}\n{rows}");
+    assert!(!rows.contains("32 KB even"), "{message}\n{rows}");
+    assert!(!message.contains("32 KB even"), "{message}\n{rows}");
+    let overflow = made.overflow.as_ref().expect("the overflow, structured");
+    assert_eq!(overflow.sections.len(), 1, "{overflow:?}");
+    assert_eq!(
+        (
+            overflow.sections[0].name.as_str(),
+            overflow.sections[0].bank
+        ),
+        ("Fixed", 2)
+    );
+    assert!(rows.contains("past bank 1"), "{rows}");
+    assert!(remedy.contains("BANK["), "{remedy}");
+}
+
+/// Two ROMX sections fixed at $4000 in no bank: banks 1 and 2 in the first
+/// link, and an overlap linked as one bank. The report names the overlap.
+#[test]
+fn a_rom_only_overlap_in_the_one_bank_link_fails_with_rgblinks_own_error() {
+    let (made, message, _) = fails_with(
+        "banks-fixed-addr",
+        "SECTION \"A\", ROMX[$4000]\ndb 1\n\nSECTION \"B\", ROMX[$4000]\ndb 2\n",
+    );
+    let rows = rows(&made);
+    assert!(
+        message.contains("section overlaps with"),
+        "{message}\n{rows}"
+    );
+    assert!(!rows.contains("32 KB even"), "{message}\n{rows}");
+    assert!(made.overflow.is_some(), "{rows}");
+}
+
+/// A ROM-only bank 0 past 16 KB that fits in 32 KB, with an undefined
+/// symbol: the first link stops at placement, before symbols resolve, and
+/// the one-bank link gets as far as the symbol. The report leads with it.
+#[test]
+fn a_full_bank_0_shows_the_one_bank_links_undefined_symbol() {
+    let (temp, options) = starter("banks-rom0-undef");
+    let project = temp.path("demo");
+    fs::write(
+        project.join("src/tables.asm"),
+        format!("{ROM0_BIG}\nSECTION \"Uses\", ROM0\ncall Nowhere\n"),
+    )
+    .unwrap();
+    let err = build(&rgbds(), &options).unwrap_err();
+    let message = err.body().message;
+    let BuildError::Failed { made, .. } = &err else {
+        panic!("expected a failed build, got {err:?}");
+    };
+    let rows = rows(made);
+    assert!(message.contains("Undefined symbol"), "{message}\n{rows}");
+    assert!(message.contains("Nowhere"), "{message}\n{rows}");
+}
+
+/// A ROMX section fixed in bank 1 beside two that spill: the one-bank link
+/// keeps it where it was fixed.
+#[test]
+fn a_section_fixed_in_bank_1_stays_put_when_linked_as_one_bank() {
+    let (temp, options) = starter("banks-bank1");
+    let project = temp.path("demo");
+    without_music(&project);
+    fs::write(project.join("src/levels.asm"), BIG).unwrap();
+    fs::write(
+        project.join("src/fixed.asm"),
+        "SECTION \"One\", ROMX[$7F00], BANK[1]\ndb $AB\n",
+    )
+    .unwrap();
+    let made = build(&rgbds(), &options).unwrap();
+    let rom = fs::read(project.join("build/demo.gb")).unwrap();
+    assert_eq!(rom.len(), 0x8000);
+    assert_eq!(rom[0x7F00], 0xAB);
+    assert_eq!(warnings(&made).len(), 1, "{:?}", made.diagnostics);
+}
+
+/// The one-bank link keeps the GBC flag and the $FF padding, and the `.sym`
+/// agrees with the ROM it ships with.
+#[test]
+fn the_one_bank_link_keeps_the_gbc_flag_padding_and_symbols() {
+    let (temp, mut options) = starter("banks-gbc");
+    options.target = gbcli_protocol::BuildTarget::Gbc;
+    let project = temp.path("demo");
+    without_music(&project);
+    // 12 KB + 12 KB + a 1-byte marker: room left at the end of $7FFF.
+    fs::write(
+        project.join("src/levels.asm"),
+        format!("{BIG}\nSECTION \"Marker\", ROMX\nMarker:: db $5A\n"),
+    )
+    .unwrap();
+    build(&rgbds(), &options).unwrap();
+    let rom = fs::read(project.join("build/gbc/demo.gbc")).unwrap();
+    assert_eq!(rom.len(), 0x8000);
+    assert_eq!(rom[0x0143], 0x80);
+    assert_eq!(rom[0x7FFF], 0xFF, "the tail no section holds");
+    let sym = fs::read_to_string(project.join("build/gbc/demo.sym")).unwrap();
+    let line = sym
+        .lines()
+        .find(|l| l.ends_with(" Marker"))
+        .expect("Marker in .sym");
+    let (bank, addr) = line.split_once(' ').unwrap().0.split_once(':').unwrap();
+    assert_eq!(bank, "00", "one bank under -t");
+    let addr = usize::from_str_radix(addr, 16).unwrap();
+    assert_eq!(rom[addr], 0x5A);
+}

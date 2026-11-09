@@ -17,11 +17,12 @@ pub enum Topic {
     Rgbds,
     Music,
     Images,
+    Pixels,
     Flash,
 }
 
 impl Topic {
-    pub const ALL: [Topic; 14] = [
+    pub const ALL: [Topic; 15] = [
         Topic::Addresses,
         Topic::Expressions,
         Topic::Time,
@@ -35,6 +36,7 @@ impl Topic {
         Topic::Rgbds,
         Topic::Music,
         Topic::Images,
+        Topic::Pixels,
         Topic::Flash,
     ];
 
@@ -53,6 +55,7 @@ impl Topic {
             Topic::Rgbds => "rgbds",
             Topic::Music => "music",
             Topic::Images => "images",
+            Topic::Pixels => "pixels",
             Topic::Flash => "flash",
         }
     }
@@ -76,6 +79,7 @@ impl Topic {
             Topic::Rgbds => RGBDS,
             Topic::Music => super::music::text(),
             Topic::Images => super::images::IMAGES,
+            Topic::Pixels => super::pixels::text(),
             Topic::Flash => super::flash::FLASH,
         }
     }
@@ -221,6 +225,7 @@ Exit codes — one table for every command; errors print to stderr as
      checkpoint_mismatch symbols_unreadable session_unreadable
      build_failed (RGBDS rejected the sources: see the diagnostic rows)
      song_unreadable (a song file is missing or malformed: see the problem row)
+     pixels_unreadable (an image is missing or malformed: see the problem row)
   5  environment: unsupported no_session boot_rom_missing toolchain_missing
      io_failed internal
 ";
@@ -297,7 +302,7 @@ mod tests {
                 }
             }
         }
-        assert_eq!(seen, 27, "every code in the closed set");
+        assert_eq!(seen, 28, "every code in the closed set");
     }
 
     #[test]
@@ -326,6 +331,7 @@ mod tests {
             GbcTileColors,
             DmgOverrideSize,
             ShadesUnpinned,
+            PixelsText,
         ] {
             assert!(text.contains(limit.name()), "{} missing", limit.name());
         }

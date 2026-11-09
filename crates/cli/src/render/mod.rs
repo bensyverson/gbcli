@@ -6,6 +6,7 @@ mod battery;
 mod equiv;
 mod images;
 mod opcode;
+mod pixels;
 mod profile;
 mod row;
 mod song;
@@ -167,6 +168,7 @@ pub fn rows(r: &ResultBody) -> String {
     }
     out += &toolchain::rows(r);
     out += &song::rows(r);
+    out += &pixels::rows(r);
     out += &opcode::rows(r);
     out += &version::rows(r);
     out += &battery::rows(r);

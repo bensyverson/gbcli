@@ -13,6 +13,7 @@ fn a_problem_spells_its_limit_snake_case_and_drops_what_it_lacks() {
         max: 256,
         tiles: vec![TileAt { x: 3, y: 4 }],
         line: None,
+        column: None,
         message: "too many".into(),
         remedy: "fewer".into(),
     };
@@ -34,6 +35,7 @@ fn a_shared_shade_warning_round_trips_as_shared_shade() {
         max: 1,
         tiles: vec![TileAt { x: 1, y: 0 }],
         line: None,
+        column: None,
         message: "one shade".into(),
         remedy: "distinct".into(),
     };
@@ -55,6 +57,7 @@ fn a_palette_file_problem_carries_its_line() {
         max: 4,
         tiles: Vec::new(),
         line: Some(3),
+        column: None,
         message: "not a color".into(),
         remedy: "one #rrggbb a line".into(),
     };
@@ -64,6 +67,29 @@ fn a_palette_file_problem_carries_its_line() {
         r#"{"image":"assets/palettes.txt","limit":"palette_file","severity":"error","count":2,"max":4,"line":3,"message":"not a color","remedy":"one #rrggbb a line"}"#
     );
     assert_eq!(serde_json::from_str::<ImageProblem>(&json).unwrap(), p);
+}
+
+#[test]
+fn a_pixel_text_problem_carries_its_line_and_column() {
+    let p = ImageProblem {
+        image: Some("assets/bg/meadow.pixels".into()),
+        limit: ImageLimit::PixelsText,
+        severity: Severity::Error,
+        count: 1,
+        max: 1,
+        tiles: Vec::new(),
+        line: Some(52),
+        column: std::num::NonZeroU32::new(7),
+        message: "no tile gx".into(),
+        remedy: "define gx".into(),
+    };
+    let json = serde_json::to_string(&p).unwrap();
+    assert_eq!(
+        json,
+        r#"{"image":"assets/bg/meadow.pixels","limit":"pixels_text","severity":"error","count":1,"max":1,"line":52,"column":7,"message":"no tile gx","remedy":"define gx"}"#
+    );
+    assert_eq!(serde_json::from_str::<ImageProblem>(&json).unwrap(), p);
+    assert_eq!(ImageLimit::PixelsText.name(), "pixels_text");
 }
 
 #[test]

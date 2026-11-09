@@ -139,7 +139,22 @@ impl Output<'_> {
             (None, Some(file)) => file.as_path(),
             _ => merged.as_path(),
         };
-        let color_file = s.path.as_path();
+        // rgbgfx reads files: a color image in pixel text is written out
+        // as a PNG first, removed once converted.
+        let color_png = PathBuf::from(format!("{data}.color.png"));
+        let _color_written = match &c.color {
+            Some(color) if c.color_text => {
+                let removed = Removed(root.join(&color_png));
+                shared::write(color, &[], &removed.0).map_err(io(&removed.0))?;
+                Some(removed)
+            }
+            _ => None,
+        };
+        let color_file = if c.color_text {
+            color_png.as_path()
+        } else {
+            s.path.as_path()
+        };
         let preview_path = root.join(format!("{data}.preview.png"));
         // A tileset is a background's tiles without its map: the program
         // builds its own maps, from the result's tile map.

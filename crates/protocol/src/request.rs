@@ -12,6 +12,7 @@ use crate::keys::KeyEvent;
 use crate::listing::SymArgs;
 use crate::opcode::OpcodeArgs;
 use crate::parse::WireRequest;
+use crate::pixels::PixelsArgs;
 use crate::profile::{MeasureArgs, ProfileArgs, RunMeasure};
 use crate::rev::Rev;
 use crate::shot::{FilmstripArgs, ShotArgs, ShotReadArgs};
@@ -78,6 +79,8 @@ pub enum Op {
     Assets(AssetsArgs),
     /// An instruction's size, cycles and flags; needs no session.
     Opcode(OpcodeArgs),
+    /// An image, a PNG or pixel text, checked and converted; needs no session.
+    Pixels(PixelsArgs),
     /// Battery saves (design §6): power-on again keeping the battery, and
     /// the battery written out as a `.sav`.
     PowerCycle(PowerCycleArgs),
@@ -118,6 +121,7 @@ impl Op {
             Op::New(_) => "new",
             Op::Assets(_) => "assets",
             Op::Opcode(_) => "opcode",
+            Op::Pixels(_) => "pixels",
             Op::PowerCycle(_) => "power_cycle",
             Op::Sav(_) => "sav",
             Op::Version => "version",
@@ -141,11 +145,16 @@ impl Op {
     }
 
     /// Whether answering it needs the project's bundle: every op but
-    /// `doctor`, `new`, `assets`, `opcode`, `version` and a `build` that
+    /// `doctor`, `new`, `assets`, `opcode`, `pixels`, `version` and a `build` that
     /// restores nothing, which a client with no `.gbcli/` yet can still send.
     pub fn needs_bundle(&self) -> bool {
         match self {
-            Op::Doctor | Op::New(_) | Op::Assets(_) | Op::Opcode(_) | Op::Version => false,
+            Op::Doctor
+            | Op::New(_)
+            | Op::Assets(_)
+            | Op::Opcode(_)
+            | Op::Pixels(_)
+            | Op::Version => false,
             Op::Build(args) => args.restore.is_some(),
             _ => true,
         }

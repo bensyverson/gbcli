@@ -1,0 +1,16 @@
+$ gbcli pixels hero.16x16.pixels
+exit 0
+pixels path=hero.16x16.pixels form=text size=32x16 colors=3 clear=1 frames=2 tiles=6
+$ gbcli pixels hero.16x16.pixels --png hero.png --preview big.png --text canon.pixels
+exit 0
+pixels path=hero.16x16.pixels form=text size=32x16 colors=3 clear=1 frames=2 tiles=6
+text path=canon.pixels bytes=680
+png path=hero.png bytes=255
+preview path=big.png bytes=268
+$ gbcli pixels hero.png --text tiles.pixels --tiles
+exit 0
+pixels path=hero.png form=png size=32x16 colors=3 clear=1 tiles=6
+text path=tiles.pixels bytes=614
+$ gbcli pixels hero.png --json
+exit 0
+{"id":"cli","ok":true,"result":{"pixels":{"path":"hero.png","form":"png","width":32,"height":16,"colors":3,"clear":true,"tiles":6,"wrote":[]}},"warnings":[]}

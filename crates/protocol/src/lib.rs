@@ -15,6 +15,7 @@ mod listing;
 mod opcode;
 mod palettes;
 mod parse;
+mod pixels;
 mod profile;
 mod raster;
 mod request;
@@ -61,6 +62,9 @@ pub use palettes::{
     FaultAt, GbcPalette, NamedPalette, NamedPalettes, NotRgb555, PaletteFault, Rgb555,
 };
 pub use parse::{RequestError, parse_request};
+pub use pixels::{
+    PixelsArgs, PixelsForm, PixelsMade, PixelsOutput, PixelsOutputKind, PixelsProblem,
+};
 pub use profile::{
     CpuSpeedName, CycleStats, FrameBudgetMade, FrameBudgetRow, MeasureArgs, MeasureMade,
     PercentStats, ProfileArgs, ProfileMade, Real, RoutineRow, RunMeasure,

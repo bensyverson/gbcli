@@ -68,9 +68,15 @@ assets  dir?: PATH | manifest?: MANIFEST  target?: "dmg"|"gbc"  keep?: PATH
 doctor  —
 new     dir: PATH
 opcode  query: TEXT  ("$20", "$CB37", "jr nz, .loop", "ld a, [hl+]")
+pixels  file: PATH  text?: PATH  tiles?: true  png?: PATH  preview?: PATH
+        palettes?: PATH  (an image, PNG or pixel text, checked and written;
+        result.pixels: {path, form: "png"|"text", width, height, colors, clear,
+        frames?, tiles?, wrote: [{kind: "text"|"png"|"preview", path, bytes}]};
+        on pixels_unreadable, error.result.pixels_problem: {path, line?,
+        column?, x?, y?, message, remedy})
 version —   (result.version: {gbcli: "0.1.0", protocol: N, sameboy: COMMIT,
         patch_set: HASH}; check protocol before relying on the rest)
-        (build, assets, doctor, new, opcode and version need no session;
+        (build, assets, doctor, new, opcode, pixels and version need no session;
         paths are relative to the server's working directory)
 power_cycle  sav?: PATH  rtc_advance?: "45s"|"30m"|"12h"|"7d"
         (a new head at power-on, keeping the cart's battery RAM and clock;
@@ -88,7 +94,8 @@ result holds only the fields the op fills: stop, reads, shot, measure, profile,
 frame_budget, raster, audio, oam_log, equiv, view, symbols,
 checkpoints, keys_unapplied, writes, checkpoint, restored, breakpoint, watch,
 deleted, registers, ppu, sessions, events, gaps, pruned, kept, busy, removed,
-build, assets, doctor, created, song, song_problem, opcodes, version,
+build, assets, doctor, created, song, song_problem, pixels, pixels_problem,
+opcodes, version,
 power_cycle, sav,
 flash_notes (run, step: each flash note, also a warning; a failed run's or
 step's are on its error).

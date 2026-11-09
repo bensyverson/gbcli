@@ -196,8 +196,8 @@ fn help_routes_topics_verbs_recipes_and_schema() {
 
 #[test]
 fn every_help_topic_is_reachable_by_gbcli_help() {
-    // A topic named like a verb (or `recipes`, `schema`) is shadowed: `help
-    // WORD` resolves those first.
+    // A topic named `recipes` or `schema` would be shadowed: `help WORD`
+    // resolves those first. A topic named like a verb wins over the verb.
     for topic in Topic::ALL {
         let routed = command(&["help", topic.name()]);
         assert!(

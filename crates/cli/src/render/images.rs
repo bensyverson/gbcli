@@ -52,7 +52,7 @@ pub fn rows(m: &ImagesMade) -> String {
         if !p.tiles.is_empty() {
             row = row.field("tiles", tiles(&p.tiles));
         }
-        row = row.opt("line", p.line);
+        row = row.opt("line", p.line).opt("column", p.column);
         out += &row
             .field("message", &p.message)
             .field("remedy", &p.remedy)

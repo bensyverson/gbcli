@@ -89,6 +89,7 @@ pub fn build(inv: Invocation, env: &Env) -> Result<Command, Usage> {
         Verb::Build => return crate::rgbds::build(&inv, env),
         Verb::Assets => return crate::rgbds::assets(&inv, env),
         Verb::Song => return Ok(crate::song::command(&inv, env)),
+        Verb::Pixels => return Ok(crate::rgbds::pixels(&inv)),
         Verb::Serve => return Ok(Command::Serve(target(&inv, env, None)?)),
         Verb::Batch => {
             let Some(file) = inv.one("file") else {
@@ -213,10 +214,12 @@ fn help(topic: Option<&str>) -> Result<Command, Usage> {
         "schema" => return Ok(Command::Schema),
         _ => {}
     }
-    if let Some(spec) = by_name(word) {
-        return Ok(Command::VerbHelp(spec));
+    // A topic named like its verb teaches the verb's format (pixels), so it
+    // comes first; the verb's flags stay under `gbcli VERB --help`.
+    if let Some(topic) = Topic::from_name(word) {
+        return Ok(Command::Topic(topic));
     }
-    Topic::from_name(word).map(Command::Topic).ok_or_else(|| {
+    by_name(word).map(Command::VerbHelp).ok_or_else(|| {
         let names = Topic::ALL.iter().map(|t| t.name());
         let near = crate::usage::near(word, names);
         Usage::new(

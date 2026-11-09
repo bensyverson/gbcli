@@ -33,6 +33,20 @@ fn the_assets_op_needs_no_bundle_and_changes_nothing() {
 }
 
 #[test]
+fn a_manifest_and_its_assignments_may_name_pixel_text() {
+    let ok = manifest(
+        r#"{"images":[{"image":"bg/town.pixels","file":"a.pixels"}],
+            "palettes":{"palettes":[{"name":"forest","colors":[32767,9009,6534,2176]}],"assignments":{"bg/town.pixels":"forest"}}}"#,
+    )
+    .unwrap();
+    assert_eq!(ok.palettes.assignments["bg/town.pixels"], "forest");
+    let dmg = manifest(r#"{"images":[{"image":"bg/town.dmg.pixels","file":"a.pixels"}]}"#);
+    assert!(dmg.unwrap_err().contains("DMG version"));
+    let other = manifest(r#"{"images":[{"image":"bg/town.pix","file":"a.pix"}]}"#);
+    assert!(other.unwrap_err().contains("isn't a path under assets/"));
+}
+
+#[test]
 fn a_manifest_names_its_images_as_a_project_would() {
     let ok = manifest(
         r#"{"images":[{"image":"bg/town.png","file":"a.png","dmg":"b.png"},{"image":"sprites/hero.16x16.png","file":"c.png"}],

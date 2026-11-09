@@ -13,6 +13,7 @@ mod history;
 mod listing;
 mod log;
 mod opcode;
+mod pixels;
 mod reads;
 mod run;
 mod shot;
@@ -254,6 +255,7 @@ impl Handler {
             | Op::New(_)
             | Op::Assets(_)
             | Op::Opcode(_)
+            | Op::Pixels(_)
             | Op::Version => Err(Failure::new(ErrorBody::new(
                 ErrorCode::BadRequest,
                 "that op doesn't name a session",

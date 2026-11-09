@@ -107,11 +107,14 @@ impl AssetManifest {
             if !is_image_path(&i.image) {
                 return Err(format!(
                     "image `{}` isn't a path under assets/: it is bg/, sprites/ or tiles/, then \
-                     a file NAME.png",
+                     a file NAME.png or NAME.pixels",
                     i.image
                 ));
             }
-            let stem = &i.image[..i.image.len() - ".png".len()];
+            let stem = i
+                .image
+                .rsplit_once('.')
+                .map_or(i.image.as_str(), |(s, _)| s);
             if stem
                 .rsplit_once('.')
                 .is_some_and(|(_, s)| s.eq_ignore_ascii_case("dmg"))

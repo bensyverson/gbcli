@@ -20,7 +20,7 @@ mod indexed;
 pub(crate) mod input;
 mod output;
 mod pack;
-mod palettes;
+pub(crate) mod palettes;
 pub(crate) mod pipeline;
 mod pixels;
 mod preview;
@@ -83,6 +83,8 @@ pub(super) struct Checked<'a> {
     image: String,
     plan: Plan,
     color: Option<Pixels>,
+    /// The color image is pixel text, so rgbgfx reads a PNG of `color`.
+    color_text: bool,
 }
 
 impl Plan {

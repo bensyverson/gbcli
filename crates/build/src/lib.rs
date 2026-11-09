@@ -13,6 +13,7 @@ mod doctor;
 mod images;
 mod music;
 mod paths;
+mod pixels;
 mod project;
 mod scaffold;
 mod toolchain;
@@ -21,6 +22,7 @@ pub use assets::{AssetsError, AssetsInput, AssetsOptions, assets};
 pub use diagnostics::parse as parse_diagnostics;
 pub use doctor::{BOOT_ROM_SIZES, DoctorInput, GIT_LOCAL_ENV_VARS, doctor};
 pub use music::{MUSIC_DIR, MUSIC_OUT, song_problem};
+pub use pixels::pixels;
 pub use project::{BuildError, BuildOptions, TOOL_TIMEOUT, build};
 pub use scaffold::{HARDWARE_INC, HUGEDRIVER, NewError, new_project};
 pub use toolchain::{

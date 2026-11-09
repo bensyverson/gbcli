@@ -1,12 +1,13 @@
 //! The images a project has, by convention: `assets/bg/*.png`,
 //! `assets/sprites/*.png` and `assets/tiles/*.png` (`.PNG` too, in any
-//! case), each named after its
+//! case), or pixel text in their place (`*.pixels`), each named after its
 //! file so the program can address it (`town.png` is `TownTiles`,
 //! `TOWN_WIDTH`). A sprite sheet's name may carry its frame size:
 //! `hero.16x24.png` (8x8 objects when it is a multiple of 8 high but not
 //! 16, `sheet::object_size`). `<name>.dmg.png` beside `<name>.png` is not
 //! an image of its own but that image's DMG version, in every build (plan
-//! question 3); one with no color image beside it is a layout error.
+//! question 3); one with no color image beside it is a layout error. Either
+//! may be pixel text; a PNG and pixel text of one name are a layout error.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -62,14 +63,15 @@ pub(crate) fn sources(
                     error,
                 })?
                 .path();
-            let png = path
+            let image = path
                 .extension()
-                .is_some_and(|e| e.eq_ignore_ascii_case("png"));
-            if path.is_file() && png {
+                .is_some_and(|e| e.eq_ignore_ascii_case("png") || e == PIXELS);
+            if path.is_file() && image {
                 paths.push(path);
             }
         }
         paths.sort();
+        two_forms(&paths, shown)?;
         // `<name>.dmg.png` is `<name>.png`'s DMG version, not an image.
         let (overrides, images): (Vec<PathBuf>, Vec<PathBuf>) =
             paths.into_iter().partition(|p| color_stem(p).is_some());
@@ -102,6 +104,40 @@ pub(crate) fn sources(
     }
     collisions(&found, shown)?;
     Ok(found)
+}
+
+/// Pixel text's extension.
+const PIXELS: &str = gbcli_pixels::EXTENSION;
+
+/// The layout error when one image is both a PNG and pixel text, which
+/// would be two sources of truth for it.
+fn two_forms(paths: &[PathBuf], shown: &dyn Fn(&Path) -> String) -> Result<(), BuildError> {
+    let mut by_stem: BTreeMap<&std::ffi::OsStr, &PathBuf> = BTreeMap::new();
+    for path in paths {
+        let Some(stem) = path.file_stem() else {
+            continue;
+        };
+        let text = |p: &Path| p.extension().is_some_and(|e| e == PIXELS);
+        // Two PNGs of one stem (`town.png`, `town.PNG`) are `collisions`'.
+        if let Some(other) = by_stem.insert(stem, path)
+            && text(other) != text(path)
+        {
+            let (png, text) = if text(path) {
+                (other, path)
+            } else {
+                (path, other)
+            };
+            return Err(BuildError::Layout {
+                message: format!(
+                    "{} and {} are two forms of one image",
+                    shown(png),
+                    shown(text)
+                ),
+                remedy: "keep one: a PNG from any tool, or pixel text".into(),
+            });
+        }
+    }
+    Ok(())
 }
 
 /// The layout error when two of `found` would define one symbol.
@@ -323,14 +359,18 @@ fn color_stem(path: &Path) -> Option<String> {
 /// What a DMG version's name adds to its color image's, before `.png`.
 const DMG_SUFFIX: &str = "dmg";
 
-/// Where `name.dmg.png`, the DMG version of the color image at `image`,
-/// would be.
+/// Where `name.dmg.png` (or `name.dmg.pixels` for pixel text), the DMG
+/// version of the color image at `image`, would be.
 pub(crate) fn dmg_path(image: &Path) -> PathBuf {
     let stem = image
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_default();
-    image.with_file_name(format!("{stem}.{DMG_SUFFIX}.png"))
+    let ext = match image.extension() {
+        Some(e) if e == PIXELS => PIXELS,
+        _ => "png",
+    };
+    image.with_file_name(format!("{stem}.{DMG_SUFFIX}.{ext}"))
 }
 
 /// `16x24` as (16, 24).

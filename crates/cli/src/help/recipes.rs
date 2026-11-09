@@ -37,6 +37,10 @@ Hand the save to an emulator or flash cart, or load one
 Does my art fit the hardware, and how will it look?
   put the PNG in assets/bg/ or assets/sprites/, then gbcli build: a problem row
   per limit broken, with a remedy, else a .preview.png (gbcli help images)
+Read an image as text, or draw one as text
+  gbcli pixels assets/sprites/hero.png --text hero.pixels (--tiles for a big
+  background: tiles and a map; gbcli help pixels), then edit it and gbcli pixels
+  hero.pixels --png hero.png, or --preview big.png to look at it 4x with a grid
 Read or write music (hUGETracker songs)
   gbcli song theme.uge --text theme.song (a grid an agent can edit; gbcli help
   music), then gbcli song theme.song --uge theme.uge --piano theme.png

@@ -6,6 +6,7 @@ mod hardware;
 mod images;
 mod music;
 mod optimize;
+mod pixels;
 mod recipes;
 mod schema;
 mod topics;
@@ -67,7 +68,7 @@ fn title(class: Class) -> &'static str {
         Class::Read => "look without changing the head",
         Class::Configure => "change the session's settings",
         Class::Project => "every session in .gbcli/, and what they share; no session needed",
-        Class::Build => "RGBDS from PATH: edit, build, restore, measure; song files",
+        Class::Build => "RGBDS from PATH: edit, build, restore, measure; song and pixel text",
         Class::Server => "the JSON Lines protocol, for harnesses",
         Class::Help => "no session, ROM or network needed",
     }

@@ -7,6 +7,7 @@ mod table;
 mod table_battery;
 mod table_build;
 mod table_opcode;
+mod table_pixels;
 mod table_read;
 mod table_song;
 mod table_version;
@@ -66,8 +67,8 @@ impl Class {
             }
             Class::Build => {
                 "runs RGBDS from PATH, checked against the pinned version (`gbcli doctor`); \
-                 a session only to reload the build into; `new` and `song` need neither, \
-                 and `assets` only rgbgfx"
+                 a session only to reload the build into; `new`, `song` and `pixels` need \
+                 neither, and `assets` only rgbgfx"
             }
             Class::Server => "speaks the JSON Lines protocol; a session is optional",
             Class::Help => "no preconditions: works with no session, no ROM and no network",
@@ -106,6 +107,7 @@ pub enum Verb {
     Build,
     Assets,
     Song,
+    Pixels,
     Serve,
     Batch,
     Help,

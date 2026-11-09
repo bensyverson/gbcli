@@ -12,6 +12,7 @@ use crate::error::{ErrorBody, ErrorCode};
 use crate::keys::KeyEvent;
 use crate::listing::{CheckpointRow, SymbolRow};
 use crate::opcode::OpcodeRow;
+use crate::pixels::{PixelsMade, PixelsProblem};
 use crate::profile::{FrameBudgetMade, MeasureMade, ProfileMade};
 use crate::raster::RasterMade;
 use crate::request::WriteKind;
@@ -228,6 +229,12 @@ pub struct ResultBody {
     /// `song`: why the song file didn't load (with `song_unreadable`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub song_problem: Option<SongProblem>,
+    /// `pixels`: the image read and the files written.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pixels: Option<PixelsMade>,
+    /// `pixels`: why the image didn't load (with `pixels_unreadable`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pixels_problem: Option<PixelsProblem>,
     /// `power_cycle`: what the cycle carried across.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub power_cycle: Option<PowerCycleMade>,

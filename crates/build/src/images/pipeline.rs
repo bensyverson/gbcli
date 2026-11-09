@@ -7,13 +7,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use gbcli_protocol::{BuildTarget, ImageKind, ImagesMade};
+use gbcli_protocol::{BuildTarget, ImageKind, ImageLimit, ImageProblem, ImagesMade};
 
 use super::derive::{self, Version};
 use super::emit::{self, Entry};
 use super::find::{self, KINDS, Source};
 use super::input::{Input, Origin};
-use super::pixels::{Color, Pixels};
+use super::pixels::{Color, Pixels, Read, Unread};
 use super::{Checked, Converted, Generated, Plan, bg, census, indexed, output, run, shades};
 use super::{shared, sheet, vram};
 use crate::project::BuildError;
@@ -69,30 +69,60 @@ pub(crate) fn convert(
             ..stopped
         }));
     }
-    let read_png = |path: &Path| {
-        Pixels::read(path).map_err(|e| BuildError::Layout {
+    // Pixel text's palette entries resolve through the named palettes.
+    let resolve = super::palettes::eight_bit(&named_palettes);
+    let read_image = |path: &Path| match Pixels::read(path, &resolve) {
+        Ok(read) => Ok(Ok(read)),
+        Err(Unread::Text(e)) => Ok(Err(text_problem(&shown(path), e))),
+        Err(Unread::Png(e)) => Err(BuildError::Layout {
             message: format!("{} isn't a PNG gbcli can read: {e}", shown(path)),
             remedy: match origin {
                 Origin::Project => "save it as a PNG (8-bit gray, RGB or RGBA)".into(),
                 Origin::Manifest => "check the path in the manifest, and that the file is a PNG \
-                                     (8-bit gray, RGB or RGBA); `gbcli assets --manifest` reads \
-                                     a relative path from the manifest's folder, and the wire \
-                                     from the server's working directory"
+                                     (8-bit gray, RGB or RGBA) or pixel text; `gbcli assets \
+                                     --manifest` reads a relative path from the manifest's \
+                                     folder, and the wire from the server's working directory"
                     .into(),
             },
-        })
+        }),
     };
+    // Each pixel text image's picture, by its name in problems, so a
+    // hardware problem can name the line that drew its tile.
+    let mut texts: Vec<(String, gbcli_pixels::Picture)> = Vec::new();
+    // Pixel text that doesn't read is a problem of its own image: every
+    // other image is still checked.
+    let mut unread: Vec<ImageProblem> = Vec::new();
     let mut all = Vec::with_capacity(sources.len());
     for s in &sources {
-        let pixels = read_png(&s.path)?;
-        let over = s.dmg.as_deref().map(read_png).transpose()?;
-        all.push((s, shown(&s.path), pixels, over));
+        let mut take = |read: Result<Read, ImageProblem>, path: &Path| match read {
+            Ok(Read { pixels, text }) => {
+                let is_text = text.is_some();
+                texts.extend(text.map(|t| (shown(path), t)));
+                Some((pixels, is_text))
+            }
+            Err(p) => {
+                unread.push(p);
+                None
+            }
+        };
+        let Some(image) = take(read_image(&s.path)?, &s.path) else {
+            continue;
+        };
+        let over = match s.dmg.as_deref() {
+            Some(d) => match take(read_image(d)?, d) {
+                Some(o) => Some(o),
+                None => continue,
+            },
+            None => None,
+        };
+        all.push((s, shown(&s.path), image, over));
     }
     // A bad palette file stops the conversion once the images are known to
     // read: the shades are chosen from the palettes and every image.
     if made.first_error().is_some() {
         return Ok(Some(Converted { made, ..stopped }));
     }
+    made.problems.extend(unread);
     find::palette_collision(&sources, &named_palettes, palettes.shown(), shown)?;
     // Each image's DMG version, the same in every build (Ben's ruling,
     // 2026-11-08): color art's derived or overridden, indexed art's its
@@ -100,13 +130,16 @@ pub(crate) fn convert(
     // cascade and the named palettes are checked.
     let gbc = target == BuildTarget::Gbc;
     let mut versioned = Vec::with_capacity(all.len());
-    for (s, image, pixels, over) in all {
+    for (s, image, (pixels, text), over) in all {
         let assigned = named_palettes.assignments.get(&s.name);
+        // rgbgfx reads files: pixel text is written out as a PNG first.
+        let over_text = over.as_ref().is_some_and(|o| o.1);
+        let over = over.map(|o| o.0);
         let version = derive::version(assigned, &palettes, over, s, &image, shown)?;
-        versioned.push((s, image, pixels, version));
+        versioned.push((s, image, pixels, version, (text, over_text)));
     }
     // One color, one shade, in every image, overrides included.
-    let colors = project_colors(versioned.iter().flat_map(|(_, _, p, v)| match v {
+    let colors = project_colors(versioned.iter().flat_map(|(_, _, p, v, _)| match v {
         Version::Override(o) => vec![p, o],
         _ => vec![p],
     }));
@@ -116,7 +149,7 @@ pub(crate) fn convert(
     // version's shares are scoped to its tiles and objects (plan question 2).
     let dmg_art: Vec<(String, &Pixels, Option<&str>)> = versioned
         .iter()
-        .filter_map(|(s, image, p, v)| {
+        .filter_map(|(s, image, p, v, _)| {
             let palette = named_palettes.assignments.get(&s.name).map(String::as_str);
             match v {
                 Version::Art => Some((image.clone(), p, palette)),
@@ -141,14 +174,17 @@ pub(crate) fn convert(
     // Each plan's DMG version, for rgbgfx: its pixels, and the file that
     // holds them, if any (a derived version is written out first).
     let mut read: Vec<(Pixels, Option<PathBuf>)> = Vec::new();
-    for (s, image, pixels, version) in versioned {
+    for (s, image, pixels, version, (text, over_text)) in versioned {
         // A manifest's `dmg` is any file; name the one given.
         let dmg_shown = shown(&s.dmg.clone().unwrap_or_else(|| find::dmg_path(&s.path)));
         // The DMG version the checks read, under the name they give it,
         // and color art's color image, whose tiles pair with it under
         // --gbc.
         let (checked_name, dmg, file, shading, color) = match version {
-            Version::Art => (image.clone(), pixels, Some(s.path.clone()), &shading, None),
+            Version::Art => {
+                let file = (!text).then(|| s.path.clone());
+                (image.clone(), pixels, file, &shading, None)
+            }
             Version::Override(o) => {
                 let wrong = derive::override_size(&image, &dmg_shown, &pixels, &o)
                     .or_else(|| derive::override_alpha(&image, &dmg_shown, s.kind, &pixels, &o));
@@ -156,7 +192,8 @@ pub(crate) fn convert(
                     made.problems.push(p);
                     continue;
                 }
-                (dmg_shown, o, s.dmg.clone(), &shading, Some(pixels))
+                let file = s.dmg.clone().filter(|_| !over_text);
+                (dmg_shown, o, file, &shading, Some(pixels))
             }
             Version::Derived => {
                 let object = sheet::object_size(s.frame);
@@ -196,6 +233,7 @@ pub(crate) fn convert(
                     image,
                     plan,
                     color,
+                    color_text: text,
                 });
                 read.push((dmg, file));
             }
@@ -226,6 +264,7 @@ pub(crate) fn convert(
         made.problems
             .extend(indexed::unpinned(&named_palettes, &assigned, &shading));
     }
+    locate(&mut made.problems, &texts);
     if made.first_error().is_some() {
         return Ok(Some(Converted { made, ..stopped }));
     }
@@ -236,6 +275,7 @@ pub(crate) fn convert(
         Ok(p) => p,
         Err(problems) => {
             made.problems.extend(problems);
+            locate(&mut made.problems, &texts);
             return Ok(Some(Converted { made, ..stopped }));
         }
     };
@@ -316,6 +356,33 @@ pub(crate) fn convert(
         generated,
         stopped: false,
     }))
+}
+
+/// Pixel text that doesn't read (or names a palette entry the palettes
+/// lack), as its image's problem.
+fn text_problem(image: &str, e: gbcli_pixels::ParseError) -> ImageProblem {
+    ImageProblem {
+        line: Some(e.line),
+        column: std::num::NonZeroU32::new(e.column),
+        ..census::error(image, ImageLimit::PixelsText, 1, 1, e.message, &e.remedy)
+    }
+}
+
+/// Gives each problem on a pixel text image's tiles the line that drew
+/// the first tile it names: a rows block's header, or a map's row.
+fn locate(problems: &mut [ImageProblem], texts: &[(String, gbcli_pixels::Picture)]) {
+    for p in problems.iter_mut().filter(|p| p.line.is_none()) {
+        let picture = texts
+            .iter()
+            .find(|(name, _)| p.image.as_deref() == Some(name.as_str()))
+            .map(|(_, picture)| picture);
+        if let (Some(picture), Some(t)) = (picture, p.tiles.first()) {
+            let (x, y) = (t.x * 8, t.y * 8);
+            if x < picture.width && y < picture.height {
+                p.line = picture.line_at(x, y);
+            }
+        }
+    }
 }
 
 fn has_kind(sources: &[Source], kind: ImageKind) -> bool {

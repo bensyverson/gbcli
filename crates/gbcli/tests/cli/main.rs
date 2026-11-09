@@ -20,6 +20,7 @@ mod model;
 mod music;
 mod observe;
 mod opcode;
+mod pixels;
 mod profile;
 mod raster;
 mod recipes;

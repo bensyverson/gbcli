@@ -176,6 +176,10 @@ pub enum ImageLimit {
     /// draws. A warning, once for the project (no `image`); `count` is the
     /// indexed images, `max` 0; the message names them.
     ShadesUnpinned,
+    /// A pixel text image (`.pixels`) doesn't parse, or names a palette
+    /// entry the palettes don't have; `line` and `column` say where. The
+    /// build still checks every other image.
+    PixelsText,
 }
 
 impl ImageLimit {
@@ -203,6 +207,7 @@ impl ImageLimit {
             ImageLimit::GbcTileColors => "gbc_tile_colors",
             ImageLimit::DmgOverrideSize => "dmg_override_size",
             ImageLimit::ShadesUnpinned => "shades_unpinned",
+            ImageLimit::PixelsText => "pixels_text",
         }
     }
 }
@@ -232,9 +237,15 @@ pub struct ImageProblem {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tiles: Vec<TileAt>,
     /// The line at fault, 1-based, when the problem is in a text file
-    /// (`palette_file`).
+    /// (`palette_file`, `pixels_text`); for a hardware limit a pixel text
+    /// image breaks, the line of the block (or map row) that drew the first
+    /// tile in `tiles`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub line: Option<u32>,
+    /// The column at fault, 1-based in characters (`pixels_text`); never 0,
+    /// which keeps the problem small.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub column: Option<std::num::NonZeroU32>,
     pub message: String,
     pub remedy: String,
 }

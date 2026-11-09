@@ -144,6 +144,7 @@ pub(crate) fn error(
         max: max as u32,
         tiles: Vec::new(),
         line: None,
+        column: None,
         message,
         remedy: remedy.to_string(),
     }

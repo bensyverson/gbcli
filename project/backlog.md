@@ -157,3 +157,7 @@ Eval run 5 asked for axis labels or a legend on the image too; `help music` now 
 **Why parked:** neither example game hit the window on a PPU write: the racer's 162,660 scroll writes over 900 frames and the shooter's 8,973 split writes all had a mode. Only 95 of the shooter's sound writes did. A condition that hits it now says `condition_error`, so nothing is hidden. Both ways cost real care: a scratch copy is a second instance or a raw copy of SameBoy's state, and the early sync must be shown to leave the state byte-identical.
 
 **Un-park when:** an agent's real check hits `condition_error` or a missing `mode=` on a write it needs to judge.
+
+## 2026-11-08 — Tile and frame names as program constants
+
+What: let pixel text (or a sheet's name) name its tiles and frames so `images.inc` defines constants for them (`FONT_TILE_A`, `HERO_FRAME_STEP`), instead of programs hard-coding tile numbers as the shooter's `include/game.inc` did. Why parked: the pixel text design's open question 7, which Ben ruled on 2026-11-08 ([2026-11-08-pixel-text-design.md](2026-11-08-pixel-text-design.md)): it changes `images.inc`, the LoadHigh seam, and the dedupe question (a merged tile would have two names), and only one game needed it. Un-park when: a third game hard-codes tile or frame numbers again.

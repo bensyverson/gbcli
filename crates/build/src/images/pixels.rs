@@ -1,4 +1,5 @@
-//! A PNG as RGBA pixels, whatever its color type and depth.
+//! An image as RGBA pixels: a PNG of any color type and depth, or pixel
+//! text, both read by `gbcli-pixels`.
 
 use std::fs;
 use std::path::Path;
@@ -27,75 +28,71 @@ impl Pixels {
         self.rgba[(y * self.width + x) as usize]
     }
 
-    /// Decodes the PNG at `path`; the error is the decoder's, for a message.
-    pub fn read(path: &Path) -> Result<Pixels, String> {
-        let file = fs::File::open(path).map_err(|e| e.to_string())?;
-        let mut decoder = png::Decoder::new(std::io::BufReader::new(file));
-        // 16-bit samples are kept and scaled below, as rgbgfx scales them:
-        // the png crate's STRIP_16 keeps the high byte, which can split a
-        // color rgbgfx sees as one.
-        decoder.set_transformations(png::Transformations::EXPAND);
-        let mut reader = decoder.read_info().map_err(|e| e.to_string())?;
-        let mut buf = vec![0; reader.output_buffer_size()];
-        let info = reader.next_frame(&mut buf).map_err(|e| e.to_string())?;
-        let bytes = &buf[..info.buffer_size()];
-        let scaled: Vec<u8>;
-        let bytes = if info.bit_depth == png::BitDepth::Sixteen {
-            scaled = bytes
-                .chunks(2)
-                .map(|b| scale_16(u16::from_be_bytes([b[0], b[1]])))
-                .collect();
-            &scaled[..]
-        } else {
-            bytes
+    /// Reads the image at `path`, a PNG or pixel text (told apart by
+    /// content, as `gbcli-pixels` reads them), pixel text's palette entries
+    /// resolved through `palettes`. Pixel text comes back with its picture,
+    /// whose lines locate a problem in it.
+    pub fn read(path: &Path, palettes: &gbcli_pixels::Palettes) -> Result<Read, Unread> {
+        let bytes = fs::read(path).map_err(|e| Unread::Png(e.to_string()))?;
+        // A file named as pixel text, or one that starts as it does (a
+        // manifest's file may be named anything), is read as pixel text,
+        // so its problems are located; anything else is a PNG.
+        let named = path
+            .extension()
+            .is_some_and(|e| e == gbcli_pixels::EXTENSION);
+        let text = bytes
+            .strip_prefix("\u{FEFF}".as_bytes())
+            .unwrap_or(&bytes)
+            .starts_with(b"format ");
+        if gbcli_pixels::is_png(&bytes) || !(named || text) {
+            let r = gbcli_pixels::decode_png(&bytes).map_err(|e| {
+                let decoder = e.message.strip_prefix("the PNG doesn't decode: ");
+                Unread::Png(decoder.unwrap_or(&e.message).to_string())
+            })?;
+            return Ok(Read {
+                pixels: r.into(),
+                text: None,
+            });
+        }
+        let picture = match gbcli_pixels::read(&bytes) {
+            Ok(loaded) => loaded.picture,
+            Err(gbcli_pixels::PixelsError::Text(e)) => return Err(Unread::Text(e)),
+            Err(e) => return Err(Unread::Png(e.to_string())),
         };
-        let rgba = match info.color_type {
-            png::ColorType::Grayscale => bytes.iter().map(|&g| [g, g, g, 0xFF]).collect(),
-            png::ColorType::GrayscaleAlpha => {
-                bytes.chunks(2).map(|p| [p[0], p[0], p[0], p[1]]).collect()
-            }
-            png::ColorType::Rgb => bytes.chunks(3).map(|p| [p[0], p[1], p[2], 0xFF]).collect(),
-            png::ColorType::Rgba => bytes.chunks(4).map(|p| [p[0], p[1], p[2], p[3]]).collect(),
-            png::ColorType::Indexed => return Err("indexed color was not expanded".into()),
-        };
-        Ok(Pixels {
-            width: info.width,
-            height: info.height,
-            rgba,
+        let raster = picture.raster(palettes).map_err(Unread::Text)?;
+        Ok(Read {
+            pixels: raster.into(),
+            text: Some(picture),
         })
     }
+}
+
+impl From<gbcli_pixels::Raster> for Pixels {
+    fn from(r: gbcli_pixels::Raster) -> Pixels {
+        Pixels {
+            width: r.width,
+            height: r.height,
+            rgba: r.rgba,
+        }
+    }
+}
+
+/// An image read: its pixels, and its picture when it is pixel text.
+pub(crate) struct Read {
+    pub pixels: Pixels,
+    pub text: Option<gbcli_pixels::Picture>,
+}
+
+/// Why an image didn't read.
+pub(crate) enum Unread {
+    /// Not a PNG gbcli can read (nor pixel text): the decoder's message.
+    Png(String),
+    /// Pixel text that doesn't parse, or names a palette entry the
+    /// palettes don't have.
+    Text(gbcli_pixels::ParseError),
 }
 
 /// `#rrggbb`.
 pub(crate) fn hex(c: Rgba) -> String {
     format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2])
-}
-
-/// A 16-bit sample as 8 bits, as rgbgfx reads it: libpng's
-/// `png_set_scale_16`.
-pub(crate) fn scale_16(v: u16) -> u8 {
-    // pngrtran.c, png_do_scale_16_to_8: a fast (v * 255 + 32767) / 65535.
-    let [high, low] = v.to_be_bytes();
-    let high = i32::from(high);
-    (high + (((i32::from(low) - high + 128) * 65535) >> 24)) as u8
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_16_bit_sample_rounds_as_libpng_scales_it() {
-        assert_eq!(scale_16(0x0000), 0x00);
-        assert_eq!(scale_16(0xFFFF), 0xFF);
-        // The high byte alone would give $07 and $08: these differ in RGB555.
-        assert_eq!(scale_16(0x07FF), 0x08);
-        assert_eq!(scale_16(0x0800), 0x08);
-        assert_eq!(scale_16(0x807F), 0x80);
-        assert_eq!(scale_16(0x8080), 0x80);
-        for v in 0..=u16::MAX {
-            let rounded = ((u32::from(v) * 255 + 32767) / 65535) as u8;
-            assert_eq!(scale_16(v), rounded, "{v:#06x}");
-        }
-    }
 }

@@ -4,6 +4,9 @@
 
 pub const IMAGES: &str = "\
 Images — PNGs under assets/, converted by `gbcli build` with rgbgfx (RGBDS).
+Each may be a PNG from any tool, or pixel text: the same name with .pixels
+(town.pixels, hero.16x16.pixels, town.dmg.pixels; gbcli help pixels). Keep
+one form of an image; both is a layout error.
 
   assets/bg/town.png           a background: unique tiles + a tilemap
   assets/sprites/hero.png      8x16 objects; the whole sheet is one frame
@@ -47,7 +50,7 @@ DMG's lightest) first, and assigns them to images by path under assets/:
   dmg:    #e0f8d0 #88c070 #346856 #081820   # reserved: the shades above
   forest: #fff #8c4 #363 #021               # #rgb is #rrggbb (#88cc44)
   ember:  #ffe #f80 #a20 #200
-  bg/town.png = forest
+  bg/town.png = forest                      # pixel text: bg/town.pixels
 Colors are #rrggbb or #rgb, kept as RGB555. Names are a lowercase letter,
 then lowercase letters, digits or _. '#' then a space or tab (or '#' last
 on a line) starts a comment; any other '#' word is a color, so a fifth
@@ -88,6 +91,10 @@ the image's 8x8 grid; --json lists them all), message and remedy.
                       art and no dmg line, so other art can recolor it
   rgbgfx_agrees       not a limit: rgbgfx drew other indices than gbcli
                       planned (a gbcli bug; re-save the PNG as 8-bit)
+  pixels_text         a .pixels image doesn't read (line=N column=N); the
+                      other images are still checked. On a .pixels image,
+                      a limit naming tiles also gives line=, the block (or
+                      map row) that drew the first tile
 
 What the program gets (build/images/, rewritten by every build):
   INCLUDE \"images.inc\"   constants: TOWN_WIDTH, TOWN_HEIGHT (tiles),
@@ -108,7 +115,7 @@ HeroFrames' tile bytes and --json's tile_map all start at 0. Copy
 TownTiles to tile N and add N to each map byte (and object tile) you
 write. Tiles you load by hand go after TOWN_TILES, or the map is offset.
 
-  gbcli build game, then gbcli run game/build/game.gb --frames 60 --shot a.png
+  cd game, then gbcli build and gbcli run build/game.gb --frames 60 --shot a.png
 The images row counts image problems; the build (or assets) row after it
 counts toolchain diagnostics only, so `images warnings=1` can sit above
 `build errors=0 warnings=0`.

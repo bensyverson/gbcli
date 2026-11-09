@@ -1,11 +1,13 @@
-//! `doctor`, `new`, `build`, `assets`, `opcode` and `version`: argv to the
+//! `doctor`, `new`, `build`, `assets`, `opcode`, `pixels` and `version`: argv to the
 //! protocol's ops, which the server answers (design §12), so `serve` and
 //! `batch` build exactly as the CLI does. Only what argv alone can say is
 //! checked here.
 
 use std::path::Path;
 
-use gbcli_protocol::{AssetManifest, AssetsArgs, BuildArgs, BuildTarget, NewArgs, Op, OpcodeArgs};
+use gbcli_protocol::{
+    AssetManifest, AssetsArgs, BuildArgs, BuildTarget, NewArgs, Op, OpcodeArgs, PixelsArgs,
+};
 
 use crate::Env;
 use crate::argv::Invocation;
@@ -120,6 +122,21 @@ pub fn doctor(inv: &Invocation) -> Command {
 pub fn opcode(inv: &Invocation) -> Command {
     let query = inv.positionals.join(" ");
     request(only_json(inv), Op::Opcode(OpcodeArgs { query }))
+}
+
+/// `pixels`: the paths as typed, which the server resolves from its working
+/// directory.
+pub fn pixels(inv: &Invocation) -> Command {
+    let path = |flag: &str| inv.one(flag).map(str::to_string);
+    let args = PixelsArgs {
+        file: inv.positionals[0].clone(),
+        text: path("text"),
+        tiles: inv.has("tiles"),
+        png: path("png"),
+        preview: path("preview"),
+        palettes: path("palettes"),
+    };
+    request(only_json(inv), Op::Pixels(args))
 }
 
 /// `version` (and `--version`): the op, so the text line and a `serve`

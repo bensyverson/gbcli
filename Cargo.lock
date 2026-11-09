@@ -74,6 +74,7 @@ dependencies = [
  "gbcli-cli",
  "gbcli-core",
  "gbcli-music",
+ "gbcli-pixels",
  "gbcli-protocol",
  "png",
  "serde_json",
@@ -97,6 +98,7 @@ dependencies = [
  "gbcli-core",
  "gbcli-engine",
  "gbcli-music",
+ "gbcli-pixels",
  "gbcli-protocol",
  "gbcli-view",
  "png",
@@ -121,6 +123,7 @@ dependencies = [
  "gbcli-bundle",
  "gbcli-core",
  "gbcli-music",
+ "gbcli-pixels",
  "gbcli-protocol",
  "gbcli-server",
  "lexopt",
@@ -172,6 +175,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "gbcli-pixels"
+version = "0.1.0"
+dependencies = [
+ "gbcli-view",
+ "png",
+]
+
+[[package]]
 name = "gbcli-protocol"
 version = "0.1.0"
 dependencies = [
@@ -197,6 +208,7 @@ dependencies = [
  "gbcli-bundle",
  "gbcli-core",
  "gbcli-engine",
+ "gbcli-pixels",
  "gbcli-protocol",
  "gbcli-view",
  "png",

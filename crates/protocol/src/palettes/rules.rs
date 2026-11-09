@@ -96,7 +96,7 @@ impl fmt::Display for PaletteFault {
             PaletteFault::BadImage { image } => write!(
                 f,
                 "{image:?} isn't an image's path under assets/: bg/, sprites/ or tiles/, then \
-                 the PNG's file name, joined by '/' (`bg/town.png`)"
+                 the image's file name, joined by '/' (`bg/town.png`, `bg/town.pixels`)"
             ),
             PaletteFault::RepeatedDmgColor { shade, first } => write!(
                 f,
@@ -255,16 +255,17 @@ fn is_label(name: &str) -> bool {
         && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
 }
 
-/// `<kind dir>/<file>.png` (any case of `png`), as the build names the
-/// images it finds: one directory of an [`ImageKind`], one file, `/`
-/// between, nothing that steps out or round about.
+/// `<kind dir>/<file>.png` (any case of `png`), or `.pixels` for pixel
+/// text, as the build names the images it finds: one directory of an
+/// [`ImageKind`], one file, `/` between, nothing that steps out or round
+/// about.
 pub(crate) fn is_image_path(path: &str) -> bool {
     let Some((dir, file)) = path.split_once('/') else {
         return false;
     };
     let kinds = [ImageKind::Bg, ImageKind::Sprites, ImageKind::Tiles];
-    let png = file
-        .rsplit_once('.')
-        .is_some_and(|(stem, ext)| !stem.is_empty() && ext.eq_ignore_ascii_case("png"));
-    kinds.iter().any(|k| k.dir() == dir) && png && !file.contains(['/', '\\'])
+    let image = file.rsplit_once('.').is_some_and(|(stem, ext)| {
+        !stem.is_empty() && (ext.eq_ignore_ascii_case("png") || ext == "pixels")
+    });
+    kinds.iter().any(|k| k.dir() == dir) && image && !file.contains(['/', '\\'])
 }

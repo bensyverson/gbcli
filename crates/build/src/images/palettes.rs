@@ -31,7 +31,7 @@ pub(crate) const PATH: &str = "assets/palettes.txt";
 /// The reserved name: the DMG shades, not a GBC palette.
 pub(crate) const DMG: &str = "dmg";
 
-const REMEDY: &str = "one palette a line, `name: c0 c1 c2 c3` (#rrggbb or #rgb, index 0 \
+pub(crate) const REMEDY: &str = "one palette a line, `name: c0 c1 c2 c3` (#rrggbb or #rgb, index 0 \
                       lightest first; `dmg:` for the colors of DMG shades 0-3), or one image a \
                       line, `bg/town.png = name`; '#' and a space or tab starts a comment \
                       (gbcli help images)";
@@ -46,6 +46,8 @@ pub(crate) struct Bad {
     pub count: u32,
     pub max: u32,
     pub message: String,
+    /// The next thing to try, when it is more than the file's grammar.
+    pub remedy: Option<String>,
 }
 
 impl Bad {
@@ -55,6 +57,7 @@ impl Bad {
             count: 1,
             max: 1,
             message,
+            remedy: None,
         }
     }
 }
@@ -91,6 +94,7 @@ pub(crate) fn read(
                 count: 1,
                 max: 1,
                 message: message.into(),
+                remedy: None,
             },
         )
     };
@@ -170,7 +174,7 @@ fn problem(shown: &str, bad: Bad) -> ImageProblem {
             bad.count as usize,
             bad.max as usize,
             format!("{shown}{at}: {}", bad.message),
-            REMEDY,
+            bad.remedy.as_deref().unwrap_or(REMEDY),
         )
     }
 }
@@ -339,6 +343,20 @@ fn palette(name: &str, colors: &str, line: u32) -> Result<GbcPalette, Bad> {
     }
 }
 
+/// The named palettes at 8 bits a channel, as rgbgfx reads their RGB555
+/// back: what pixel text's `PALETTE N` and `dmg N` draw.
+pub(crate) fn eight_bit(named: &NamedPalettes) -> gbcli_pixels::Palettes {
+    let colors = |p: &GbcPalette| p.0.map(|c| c.to_rgb888());
+    gbcli_pixels::Palettes {
+        dmg: named.dmg.as_ref().map(colors),
+        named: named
+            .palettes
+            .iter()
+            .map(|p| (p.name.clone(), colors(&p.colors)))
+            .collect(),
+    }
+}
+
 /// `#rrggbb` or `#rgb` (either case), as RGB555.
 pub(crate) fn color(word: &str) -> Option<Rgb555> {
     let digits = word.strip_prefix('#')?;
@@ -367,13 +385,22 @@ pub(crate) fn check_images(parsed: &Parsed, images: &[String]) -> Result<(), Bad
             } else {
                 format!("its images are {}", images.join(", "))
             };
-            return Err(Bad::at(
-                line,
-                format!(
-                    "{image} is no image of this project: an assignment names a PNG by its \
-                     path under assets/, in bg/, sprites/ or tiles/ ({read})"
-                ),
-            ));
+            // The image in its other form, a PNG for pixel text or back.
+            let other = [(".png", ".pixels"), (".pixels", ".png")]
+                .iter()
+                .find_map(|(from, to)| Some(format!("{}{to}", image.strip_suffix(from)?)))
+                .filter(|other| images.contains(other));
+            let palette = &parsed.named.assignments[image];
+            return Err(Bad {
+                remedy: other.map(|o| format!("name the image as its file is: `{o} = {palette}`")),
+                ..Bad::at(
+                    line,
+                    format!(
+                        "{image} is no image of this project: an assignment names an image by \
+                         its file's path under assets/, in bg/, sprites/ or tiles/ ({read})"
+                    ),
+                )
+            });
         }
     }
     Ok(())

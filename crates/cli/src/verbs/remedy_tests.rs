@@ -103,8 +103,11 @@ fn check_command(command: &str) -> Option<String> {
             .then(|| format!("`{command}`: no such global flag"));
     }
     let spec = match words.get(1) {
-        Some(sub) if first == "sessions" && by_name(&format!("sessions {sub}")).is_some() => {
-            by_name(&format!("sessions {sub}"))
+        Some(sub)
+            if matches!(first, "sessions" | "font")
+                && by_name(&format!("{first} {sub}")).is_some() =>
+        {
+            by_name(&format!("{first} {sub}"))
         }
         _ => by_name(first),
     };

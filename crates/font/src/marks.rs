@@ -17,6 +17,14 @@ pub fn precomposed(base: char, mark: char) -> Option<char> {
         .map(|(_, _, letter)| *letter)
 }
 
+/// The base and combining mark the table's letter `c` is made of.
+pub fn decompose(c: char) -> Option<(char, char)> {
+    DECOMPOSED
+        .iter()
+        .find(|(_, _, letter)| *letter == c)
+        .map(|(b, m, _)| (*b, *m))
+}
+
 /// The table's letter that `c` is canonically, when `c` is a singleton
 /// such as U+212B ANGSTROM SIGN.
 pub fn singleton(c: char) -> Option<char> {
@@ -61,5 +69,8 @@ mod tests {
                 .all(|l| ('\u{00C0}'..='\u{017F}').contains(l))
         );
         assert!(DECOMPOSED.iter().all(|(_, m, _)| is_combining(*m)));
+        assert_eq!(decompose('é'), Some(('e', '\u{0301}')));
+        assert_eq!(decompose('Ž'), Some(('Z', '\u{030C}')));
+        assert_eq!(decompose('e'), None);
     }
 }

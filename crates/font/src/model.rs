@@ -9,6 +9,10 @@ pub const HEIGHT: usize = 8;
 /// The widest a glyph may be: one tile.
 pub const MAX_WIDTH: u8 = 8;
 
+/// The rows above the baseline when a font doesn't say (its `ascent`
+/// property): row 7 is the descender.
+pub const DEFAULT_ASCENT: u8 = 7;
+
 /// A font: glyphs in glyph-number order, never deduplicated.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Font {
@@ -54,6 +58,24 @@ impl Font {
         let min = self.glyphs.iter().map(|g| g.width).min()?;
         let max = self.glyphs.iter().map(|g| g.width).max()?;
         Some((min, max))
+    }
+
+    /// The rows above the baseline: the `ascent` property when it is a
+    /// whole number from 1 to 8, else [`DEFAULT_ASCENT`].
+    pub fn ascent(&self) -> u8 {
+        self.property("ascent")
+            .and_then(|v| v.parse::<u8>().ok())
+            .filter(|a| (1..=HEIGHT as u8).contains(a))
+            .unwrap_or(DEFAULT_ASCENT)
+    }
+
+    /// The value of the property `key` (`_` and `-` alike, any case).
+    pub fn property(&self, key: &str) -> Option<&str> {
+        let norm = |k: &str| k.to_ascii_lowercase().replace('_', "-");
+        self.properties
+            .iter()
+            .find(|p| norm(&p.key) == norm(key))
+            .map(|p| p.value.as_str())
     }
 
     /// The glyph number of `key`.

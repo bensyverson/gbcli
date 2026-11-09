@@ -108,6 +108,7 @@ impl Answer for Tooling {
             Op::Opcode(args) => super::opcode::opcode(id, args),
             Op::Pixels(args) => super::pixels::pixels(&self.host, id, args),
             Op::Font(args) => super::font::font(&self.host, id, args),
+            op if super::font::is_authoring(op) => super::font::author(&self.host, id, op),
             Op::Version => super::version::version(id),
             op => unreachable!("{} needs a bundle", op.name()),
         }
@@ -135,6 +136,7 @@ impl Handler {
             Op::Opcode(args) => super::opcode::opcode(id, args),
             Op::Pixels(args) => super::pixels::pixels(&self.host, id, args),
             Op::Font(args) => super::font::font(&self.host, id, args),
+            op if super::font::is_authoring(op) => super::font::author(&self.host, id, op),
             Op::Version => super::version::version(id),
             _ => return None,
         })

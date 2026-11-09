@@ -6,7 +6,10 @@ use super::flags::{
 };
 use super::table_battery::{POWER_CYCLE_VERB, SAV_VERB};
 use super::table_build::{ASSETS_VERB, BUILD_VERB, DOCTOR_VERB, NEW_VERB};
-use super::table_font::FONT_VERB;
+use super::table_font::{
+    FONT_DIFF_VERB, FONT_EDIT_VERB, FONT_EXPORT_VERB, FONT_IMPORT_VERB, FONT_NEW_VERB,
+    FONT_SAVE_VERB, FONT_VERB,
+};
 use super::table_opcode::OPCODE_VERB;
 use super::table_pixels::PIXELS_VERB;
 use super::table_read::{
@@ -366,6 +369,12 @@ pub const VERBS: &[VerbSpec] = &[
     SONG_VERB,
     PIXELS_VERB,
     FONT_VERB,
+    FONT_EDIT_VERB,
+    FONT_SAVE_VERB,
+    FONT_NEW_VERB,
+    FONT_IMPORT_VERB,
+    FONT_EXPORT_VERB,
+    FONT_DIFF_VERB,
     VerbSpec {
         verb: Verb::Serve,
         name: "serve",

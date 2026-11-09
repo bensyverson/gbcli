@@ -416,6 +416,10 @@ pub struct ImagesMade {
     /// for a build, the glyphs it emitted; for `assets`, those asked for.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fonts: Vec<FontAsset>,
+    /// Composed glyphs among `fonts` whose mark lands on their base's ink:
+    /// a warning each.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub font_overlaps: Vec<crate::font_author::FontOverlap>,
 }
 
 impl ImagesMade {

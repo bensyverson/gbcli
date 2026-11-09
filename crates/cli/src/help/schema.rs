@@ -100,10 +100,27 @@ font    file: PATH  sample?: TEXT  preview?: PATH  fit?: PX
         fit: predicate_false past PX, the result on the error; on
         font_unreadable, error.result.font_problem: {path, line?, column?,
         message, remedy})
+font_edit  file: PATH  form?: "png"|"bdf"  (a working copy in the project's
+        build/font-edit/: NAME.png and NAME.chars with guides, or NAME.bdf)
+font_save  file: PATH  (the .yaff or its copy: the copy converted back into
+        the .yaff, keeping its comments and properties, and removed)
+font_import  file: PATH  chars?: SET|PATH  out?: PATH  (a BDF as a .yaff;
+        never over a file)
+font_export  file: PATH  png?: PATH  bdf?: PATH  guides?: true
+font_new  name: NAME|PATH  chars: SET|PATH  guide_sheet?: PATH  (an empty,
+        guided copy of a font to be; SET: ascii, latin1, latin-ext-a)
+font_diff  a: PATH  b: PATH  png?: PATH  (result.font_diff: {a, b, glyphs:
+        [{key, change: "changed"|"added"|"removed", width_a?, width_b?}],
+        reordered, png?: {path, bytes}})
+        (the others: result.font_written: {font, glyphs, files: [{path, kind:
+        "yaff"|"png"|"chars"|"bdf"|"guide_sheet", bytes}], removed?, missing?,
+        skipped?}; on font_unreadable from a copy or a BDF,
+        error.result.font_problems: [{path, line?, column?, cell?: {x, y},
+        glyph?, message, remedy}], every problem)
 version —   (result.version: {gbcli: "0.1.0", protocol: N, sameboy: COMMIT,
         patch_set: HASH}; check protocol before relying on the rest)
-        (build, assets, doctor, new, opcode, pixels, font and version need no
-        session;
+        (build, assets, doctor, new, opcode, pixels, the font ops and version
+        need no session;
         paths are relative to the server's working directory)
 power_cycle  sav?: PATH  rtc_advance?: "45s"|"30m"|"12h"|"7d"
         (a new head at power-on, keeping the cart's battery RAM and clock;
@@ -122,7 +139,7 @@ frame_budget, raster, audio, oam_log, equiv, view, memory, symbols,
 checkpoints, keys_unapplied, writes, checkpoint, restored, breakpoint, watch,
 deleted, machine, registers, ppu, sessions, events, gaps, pruned, kept, busy, removed,
 build, assets, doctor, created, song, song_problem, pixels, pixels_problem,
-font, font_problem, opcodes, version,
+font, font_problem, font_written, font_problems, font_diff, opcodes, version,
 power_cycle, sav,
 flash_notes (run, step: each flash note, also a warning; a failed run's or
 step's are on its error).
@@ -162,7 +179,10 @@ origin: "drawn"|"composed"}]}], glyphs in glyph-number order (a build's
 charmap numbers; for assets, the font's order among those asked for), rows
 row 0 first, bit 7 the leftmost pixel. problems[].limit also: font_text (with
 line and column), font_glyphs (past 254 in a build, without a character
-list), font_missing (a character asked for that the font lacks).
+list), font_missing (a character asked for that the font lacks). A letter
+asked for that the font doesn't draw is composed from its base and mark when
+both are drawn (origin "composed", after the drawn glyphs); font_overlaps:
+[{source, key, base, mark, rows: [N]}] warns of a mark landing on its base.
   font  {"source":"assets/fonts/talk.yaff","label":"Talk","fixed":false,"glyphs":[{"key":"i","width":2,"rows":[0,128,0,128,128,128,128,0],"origin":"drawn"}]}
 ENTRY = {index: N, flip?: "x"|"y"|"xy", palette?: 0-7}: the tile in the
 image's own data (a sheet unit's top tile, even), how a sheet unit is
@@ -218,6 +238,12 @@ Examples:
   {"id":"36","op":"view","args":{"what":"memory","addr":"wMap","len":16,"out":"map.bin"}}
   {"id":"37","op":"font","args":{"file":"assets/fonts/talk.yaff","sample":"Press START","fit":144}}
   {"id":"38","op":"assets","args":{"dir":"game","glyphs":{"fonts/talk.yaff":["H","i","heart"]}}}
+  {"id":"39","op":"font_edit","args":{"file":"assets/fonts/talk.yaff","form":"png"}}
+  {"id":"40","op":"font_save","args":{"file":"assets/fonts/talk.yaff"}}
+  {"id":"41","op":"font_import","args":{"file":"misaki.bdf","chars":"latin1","out":"assets/fonts/misaki.yaff"}}
+  {"id":"42","op":"font_export","args":{"file":"assets/fonts/talk.yaff","bdf":"talk.bdf"}}
+  {"id":"43","op":"font_new","args":{"name":"hud","chars":"ascii","guide_sheet":"hud-sheet.png"}}
+  {"id":"44","op":"font_diff","args":{"a":"old.yaff","b":"assets/fonts/talk.yaff","png":"diff.png"}}
 "#;
 
 #[cfg(test)]
@@ -239,7 +265,7 @@ mod tests {
         }
         ops.sort();
         ops.dedup();
-        assert_eq!(ops.len(), 31, "one example per op: {ops:?}");
+        assert_eq!(ops.len(), 37, "one example per op: {ops:?}");
     }
 
     /// run's `expect` and `keys_since`, with an example that parses into

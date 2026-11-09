@@ -6,7 +6,8 @@
 use std::path::Path;
 
 use gbcli_protocol::{
-    AssetManifest, AssetsArgs, BuildArgs, BuildTarget, FontArgs, NewArgs, Op, OpcodeArgs,
+    AssetManifest, AssetsArgs, BuildArgs, BuildTarget, FontArgs, FontDiffArgs, FontEditArgs,
+    FontExportArgs, FontForm, FontImportArgs, FontNewArgs, FontSaveArgs, NewArgs, Op, OpcodeArgs,
     PixelsArgs,
 };
 
@@ -162,6 +163,58 @@ pub fn font(inv: &Invocation) -> Result<Command, Usage> {
         fit,
     };
     Ok(request(only_json(inv), Op::Font(args)))
+}
+
+/// `font edit`, `save`, `import`, `export`, `new` and `diff`: the paths
+/// as typed.
+pub fn font_author(inv: &Invocation) -> Result<Command, Usage> {
+    use crate::verbs::Verb;
+    let pos = |i: usize| inv.positionals[i].clone();
+    let path = |flag: &str| inv.one(flag).map(str::to_string);
+    let op = match inv.spec.verb {
+        Verb::FontEdit => Op::FontEdit(FontEditArgs {
+            file: pos(0),
+            form: match inv.one("as") {
+                None | Some("png") => FontForm::Png,
+                Some("bdf") => FontForm::Bdf,
+                Some(other) => {
+                    return Err(Usage::new(
+                        format!("--as takes png or bdf, not `{other}`"),
+                        "`gbcli font edit FONT.yaff --as png` (a grid and its .chars) or --as bdf",
+                    ));
+                }
+            },
+        }),
+        Verb::FontSave => Op::FontSave(FontSaveArgs { file: pos(0) }),
+        Verb::FontImport => Op::FontImport(FontImportArgs {
+            file: pos(0),
+            chars: path("chars"),
+            out: path("out"),
+        }),
+        Verb::FontExport => Op::FontExport(FontExportArgs {
+            file: pos(0),
+            png: path("png"),
+            bdf: path("bdf"),
+            guides: inv.has("guides"),
+        }),
+        Verb::FontNew => Op::FontNew(FontNewArgs {
+            name: pos(0),
+            chars: path("chars").ok_or_else(|| {
+                Usage::new(
+                    "`gbcli font new` needs --chars",
+                    "`gbcli font new NAME --chars ascii` (or latin1, latin-ext-a, or a file)",
+                )
+            })?,
+            guide_sheet: path("guide-sheet"),
+        }),
+        Verb::FontDiff => Op::FontDiff(FontDiffArgs {
+            a: pos(0),
+            b: pos(1),
+            png: path("png"),
+        }),
+        verb => unreachable!("{verb:?} isn't a font authoring verb"),
+    };
+    Ok(request(only_json(inv), op))
 }
 
 /// `version` (and `--version`): the op, so the text line and a `serve`

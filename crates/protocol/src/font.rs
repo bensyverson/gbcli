@@ -118,6 +118,12 @@ pub struct FontProblem {
     pub line: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub column: Option<u32>,
+    /// The cell of a PNG working copy's grid at fault (8x8 cells).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cell: Option<crate::images::TileAt>,
+    /// The glyph at fault, by key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub glyph: Option<String>,
     pub message: String,
     pub remedy: String,
 }

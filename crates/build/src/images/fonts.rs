@@ -6,13 +6,21 @@
 //! list, `assets/fonts/NAME.charlist`: text holding the characters the
 //! program's strings use (a named glyph as `<name>`), which limits what it
 //! emits. `assets` returns the glyphs a request names, with no cap.
+//!
+//! A requested letter the font doesn't draw (named by a request or a
+//! character list, never otherwise) is composed from its base and mark
+//! when the font draws both (`gbcli_font::compose`); composed glyphs
+//! follow the drawn ones, in the order first asked, and are reported as
+//! `GlyphOrigin::Composed`, an overlap of mark and base as a warning in
+//! `ImagesMade.font_overlaps`. A build refuses while a font's working copy
+//! (`gbcli font edit`) is newer than it.
 
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use gbcli_font::{Font, Key};
-use gbcli_protocol::{FontAsset, FontGlyph, GlyphOrigin, ImageLimit, ImageProblem};
+use gbcli_font::{Composed, Font, Key};
+use gbcli_protocol::{FontAsset, FontGlyph, FontOverlap, GlyphOrigin, ImageLimit, ImageProblem};
 
 use super::census;
 use super::find;
@@ -82,6 +90,22 @@ pub(crate) fn find(
             source(path.clone(), format!("{DIR}/{file}"), shown)
         })
         .collect::<Result<_, _>>()?;
+    for f in &found {
+        if let Some(copy) = crate::font_author::newer_copy(&f.path) {
+            let font = shown(&f.path);
+            return Err(BuildError::Layout {
+                message: format!(
+                    "{} is a working copy of {font}, newer than it: its edits aren't in the font",
+                    shown(&copy)
+                ),
+                remedy: format!(
+                    "`gbcli font save {}` saves them into the font (removing the copy discards \
+                     them)",
+                    quote(&font)
+                ),
+            });
+        }
+    }
     for list in lists {
         if !found.iter().any(|f| f.charlist == list) {
             return Err(BuildError::Layout {
@@ -159,7 +183,11 @@ pub(crate) struct Fonts {
     pub assets: Vec<FontAsset>,
     pub emitted: Vec<Emitted>,
     pub problems: Vec<ImageProblem>,
+    pub overlaps: Vec<FontOverlap>,
 }
+
+/// The glyphs taken from a font: drawn ones by number, then composed.
+type Picked = (Vec<usize>, Vec<Composed>);
 
 const FORMAT: &str = "`gbcli help fonts` has the format; `gbcli font FILE` checks a font";
 
@@ -221,25 +249,43 @@ pub(crate) fn convert(
             Select::Build => build_glyphs(s, &font, &image, shown, &mut out.problems)?,
             Select::Request(asked) => match asked.get(&s.name) {
                 Some(keys) => requested(&font, keys, &image, &mut out.problems),
-                None => Some((0..font.glyphs.len()).collect()),
+                None => Some(((0..font.glyphs.len()).collect(), Vec::new())),
             },
         };
         let Some(picked) = picked else {
             continue;
         };
-        let glyphs: Vec<gbcli_font::Glyph> =
-            picked.iter().map(|&i| font.glyphs[i].clone()).collect();
+        let (drawn, composed) = picked;
+        let glyphs: Vec<gbcli_font::Glyph> = drawn
+            .iter()
+            .map(|&i| font.glyphs[i].clone())
+            .chain(composed.iter().map(|c| c.glyph.clone()))
+            .collect();
+        for c in composed.iter().filter(|c| !c.overlap.is_empty()) {
+            out.overlaps.push(FontOverlap {
+                source: image.clone(),
+                key: c.glyph.key.text(),
+                base: c.base.to_string(),
+                mark: c.mark.to_string(),
+                rows: c.overlap.iter().map(|&r| r as u8).collect(),
+            });
+        }
         out.assets.push(FontAsset {
             source: image.clone(),
             label: s.label.clone(),
             fixed: font.fixed(),
             glyphs: glyphs
                 .iter()
-                .map(|g| FontGlyph {
+                .enumerate()
+                .map(|(n, g)| FontGlyph {
                     key: g.key.text(),
                     width: g.width,
                     rows: g.rows,
-                    origin: GlyphOrigin::Drawn,
+                    origin: if n < drawn.len() {
+                        GlyphOrigin::Drawn
+                    } else {
+                        GlyphOrigin::Composed
+                    },
                 })
                 .collect(),
         });
@@ -263,8 +309,9 @@ fn build_glyphs(
     image: &str,
     shown: &dyn Fn(&Path) -> String,
     problems: &mut Vec<ImageProblem>,
-) -> Result<Option<Vec<usize>>, BuildError> {
+) -> Result<Option<Picked>, BuildError> {
     let list = shown(&s.charlist);
+    let mut composed = Vec::new();
     let picked: Vec<usize> = if s.charlist.is_file() {
         let text = fs::read_to_string(&s.charlist).map_err(|error| BuildError::Io {
             path: s.charlist.clone(),
@@ -276,9 +323,7 @@ fn build_glyphs(
             let set = gbcli_font::set(font, line);
             picked.extend(set.glyphs);
             for m in set.missing {
-                if !missing.contains(&m) {
-                    missing.push(m);
-                }
+                compose_or_miss(font, m, &mut composed, &mut missing);
             }
         }
         if let Some(problem) = missing_problem(image, &missing, &format!("{list} lists")) {
@@ -291,22 +336,23 @@ fn build_glyphs(
     } else {
         (0..font.glyphs.len()).collect()
     };
-    if picked.len() > MAX_GLYPHS {
+    let count = picked.len() + composed.len();
+    if count > MAX_GLYPHS {
         let whose = if s.charlist.is_file() {
-            format!("its character list, {list}, names")
+            format!("its character list, {list}, names (with the letters it composes)")
         } else {
             "it holds".into()
         };
         problems.push(census::error(
             image,
             ImageLimit::FontGlyphs,
-            picked.len(),
+            count,
             MAX_GLYPHS,
             format!(
                 "a build emits at most {MAX_GLYPHS} glyphs of a font ($FE and $FF are its \
                  charmap's newline and end), and {whose} {}; gbcli can't see which characters the \
                  program's strings use",
-                picked.len()
+                count
             ),
             &format!(
                 "list the characters the program uses in {list}, as text (a named glyph as \
@@ -315,7 +361,34 @@ fn build_glyphs(
         ));
         return Ok(None);
     }
-    Ok(Some(picked))
+    Ok(Some((picked, composed)))
+}
+
+/// `m`, a character the font has no glyph for, composed into `composed`
+/// when its base and mark are drawn, else added to `missing`; each once.
+fn compose_or_miss(
+    font: &Font,
+    m: String,
+    composed: &mut Vec<Composed>,
+    missing: &mut Vec<String>,
+) {
+    let mut chars = m.chars();
+    let one = match (chars.next(), chars.next()) {
+        (Some(c), None) => Some(c),
+        _ => None,
+    };
+    if let Some(c) = one {
+        if composed.iter().any(|x| x.glyph.key == Key::Char(c)) {
+            return;
+        }
+        if let Some(x) = gbcli_font::compose(font, c) {
+            composed.push(x);
+            return;
+        }
+    }
+    if !missing.contains(&m) {
+        missing.push(m);
+    }
 }
 
 /// The glyphs of `font` that `keys` name, in the font's order; none, with
@@ -325,14 +398,14 @@ fn requested(
     keys: &[String],
     image: &str,
     problems: &mut Vec<ImageProblem>,
-) -> Option<Vec<usize>> {
+) -> Option<Picked> {
     let mut picked = Vec::new();
     let mut missing = Vec::new();
+    let mut composed = Vec::new();
     for k in keys {
         match Key::from_wire(k).ok().and_then(|key| font.find(&key)) {
             Some(i) => picked.push(i),
-            None if !missing.contains(k) => missing.push(k.clone()),
-            None => {}
+            None => compose_or_miss(font, k.clone(), &mut composed, &mut missing),
         }
     }
     if let Some(p) = missing_problem(image, &missing, "the request asks for") {
@@ -341,7 +414,7 @@ fn requested(
     }
     picked.sort_unstable();
     picked.dedup();
-    Some(picked)
+    Some((picked, composed))
 }
 
 /// The problem naming every character `missing` from the font, each with

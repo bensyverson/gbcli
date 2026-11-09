@@ -9,6 +9,7 @@ mod checkpoint;
 mod equiv;
 mod error;
 mod font;
+mod font_author;
 mod hex;
 mod images;
 mod keys;
@@ -53,6 +54,11 @@ pub use equiv::{
 pub use error::{ErrorBody, ErrorCode};
 pub use font::{
     FontArgs, FontAsset, FontGlyph, FontMade, FontPreview, FontProblem, FontSample, GlyphOrigin,
+};
+pub use font_author::{
+    FontDiffArgs, FontDiffMade, FontEditArgs, FontExportArgs, FontFile, FontFileKind, FontForm,
+    FontImportArgs, FontNewArgs, FontOverlap, FontSaveArgs, FontWritten, GlyphChange,
+    GlyphChangeKind,
 };
 pub use images::{
     Flip, GbcImage, GbcImagesMade, ImageArt, ImageAsset, ImageKind, ImageLimit, ImageProblem,

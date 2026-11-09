@@ -23,6 +23,8 @@ pub(super) struct Unchecked {
     gbc: Option<GbcImagesMade>,
     #[serde(default)]
     fonts: Vec<FontAsset>,
+    #[serde(default)]
+    font_overlaps: Vec<crate::font_author::FontOverlap>,
 }
 
 impl TryFrom<Unchecked> for ImagesMade {
@@ -64,6 +66,7 @@ impl TryFrom<Unchecked> for ImagesMade {
             shades: u.shades,
             gbc: u.gbc,
             fonts: u.fonts,
+            font_overlaps: u.font_overlaps,
         })
     }
 }

@@ -1,0 +1,39 @@
+$ gbcli font edit main.yaff
+exit 0
+wrote kind=png path=build/font-edit/main.png bytes=232
+wrote kind=chars path=build/font-edit/main.chars bytes=18
+font path=main.yaff glyphs=4
+$ gbcli font edit main.yaff --as bdf
+exit 2
+--- stderr
+gbcli: bad_request: main.yaff already has a working copy, build/font-edit/main.png
+remedy: `gbcli font save main.yaff` keeps its edits; removing it discards them
+$ gbcli font save build/font-edit/main.png
+exit 0
+wrote kind=yaff path=main.yaff bytes=338
+removed path=build/font-edit/main.png
+removed path=build/font-edit/main.chars
+font path=main.yaff glyphs=4
+$ gbcli font edit main.yaff --as bdf
+exit 0
+wrote kind=bdf path=build/font-edit/main.bdf bytes=623
+font path=main.yaff glyphs=4
+$ gbcli font save main.yaff
+exit 0
+wrote kind=yaff path=main.yaff bytes=338
+removed path=build/font-edit/main.bdf
+font path=main.yaff glyphs=4
+$ gbcli font export main.yaff --bdf main.bdf
+exit 0
+wrote kind=bdf path=main.bdf bytes=623
+font path=main.yaff glyphs=4
+$ gbcli font new hud.yaff --chars ascii
+exit 0
+wrote kind=png path=build/font-edit/hud.png bytes=246
+wrote kind=chars path=build/font-edit/hud.chars bytes=108
+font path=hud.yaff glyphs=0
+$ gbcli font diff main.yaff other.yaff --png diff.png
+exit 0
+glyph key=H change=changed width_a=5 width_b=5
+diff a=main.yaff b=other.yaff changed=1 added=0 removed=0 reordered=0
+preview path=diff.png bytes=242

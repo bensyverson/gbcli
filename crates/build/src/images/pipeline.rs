@@ -63,8 +63,10 @@ pub(crate) fn convert(
         assets: font_assets,
         emitted: font_entries,
         problems: font_problems,
+        overlaps: font_overlaps,
     } = fonts::convert(&fonts, &select, shown)?;
     made.fonts = font_assets;
+    made.font_overlaps = font_overlaps;
     let stopped = Converted {
         made: ImagesMade::default(),
         diagnostics: Vec::new(),

@@ -35,8 +35,9 @@ pub fn primer() -> String {
             .filter(|s| s.class == class)
             .map(|s| s.name)
             .collect();
-        // Wrapped to the 80 columns the primer keeps, under the verb column.
-        let verbs = wrap(&names.join(", "), 80 - 13).replace('\n', &format!("\n{:13}", ""));
+        // Wrapped to the 80 columns the primer keeps, under the verb column,
+        // between verbs only: `font new` stays one name.
+        let verbs = wrap_list(&names, 80 - 13).replace('\n', &format!("\n{:13}", ""));
         out += &format!(
             "  {:<11}{}\n  {:<11}{}\n",
             class.name(),
@@ -142,6 +143,30 @@ fn indent(text: &str, by: &str) -> String {
 }
 
 /// Wraps a paragraph at `width` columns.
+/// `names` joined by `, `, broken into lines of at most `width` between
+/// names only.
+fn wrap_list(names: &[&str], width: usize) -> String {
+    let mut out = String::new();
+    let mut line = 0;
+    for (i, name) in names.iter().enumerate() {
+        let word = if i + 1 < names.len() {
+            format!("{name},")
+        } else {
+            name.to_string()
+        };
+        if line > 0 && line + 1 + word.chars().count() > width {
+            out.push('\n');
+            line = 0;
+        } else if line > 0 {
+            out.push(' ');
+            line += 1;
+        }
+        line += word.chars().count();
+        out += &word;
+    }
+    out
+}
+
 fn wrap(text: &str, width: usize) -> String {
     let mut lines = vec![String::new()];
     for word in text.split_whitespace() {

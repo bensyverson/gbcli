@@ -6,18 +6,30 @@
 //! `gbcli help fonts` states (`layout`), and draws previews (`preview`).
 //! It decides nothing about a project; `gbcli-build` does.
 
+pub mod bdf;
+mod chars;
+mod compose;
+pub mod diff;
 mod error;
+pub mod grid;
 mod key;
+mod labels;
 mod layout;
 mod marks;
 mod model;
 mod preview;
+mod problem;
+mod sets;
 pub mod yaff;
 
+pub use chars::{CHARS_EXTENSION, GRID_COLUMNS, Slot, read_chars, read_list, write_chars};
+pub use compose::{Composed, compose};
 pub use error::FontError;
 pub use key::{Key, KeyError};
 pub use layout::{Line, RULES, draw, set};
-pub use marks::{precomposed, singleton};
-pub use model::{Font, Glyph, HEIGHT, MAX_WIDTH, Property};
+pub use marks::{decompose, precomposed, singleton};
+pub use model::{DEFAULT_ASCENT, Font, Glyph, HEIGHT, MAX_WIDTH, Property};
 pub use preview::{PREVIEW_SCALE, preview_font, preview_line};
+pub use problem::Problem;
+pub use sets::{SET_NAMES, named_set};
 pub use yaff::{EXTENSION, read, write};

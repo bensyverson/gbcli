@@ -10,6 +10,7 @@ use crate::checkpoint::{Location, WatchAccess};
 use crate::equiv::EquivMade;
 use crate::error::{ErrorBody, ErrorCode};
 use crate::font::{FontMade, FontProblem};
+use crate::font_author::{FontDiffMade, FontWritten};
 use crate::keys::KeyEvent;
 use crate::listing::{CheckpointRow, SymbolRow};
 use crate::opcode::OpcodeRow;
@@ -251,6 +252,18 @@ pub struct ResultBody {
     /// `font`: why the font didn't load (with `font_unreadable`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub font_problem: Option<FontProblem>,
+    /// `font_edit`, `font_save`, `font_import`, `font_export`, `font_new`:
+    /// the files written and removed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_written: Option<FontWritten>,
+    /// `font_save`, `font_import`: every problem in the working copy or
+    /// the BDF (with `font_unreadable`), each naming its cell, line or
+    /// glyph.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub font_problems: Vec<FontProblem>,
+    /// `font_diff`: what differs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_diff: Option<FontDiffMade>,
     /// `power_cycle`: what the cycle carried across.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub power_cycle: Option<PowerCycleMade>,

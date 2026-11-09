@@ -9,6 +9,9 @@ use crate::battery::{PowerCycleArgs, SavArgs};
 use crate::checkpoint::WatchAccess;
 use crate::equiv::EquivArgs;
 use crate::font::FontArgs;
+use crate::font_author::{
+    FontDiffArgs, FontEditArgs, FontExportArgs, FontImportArgs, FontNewArgs, FontSaveArgs,
+};
 use crate::keys::KeyEvent;
 use crate::listing::SymArgs;
 use crate::opcode::OpcodeArgs;
@@ -85,6 +88,14 @@ pub enum Op {
     /// A font, a `.yaff` file, read, a sample set and previewed; needs no
     /// session.
     Font(FontArgs),
+    /// Font authoring: a working copy written, saved back, a BDF imported,
+    /// a font exported or begun, two fonts compared; none needs a session.
+    FontEdit(FontEditArgs),
+    FontSave(FontSaveArgs),
+    FontImport(FontImportArgs),
+    FontExport(FontExportArgs),
+    FontNew(FontNewArgs),
+    FontDiff(FontDiffArgs),
     /// Battery saves (design §6): power-on again keeping the battery, and
     /// the battery written out as a `.sav`.
     PowerCycle(PowerCycleArgs),
@@ -127,6 +138,12 @@ impl Op {
             Op::Opcode(_) => "opcode",
             Op::Pixels(_) => "pixels",
             Op::Font(_) => "font",
+            Op::FontEdit(_) => "font_edit",
+            Op::FontSave(_) => "font_save",
+            Op::FontImport(_) => "font_import",
+            Op::FontExport(_) => "font_export",
+            Op::FontNew(_) => "font_new",
+            Op::FontDiff(_) => "font_diff",
             Op::PowerCycle(_) => "power_cycle",
             Op::Sav(_) => "sav",
             Op::Version => "version",
@@ -150,7 +167,8 @@ impl Op {
     }
 
     /// Whether answering it needs the project's bundle: every op but
-    /// `doctor`, `new`, `assets`, `opcode`, `pixels`, `font`, `version` and a `build` that
+    /// `doctor`, `new`, `assets`, `opcode`, `pixels`, `font` and its
+    /// authoring ops, `version` and a `build` that
     /// restores nothing, which a client with no `.gbcli/` yet can still send.
     pub fn needs_bundle(&self) -> bool {
         match self {
@@ -160,6 +178,12 @@ impl Op {
             | Op::Opcode(_)
             | Op::Pixels(_)
             | Op::Font(_)
+            | Op::FontEdit(_)
+            | Op::FontSave(_)
+            | Op::FontImport(_)
+            | Op::FontExport(_)
+            | Op::FontNew(_)
+            | Op::FontDiff(_)
             | Op::Version => false,
             Op::Build(args) => args.restore.is_some(),
             _ => true,

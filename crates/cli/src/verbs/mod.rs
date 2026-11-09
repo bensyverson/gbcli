@@ -68,8 +68,8 @@ impl Class {
             }
             Class::Build => {
                 "runs RGBDS from PATH, checked against the pinned version (`gbcli doctor`); \
-                 a session only to reload the build into; `new`, `song`, `pixels` and `font` \
-                 need neither, and `assets` only rgbgfx"
+                 a session only to reload the build into; `new`, `song`, `pixels` and the \
+                 `font` verbs need neither, and `assets` only rgbgfx"
             }
             Class::Server => "speaks the JSON Lines protocol; a session is optional",
             Class::Help => "no preconditions: works with no session, no ROM and no network",
@@ -110,6 +110,12 @@ pub enum Verb {
     Song,
     Pixels,
     Font,
+    FontEdit,
+    FontSave,
+    FontImport,
+    FontExport,
+    FontNew,
+    FontDiff,
     Serve,
     Batch,
     Help,

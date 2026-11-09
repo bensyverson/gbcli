@@ -52,6 +52,9 @@ impl Invocation {
 /// `sessions prune` and `sessions rm` are typed as two words.
 const SUBVERBS: &[&str] = &["prune", "rm"];
 
+/// So are `font edit`, `font save` and the other authoring verbs.
+const FONT_SUBVERBS: &[&str] = &["edit", "save", "import", "export", "new", "diff"];
+
 pub fn parse(args: Vec<OsString>) -> Result<Parsed, Usage> {
     let args = args
         .into_iter()
@@ -78,6 +81,9 @@ pub fn parse(args: Vec<OsString>) -> Result<Parsed, Usage> {
     let (spec, rest) = match (first, args.get(1).map(String::as_str)) {
         ("sessions", Some(sub)) if SUBVERBS.contains(&sub) => {
             (by_name(&format!("sessions {sub}")), &args[2..])
+        }
+        ("font", Some(sub)) if FONT_SUBVERBS.contains(&sub) => {
+            (by_name(&format!("font {sub}")), &args[2..])
         }
         _ => (by_name(first), &args[1..]),
     };

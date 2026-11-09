@@ -259,6 +259,12 @@ impl Handler {
             | Op::Opcode(_)
             | Op::Pixels(_)
             | Op::Font(_)
+            | Op::FontEdit(_)
+            | Op::FontSave(_)
+            | Op::FontImport(_)
+            | Op::FontExport(_)
+            | Op::FontNew(_)
+            | Op::FontDiff(_)
             | Op::Version => Err(Failure::new(ErrorBody::new(
                 ErrorCode::BadRequest,
                 "that op doesn't name a session",

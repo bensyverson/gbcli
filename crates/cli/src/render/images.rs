@@ -1,7 +1,7 @@
 //! Rows for the images a build converted: one per image, one per problem
 //! (its tiles shortened; `--json` lists them all), then a summary.
 
-use gbcli_protocol::{ImagesMade, Severity, TileAt};
+use gbcli_protocol::{GlyphOrigin, ImagesMade, Severity, TileAt};
 
 use super::Row;
 
@@ -44,6 +44,33 @@ pub fn rows(m: &ImagesMade) -> String {
             .field("label", &f.label)
             .field("glyphs", f.glyphs.len())
             .flag("fixed", f.fixed)
+            .opt(
+                "composed",
+                Some(
+                    f.glyphs
+                        .iter()
+                        .filter(|g| g.origin == GlyphOrigin::Composed)
+                        .count(),
+                )
+                .filter(|n| *n > 0),
+            )
+            .line();
+    }
+    for o in &m.font_overlaps {
+        let rows: Vec<String> = o.rows.iter().map(u8::to_string).collect();
+        out += &Row::new("overlap")
+            .field("source", &o.source)
+            .field("glyph", &o.key)
+            .field("base", &o.base)
+            .field(
+                "mark",
+                format!("u+{:04X}", o.mark.chars().next().map_or(0, u32::from)),
+            )
+            .field("rows", rows.join(","))
+            .field(
+                "remedy",
+                "the composed letter's mark lands on its base: draw the letter in the font",
+            )
             .line();
     }
     for p in &m.problems {

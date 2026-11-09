@@ -99,8 +99,54 @@ font_text, with line= and column=.
 
 `gbcli assets` returns each font as a FontAsset (`gbcli schema`): its glyphs
 in glyph-number order, each with key, width, 8 row bytes (by rule 3) and
-origin (drawn), and fixed. Its request's `glyphs` names the characters
-wanted from each font (by its path, fonts/NAME.yaff), with no cap.
+origin (drawn or composed, below), and fixed. Its request's `glyphs` names
+the characters wanted from each font (by its path, fonts/NAME.yaff), with
+no cap.
+
+Composed letters. A letter asked for (by a request's `glyphs`, or a
+character list) that the font doesn't draw is made from its base and its
+combining mark when the font draws both: é from 'e' and u+0301, for
+gbcli's mark table (Latin-1 and Latin Extended-A). The mark's pixels are
+laid over the base's at the base's width; a drawn é always wins. Composed
+glyphs follow the drawn ones, origin composed. A mark landing on its
+base's ink is a warning naming the glyph (`overlap`, and font_overlaps in
+--json): draw that letter by hand. Nothing is composed unless asked for.
+
+Authoring. The .yaff is the font's one source, committed; a PNG or BDF is
+a working copy for an editing tool, never committed:
+  gbcli font edit FONT.yaff [--as png|bdf]
+                       write a copy to the project's build/font-edit/
+                       (gitignored) and print its path
+  gbcli font save FONT.yaff
+                       convert the copy back (its path works too), keep
+                       the font's comments and properties, remove the copy
+  gbcli font new NAME --chars ascii|latin1|latin-ext-a|FILE [--guide-sheet PNG]
+                       an empty, guided copy for assets/fonts/NAME.yaff
+  gbcli font import FILE.bdf [--chars SET|FILE] [--out FONT.yaff]
+  gbcli font export FONT.yaff [--png PATH [--guides]] [--bdf PATH]
+  gbcli font diff A.yaff B.yaff [--png PATH]
+                       each changed glyph; the PNG draws it before and after
+A build refuses while a copy is newer than its font, naming `gbcli font
+save`. One copy at a time.
+
+The PNG copy is a grid of 8x8 cells, 16 to a row (128 px wide), glyphs in
+order, each at its cell's left edge. An opaque pixel is ink (the darker of
+two colors) or paper; a glyph's width runs to its cell's last opaque
+column, so spacing is drawn as paper, and every pixel left of that is
+opaque. Other pixels are clear: alpha 0, or alpha 1-254, guides, which
+saving drops (every other cell and the rows below the baseline are
+tinted). Beside it, NAME.chars names the cells, one line per row of
+cells: each character as itself, a named glyph as <name>, any character
+as <u+XXXX>, and <> for a cell left empty. Every disagreement with the
+art is a problem naming its cell: a drawn cell with no character, a
+character over an empty cell, a clear pixel inside a glyph, a third
+color, a line past 16 cells or the image's rows, a character listed
+twice.
+
+BDF import places each glyph by its bounding box and the font's ascent
+(FONT_ASCENT), so trimmed glyphs (Misaki's) land where they draw, and
+advances it by DWIDTH (1-8). The BDF must be Unicode (ISO10646); its
+properties become the font's, FONT_ASCENT as ascent.
 
 The starter's renderer: `gbcli new` writes src/text.asm, a font drawn for
 gbcli (assets/fonts/main.yaff: the 95 printable ASCII characters, 2-6 px wide,

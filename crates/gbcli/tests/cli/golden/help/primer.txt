@@ -15,7 +15,8 @@ its machine, saves it and prints rows; --json prints the response line.
              change the session's settings
   project    gaps, sessions, sessions prune, sessions rm
              every session in .gbcli/, and what they share; no session needed
-  build      new, build, assets, song, pixels, font
+  build      new, build, assets, song, pixels, font, font edit, font save,
+             font new, font import, font export, font diff
              RGBDS from PATH: build, restore, measure; song, pixel text, fonts
   server     serve, batch
              the JSON Lines protocol, for harnesses

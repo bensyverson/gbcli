@@ -27,7 +27,9 @@ pub(super) fn write(font: &Font) -> String {
     }
     for p in &font.properties {
         comment(&mut out, &p.comment);
-        if p.value.contains('\n') {
+        // A one-line value ending in `:` would read as a label: write it
+        // indented under its key, as a value of several lines is.
+        if p.value.contains('\n') || p.value.ends_with(':') {
             out.push_str(&p.key);
             out.push_str(":\n");
             for l in p.value.lines() {

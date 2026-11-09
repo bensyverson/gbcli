@@ -90,6 +90,62 @@ fn font_reads_sets_a_sample_previews_and_fits() {
 }
 
 #[test]
+fn font_authoring_edits_saves_compares_and_starts_fonts() {
+    let p = project("font-author");
+    let mut transcript = String::new();
+    let steps: &[(&[&str], i32)] = &[
+        (&["font", "edit", "main.yaff"], 0),
+        (&["font", "edit", "main.yaff", "--as", "bdf"], 2),
+        (&["font", "save", "build/font-edit/main.png"], 0),
+        (&["font", "edit", "main.yaff", "--as", "bdf"], 0),
+        (&["font", "save", "main.yaff"], 0),
+        (&["font", "export", "main.yaff", "--bdf", "main.bdf"], 0),
+        (&["font", "new", "hud.yaff", "--chars", "ascii"], 0),
+        (
+            &[
+                "font",
+                "diff",
+                "main.yaff",
+                "other.yaff",
+                "--png",
+                "diff.png",
+            ],
+            0,
+        ),
+    ];
+    fs::write(
+        p.path("other.yaff"),
+        FONT.replace(
+            "    @...@\n    @...@\n    @@@@@",
+            "    @...@\n    @@.@@\n    @@@@@",
+        ),
+    )
+    .unwrap();
+    for (args, code) in steps {
+        let run = p.gbcli(args);
+        assert_eq!(run.code, *code, "{args:?}: {}", run.stderr);
+        transcript += &run.transcript(args, &p.dir);
+    }
+    golden("font_author.txt", &transcript);
+    assert_eq!(fs::read_to_string(p.path("main.yaff")).unwrap(), FONT);
+    // A copy's disagreement with its .chars names the cell.
+    fs::write(p.path("build/font-edit/hud.chars"), "<u+0020>!\n").unwrap();
+    let run = p.gbcli(&["font", "save", "hud.yaff"]);
+    run.fails(4, "font_unreadable", "write <> in its place");
+    assert!(
+        run.stderr.contains("build/font-edit/hud.png: cell 0,0: "),
+        "{}",
+        run.stderr
+    );
+    assert!(
+        run.stdout
+            .contains("problem path=build/font-edit/hud.png cell=1,0"),
+        "{}",
+        run.stdout
+    );
+}
+
+#[test]
 fn a_bad_font_is_font_unreadable_at_its_line_and_column() {
     let p = project("font-bad");
     fs::write(p.path("bad.yaff"), "0x41:\n    @\n").unwrap();

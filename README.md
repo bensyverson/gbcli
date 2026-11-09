@@ -22,6 +22,7 @@ gbcli                           # the primer: what the tool does and where to go
 
 ## Learn more
 
+- [examples/](examples/README.md) — games built entirely by agents with gbcli
 - [docs/architecture.md](docs/architecture.md) — which crate owns what
 - [docs/development.md](docs/development.md) — setting up a checkout and running the tests
 - [project/](project/) — plans, findings and decisions

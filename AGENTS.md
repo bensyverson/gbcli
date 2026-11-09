@@ -15,6 +15,7 @@ gbcli is an agent-friendly Game Boy development tool: a headless, deterministic 
 ## Documentation
 
 - [README.md](README.md) — what gbcli is, install and quick start
+- [examples/](examples/README.md) — games built by agents using gbcli as users; game agents read only gbcli's help and README
 - [docs/architecture.md](docs/architecture.md) — which crate owns what
 - [docs/development.md](docs/development.md) — setup, the test suites and their budget
 - [project/](project/) — dated plans, findings and decisions; the plan's tasks are in `job` (root `9b5RBA`)

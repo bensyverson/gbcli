@@ -62,3 +62,5 @@ opt-level 1 keeps debug info and debug assertions, including overflow checks. St
 - The pre-commit hook builds the tests, then times the run and warns when it passes 30 s. It warns rather than fails because host load alone can push a run over.
 - `python3 -I scripts/bench/test-times.py` gives the per-binary and per-test breakdown, with CPU seconds beside wall.
 - A test that is valuable but too slow for every commit is marked `#[ignore = "pre-release: <why>"]` and runs with `cargo test --workspace -- --ignored` before a release. Prefer making it faster first, e.g. by sampling fewer points or using a smaller ROM. Moving a test out of the loop means it runs rarely, so it catches regressions late.
+
+> **Re-timed, 2026-11-09 (sixteenth session):** 26.3 s and 27.2 s of wall time (126-129 s CPU), from `python3 -I scripts/bench/test-times.py` run twice with no agents compiling (load average 5.5-8.1 from other sessions, not in low-power mode). That's under budget, so no test moves to the pre-release suite. The fifteenth session's 43-51 s hook warnings were load. The largest binary is `gbcli-build::it` at 7.8 s.

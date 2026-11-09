@@ -10,6 +10,11 @@ From the fifteenth session's handoff ▸ "What the D and E agents said the brief
 - **Give the binary's absolute path only.** The worktree guard refuses a `PATH=…:$PATH` prefix, and it refuses a shell variable that holds the binary.
 - **Drop `gbcli gaps` from the DX doc's required content.** It lists only what the emulator core couldn't do, and it printed `none` in every D and E session. Stumbles belong in the DX doc.
 - **The halfway context rule stays, but expect it not to bite.** Each four-leaf chain fit in about 35% of a 1M window. C has five leaves.
+- **From the D/E DX review** ([2026-11-09-examples-dx-review-de.md](2026-11-09-examples-dx-review-de.md) ▸ What the brief got wrong):
+  - Name only verbs that exist at the pin. D's leaf promised a memory view that didn't exist. `view memory` lands with the fixes C waits for.
+  - Record key files late, after startup stops changing, or replay them with `--keys-since`.
+  - Ask the agent to report its bot's call count and wall time. C is the test for the embedded-scripting backlog entry.
+  - State in the brief when a frame ends and when a key lands, unless `help time` already says it at the pin.
 
 ## The game
 

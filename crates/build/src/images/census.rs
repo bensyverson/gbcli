@@ -7,9 +7,9 @@ use gbcli_protocol::{ImageLimit, ImageProblem, Rgb555, Severity, TileAt};
 
 use super::pixels::{Pixels, Rgba, hex};
 
-/// A color as rgbgfx reads it: RGB555, each channel's top 5 bits. Colors
-/// with one key are one color to rgbgfx (it merges them with a warning), so
-/// every check counts and shades them as one.
+/// A color as the hardware holds it: RGB555, each channel's top 5 bits.
+/// Colors with one key draw as one color, so every check counts and shades
+/// them as one.
 pub(crate) type Key = [u8; 3];
 
 /// The protocol's one truncation (`Rgb555::from_rgb888`), so a color the
@@ -18,8 +18,8 @@ pub(crate) fn key(c: Rgba) -> Key {
     Rgb555::from_rgb888(c[0], c[1], c[2]).channels()
 }
 
-/// An image's colors (fully transparent pixels excluded) as rgbgfx counts
-/// them, most used first. Each is its key's most used RGB value, which
+/// An image's colors (fully transparent pixels excluded), one a key, most
+/// used first. Each is its key's most used RGB value, which
 /// stands for the rest in messages and for its shade.
 pub(crate) fn colors(pixels: &Pixels) -> Vec<(Rgba, u32)> {
     let mut count: BTreeMap<Rgba, u32> = BTreeMap::new();

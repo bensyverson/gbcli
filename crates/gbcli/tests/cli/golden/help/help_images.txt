@@ -53,7 +53,7 @@ colors one image holds, or chained through one, are a group (a/b); it
 lists each group with its images, and count= is the groups. Colors of
 different named palettes may share a shade unremarked: on the DMG every
 palette's lightest color is white. Colors equal in RGB555 (5 bits a
-channel, as rgbgfx reads them) are one color.
+channel, an 8-bit channel's top 5) are one color.
 gbcli keys no color out: GB Studio's transparent green (#65ff00) is a
 color here; make those pixels alpha 0.
 

@@ -36,7 +36,49 @@ rgbgfx field, `BuildError::Toolchain`, `AssetsOptions::tool_timeout`, the
 and `Tool::Rgbgfx` remain in the protocol types, which this leaf did not
 change; nothing produces them.
 
+> **Update (2026-11-09, leaf HNBr9t).** Ben ruled that the unused values
+> go: `Tool::Rgbgfx`, `CheckName::Rgbgfx` and `ImageLimit::RgbgfxAgrees`
+> are removed from the protocol, so `"rgbgfx"` no longer reads as a
+> diagnostic's tool or a doctor check, nor `"rgbgfx_agrees"` as a limit.
+> `AssetsMade.diagnostics` stays on the wire, always empty.
+
 ## The differential test
+
+> **Correction (2026-11-09, leaf HNBr9t): the test below, as first
+> written, did not run rgbgfx "on the same image".** Its DMG half painted
+> rgbgfx's input from gbcli's own `.2bpp` decoded through gbcli's own tile
+> map, so it was a 2bpp round trip: reversing a background's tile order,
+> reversing a sheet's unit order, and swapping the planes in
+> `encode::background` all left it green (the independent review of
+> c47f60d; other image tests caught each). The plane-swap line below
+> credited the DMG check with a catch it could not make. Its GBC half
+> repainted the source at 8 bits, after truncating 16-bit samples, so a
+> truncating decoder passed it too. Now:
+>
+> - **DMG** reads the source's own pixels (its `name.dmg.png` when it has
+>   one), each color repainted as the one `-c` lists for the index gbcli
+>   gave it, and each cell's tile must be rgbgfx's tile at that place.
+>   Tile and unit reversal turn it red (checked by applying each). It still
+>   takes gbcli's color → index choice, so a uniform relabeling of indices
+>   (the plane swap is one: 1 ↔ 2) passes the comparison. Where the
+>   project's shade rule is a known palette, a background's or tileset's
+>   index must also be its color's shade there (BGP $E4); a pure-gray
+>   fixture (`gray_art_matches_rgbgfx_on_the_source_and_in_its_shades`)
+>   makes that apply, and the plane swap fails it.
+> - **GBC** hands rgbgfx the source PNG itself, so rgbgfx decodes it
+>   (16-bit samples included); a 16-bit fixture whose samples sit just
+>   under an RGB555 step fails when gbcli truncates instead of rounding
+>   (checked), and `images_png_encodings.rs` pins the same colors without
+>   rgbgfx.
+>
+> **What the oracle cannot see.** An image whose source isn't a PNG
+> (`.pixels` text: 11 images in 3 of the 5 example games): its DMG data is
+> not compared, and its GBC data is compared with a PNG painted from
+> gbcli's own data, a round trip. A sheet's indices are not checked
+> against its OBP's shades, and a background's only under a known palette;
+> elsewhere gbcli's shade choice is taken, not checked. `assets` is not run
+> with a recording rgbgfx; it takes no toolchain and the protocol has no
+> rgbgfx tool to find.
 
 `crates/build/tests/it/images_differential.rs` converts every example
 game's images and a fixture of each kind and art with `assets` (no tool),

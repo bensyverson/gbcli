@@ -105,8 +105,6 @@ fn tool_check(tool: Tool) -> CheckName {
         Tool::Rgbasm => CheckName::Rgbasm,
         Tool::Rgblink => CheckName::Rgblink,
         Tool::Rgbfix => CheckName::Rgbfix,
-        // Not among `Tool::ALL`: a build needs no image tool.
-        Tool::Rgbgfx => unreachable!("rgbgfx is not checked"),
     }
 }
 

@@ -147,7 +147,6 @@ fn every_limit_name_matches_the_wire() {
         FrameSpan,
         RomxBank,
         Alpha,
-        RgbgfxAgrees,
         SharedShade,
         PaletteFile,
         ShadeStretched,
@@ -166,4 +165,16 @@ fn every_limit_name_matches_the_wire() {
     for kind in [ImageKind::Bg, ImageKind::Sprites, ImageKind::Tiles] {
         assert_eq!(serde_json::to_value(kind).unwrap(), kind.dir());
     }
+}
+
+/// The build runs no rgbgfx since it encodes images itself (c47f60d), so
+/// the limit that checked rgbgfx's output is gone from the wire (Ben's
+/// ruling, 2026-11-09), and `alpha` still reads.
+#[test]
+fn rgbgfx_agrees_is_no_limit() {
+    assert!(serde_json::from_str::<ImageLimit>("\"rgbgfx_agrees\"").is_err());
+    assert_eq!(
+        serde_json::from_str::<ImageLimit>("\"alpha\"").unwrap(),
+        ImageLimit::Alpha
+    );
 }

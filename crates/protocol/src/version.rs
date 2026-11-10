@@ -18,7 +18,9 @@ use serde::{Deserialize, Serialize};
 /// response carries that was published under 3. 5 since leaf xdES5r: the
 /// wall guard answers its own error code (`wall_guard`), where it answered
 /// `budget_exhausted`; the request's optional `wall_guard_s` raises it.
-pub const PROTOCOL_VERSION: u32 = 5;
+/// 6 since leaf HNBr9t: `Tool` and `CheckName` lose `rgbgfx` and
+/// `ImageLimit` loses `rgbgfx_agrees`, values a response under 5 could carry.
+pub const PROTOCOL_VERSION: u32 = 6;
 
 /// What `version` answers.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -61,7 +63,7 @@ mod tests {
         };
         assert_eq!(
             serde_json::to_string(&result).unwrap(),
-            r#"{"version":{"gbcli":"0.1.0","protocol":5,"sameboy":"abc","patch_set":"def"}}"#
+            r#"{"version":{"gbcli":"0.1.0","protocol":6,"sameboy":"abc","patch_set":"def"}}"#
         );
     }
 }

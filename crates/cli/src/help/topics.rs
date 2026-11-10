@@ -392,9 +392,6 @@ mod tests {
             FrameSpan,
             RomxBank,
             Alpha,
-            // RgbgfxAgrees stays in the protocol types but no build produces
-            // it since gbcli encodes images itself (leaf zkoPft), so the
-            // topic no longer names it.
             SharedShade,
             PaletteFile,
             ShadeStretched,

@@ -1,8 +1,11 @@
-//! PNG encodings the agree check must let through when gbcli and rgbgfx
-//! read them alike, and one the build must refuse, against the real rgbgfx
-//! 1.0.4: 16-bit samples on every rounding boundary, 16-bit RGBA, RGB with
-//! a tRNS key, 2-bit paletted and gray, flipped and repeated frames (the
-//! second review's probes, leaf FPQsnp's review; kept as guards in iH2KOO).
+//! PNG encodings the build must read, and one it must refuse: 16-bit
+//! samples on every rounding boundary, 16-bit RGBA, RGB with a tRNS key,
+//! 2-bit paletted and gray, flipped and repeated frames (the second
+//! review's probes, leaf FPQsnp's review; kept as guards in iH2KOO). They
+//! were checked against rgbgfx 1.0.4 while it wrote the data; since gbcli
+//! encodes images itself (c47f60d) most assert only that the build reads
+//! them. The 16-bit colors are pinned here, and rgbgfx reads a 16-bit PNG
+//! beside gbcli in `images_differential.rs`.
 
 use crate::common;
 use crate::pngs;
@@ -54,8 +57,8 @@ fn write_raw(path: &Path, raw: Raw<'_>) {
 }
 
 /// 16-bit gray backgrounds whose samples sit on every 8-bit boundary where
-/// rounding (libpng's scale_16) and truncation pick different RGB555 colors.
-/// The agree check referees each: the build must succeed.
+/// rounding (libpng's scale_16) and truncation pick different RGB555 colors:
+/// the build must read each.
 #[test]
 fn sixteen_bit_gray_at_every_rgb555_boundary_builds() {
     let (temp, options) = starter("png-16-boundaries");
@@ -101,6 +104,58 @@ fn sixteen_bit_gray_at_every_rgb555_boundary_builds() {
         31,
         "every image converted"
     );
+}
+
+/// A 16-bit color background's colors, as its GBC palettes report them:
+/// each sample rounded to 8 bits as libpng's `png_set_scale_16` does (how
+/// rgbgfx read them), then its top five bits. Every sample sits just under
+/// an RGB555 step, so truncating it gives the value below.
+#[test]
+fn sixteen_bit_colors_round_as_libpng_scales_them() {
+    let (temp, _options) = starter("png-16-colors");
+    let colors: [[u16; 4]; 4] = [
+        [0x77FF, 0x07FF, 0x0000, 0xFFFF],
+        [0x0000, 0xBFFF, 0x0FFF, 0xFFFF],
+        [0x17FF, 0x0000, 0xF7FF, 0xFFFF],
+        [0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF],
+    ];
+    pngs::write_png16(&temp.path("demo/assets/bg/deep.png"), 8, 8, |x, y| {
+        colors[((x + y) % 4) as usize]
+    });
+    let mut options = gbcli_build::AssetsOptions::new(
+        gbcli_build::AssetsInput::Project(temp.path("demo")),
+        temp.0.clone(),
+    );
+    options.target = gbcli_protocol::BuildTarget::Gbc;
+    let made = gbcli_build::assets(&options).unwrap_or_else(|e| panic!("{:?}", e.body()));
+    let image = &made.images.images[0];
+    let got: Vec<gbcli_protocol::Rgb555> = image
+        .gbc
+        .as_ref()
+        .unwrap()
+        .palettes
+        .iter()
+        .flat_map(|p| p.0)
+        .collect();
+    let five = |s: u16, round: bool| {
+        let eight = if round {
+            pngs::scale_16(s)
+        } else {
+            (s >> 8) as u8
+        };
+        eight >> 3
+    };
+    // White is the tile's fourth color; it is white either way.
+    for [r, g, b, _] in &colors[..3] {
+        let (r, g, b) = (*r, *g, *b);
+        let want = gbcli_protocol::Rgb555::new(five(r, true), five(g, true), five(b, true));
+        let truncated = gbcli_protocol::Rgb555::new(five(r, false), five(g, false), five(b, false));
+        assert_ne!(want, truncated, "{r:#06x} {g:#06x} {b:#06x} is no boundary");
+        assert!(
+            got.contains(&want.unwrap()),
+            "{r:#06x} {g:#06x} {b:#06x} should be {want:?}; the palettes hold {got:?}"
+        );
+    }
 }
 
 /// A 16-bit RGBA sprite sheet: transparent pixels, and colors on the
@@ -225,7 +280,7 @@ fn low_depth_pngs_build() {
 
 /// A sheet of four 16x16 frames: a figure, its mirror (flip-merged units),
 /// an empty frame, and the figure again (deduped). Only the first frame's
-/// units are kept; the agree check must let it through.
+/// units are kept.
 #[test]
 fn flipped_empty_and_repeated_frames_build() {
     use pngs::{BLACK, CLEAR, DARK, LIGHT, write_png};

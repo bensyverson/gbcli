@@ -12,7 +12,7 @@ and --as. A mutation that passes rev is refused (rev_mismatch) if the session
 moved on. wall_guard_s replaces the server's 60 s host-time guard for this
 request; a request it ends fails wall_guard (exit 3), not budget_exhausted. Unknown and repeated fields are refused, naming the nearest field.
 Fields marked ? may be left out; an op with no required field may omit args.
-This schema's protocol version is 5, which the version op reports. It goes up
+This schema's protocol version is 6, which the version op reports. It goes up
 on a breaking change to these shapes (a new value of a response's enum among
 them), not for a new op or a new optional request field.
 
@@ -160,7 +160,7 @@ on its error).
 
 Build diagnostics, in result.build.diagnostics (on build_failed, in
 error.result.build):
-  {tool: "rgbasm"|"rgblink"|"rgbfix"|"rgbgfx", severity: "error"|"warning",
+  {tool: "rgbasm"|"rgblink"|"rgbfix", severity: "error"|"warning",
    file?, line?, last_line?, within?, message, chain?: [SOURCE],
    also?: [[SOURCE]], count?: N}
   last_line, count: a message the tool repeated on lines line to last_line,

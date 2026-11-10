@@ -88,11 +88,13 @@ pub struct ManifestImage {
 }
 
 /// What `assets` converted: the images as a build of the same target
-/// records them (`BuildMade.images`), and rgbgfx's diagnostics.
+/// records them (`BuildMade.images`).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AssetsMade {
     pub target: BuildTarget,
     pub images: ImagesMade,
+    /// Always empty: `assets` runs no tool, so nothing reports a
+    /// diagnostic. Kept on the wire for the result's shape.
     pub diagnostics: Vec<Diagnostic>,
 }
 

@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use gbcli_protocol::{
-    AssetManifest, AssetsArgs, AssetsMade, BuildTarget, Diagnostic, ErrorBody, ErrorCode,
-    ImagesMade, ResultBody, Severity,
+    AssetManifest, AssetsArgs, AssetsMade, BuildTarget, ErrorBody, ErrorCode, ImagesMade,
+    ResultBody,
 };
 
 use crate::images::{input, pipeline};
@@ -119,17 +119,12 @@ impl AssetsError {
                     p.remedy.clone(),
                 )
             }
-            None => {
-                let first = made
-                    .diagnostics
-                    .iter()
-                    .find(|d| d.severity == Severity::Error)
-                    .map_or_else(|| "no diagnostic".to_string(), said);
-                (
-                    format!("the images didn't convert: {first}"),
-                    "fix the image it names, then convert again".to_string(),
-                )
-            }
+            // The images stop only on an error problem, and no tool runs to
+            // say anything else; this is gbcli's bug if it is ever reached.
+            None => (
+                "the images didn't convert, and no problem says why".to_string(),
+                "this is gbcli's bug: report it with the images".to_string(),
+            ),
         };
         let mut body = ErrorBody::new(ErrorCode::BuildFailed, message, remedy);
         body.result = Some(Box::new(ResultBody {
@@ -138,14 +133,6 @@ impl AssetsError {
         }));
         body
     }
-}
-
-fn said(d: &Diagnostic) -> String {
-    let place = d
-        .file
-        .as_deref()
-        .map_or(String::new(), |f| format!("{f}: "));
-    format!("{place}{} ({})", d.message, d.tool.name())
 }
 
 /// Converts the images `options` names. Warnings ride in the result.

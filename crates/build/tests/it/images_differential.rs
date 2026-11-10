@@ -5,43 +5,61 @@
 //! Every example game's images, and a fixture of each kind and art (a plain
 //! background, a tileset, 8x16 and 8x8 sheets, shared shades, derived color
 //! art, GBC multi-palette art and a 16-bit PNG), are converted by `assets`,
-//! which runs no tool. Then real rgbgfx is run on the same image with the
-//! same palettes, and what the two wrote must agree: the DMG tile data byte
-//! for byte, and the GBC data by the color each pixel draws (rgbgfx may
-//! pick another palette that holds a tile's colors, research §3; gbcli
-//! always draws from the slot it packed).
+//! which runs no tool. Then real rgbgfx reads the source's own pixels, and
+//! each cell gbcli's data draws must be the tile rgbgfx wrote for that place
+//! in the image:
 //!
-//! The fixtures other image tests build live in their own temporary
-//! directories and are gone before this test runs, so this file builds the
-//! same shapes again rather than reaching into them; every one of them is
-//! also built with no rgbgfx on `PATH` by its own test.
+//! - DMG: rgbgfx reads the source (its `name.dmg.png` when it has one), each
+//!   color repainted as the one `-c` lists for the index gbcli gave it, so
+//!   two colors sharing a shade are one to rgbgfx too. Its tile there must
+//!   be gbcli's byte for byte. gbcli's tile order, map, sheet unit order and
+//!   2bpp encoding never reach rgbgfx's input. gbcli's color -> index choice
+//!   does: a uniform relabeling of indices passes this comparison. Where the
+//!   project's shade rule is a known palette, a background's (or tileset's)
+//!   index must also be its color's shade in that palette, which a relabeling
+//!   breaks.
+//! - GBC: rgbgfx reads the source PNG itself (so it decodes 16-bit samples
+//!   itself) with gbcli's palettes, and each pixel must draw the same color
+//!   (rgbgfx may pick another palette that holds a tile's colors, research
+//!   §3; gbcli always draws from the slot it packed).
+//!
+//! What it cannot see: an image whose source isn't a PNG (`.pixels` text,
+//! 3 of 5 example games): its DMG data is not compared, and its GBC data is
+//! compared with a PNG painted from gbcli's own data, a round trip. A
+//! sheet's indices are not checked against its OBP's shades. And the
+//! fixtures other image tests build live in their own temporary
+//! directories, so this file builds the same shapes again.
 
 use crate::common;
 use crate::pngs;
 
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use gbcli_build::{AssetsInput, AssetsOptions, assets};
 use gbcli_protocol::{
-    AssetsMade, BuildTarget, Flip, GbcPalette, ImageArt, ImageAsset, ImageKind, ImagesMade, Rgb555,
-    Tool,
+    AssetsMade, BuildTarget, Flip, GbcPalette, ImageArt, ImageAsset, ImageKind, ImagesMade,
+    KnownPalette, Rgb555, ShadeChoice, ShadeRule,
 };
-use pngs::{BLACK, CLEAR, DARK, LIGHT, Rgba, WHITE, write_png};
+use pngs::{BLACK, CLEAR, DARK, LIGHT, Rgba, WHITE, write_png, write_png16};
 
 /// The rgbgfx this test compares with: the pinned 1.0.4 from `PATH`.
 fn rgbgfx() -> PathBuf {
-    let path = std::env::var_os("PATH");
-    let cwd = std::env::current_dir().unwrap();
-    gbcli_build::probe(Tool::Rgbgfx, path.as_deref(), &cwd)
-        .unwrap_or_else(|e| {
-            panic!(
-                "this differential test needs rgbgfx 1.0.4 on PATH: {}",
-                e.message()
-            )
-        })
-        .path
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    let found = std::env::split_paths(&path)
+        .map(|dir| dir.join("rgbgfx"))
+        .find(|p| p.is_file())
+        .expect("this differential test needs rgbgfx 1.0.4 on PATH");
+    let out = Command::new(&found).arg("--version").output().unwrap();
+    let version = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        version.trim() == "rgbgfx v1.0.4",
+        "this differential test needs rgbgfx 1.0.4; {} is {version}",
+        found.display()
+    );
+    found
 }
 
 /// Converts `project` for the GBC, keeping its data in `keep`.
@@ -191,15 +209,24 @@ fn hex(c: Rgba) -> String {
     format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2])
 }
 
-/// An image's pixels as RGBA, expanded from any PNG encoding.
+/// An image's pixels as RGBA, expanded from any PNG encoding; 16-bit
+/// samples are rounded to 8 bits as libpng's `png_set_scale_16` does, which
+/// is how rgbgfx reads them.
 fn read_rgba(path: &Path) -> (u32, u32, Vec<Rgba>) {
     let mut decoder = png::Decoder::new(fs::File::open(path).unwrap());
-    decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
+    decoder.set_transformations(png::Transformations::EXPAND);
     let mut reader = decoder.read_info().unwrap();
     let mut buf = vec![0; reader.output_buffer_size()];
     let info = reader.next_frame(&mut buf).unwrap();
     let n = info.color_type.samples();
-    let pixels = buf[..info.buffer_size()]
+    let samples: Vec<u8> = match info.bit_depth {
+        png::BitDepth::Sixteen => buf[..info.buffer_size()]
+            .chunks(2)
+            .map(|b| pngs::scale_16(u16::from_be_bytes([b[0], b[1]])))
+            .collect(),
+        _ => buf[..info.buffer_size()].to_vec(),
+    };
+    let pixels = samples
         .chunks(n)
         .map(|p| match n {
             1 => [p[0], p[0], p[0], 0xFF],
@@ -211,12 +238,56 @@ fn read_rgba(path: &Path) -> (u32, u32, Vec<Rgba>) {
     (info.width, info.height, pixels)
 }
 
-/// The four grays a DMG tile's indices are drawn in when the data has no
-/// image file of its own (a derived DMG version, pixel text).
-const GRAYS: [Rgba; 4] = [WHITE, LIGHT, DARK, BLACK];
+/// A known palette's colors, shade 0 first, as `KnownPalette` documents
+/// them: written out here so the shade check doesn't take them from gbcli.
+fn known_colors(palette: KnownPalette) -> [Rgba; 4] {
+    let c = |v: u32| [(v >> 16) as u8, (v >> 8) as u8, v as u8, 0xFF];
+    let words = match palette {
+        KnownPalette::DmgGrays => [0xffffff, 0xaaaaaa, 0x555555, 0x000000],
+        KnownPalette::PeaGreens => [0x9bbc0f, 0x8bac0f, 0x306230, 0x0f380f],
+        KnownPalette::GbStudioGreens => [0xe0f8cf, 0x86c06c, 0x306850, 0x071821],
+        KnownPalette::PocketGrays => [0xc2ce93, 0x818d66, 0x3a4c3a, 0x07100e],
+    };
+    words.map(c)
+}
 
-/// Checks the DMG data of `asset` against rgbgfx, appending mismatches.
-fn check_dmg(base: &Path, keep: &Path, asset: &ImageAsset, scratch: &Path, bad: &mut Vec<String>) {
+/// A color's RGB555 key, or none for a transparent pixel.
+fn key(c: Rgba) -> Option<(u8, u8, u8)> {
+    (c[3] != 0).then_some((c[0] >> 3, c[1] >> 3, c[2] >> 3))
+}
+
+/// The image rgbgfx reads for `asset`'s DMG data: its `name.dmg.png` when
+/// it has one, else its source; none when that isn't a PNG of its size.
+fn dmg_source(base: &Path, asset: &ImageAsset) -> Option<Vec<Rgba>> {
+    let given = Path::new(&asset.source);
+    let name = given.file_name().unwrap().to_string_lossy().into_owned();
+    let stem = name
+        .rsplit_once('.')
+        .map_or(name.clone(), |(n, _)| n.to_string());
+    let dmg = base.join(given.with_file_name(format!("{stem}.dmg.png")));
+    let source = if dmg.exists() { dmg } else { base.join(given) };
+    if source.extension().is_none_or(|e| e != "png") {
+        return None;
+    }
+    let (pw, ph, pixels) = read_rgba(&source);
+    ((pw, ph) == (asset.width * 8, asset.height * 8)).then_some(pixels)
+}
+
+/// Checks the DMG data of `asset` against rgbgfx reading the source's own
+/// pixels, appending mismatches. gbcli's data gives only a color -> index
+/// mapping, which must be a function of the RGB555 color; every pixel of
+/// rgbgfx's input is drawn from the source at its own place, so the tile it
+/// writes for a cell is independent of gbcli's tile order, map, unit order
+/// and 2bpp encoding. With `shades` a known palette, a background's indices
+/// must also be their colors' shades in it (BGP $E4).
+fn check_dmg(
+    base: &Path,
+    keep: &Path,
+    asset: &ImageAsset,
+    shades: Option<ShadeChoice>,
+    scratch: &Path,
+    bad: &mut Vec<String>,
+) {
     let sheet = asset.kind == ImageKind::Sprites;
     let per = asset.object_size.map_or(1, |size| size.tiles());
     let Ok(tiles) = fs::read(data_path(keep, asset, "2bpp")) else {
@@ -226,39 +297,58 @@ fn check_dmg(base: &Path, keep: &Path, asset: &ImageAsset, scratch: &Path, bad: 
     if cells.is_empty() {
         return;
     }
-    let (w, h) = (asset.width * 8, asset.height * 8);
-    // The image rgbgfx reads: the source of indexed art, a `dmg` version
-    // beside a color image, else a copy of the data in four grays.
-    let dmg_png = match asset.gbc.as_ref().map(|g| &g.art) {
-        Some(ImageArt::Indexed { .. }) => Some(base.join(&asset.source)),
-        _ => {
-            let given = Path::new(&asset.source);
-            let name = given.file_name().unwrap().to_string_lossy().into_owned();
-            let stem = name
-                .rsplit_once('.')
-                .map_or(name.clone(), |(n, _)| n.to_string());
-            let dmg = base.join(given.with_file_name(format!("{stem}.dmg.png")));
-            dmg.exists().then_some(dmg)
-        }
+    let Some(real) = dmg_source(base, asset) else {
+        return;
     };
-    let real = dmg_png
-        .filter(|p| p.extension().is_some_and(|e| e == "png"))
-        .and_then(|p| {
-            let (pw, ph, pixels) = read_rgba(&p);
-            (pw == w && ph == h).then_some(pixels)
-        });
-    // One color a color index: the image's own where there is one, else the
-    // grays. Two colors sharing an index draw as one, as the plan says.
+    let w = asset.width * 8;
+    let known = match shades {
+        Some(ShadeChoice {
+            rule: ShadeRule::Known,
+            palette: Some(p),
+        }) if !sheet => Some(known_colors(p).map(|c| key(c).unwrap())),
+        _ => None,
+    };
+    let mut map: HashMap<(u8, u8, u8), u8> = HashMap::new();
+    let mut split: HashSet<(u8, u8, u8)> = HashSet::new();
     let mut spec: [Option<Rgba>; 4] = [None; 4];
     for cell in &cells {
         for (n, &index) in cell.pixels.iter().enumerate() {
-            let index = index as usize;
             let (x, y) = (cell.x * 8 + n as u32 % 8, cell.y * 8 + n as u32 / 8);
-            let color = real
-                .as_ref()
-                .map_or(GRAYS[index], |pixels| pixels[(y * w + x) as usize]);
-            spec[index].get_or_insert(color);
+            let c = real[(y * w + x) as usize];
+            let Some(k) = key(c) else { continue };
+            // Once a color: the map check below covers its other pixels.
+            if !map.contains_key(&k)
+                && let Some(shade) = known.and_then(|colors| colors.iter().position(|&s| s == k))
+                && shade != index as usize
+            {
+                bad.push(format!(
+                    "{}: color {} at ({x}, {y}) is shade {shade} but index {index}",
+                    asset.source,
+                    hex(c)
+                ));
+            }
+            match map.get(&k) {
+                Some(&was) if was != index => {
+                    // Once a color, at its first other index.
+                    if split.insert(k) {
+                        bad.push(format!(
+                            "{}: color {} at ({x}, {y}) is index {index} here, {was} elsewhere",
+                            asset.source,
+                            hex(c)
+                        ));
+                    }
+                }
+                Some(_) => {}
+                None => {
+                    map.insert(k, index);
+                    spec[index as usize].get_or_insert(c);
+                }
+            }
         }
+    }
+    if !split.is_empty() {
+        // No one color an index: there is no image to show rgbgfx.
+        return;
     }
     let spec_text = (0..4)
         .map(|i| match spec[i] {
@@ -268,27 +358,28 @@ fn check_dmg(base: &Path, keep: &Path, asset: &ImageAsset, scratch: &Path, bad: 
         .collect::<Vec<_>>()
         .join(",");
     let png = scratch.join("oracle-dmg.png");
-    let mut drawn = vec![CLEAR; (w * h) as usize];
-    for cell in &cells {
-        for (n, &index) in cell.pixels.iter().enumerate() {
-            let (x, y) = (cell.x * 8 + n as u32 % 8, cell.y * 8 + n as u32 / 8);
-            let mut color = spec[index as usize].unwrap_or(GRAYS[index as usize]);
-            if sheet && index == 0 {
-                color[3] = 0;
-            }
-            drawn[(y * w + x) as usize] = color;
+    write_png(&png, w, asset.height * 8, |x, y| {
+        let c = real[(y * w + x) as usize];
+        match key(c).and_then(|k| map.get(&k)) {
+            Some(&i) => spec[i as usize].unwrap(),
+            None => CLEAR,
         }
-    }
-    write_png(&png, w, h, |x, y| drawn[(y * w + x) as usize]);
+    });
     let (out, _) = run_rgbgfx(&png, &spec_text, sheet, false, scratch);
-    let (dw, dh) = (asset.width, asset.height);
     for cell in &cells {
         for t in 0..per {
-            let got = decode(oracle(&out, sheet, dw, dh, cell.x, cell.y + t));
+            let got = decode(oracle(
+                &out,
+                sheet,
+                asset.width,
+                asset.height,
+                cell.x,
+                cell.y + t,
+            ));
             let want = &cell.pixels[64 * t as usize..64 * (t as usize + 1)];
             if got != want {
                 bad.push(format!(
-                    "{}: DMG tile ({}, {}) differs from rgbgfx (spec {spec_text})",
+                    "{}: DMG tile ({}, {}) differs from rgbgfx on the source (spec {spec_text})",
                     asset.source,
                     cell.x,
                     cell.y + t
@@ -334,33 +425,32 @@ fn check_gbc(
     }
     let (w, h) = (asset.width * 8, asset.height * 8);
     let obj = sheet;
-    // The color image rgbgfx reads: the source when it is a PNG, else a
-    // copy of the colors the data draws.
+    // The color image rgbgfx reads: the source itself when it is a PNG of
+    // the image's size, else (pixel text) a copy of the colors the data
+    // draws, which only round-trips gbcli's own data.
     let source = base.join(&asset.source);
-    let real = source
-        .extension()
-        .is_some_and(|e| e == "png")
-        .then(|| read_rgba(&source))
-        .filter(|(pw, ph, _)| *pw == w && *ph == h)
-        .map(|(_, _, pixels)| pixels);
-    let png = scratch.join("oracle-gbc.png");
-    let mut drawn = vec![CLEAR; (w * h) as usize];
-    for cell in &cells {
-        let slot = cell.slot.expect("a GBC cell has a slot");
-        for (n, &index) in cell.pixels.iter().enumerate() {
-            let (x, y) = (cell.x * 8 + n as u32 % 8, cell.y * 8 + n as u32 / 8);
-            drawn[(y * w + x) as usize] =
-                match (real.as_ref(), color_of(palettes, slot, obj, index)) {
-                    (Some(pixels), _) => pixels[(y * w + x) as usize],
-                    (None, Some(color)) => {
-                        let [r, g, b] = color.to_rgb888();
-                        [r, g, b, 0xFF]
-                    }
-                    (None, None) => CLEAR,
-                };
+    let is_png = source.extension().is_some_and(|e| e == "png") && {
+        let (pw, ph, _) = read_rgba(&source);
+        (pw, ph) == (w, h)
+    };
+    let png = if is_png {
+        source
+    } else {
+        let png = scratch.join("oracle-gbc.png");
+        let mut drawn = vec![CLEAR; (w * h) as usize];
+        for cell in &cells {
+            let slot = cell.slot.expect("a GBC cell has a slot");
+            for (n, &index) in cell.pixels.iter().enumerate() {
+                let (x, y) = (cell.x * 8 + n as u32 % 8, cell.y * 8 + n as u32 / 8);
+                if let Some(color) = color_of(palettes, slot, obj, index) {
+                    let [r, g, b] = color.to_rgb888();
+                    drawn[(y * w + x) as usize] = [r, g, b, 0xFF];
+                }
+            }
         }
-    }
-    write_png(&png, w, h, |x, y| drawn[(y * w + x) as usize]);
+        write_png(&png, w, h, |x, y| drawn[(y * w + x) as usize]);
+        png
+    };
     let spec = palettes
         .iter()
         .map(|GbcPalette(colors)| {
@@ -414,7 +504,9 @@ fn check_gbc(
     }
 }
 
-fn check(project: &Path, base: &Path, name: &str) -> Vec<String> {
+/// Converts `project` and checks every image against rgbgfx; the
+/// mismatches, and the project's shade choice.
+fn check(project: &Path, base: &Path, name: &str) -> (Vec<String>, Option<ShadeChoice>) {
     let keep = std::env::temp_dir().join(format!("gbcli-differ-{name}"));
     let _ = fs::remove_dir_all(&keep);
     let made = convert(project, base, &keep);
@@ -426,7 +518,7 @@ fn check(project: &Path, base: &Path, name: &str) -> Vec<String> {
             Some(g) => &g.palettes,
             None => &[],
         };
-        check_dmg(base, &keep, asset, &keep, &mut bad);
+        check_dmg(base, &keep, asset, made.shades, &keep, &mut bad);
         check_gbc(base, &keep, asset, palettes, &keep, &mut bad);
         // A color background's attribute map is its tile map's slots.
         if asset.kind == ImageKind::Bg
@@ -450,7 +542,7 @@ fn check(project: &Path, base: &Path, name: &str) -> Vec<String> {
         }
     }
     let _ = fs::remove_dir_all(&keep);
-    bad
+    (bad, made.shades)
 }
 
 /// Every image of every example game matches rgbgfx.
@@ -467,13 +559,13 @@ fn every_example_games_images_match_rgbgfx() {
         }
         games += 1;
         let name = game.file_name().to_string_lossy().into_owned();
-        bad.extend(check(&project, &examples, &format!("ex-{name}")));
+        bad.extend(check(&project, &examples, &format!("ex-{name}")).0);
     }
     assert!(games >= 5, "{games} example games");
     assert!(bad.is_empty(), "rgbgfx disagrees:\n{}", bad.join("\n"));
 }
 
-/// A fixture of every kind and art matches rgbgfx.
+/// A fixture of every kind and art matches rgbgfx, a 16-bit PNG among them.
 #[test]
 fn every_kind_and_art_matches_rgbgfx() {
     let (temp, _options) = common::starter("differ");
@@ -530,6 +622,18 @@ fn every_kind_and_art_matches_rgbgfx() {
             palette[n % 3],
         ][(x % 8 / 2) as usize]
     });
+    // 16-bit color art whose samples sit just under an RGB555 step:
+    // rounded to 8 bits (libpng's scale_16, as rgbgfx reads them) they reach
+    // it, truncated they don't, so a decoder that truncates draws colors
+    // rgbgfx doesn't find among gbcli's palettes.
+    write_png16(&demo.join("assets/bg/deep.png"), 8, 8, |x, y| {
+        [
+            [0x77FF, 0x0000, 0x0000, 0xFFFF],
+            [0x0000, 0xBFFF, 0x0000, 0xFFFF],
+            [0x0000, 0x0000, 0xF7FF, 0xFFFF],
+            [0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF],
+        ][((x + y) % 4) as usize]
+    });
     // An 8x8 sheet, and a tileset.
     write_png(&demo.join("assets/sprites/dot.8x8.png"), 8, 8, |x, _| {
         if x < 4 { BLACK } else { CLEAR }
@@ -537,12 +641,76 @@ fn every_kind_and_art_matches_rgbgfx() {
     write_png(&demo.join("assets/tiles/blocks.png"), 8, 8, |x, y| {
         if (x + y) % 2 == 0 { LIGHT } else { DARK }
     });
-    let bad = check(&demo, &temp.0, "fixtures");
+    let (bad, _) = check(&demo, &temp.0, "fixtures");
     assert!(bad.is_empty(), "rgbgfx disagrees:\n{}", bad.join("\n"));
 }
 
+/// Gray art in the DMG's own grays, so its shades are the known palette's:
+/// tiles that share colors in different arrangements (no relabeling of
+/// indices hides a misplaced tile), an indexed 8x16 sheet of distinct units
+/// (a misordered unit shows), derived color art and a tileset. The DMG data
+/// must be rgbgfx's on the source pixels, and each background index its
+/// color's shade.
+#[test]
+fn gray_art_matches_rgbgfx_on_the_source_and_in_its_shades() {
+    let (temp, _options) = common::starter("differ-grays");
+    let demo = temp.path("demo");
+    write_png(&demo.join("assets/bg/sky.png"), 16, 8, |x, y| {
+        if (x / 8 + y / 8) % 2 == 0 {
+            WHITE
+        } else {
+            BLACK
+        }
+    });
+    write_png(&demo.join("assets/sprites/bugs.png"), 24, 16, |x, y| {
+        let (u, fx) = (x / 8, x % 8);
+        match (u + fx + y) % 4 {
+            0 => CLEAR,
+            1 => [DARK, WHITE, BLACK][u as usize],
+            2 => WHITE,
+            _ => BLACK,
+        }
+    });
+    write_png(&demo.join("assets/bg/split.png"), 24, 8, |x, y| {
+        let (t, fx) = (x / 8, x % 8);
+        let dark = match t {
+            0 => fx < 4,
+            1 => y < 4,
+            _ => fx > y,
+        };
+        if dark { BLACK } else { WHITE }
+    });
+    pngs::indexed(&demo, &["bg/sky.png", "sprites/bugs.png", "bg/split.png"]);
+    write_png(&demo.join("assets/bg/town.png"), 16, 8, |x, _| {
+        [WHITE, LIGHT, DARK, BLACK][(x / 4) as usize]
+    });
+    write_png(&demo.join("assets/tiles/blocks.png"), 16, 8, |x, y| {
+        if (x / 8 + x + y) % 2 == 0 {
+            LIGHT
+        } else {
+            DARK
+        }
+    });
+    let (bad, shades) = check(&demo, &temp.0, "grays");
+    assert_eq!(
+        shades,
+        Some(ShadeChoice {
+            rule: ShadeRule::Known,
+            palette: Some(KnownPalette::DmgGrays),
+        }),
+        "the shade check needs the known grays"
+    );
+    assert!(
+        bad.is_empty(),
+        "rgbgfx disagrees on the source:\n{}",
+        bad.join("\n")
+    );
+}
+
 /// The build runs no rgbgfx: one that records being called and fails is
-/// never run.
+/// never run. `assets` is not tested this way: it takes no toolchain and
+/// no `PATH`, and the protocol has no rgbgfx `Tool` to discover (Ben's
+/// ruling, 2026-11-09), so it has no way to find one.
 #[test]
 fn a_build_never_runs_rgbgfx() {
     use gbcli_protocol::Tool;

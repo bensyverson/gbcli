@@ -90,8 +90,8 @@ fn a_manifest_names_its_images_as_a_project_would() {
     }
 }
 
-/// The result is the images a build records, beside the target and
-/// rgbgfx's diagnostics; an image whose previews weren't kept names none.
+/// The result is the images a build records, beside the target and an
+/// empty diagnostics list; an image whose previews weren't kept names none.
 #[test]
 fn the_result_reads_back_and_an_image_may_name_no_preview() {
     let json = r#"{"target":"dmg","images":{"images":[{"kind":"tiles","source":"art/font.png","label":"Font","width":2,"height":1,"tiles":1,"tile_map":[{"index":0},{"index":0}]}]},"diagnostics":[]}"#;

@@ -78,9 +78,6 @@ pub enum Tool {
     Rgbasm,
     Rgblink,
     Rgbfix,
-    /// The image converter: needed only when `assets/` holds images, so not
-    /// among [`Tool::ALL`].
-    Rgbgfx,
 }
 
 impl Tool {
@@ -93,7 +90,6 @@ impl Tool {
             Tool::Rgbasm => "rgbasm",
             Tool::Rgblink => "rgblink",
             Tool::Rgbfix => "rgbfix",
-            Tool::Rgbgfx => "rgbgfx",
         }
     }
 }
@@ -271,7 +267,6 @@ pub enum CheckName {
     Gitignore,
     Writable,
     CoreSupport,
-    Rgbgfx,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -427,5 +422,21 @@ mod tests {
         for tool in Tool::ALL {
             assert_eq!(serde_json::to_value(tool).unwrap(), tool.name());
         }
+    }
+
+    /// gbcli encodes images itself (c47f60d), so rgbgfx is neither a tool a
+    /// diagnostic names nor a doctor check (Ben's ruling, 2026-11-09).
+    #[test]
+    fn rgbgfx_is_no_tool_and_no_check() {
+        assert!(serde_json::from_str::<Tool>("\"rgbgfx\"").is_err());
+        assert!(serde_json::from_str::<CheckName>("\"rgbgfx\"").is_err());
+        assert_eq!(
+            serde_json::from_str::<Tool>("\"rgbfix\"").unwrap(),
+            Tool::Rgbfix
+        );
+        assert_eq!(
+            serde_json::from_str::<CheckName>("\"rgbfix\"").unwrap(),
+            CheckName::Rgbfix
+        );
     }
 }

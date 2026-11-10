@@ -34,6 +34,34 @@ pub fn write_png(path: &Path, width: u32, height: u32, pixel: impl Fn(u32, u32) 
     writer.write_image_data(&data).unwrap();
 }
 
+/// Writes a `width`x`height` 16-bit RGBA PNG at `path`, each pixel's four
+/// samples from `pixel`.
+pub fn write_png16(path: &Path, width: u32, height: u32, pixel: impl Fn(u32, u32) -> [u16; 4]) {
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let mut data = Vec::new();
+    for y in 0..height {
+        for x in 0..width {
+            for sample in pixel(x, y) {
+                data.extend_from_slice(&sample.to_be_bytes());
+            }
+        }
+    }
+    let file = fs::File::create(path).unwrap();
+    let mut encoder = png::Encoder::new(file, width, height);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Sixteen);
+    let mut writer = encoder.write_header().unwrap();
+    writer.write_image_data(&data).unwrap();
+}
+
+/// A 16-bit sample as libpng's `png_set_scale_16` reduces it to 8 bits:
+/// rounded to the nearest, not truncated (pngrtran.c,
+/// `png_do_scale_16_to_8`). Written out here so a test does not take the
+/// rule from the code it checks.
+pub fn scale_16(v: u16) -> u8 {
+    ((u32::from(v) * 255 + 32767) / 65535) as u8
+}
+
 /// Makes `images` (paths under `assets/`) of the project at `project`
 /// indexed art, assigned one gray palette, added to its
 /// `assets/palettes.txt`. Indexed art is its own DMG version in every

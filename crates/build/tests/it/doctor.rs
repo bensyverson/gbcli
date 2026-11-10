@@ -79,7 +79,9 @@ fn rgbgfx_is_not_a_check() {
     );
     let made = run(&temp.0, Some(&tools)).unwrap();
     assert!(
-        made.checks.iter().all(|c| c.name != CheckName::Rgbgfx),
+        made.checks
+            .iter()
+            .all(|c| serde_json::to_value(c.name).unwrap() != "rgbgfx"),
         "{made:?}"
     );
 }

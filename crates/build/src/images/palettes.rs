@@ -313,7 +313,7 @@ impl Parsed {
             PaletteFault::RepeatedDmgColor { shade, first } => {
                 let word = |i: usize| self.dmg_words.get(i).map_or("?", String::as_str);
                 format!(
-                    "{} is {} (shade {first}) to rgbgfx, which keeps 5 bits a channel, so the \
+                    "{} is {} (shade {first}) in RGB555, which keeps 5 bits a channel, so the \
                      two can't name two shades",
                     word(*shade),
                     word(*first)

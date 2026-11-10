@@ -29,6 +29,7 @@ gbcli is an agent-friendly Game Boy development tool: a headless, deterministic 
 - [scripts/fonts/gen_marks.py](scripts/fonts/gen_marks.py) — regenerates the protocol crate's combining-mark table (`gbcli_protocol::marks`) from Python's `unicodedata`; `--check` fails if it is stale
 - [scripts/music/export-reference.sh](scripts/music/export-reference.sh) — builds hUGETracker's own `uge2source` and exports the reference songs
 - [scripts/web/build-rgbds-wasm.sh](scripts/web/build-rgbds-wasm.sh) — builds RGBDS 1.0.4's rgbasm, rgblink and rgbfix to wasm with Emscripten (web spike); `test-rgbds-wasm.mjs` runs them in Node
+- [scripts/web/check-wasm.sh](scripts/web/check-wasm.sh) — checks that the library crates still compile for `wasm32-wasip1`; setup in docs/development.md
 - [scripts/help/check-doc-links.py](scripts/help/check-doc-links.py) — checks every Pan Docs and RGBDS link in the help topics; needs the network
 - [scripts/vendor-sameboy.sh](scripts/vendor-sameboy.sh), [scripts/build-roms.sh](scripts/build-roms.sh), [scripts/sameboy-core-hash.sh](scripts/sameboy-core-hash.sh) — re-vendor SameBoy, rebuild the committed boot and test ROMs, hash a `Core/` tree
 

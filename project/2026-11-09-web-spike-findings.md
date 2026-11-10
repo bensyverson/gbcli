@@ -464,3 +464,5 @@ For the main thread to put to Ben.
 3. **Spike code stays on the `spike/web` branch** (pushed); nothing lands on main.
 4. **rgbgfx on the web:** Ben asked what replacing rgbgfx would take (answered in the session: only rgbgfx, not the rest of RGBDS, since gbcli already plans every pixel and rgbgfx only encodes the plan); no decision yet.
 
+> **Superseded, same day.** Items 2 and 4 no longer hold. Ben scheduled the library entry point as Stage 13 ([2026-11-09-library-entry-point-plan.md](2026-11-09-library-entry-point-plan.md)); the web page itself stays paused. He also chose to replace rgbgfx: gbcli now encodes images in Rust (c47f60d, [2026-11-09-rgbgfx-encoder.md](2026-11-09-rgbgfx-encoder.md)), and rgbgfx survives only as a differential test oracle.
+

@@ -147,6 +147,14 @@ pub trait Clock: Send + Sync + fmt::Debug {
 /// caller tells "not there" from "couldn't read" as it would on a file. The
 /// writes never create a key's parent: a write under a prefix another
 /// process just removed fails instead of resurrecting it.
+///
+/// The backings agree on the edge cases too (held to it by
+/// `store_parity_tests.rs`): a blob call (`get`, `size`, `change_token`,
+/// `remove`, `touch`, `put`) on a directory is `IsADirectory`; a directory
+/// call through a blob (`list`, `make_dirs` past one) is `NotADirectory`;
+/// `make_dir` or `make_dirs` where a blob has the name is `AlreadyExists`.
+/// The project itself and `/` are directories that always exist, with a
+/// last use.
 pub trait ProjectStore: Send + Sync + fmt::Debug {
     /// The blob at `key`.
     fn get(&self, key: &Key) -> io::Result<Vec<u8>>;
@@ -158,7 +166,7 @@ pub trait ProjectStore: Send + Sync + fmt::Debug {
     fn size(&self, key: &Key) -> io::Result<u64>;
 
     /// The blob's [`ChangeToken`] now; cheap, reading no bytes. `NotFound`
-    /// when there is no blob.
+    /// when nothing is there, `IsADirectory` for a directory.
     fn change_token(&self, key: &Key) -> io::Result<ChangeToken>;
 
     /// Replaces the blob at `key`, atomically: a reader sees the old blob or

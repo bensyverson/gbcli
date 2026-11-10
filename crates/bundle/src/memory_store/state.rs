@@ -109,6 +109,21 @@ pub(super) fn not_a_dir(key: &Key) -> io::Error {
 }
 
 impl State {
+    /// An empty store whose two top directories, the project and `/`, were
+    /// made at `now`: they always exist, and their last use moves like any
+    /// directory's.
+    pub(super) fn new(now: u64) -> State {
+        let mut state = State::default();
+        for top in [Key::root(), Key::new("/")] {
+            let node = Node {
+                data: Data::Dir,
+                used: now,
+            };
+            state.nodes.insert(top, node);
+        }
+        state
+    }
+
     pub(super) fn is_dir(&self, key: &Key) -> bool {
         is_top(key) || self.nodes.get(key).is_some_and(Node::is_dir)
     }

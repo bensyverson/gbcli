@@ -1,10 +1,10 @@
 //! One request, answered in-process by the server's [`Handler`], then printed.
 
-use std::io::{Cursor, Write};
+use std::io::{self, Cursor, Write};
 
 use gbcli_bundle::{Bundle, RomSource, StoreError};
 use gbcli_protocol::{ErrorBody, ErrorCode, Op, Request, Response};
-use gbcli_server::{Answer, Handler, Host, Interrupt, InterruptFlag, Tooling, Watchdog, serve};
+use gbcli_server::{Answer, Handler, Host, HostFiles, Interrupt, Tooling, Watchdog, serve};
 
 use crate::build::Target;
 use crate::{Env, Io, render};
@@ -35,7 +35,10 @@ pub fn request(target: &Target, op: Op, env: &Env, io: Io) -> u8 {
 /// relative working directory (the process's couldn't be read) is refused:
 /// the server would otherwise resolve paths against the project instead.
 fn host(env: &Env) -> Result<Host, Box<ErrorBody>> {
-    Host::new(env.cwd.clone(), env.path.clone()).map_err(|e| {
+    let files = HostFiles::Allowed {
+        path: env.path.clone(),
+    };
+    Host::new(env.cwd.clone(), files).map_err(|e| {
         Box::new(ErrorBody::new(
             ErrorCode::IoFailed,
             e.to_string(),
@@ -44,12 +47,26 @@ fn host(env: &Env) -> Result<Host, Box<ErrorBody>> {
     })
 }
 
-/// What ends a request early: the wall guard's thread, or, on a host that
-/// can't start one (wasm32), a flag nothing sets, so the guard never fires.
-fn interrupt() -> Box<dyn Interrupt> {
-    match Watchdog::start() {
-        Ok(watchdog) => Box::new(watchdog),
-        Err(_) => Box::new(InterruptFlag::new()),
+/// What ends a request early: the wall guard's thread.
+fn interrupt() -> Result<Box<dyn Interrupt>, Box<ErrorBody>> {
+    guard_or_refusal(Watchdog::start())
+}
+
+/// The wall guard that started, or what to do when none did: on a host
+/// that can't start a thread (wasm32), a flag nothing sets, so the guard
+/// never fires; natively, a refusal, since a thread that won't start is a
+/// fault and a request must not run unguarded.
+fn guard_or_refusal(started: io::Result<Watchdog>) -> Result<Box<dyn Interrupt>, Box<ErrorBody>> {
+    match started {
+        Ok(watchdog) => Ok(Box::new(watchdog)),
+        #[cfg(target_arch = "wasm32")]
+        Err(_) => Ok(Box::new(gbcli_server::InterruptFlag::new())),
+        #[cfg(not(target_arch = "wasm32"))]
+        Err(e) => Err(Box::new(ErrorBody::new(
+            ErrorCode::Internal,
+            format!("the wall guard's thread didn't start ({e}), so the request wasn't run"),
+            "retry; if it persists, the host is out of threads or memory",
+        ))),
     }
 }
 
@@ -132,6 +149,7 @@ fn open_handler(target: &Target, env: &Env, opens: bool) -> Result<Handler, Box<
 fn start_handler(target: &Target, env: &Env, opens: bool) -> Result<Handler, Opening> {
     // Before anything is opened or created: a refusal leaves no trace.
     let host = host(env).map_err(Opening::Refused)?;
+    let interrupt = interrupt().map_err(Opening::Refused)?;
     let source = target.create.as_ref().map(|create| RomSource {
         rom: create.rom.clone(),
         sym: create.sym.clone(),
@@ -173,7 +191,7 @@ fn start_handler(target: &Target, env: &Env, opens: bool) -> Result<Handler, Ope
             .open_session(name, source.as_ref())
             .map_err(|e| Opening::Refused(Box::new(store(e))))?;
     }
-    Ok(Handler::new(host, bundle, interrupt())
+    Ok(Handler::new(host, bundle, interrupt)
         .with_defaults(target.session.clone(), target.actor.clone()))
 }
 
@@ -288,6 +306,30 @@ mod tests {
         assert_eq!(code, 3, "{err}");
         assert!(err.contains("1s wall guard"), "{err}");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Natively, a wall guard whose thread won't start refuses the request
+    /// rather than running it unguarded, naming the guard.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn natively_a_wall_guard_that_cannot_start_refuses() {
+        let failed = std::io::Error::other("no threads left");
+        let Err(refused) = super::guard_or_refusal(Err(failed)) else {
+            panic!("ran unguarded");
+        };
+        assert_eq!(refused.code, gbcli_protocol::ErrorCode::Internal);
+        assert!(
+            refused.message.contains("wall guard"),
+            "{}",
+            refused.message
+        );
+        assert!(
+            refused.message.contains("no threads left"),
+            "{}",
+            refused.message
+        );
+        let started = gbcli_server::Watchdog::start();
+        assert!(super::guard_or_refusal(started).is_ok());
     }
 
     #[test]

@@ -1,7 +1,8 @@
 //! What ends a request early (design §3). The handler arms an [`Interrupt`]
 //! at the start of every request with the request's allowance
 //! (`wall_guard_s`, else the handler's default), and emulation polls the
-//! flag it returns; a request it ends answers `wall_guard`. The caller
+//! flag it returns. A request it ends answers `wall_guard`, saying who set
+//! the flag ([`StoppedBy`]): the wall guard, or the caller. The caller
 //! supplies it: natively the [`crate::Watchdog`] thread sets the flag when
 //! the allowance runs out; a host that can't start a thread passes an
 //! [`InterruptFlag`] and sets the flag itself, or never.
@@ -19,15 +20,33 @@ pub trait Interrupt: Send {
 
     /// The request is answered: an interrupt now would reach nothing.
     fn disarm(&mut self);
+
+    /// Who set the armed request's flag, asked once it is set.
+    fn stopped_by(&self) -> StoppedBy;
+}
+
+/// Who ended a request early.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StoppedBy {
+    /// The request's allowance ran out (`wall_guard_s`, else the default).
+    WallGuard,
+    /// The caller set the flag itself ([`InterruptFlag::flag`]).
+    Caller,
 }
 
 /// An interrupt with no thread and no clock: the caller keeps
 /// [`InterruptFlag::flag`] and sets it to stop the request in flight (from
 /// another thread, a signal handler, a page's shared memory). The allowance
 /// isn't enforced, except that a zero allowance stops a request at once.
+///
+/// Arming clears the flag, so a stop set before a request starts is lost:
+/// set it only once the request is running.
 #[derive(Clone, Debug, Default)]
 pub struct InterruptFlag {
     flag: Arc<AtomicBool>,
+    /// Whether the armed request's allowance was zero, so the flag was set
+    /// by arming it: the wall guard's stop, not the caller's.
+    expired: bool,
 }
 
 impl InterruptFlag {
@@ -36,6 +55,8 @@ impl InterruptFlag {
     }
 
     /// The flag every request polls; setting it stops the one in flight.
+    /// Every request is armed with it cleared, so set it only once the
+    /// request has started.
     pub fn flag(&self) -> Arc<AtomicBool> {
         self.flag.clone()
     }
@@ -43,11 +64,20 @@ impl InterruptFlag {
 
 impl Interrupt for InterruptFlag {
     fn arm(&mut self, after: Duration) -> Arc<AtomicBool> {
-        self.flag.store(after.is_zero(), Ordering::Relaxed);
+        self.expired = after.is_zero();
+        self.flag.store(self.expired, Ordering::Relaxed);
         self.flag.clone()
     }
 
     fn disarm(&mut self) {}
+
+    fn stopped_by(&self) -> StoppedBy {
+        if self.expired {
+            StoppedBy::WallGuard
+        } else {
+            StoppedBy::Caller
+        }
+    }
 }
 
 #[cfg(test)]
@@ -73,5 +103,18 @@ mod tests {
                 .arm(Duration::from_secs(1))
                 .load(Ordering::Relaxed)
         );
+    }
+
+    #[test]
+    fn a_set_flag_is_the_callers_stop_unless_the_allowance_was_zero() {
+        let mut interrupt = InterruptFlag::new();
+        interrupt.arm(Duration::from_secs(60));
+        interrupt.flag().store(true, Ordering::Relaxed);
+        assert_eq!(interrupt.stopped_by(), StoppedBy::Caller);
+        interrupt.arm(Duration::ZERO);
+        assert_eq!(interrupt.stopped_by(), StoppedBy::WallGuard);
+        interrupt.arm(Duration::from_secs(1));
+        interrupt.flag().store(true, Ordering::Relaxed);
+        assert_eq!(interrupt.stopped_by(), StoppedBy::Caller, "rearmed");
     }
 }

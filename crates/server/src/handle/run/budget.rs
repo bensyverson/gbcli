@@ -43,30 +43,69 @@ pub(in crate::handle) const WALL_GUARD_REMEDY: &str = "host time ran out, not th
      raise --wall-guard SECONDS (up to 3600), or split the work into shorter requests \
      (run --checkpoint NAME, then continue with --at NAME)";
 
-/// The wall guard's answer to a run or step: `wall_guard`, and not
-/// reproducible.
-pub(super) fn wall_guard_error(guard: Duration, stop: StopRecord) -> ErrorBody {
-    ErrorBody::new(
-        ErrorCode::WallGuard,
-        format!("the {guard:?} wall guard ended the request; this stop isn't reproducible"),
-        WALL_GUARD_REMEDY,
-    )
-    .with_stop(stop)
+/// What an error tells the caller when the server's own caller stopped the
+/// request: neither host time nor the budget ran out.
+pub(in crate::handle) const CALLER_STOP_REMEDY: &str = "the program driving this server set \
+     its interrupt flag; repeat the request to finish it, or ask that program why it stopped \
+     the request";
+
+/// Who ended the current request early, as its answer names them. Both
+/// answer `wall_guard`, the code for a stop from outside the emulation; the
+/// message, remedy and stop reason tell them apart.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::handle) enum Interruption {
+    /// The request's allowance ran out.
+    WallGuard(Duration),
+    /// The server's caller set the request's flag.
+    Caller,
 }
 
-/// The wall guard's answer to work with no stop of its own (a measurement,
-/// an equivalence check); `reached` says how far it got, and `remedy` is
-/// the work's own way to fit under the guard.
-pub(in crate::handle) fn wall_guard_ended(
-    guard: Duration,
+impl Interruption {
+    /// The stop record's reason for a run it ended.
+    pub(super) fn stop_reason(self) -> StopReason {
+        match self {
+            Interruption::WallGuard(_) => StopReason::WallGuard,
+            Interruption::Caller => StopReason::UserBreak,
+        }
+    }
+}
+
+/// The answer to a run or step `by` ended: `wall_guard`, and not
+/// reproducible.
+pub(super) fn interrupted_error(by: Interruption, stop: StopRecord) -> ErrorBody {
+    let (message, remedy) = match by {
+        Interruption::WallGuard(guard) => (
+            format!("the {guard:?} wall guard ended the request; this stop isn't reproducible"),
+            WALL_GUARD_REMEDY,
+        ),
+        Interruption::Caller => (
+            "the caller stopped the request; this stop isn't reproducible".to_string(),
+            CALLER_STOP_REMEDY,
+        ),
+    };
+    ErrorBody::new(ErrorCode::WallGuard, message, remedy).with_stop(stop)
+}
+
+/// The answer to work with no stop of its own (a measurement, an
+/// equivalence check, the boot run) that `by` ended; `reached` says how far
+/// it got, and `guard_remedy` is the work's own way to fit under the guard.
+pub(in crate::handle) fn interrupted_ended(
+    by: Interruption,
     reached: &str,
-    remedy: &str,
+    guard_remedy: &str,
 ) -> ErrorBody {
-    ErrorBody::new(
-        ErrorCode::WallGuard,
-        format!("the {guard:?} wall guard ended the request {reached}"),
-        remedy,
-    )
+    match by {
+        Interruption::WallGuard(guard) => ErrorBody::new(
+            ErrorCode::WallGuard,
+            format!("the {guard:?} wall guard ended the request {reached}"),
+            guard_remedy,
+        ),
+        Interruption::Caller => ErrorBody::new(
+            ErrorCode::WallGuard,
+            format!("the caller stopped the request {reached}"),
+            CALLER_STOP_REMEDY,
+        ),
+    }
 }
 
 /// What a targeted run's stop means for its target (design §11, the

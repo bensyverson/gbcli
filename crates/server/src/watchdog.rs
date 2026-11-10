@@ -10,7 +10,7 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use crate::interrupt::Interrupt;
+use crate::interrupt::{Interrupt, StoppedBy};
 
 /// The default allowance: a safety net, not a budget.
 pub const WALL_GUARD: Duration = Duration::from_secs(60);
@@ -65,6 +65,11 @@ impl Interrupt for Watchdog {
 
     fn disarm(&mut self) {
         self.shared.lock().armed = None;
+    }
+
+    /// Only the allowance running out sets a watchdog's flag.
+    fn stopped_by(&self) -> StoppedBy {
+        StoppedBy::WallGuard
     }
 }
 

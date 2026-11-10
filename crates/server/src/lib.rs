@@ -12,7 +12,7 @@ mod watchdog;
 #[cfg(test)]
 mod fixture;
 
-pub use handle::{Handler, Host, RelativeCwd, Tooling};
-pub use interrupt::{Interrupt, InterruptFlag};
+pub use handle::{Handler, Host, HostFiles, RelativeCwd, Tooling};
+pub use interrupt::{Interrupt, InterruptFlag, StoppedBy};
 pub use serve::{Answer, answer, serve};
 pub use watchdog::Watchdog;

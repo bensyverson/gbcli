@@ -21,7 +21,7 @@ use gbcli_protocol::{
 use super::super::history::checkpoint_frame;
 use super::super::writes::apply_writes;
 use super::super::{Failure, Handler};
-use super::budget::wall_guard_ended;
+use super::budget::interrupted_ended;
 use crate::convert;
 
 /// Where a divergence leaves each side, overwritten by the next one.
@@ -72,8 +72,8 @@ impl Handler {
             interrupt: Some(&interrupt),
         };
         let verdict = equiv::compare(&mut a, &mut b, &spec).map_err(|e| match e {
-            EquivError::Interrupted { frames } => Failure::new(wall_guard_ended(
-                self.wall_guard,
+            EquivError::Interrupted { frames } => Failure::new(interrupted_ended(
+                self.interruption(),
                 &format!("after {frames} equivalent frames"),
                 "raise --wall-guard SECONDS (up to 3600), or compare fewer --frames per call",
             )),
@@ -121,7 +121,7 @@ impl Handler {
                 Ok((m, loaded))
             }),
         }
-        .map_err(|e| Failure::from_store(&e))?;
+        .map_err(|e| self.store_failure(&e))?;
         warnings.extend(loaded);
         *machine.debugger_config_mut() = Default::default();
         Ok(machine)

@@ -38,7 +38,9 @@ pub(crate) fn temp_path(path: &Path) -> PathBuf {
 pub(crate) fn ensure_dir(dir: &Path) -> io::Result<()> {
     match fs::create_dir(dir) {
         Ok(()) => Ok(()),
-        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(()),
+        // Fine only when what has the name is a directory: a file there
+        // would fail every write under it later, far from the cause.
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists && dir.is_dir() => Ok(()),
         Err(e) => Err(e),
     }
 }

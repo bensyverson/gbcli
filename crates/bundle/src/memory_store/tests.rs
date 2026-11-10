@@ -27,7 +27,21 @@ impl Clock for HandClock {
 
 fn store() -> (MemoryStore, Arc<HandClock>) {
     let clock = Arc::new(HandClock::default());
-    (MemoryStore::new("/project", clock.clone()), clock)
+    (MemoryStore::new("/project", clock.clone()).unwrap(), clock)
+}
+
+/// Every host's working directory is absolute, so none could sit under a
+/// relative project path.
+#[test]
+fn a_relative_project_path_is_refused_and_an_absolute_one_kept() {
+    let clock = Arc::new(HandClock::default());
+    for relative in ["project", ".", ""] {
+        let refused = MemoryStore::new(relative, clock.clone()).unwrap_err();
+        assert_eq!(refused, RelativeRoot(relative.into()));
+        assert!(refused.to_string().contains("isn't absolute"), "{refused}");
+    }
+    let kept = MemoryStore::new("/project/./a/..", clock).unwrap();
+    assert_eq!(kept.locate(&Key::root()), Path::new("/project"));
 }
 
 fn key(text: &str) -> Key {
@@ -366,7 +380,7 @@ fn a_key_outside_the_project_is_held_too_once_its_directory_is_made() {
 fn a_session_is_created_from_seeded_bytes_and_finds_its_sym() {
     let clock = Arc::new(HandClock::default());
     clock.set(1_000);
-    let store = Arc::new(MemoryStore::new("/project", clock.clone()));
+    let store = Arc::new(MemoryStore::new("/project", clock.clone()).unwrap());
     store.put(&key("demo.gb"), ROM).unwrap();
     store.put(&key("demo.sym"), SYM.as_bytes()).unwrap();
     store.make_dir(&key(".gbcli")).unwrap();

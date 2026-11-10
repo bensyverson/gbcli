@@ -23,6 +23,8 @@ Lantern's bot (examples/raycaster/tools/bot.py) settled whether driving gbcli fr
 - **The bundle store is the filesystem** (`.gbcli/` sessions, checkpoints, caches, `crates/bundle`), with file locks (`crates/bundle/src/lock.rs`).
 - **Font authoring's save decides on files** (`crates/build/src/font_author/`): which glyphs come from the working copy and which comments and properties from the `.yaff` is interleaved with reading and writing them, and the newer-copy check reads file times. The conversions themselves (`gbcli-font`) are data in, data out. Found by review on 2026-11-09 (leaf 2xiOiv); Resolved by that fix: `base::drift` and `save::merged` take data, and only the file reads and writes stay around them (the hash replaced file times).
 - **`serve`'s watchdog is a thread** (`crates/server/src/watchdog.rs`). Resolved 2026-11-09 (leaf sBZOk6): the thread is one `Interrupt` the caller passes in; the CLI and `serve` start it, and a host with no thread passes an `InterruptFlag` it sets itself. The bundle store has a memory backing too (`MemoryStore`).
+
+> Correction 2026-11-09 (leaf Lr5CkM): a memory caller was not yet isolated from the disk. The ops that need no session (`new`, `doctor`, `build`, `assets`, `pixels`, `font` and the font authoring ops) went to the filesystem directly whatever the store. A host now says whether it allows host files (`HostFiles::Allowed { path }` or `Denied`), and a denied host refuses those ops with `unsupported`; an in-memory build is still debt.
 - **Example tools and bots are Python.** That's fine for examples, but it means a bot isn't portable to a web host.
 
 ## What the ruling asks of new work

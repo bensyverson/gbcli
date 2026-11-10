@@ -1,15 +1,16 @@
 //! **The library entry point.** A Rust caller (an agent's tool, a web
 //! page's worker) drives gbcli in-process through [`Handler::handle`]: typed
 //! [`Request`]s in, typed responses out, the same protocol `gbcli serve`
-//! speaks, with no CLI, no subprocess, no `PATH` and no project directory.
-//! The test below is the worked example; the construction it needs is:
+//! speaks, with no CLI, no subprocess and no `PATH`. The test below is the
+//! worked example; the construction it needs is:
 //!
-//! 1. **A store.** [`MemoryStore::new`] takes the project's path (absolute;
-//!    nothing need exist there) and a [`Clock`]. The caller seeds it with
-//!    the project's files under project keys ([`ProjectStore::put`] of the
-//!    ROM, and its `.sym`, which a session finds beside the ROM) and makes
-//!    the bundle's directory (`.gbcli`). A filesystem caller uses
-//!    `Bundle::open_or_create` instead, which builds a `FileStore`.
+//! 1. **A store.** [`MemoryStore::new`] takes the project's path (absolute,
+//!    or it is refused; nothing need exist there) and a [`Clock`]. The
+//!    caller seeds it with the project's files under project keys
+//!    ([`ProjectStore::put`] of the ROM, and its `.sym`, which a session
+//!    finds beside the ROM) and makes the bundle's directory (`.gbcli`). A
+//!    filesystem caller uses `Bundle::open_or_create` instead, which builds a
+//!    `FileStore`.
 //! 2. **A [`Bundle`]** over the store: [`Bundle::new`] with the bundle's key
 //!    and the clock, the host time that logs, listing and pruning read
 //!    (emulation never does).
@@ -18,32 +19,44 @@
 //!    before their first request: no protocol op creates one.
 //! 4. **A [`Host`]** whose working directory sits under the store's project
 //!    path, so a request's relative paths (a shot's PNG) are project keys,
-//!    and with no `PATH` (only `build` and `doctor` look for RGBDS).
-//!    [`Host::new`] refuses a relative directory.
+//!    and which denies host files ([`HostFiles::Denied`]). [`Host::new`]
+//!    refuses a relative directory.
 //! 5. **An interrupt.** [`InterruptFlag`] starts no thread: the caller sets
-//!    its flag to stop the request in flight. A native caller that wants
-//!    `wall_guard_s` enforced passes a [`gbcli_server::Watchdog`] instead.
+//!    its flag to stop the request in flight, once the request is running
+//!    (arming each request clears it). That stop answers `wall_guard` with
+//!    a `user_break` stop and a message naming the caller. A native caller
+//!    that wants `wall_guard_s` enforced passes a [`gbcli_server::Watchdog`]
+//!    instead.
 //! 6. **[`Handler::new`]** with the three, and the default session and actor
 //!    ([`Handler::with_defaults`]); then [`Handler::handle`] per request.
-//!    Every file a request writes lands in the store as a key, where the
-//!    caller reads it back.
+//!
+//! **What a memory caller can do:** every session op (run, step, read,
+//! write, shot, view, sym, measure, equiv, checkpoint, restore, undo,
+//! power_cycle, sav, events, the debugger's break, watch and delete), the
+//! bundle ops (`sessions`, `gaps`, `prune`, `rm`), `opcode` and `version`.
+//! Every file those read or write (the ROM, a shot, a WAV, a memory dump, a
+//! `.sav`, the bundle) is a key in the store, where the caller reads it
+//! back; nothing reaches the disk.
+//!
+//! **What it can't:** the ops that go to the host's files or run a program
+//! outside the store: `build`, `doctor`, `new`, `assets`, `pixels`, `font`
+//! and the font authoring ops (`font_edit`, `font_save`, `font_import`,
+//! `font_export`, `font_new`, `font_diff`). A host that denies host files
+//! refuses each with `unsupported` before it touches anything.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use gbcli_bundle::{Bundle, Clock, Key, MemoryStore, ProjectStore, RomSource};
 use gbcli_protocol::{
-    Button, CheckpointArgs, KeyAction, KeyEvent, Op, ReadArgs, Request, Response, RestoreArgs,
-    ResultBody, RunArgs, ShotArgs, ShotReadArgs,
+    Button, CheckpointArgs, ErrorCode, KeyAction, KeyEvent, NewArgs, Op, ReadArgs, Request,
+    Response, RestoreArgs, ResultBody, RunArgs, ShotArgs, ShotReadArgs,
 };
-use gbcli_server::{Handler, Host, InterruptFlag};
+use gbcli_server::{Handler, Host, HostFiles, InterruptFlag};
 
 /// A block moved by the d-pad: `wX` counts the frames Right was held.
 const ROM: &[u8] = include_bytes!("../../engine/tests/roms/equiv_a.gb");
 const SYM: &[u8] = include_bytes!("../../engine/tests/roms/equiv_a.sym");
-
-/// Where the project is, as the host names it. Nothing is there.
-const PROJECT: &str = "/nonexistent/gbcli-library-caller/project";
 
 /// The caller's own clock: host time, which no decision here depends on.
 #[derive(Debug)]
@@ -53,6 +66,22 @@ impl Clock for CallerClock {
     fn now_secs(&self) -> u64 {
         1_700_000_000
     }
+}
+
+/// Where the project is, as the host names it: a real, empty directory, so
+/// anything that reached the disk instead of the store would show there.
+fn empty_project() -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("gbcli-library-caller-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::canonicalize(&dir).unwrap()
+}
+
+fn on_disk(dir: &Path) -> Vec<PathBuf> {
+    std::fs::read_dir(dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect()
 }
 
 fn request(op: Op) -> Request {
@@ -99,11 +128,11 @@ fn read_x(handler: &mut Handler) -> i64 {
 
 #[test]
 fn a_library_caller_drives_a_session_through_handle_alone() {
-    assert!(!Path::new(PROJECT).exists());
+    let project = empty_project();
 
     // 1-2. The store, seeded, and the bundle over it.
     let clock = Arc::new(CallerClock);
-    let store = Arc::new(MemoryStore::new(PROJECT, clock.clone()));
+    let store = Arc::new(MemoryStore::new(&project, clock.clone()).unwrap());
     store.put(&Key::new("game.gb"), ROM).unwrap();
     store.put(&Key::new("game.sym"), SYM).unwrap();
     store.make_dir(&Key::new(".gbcli")).unwrap();
@@ -120,7 +149,7 @@ fn a_library_caller_drives_a_session_through_handle_alone() {
     bundle.open_session("play", Some(&source)).unwrap();
 
     // 4-6. The host, the interrupt, the handler.
-    let host = Host::new(PROJECT, None).unwrap();
+    let host = Host::new(&project, HostFiles::Denied).unwrap();
     let interrupt = InterruptFlag::new();
     let mut handler = Handler::new(host, bundle, Box::new(interrupt))
         .with_defaults(Some("play".into()), Some("tool".into()));
@@ -159,11 +188,18 @@ fn a_library_caller_drives_a_session_through_handle_alone() {
     ok(handler.handle(&request(Op::Undo)));
     assert_eq!(read_x(&mut handler), moved, "the restore undone");
 
+    // An op that would write host files is refused, not run.
+    let new = handler.handle(&request(Op::New(NewArgs { dir: "game".into() })));
+    let refused = new.outcome.expect_err("a denied host makes no project");
+    assert_eq!(refused.code, ErrorCode::Unsupported);
+
     // The bundle is in the store too, and nothing reached the disk.
     assert!(
         store
             .get(&Key::new(".gbcli/sessions/play/session.json"))
             .is_ok()
     );
-    assert!(!Path::new(PROJECT).exists());
+    let left = on_disk(&project);
+    let _ = std::fs::remove_dir_all(&project);
+    assert!(left.is_empty(), "written to the disk: {left:?}");
 }

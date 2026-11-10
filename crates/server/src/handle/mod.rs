@@ -39,7 +39,7 @@ use crate::watchdog::WALL_GUARD;
 pub use build::Tooling;
 use failure::Failure;
 use head::{HeadChange, save_head};
-pub use host::{Host, RelativeCwd};
+pub use host::{Host, HostFiles, RelativeCwd};
 
 /// One server side: a project's bundle, a default session and actor, and the
 /// machine kept warm between requests.
@@ -181,6 +181,9 @@ impl Handler {
     }
 
     fn answer_armed(&mut self, request: &Request) -> Response {
+        if let Some(refused) = self.host.refusal(&request.op) {
+            return Response::failed(request.id.clone(), None, refused);
+        }
         if let Some(response) = self.toolchain_op(request) {
             return response;
         }
@@ -350,7 +353,7 @@ impl Handler {
                     Need::Head => store.head_or_power_on(meta, load),
                     Need::Replace | Need::Rom => store.machine(meta).map(|m| (m, Vec::new())),
                 }
-                .map_err(|e| Failure::from_store(&e))?;
+                .map_err(|e| self.store_failure(&e))?;
                 files.built(&machine);
                 (machine, warnings, files)
             }
@@ -465,6 +468,9 @@ mod memory_tests;
 
 #[cfg(test)]
 mod memory_store_tests;
+
+#[cfg(test)]
+mod host_files_tests;
 
 #[cfg(test)]
 mod debugger_tests;

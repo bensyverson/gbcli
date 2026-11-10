@@ -13,6 +13,7 @@
 
 mod state;
 
+use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -34,16 +35,42 @@ pub struct MemoryStore {
     state: Arc<Mutex<State>>,
 }
 
+/// Why a [`MemoryStore`] wasn't made: its project path is relative, so no
+/// host (whose working directory is absolute) could sit under it, and every
+/// request path would be a key outside the project.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RelativeRoot(pub PathBuf);
+
+impl fmt::Display for RelativeRoot {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "the memory store's project path {:?} isn't absolute",
+            self.0.display().to_string()
+        )
+    }
+}
+
+impl std::error::Error for RelativeRoot {}
+
 impl MemoryStore {
-    /// An empty store for the project at `root`, a path (absolute, so a host
-    /// can sit under it) that need not exist. `clock` dates the writes, for
-    /// the last-use fallbacks.
-    pub fn new(root: impl Into<PathBuf>, clock: Arc<dyn Clock>) -> MemoryStore {
-        MemoryStore {
-            root: normalize(&root.into()),
-            clock,
-            state: Arc::new(Mutex::new(State::default())),
+    /// An empty store for the project at `root`, a path that need not exist
+    /// but must be absolute, so a host can sit under it. `clock` dates the
+    /// writes, for the last-use fallbacks.
+    pub fn new(
+        root: impl Into<PathBuf>,
+        clock: Arc<dyn Clock>,
+    ) -> Result<MemoryStore, RelativeRoot> {
+        let root = root.into();
+        if !root.is_absolute() {
+            return Err(RelativeRoot(root));
         }
+        let state = State::new(clock.now_secs());
+        Ok(MemoryStore {
+            root: normalize(&root),
+            clock,
+            state: Arc::new(Mutex::new(state)),
+        })
     }
 
     fn state(&self) -> MutexGuard<'_, State> {
@@ -104,7 +131,8 @@ impl ProjectStore for MemoryStore {
                 data: Data::Blob { version, .. },
                 ..
             }) => Ok(ChangeToken::settled([*version])),
-            _ => Err(not_found(key)),
+            Some(_) => Err(is_a_dir(key)),
+            None => Err(not_found(key)),
         }
     }
 
@@ -163,8 +191,15 @@ impl ProjectStore for MemoryStore {
         for child in state.keys_under(key) {
             state.nodes.remove(&child);
         }
-        state.nodes.remove(key);
-        state.stamp_parent(key, now);
+        if is_top(key) {
+            // It always exists: emptied, and dated like any change in it.
+            if let Some(top) = state.nodes.get_mut(key) {
+                top.used = now;
+            }
+        } else {
+            state.nodes.remove(key);
+            state.stamp_parent(key, now);
+        }
         Ok(())
     }
 
@@ -267,6 +302,14 @@ impl ProjectStore for MemoryStore {
         while let Some(up) = chain.last().and_then(parent) {
             chain.push(up);
         }
+        // A blob on the way is in the path's way, as on a filesystem; one
+        // at `key` itself only has its name.
+        if let Some(blob) = chain[1..]
+            .iter()
+            .find(|dir| state.nodes.get(dir).is_some_and(|node| !node.is_dir()))
+        {
+            return Err(not_a_dir(blob));
+        }
         for dir in chain.iter().rev() {
             state.insert_dir(dir, now)?;
         }
@@ -275,12 +318,15 @@ impl ProjectStore for MemoryStore {
 
     /// Succeeds, or answers `Busy` at once: one owner drives a memory store
     /// from one thread, so no other holder could let go while it waited.
-    /// Like a lock file, the lock is a blob, created with no use recorded.
+    /// Like a lock file, the lock is a blob, created with no use recorded,
+    /// whose creation dates its directory.
     fn lock(&self, key: &Key, _wait: Duration) -> Result<Guard, LockError> {
+        let now = self.clock.now_secs();
         let mut state = self.state();
         if !state.nodes.get(key).is_some_and(|node| !node.is_dir()) {
             state.writable(key).map_err(LockError::Io)?;
             state.write(key, Vec::new(), 0);
+            state.stamp_parent(key, now);
         }
         if !state.held.insert(key.clone()) {
             return Err(LockError::Busy {
@@ -297,6 +343,11 @@ impl ProjectStore for MemoryStore {
         check(key)?;
         let mut state = self.state();
         let node = state.nodes.get_mut(key).ok_or_else(|| not_found(key))?;
+        // A use is recorded on a blob (a lock, `session.json`), as a file's
+        // mtime is set by opening it.
+        if node.is_dir() {
+            return Err(is_a_dir(key));
+        }
         node.used = now;
         Ok(())
     }
@@ -307,6 +358,9 @@ impl ProjectStore for MemoryStore {
     }
 
     /// A counter: the store lives in one process, so it is unique there.
+    /// A backing that persisted this store must persist the counter too,
+    /// never restart it: a recreated session must never reuse the
+    /// incarnation of the one it replaced.
     fn new_incarnation(&self) -> u64 {
         let mut state = self.state();
         state.incarnations += 1;

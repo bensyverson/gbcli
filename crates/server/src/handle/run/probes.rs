@@ -5,7 +5,6 @@
 
 use std::cell::RefCell;
 use std::sync::atomic::AtomicBool;
-use std::time::Duration;
 
 use gbcli_core::{Event, EventKinds, EventSink, Gap};
 use gbcli_engine::profile::{FrameBudget, FrameSplit, MeasureSpec, Profile, Raster, Routines};
@@ -17,7 +16,7 @@ use gbcli_protocol::{
 
 use super::super::Failure;
 use super::super::writes::parse_location;
-use super::budget::DEFAULT_FRAMES;
+use super::budget::{DEFAULT_FRAMES, Interruption};
 use super::measure::{measure_on, spec};
 use super::raster::raster_made;
 
@@ -121,17 +120,17 @@ impl Probes {
     }
 
     /// One measurement on a copy of the stop, if asked for; `interrupt` is
-    /// the request's flag, which `guard` sets.
+    /// the request's flag, which `by` stands for.
     pub(super) fn measure(
         &self,
         machine: &mut Machine,
         interrupt: &AtomicBool,
-        guard: Duration,
+        by: Interruption,
     ) -> Option<Result<MeasureMade, Failure>> {
         let (from, to, spec) = self.measure.as_ref()?;
         let mut spec = spec.clone();
         spec.interrupt = Some(interrupt);
-        Some(measure_on(machine, &spec, (from, to), None, guard).map(|(made, _)| made))
+        Some(measure_on(machine, &spec, (from, to), None, by).map(|(made, _)| made))
     }
 
     /// What the run's sinks collected, frames numbered from `since`.

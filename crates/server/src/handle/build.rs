@@ -72,6 +72,9 @@ impl Tooling {
 impl Answer for Tooling {
     fn answer(&mut self, request: &Request) -> Response {
         let id = request.id.clone();
+        if let Some(refused) = self.host.refusal(&request.op) {
+            return Response::failed(id, None, refused);
+        }
         match &request.op {
             op if op.needs_bundle() => Response::failed(id, None, self.needs_session(op)),
             Op::Build(args) => match build(&self.host, request, args) {

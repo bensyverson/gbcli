@@ -356,7 +356,7 @@ fn the_wall_guard_firing_during_the_replays_is_the_wall_guard_error() {
     let fired = std::sync::atomic::AtomicBool::new(true);
     let mut opts = RunOptions::new(Budget::frames(30));
     opts.interrupt = Some(&fired);
-    let guard = Duration::from_secs(5);
+    let guard = Interruption::WallGuard(Duration::from_secs(5));
     let result = audio::takes(Some(&mut start), |m| {
         replay(m, &Target::Budget, &opts, guard)
     });
@@ -364,4 +364,12 @@ fn the_wall_guard_firing_during_the_replays_is_the_wall_guard_error() {
     assert_eq!(error.code, ErrorCode::WallGuard);
     assert!(error.message.contains("wall guard"), "{}", error.message);
     assert_eq!(error.stop.map(|s| s.reason), Some(StopReason::WallGuard));
+    // The caller's flag ending them is the caller's stop.
+    let mut start = store.machine(&meta).unwrap();
+    let result = audio::takes(Some(&mut start), |m| {
+        replay(m, &Target::Budget, &opts, Interruption::Caller)
+    });
+    let error = result.expect_err("the caller ended the replays").body;
+    assert!(error.message.contains("the caller"), "{}", error.message);
+    assert_eq!(error.stop.map(|s| s.reason), Some(StopReason::UserBreak));
 }

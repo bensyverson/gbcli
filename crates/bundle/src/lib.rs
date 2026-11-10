@@ -23,6 +23,8 @@ mod session;
 mod stamp;
 mod store;
 #[cfg(test)]
+mod store_parity_tests;
+#[cfg(test)]
 mod test_fixture;
 
 pub use boot::Start;
@@ -33,7 +35,7 @@ pub use events::EVENTS_ROTATE_AT;
 pub use file_store::{FileStore, SystemClock};
 pub use history::HISTORY_BACK;
 pub use lock::{LOCK_WAIT, SessionLock};
-pub use memory_store::MemoryStore;
+pub use memory_store::{MemoryStore, RelativeRoot};
 pub use project_store::{
     ChangeToken, Clock, Entry, Guard, Key, Kind, LockError, ProjectStore, PutAllError,
 };

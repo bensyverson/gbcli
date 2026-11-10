@@ -12,7 +12,7 @@ mod oam_log;
 mod probes;
 mod raster;
 
-use gbcli_bundle::{SessionStore, validate_checkpoint_name};
+use gbcli_bundle::{SessionStore, StoreError, validate_checkpoint_name};
 use gbcli_core::Budget;
 use gbcli_engine::cond::EvalWarning;
 use gbcli_engine::{DebugError, EventTap, FrameSink, KeyTimeline, Machine, Outcome, RunOptions};
@@ -26,9 +26,11 @@ use super::reads::{CompiledRead, compile_reads, eval_reads_each, warning_text};
 use super::writes::{apply_writes, parse_location};
 use super::{Failure, Handler, HeadChange, Need, save_head, shot};
 use crate::convert;
+use crate::interrupt::StoppedBy;
 #[cfg(test)]
 pub(super) use budget::WALL_GUARD_REMEDY;
-use budget::{DEFAULT_FRAMES, budget_of, short_of_target, unanswered, wall_guard_error};
+use budget::{DEFAULT_FRAMES, budget_of, interrupted_error, short_of_target, unanswered};
+pub(super) use budget::{Interruption, interrupted_ended};
 #[cfg(test)]
 pub(super) use equiv::equiv_failure;
 use probes::Probes;
@@ -212,7 +214,7 @@ impl Handler {
                     .with_ignored_writes(ignored_writes));
             }
         };
-        let guarded = self.guarded(&mut outcome);
+        let interrupted = self.interrupted(&mut outcome);
         outcome.stop.budget.limits = limits;
         outcome.stop.budget.defaulted = defaulted;
         warnings.extend(outcome.warnings.iter().map(warning_text));
@@ -248,12 +250,12 @@ impl Handler {
             .shot
             .as_ref()
             .map(|s| shot::take(&machine, s, &since, &files));
-        let answered = self.answered(args, defaulted, guarded, &stop);
+        let answered = answered(args, defaulted, interrupted, &stop);
         warnings.extend(short_of_target(args, &stop));
         // Step 5, on a copy of the stop; and what the run's sinks collected.
         let measured = plan
             .probes
-            .measure(&mut machine, &interrupt, self.wall_guard);
+            .measure(&mut machine, &interrupt, self.interruption());
         let collected_probes = plan.probes.finish(&machine, &since);
         let oam_made = oam_log.as_ref().map(|o| o.finish(&machine, &since));
         // The core's gaps reach the ledger whether or not the request fails.
@@ -272,8 +274,8 @@ impl Handler {
         let so_far = so_far && strip.as_ref().is_none_or(Result::is_ok);
         let sound = match (sound, collected) {
             (Some(a), Some(collected)) if so_far => Some(collected.and_then(|c| {
-                let guard = self.wall_guard;
-                let drive = |m: &mut Machine| replay(m, &plan.target, &replay_opts, guard);
+                let by = self.interruption();
+                let drive = |m: &mut Machine| replay(m, &plan.target, &replay_opts, by);
                 audio::deliver(a, c, &machine, &since, &files, || {
                     audio::takes(replay_from.as_mut(), drive)
                 })
@@ -329,35 +331,38 @@ impl Handler {
         expected.verdict(result).map_err(with_stop)
     }
 
-    /// Whether the run reached what it was asked for: not stopped by the
-    /// wall guard, and not out of budget short of an explicit target.
-    fn answered(
-        &self,
-        args: &RunArgs,
-        defaulted: bool,
-        guarded: bool,
-        stop: &StopRecord,
-    ) -> Result<(), Failure> {
-        if guarded {
-            return Err(Failure::new(wall_guard_error(
-                self.wall_guard,
-                stop.clone(),
-            )));
-        }
-        match unanswered(args, defaulted, stop) {
-            Some(body) => Err(Failure::new(body)),
-            None => Ok(()),
+    /// Who the request's interrupt flag stands for: the wall guard, with
+    /// this request's allowance, or the caller.
+    pub(in crate::handle) fn interruption(&self) -> Interruption {
+        match self.interrupter.stopped_by() {
+            StoppedBy::WallGuard => Interruption::WallGuard(self.wall_guard),
+            StoppedBy::Caller => Interruption::Caller,
         }
     }
 
-    /// Rewrites an interrupted stop as the wall guard's, which is the only
-    /// thing that interrupts a request; true when it did.
-    fn guarded(&self, outcome: &mut Outcome) -> bool {
-        let guarded = outcome.stop.reason == StopReason::UserBreak;
-        if guarded {
-            outcome.stop.reason = StopReason::WallGuard;
+    /// A store failure as the request's answer; a boot run the request's
+    /// flag ended names who ended it.
+    pub(in crate::handle) fn store_failure(&self, e: &StoreError) -> Failure {
+        match e {
+            StoreError::BootInterrupted => Failure::new(interrupted_ended(
+                self.interruption(),
+                "during the boot run, before the handoff",
+                &e.remedy(),
+            )),
+            e => Failure::from_store(e),
         }
-        guarded
+    }
+
+    /// Who interrupted the run, if anything did, with its stop's reason
+    /// rewritten to say so: the engine reports every interrupt as
+    /// `user_break`, which stays only when it was the caller's.
+    fn interrupted(&self, outcome: &mut Outcome) -> Option<Interruption> {
+        if outcome.stop.reason != StopReason::UserBreak {
+            return None;
+        }
+        let by = self.interruption();
+        outcome.stop.reason = by.stop_reason();
+        Some(by)
     }
 
     /// A run that failed: save the state it reached, and keep the stop record.
@@ -430,7 +435,7 @@ impl Handler {
                     .with_ignored_writes(ignored_writes));
             }
         };
-        let guarded = self.guarded(&mut outcome);
+        let interrupted = self.interrupted(&mut outcome);
         warnings.extend(outcome.warnings.iter().map(warning_text));
         let ignored_writes = ignored_rows(&outcome.warnings);
         let flash_notes = report_flash(&mut machine, warnings)?;
@@ -442,8 +447,8 @@ impl Handler {
         };
         save_head(store, meta, &mut machine, change)?;
         self.keep_warm(store, meta, machine);
-        if guarded {
-            let failure = Failure::new(wall_guard_error(self.wall_guard, stop));
+        if let Some(by) = interrupted {
+            let failure = Failure::new(interrupted_error(by, stop));
             return Err(failure
                 .with_flash_notes(flash_notes)
                 .with_ignored_writes(ignored_writes));
@@ -524,21 +529,38 @@ fn run_target(
     }
 }
 
+/// Whether the run reached what it was asked for: not interrupted, and not
+/// out of budget short of an explicit target.
+fn answered(
+    args: &RunArgs,
+    defaulted: bool,
+    interrupted: Option<Interruption>,
+    stop: &StopRecord,
+) -> Result<(), Failure> {
+    if let Some(by) = interrupted {
+        return Err(Failure::new(interrupted_error(by, stop.clone())));
+    }
+    match unanswered(args, defaulted, stop) {
+        Some(body) => Err(Failure::new(body)),
+        None => Ok(()),
+    }
+}
+
 /// One of the per-channel WAVs' replays of the run. They share the request's
-/// interrupt flag, so a replay the wall guard ended is the wall guard's error,
-/// not a replay that diverged from the run.
+/// interrupt flag, so a replay the flag ended is the interruption's error
+/// (`by`'s), not a replay that diverged from the run.
 fn replay(
     machine: &mut Machine,
     target: &Target,
     opts: &RunOptions<'_>,
-    guard: std::time::Duration,
+    by: Interruption,
 ) -> Result<(), Failure> {
     let mut stop = run_target(machine, target, opts)
         .map_err(|e| Failure::from_debug(&e))?
         .stop;
     if stop.reason == StopReason::UserBreak {
-        stop.reason = StopReason::WallGuard;
-        return Err(Failure::new(wall_guard_error(guard, stop)));
+        stop.reason = by.stop_reason();
+        return Err(Failure::new(interrupted_error(by, stop)));
     }
     Ok(())
 }

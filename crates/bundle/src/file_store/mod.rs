@@ -95,6 +95,13 @@ fn file_id(_: &fs::Metadata) -> (u64, u64) {
     (0, 0)
 }
 
+fn is_a_dir(path: &Path) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::IsADirectory,
+        format!("{} is a directory", path.display()),
+    )
+}
+
 /// The host's clock.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SystemClock;
@@ -126,14 +133,23 @@ impl ProjectStore for FileStore {
     /// A symbolic link's own length, not its target's, so a size total
     /// never counts a file outside the tree.
     fn size(&self, key: &Key) -> io::Result<u64> {
-        fs::symlink_metadata(self.path(key)).map(|m| m.len())
+        let path = self.path(key);
+        let stat = fs::symlink_metadata(&path)?;
+        if stat.is_dir() {
+            return Err(is_a_dir(&path));
+        }
+        Ok(stat.len())
     }
 
     /// Size, modification time and inode, following a symbolic link. A file
     /// modified within [`RACY`] of now is unsettled: rewritten in place
     /// within the same mtime tick, it would keep all three.
     fn change_token(&self, key: &Key) -> io::Result<ChangeToken> {
-        let stat = fs::metadata(self.path(key))?;
+        let path = self.path(key);
+        let stat = fs::metadata(&path)?;
+        if stat.is_dir() {
+            return Err(is_a_dir(&path));
+        }
         let modified = stat.modified()?;
         if racy(modified, SystemTime::now()) {
             return Ok(ChangeToken::unsettled());
@@ -180,8 +196,17 @@ impl ProjectStore for FileStore {
         append(&self.path(key), bytes)
     }
 
+    /// A directory is `IsADirectory` on every host (unlinking one is
+    /// `PermissionDenied` on macOS).
     fn remove(&self, key: &Key) -> io::Result<()> {
-        fs::remove_file(self.path(key))
+        let path = self.path(key);
+        fs::remove_file(&path).map_err(|e| {
+            if fs::symlink_metadata(&path).is_ok_and(|m| m.is_dir()) {
+                is_a_dir(&path)
+            } else {
+                e
+            }
+        })
     }
 
     fn remove_tree(&self, key: &Key) -> io::Result<()> {

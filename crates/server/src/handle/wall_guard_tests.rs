@@ -89,25 +89,46 @@ fn with_no_watchdog_short_requests_are_answered_and_a_zero_allowance_still_stops
     assert_eq!(error.code, ErrorCode::WallGuard);
 }
 
+/// Sets `interrupt`'s flag from another thread once `after` has passed, as
+/// a caller stopping the request in flight does.
+pub(super) fn stop_after(
+    interrupt: &InterruptFlag,
+    after: Duration,
+) -> std::thread::JoinHandle<()> {
+    let flag = interrupt.flag();
+    std::thread::spawn(move || {
+        std::thread::sleep(after);
+        flag.store(true, std::sync::atomic::Ordering::Relaxed);
+    })
+}
+
 /// The caller ends a request in flight by setting its flag, from another
-/// thread here; the request answers `wall_guard`, and the next one runs.
+/// thread here. The request answers `wall_guard`, the code for a stop from
+/// outside the emulation, but says the caller stopped it, not the guard,
+/// and its stop is the caller's (`user_break`); the next request runs.
 #[test]
-fn the_caller_setting_its_flag_ends_the_request_in_flight() {
+fn the_caller_setting_its_flag_ends_the_request_in_flight_as_the_callers_stop() {
     let f = Fixture::new("guard-caller");
     let (mut h, interrupt) = flagged(&f);
     assert!(run_frames(&mut h, 1).is_ok(), "past the boot run");
-    let flag = interrupt.flag();
-    let setter = std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(50));
-        flag.store(true, std::sync::atomic::Ordering::Relaxed);
-    });
+    let setter = stop_after(&interrupt, Duration::from_millis(50));
     let error = run_frames(&mut h, 1_000_000)
         .outcome
         .expect_err("the caller stopped it");
     setter.join().unwrap();
     assert_eq!(error.code, ErrorCode::WallGuard);
+    assert_eq!(error.stop.map(|s| s.reason), Some(StopReason::UserBreak));
+    assert!(error.message.contains("the caller"), "{}", error.message);
+    assert!(!error.message.contains("wall guard"), "{}", error.message);
+    assert!(!error.remedy.contains("--wall-guard"), "{}", error.remedy);
     let next = run_frames(&mut h, 2);
     assert!(next.is_ok(), "{:?}", next.error());
+    // A zero allowance on the same handler is still the guard's stop.
+    h.set_wall_guard(Duration::ZERO);
+    let guard = run_frames(&mut h, 2).outcome.expect_err("stopped");
+    assert_eq!(guard.stop.map(|s| s.reason), Some(StopReason::WallGuard));
+    assert!(guard.message.contains("wall guard"), "{}", guard.message);
+    assert_eq!(guard.remedy, WALL_GUARD_REMEDY);
 }
 
 /// The request's own allowance arms the guard, and the message names it.

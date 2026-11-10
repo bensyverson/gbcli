@@ -20,7 +20,11 @@ use serde::{Deserialize, Serialize};
 /// `budget_exhausted`; the request's optional `wall_guard_s` raises it.
 /// 6 since leaf HNBr9t: `Tool` and `CheckName` lose `rgbgfx` and
 /// `ImageLimit` loses `rgbgfx_agrees`, values a response under 5 could carry.
-pub const PROTOCOL_VERSION: u32 = 6;
+/// 7 since leaf Fn6W61: a stop the server's caller asks for through its
+/// interrupt answers its own error code (`interrupted`), where it answered
+/// `wall_guard`. The CLI and `serve` never set that flag, so their answers
+/// are as under 6.
+pub const PROTOCOL_VERSION: u32 = 7;
 
 /// What `version` answers.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -63,7 +67,7 @@ mod tests {
         };
         assert_eq!(
             serde_json::to_string(&result).unwrap(),
-            r#"{"version":{"gbcli":"0.1.0","protocol":6,"sameboy":"abc","patch_set":"def"}}"#
+            r#"{"version":{"gbcli":"0.1.0","protocol":7,"sameboy":"abc","patch_set":"def"}}"#
         );
     }
 }

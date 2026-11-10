@@ -370,6 +370,7 @@ fn the_wall_guard_firing_during_the_replays_is_the_wall_guard_error() {
         replay(m, &Target::Budget, &opts, Interruption::Caller)
     });
     let error = result.expect_err("the caller ended the replays").body;
+    assert_eq!(error.code, ErrorCode::Interrupted);
     assert!(error.message.contains("the caller"), "{}", error.message);
     assert_eq!(error.stop.map(|s| s.reason), Some(StopReason::UserBreak));
 }

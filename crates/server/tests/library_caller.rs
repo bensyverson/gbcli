@@ -23,7 +23,7 @@
 //!    refuses a relative directory.
 //! 5. **An interrupt.** [`InterruptFlag`] starts no thread: the caller sets
 //!    its flag to stop the request in flight, once the request is running
-//!    (arming each request clears it). That stop answers `wall_guard` with
+//!    (arming each request clears it). That stop answers `interrupted` with
 //!    a `user_break` stop and a message naming the caller. A native caller
 //!    that wants `wall_guard_s` enforced passes a [`gbcli_server::Watchdog`]
 //!    instead.

@@ -263,6 +263,7 @@ Exit codes — one table for every command; errors print to stderr as
      rom_changed uninitialized_read target_not_reached (a run's --to or
      --until ended short: the CPU locked up first; the stop says how)
      wall_guard (host time ran out, not the budget: --wall-guard SECONDS)
+     interrupted (a program calling gbcli as a library stopped the request)
   4  something didn't load: rom_unreadable checkpoint_unreadable
      checkpoint_mismatch symbols_unreadable session_unreadable
      build_failed (RGBDS rejected the sources: see the diagnostic rows)
@@ -376,7 +377,7 @@ mod tests {
                 }
             }
         }
-        assert_eq!(seen, 30, "every code in the closed set");
+        assert_eq!(seen, 31, "every code in the closed set");
     }
 
     #[test]

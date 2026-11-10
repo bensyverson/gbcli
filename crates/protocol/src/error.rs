@@ -33,6 +33,11 @@ pub enum ErrorCode {
     /// emulated budget, so the stop isn't reproducible. The request's
     /// `wall_guard_s` (`--wall-guard`) raises it.
     WallGuard,
+    /// The program driving the server stopped the request through its
+    /// interrupt: neither host time nor the budget ran out, so no flag
+    /// raises it, and the stop isn't reproducible. The CLI and `serve`
+    /// never answer it; a library caller's own stop does.
+    Interrupted,
     /// A run with a target (`--to`, `--until`) ended without reaching it,
     /// for a reason other than its budget: the CPU locked up (an illegal
     /// opcode, HALT or STOP that nothing can wake). The stop rides along.
@@ -85,6 +90,7 @@ impl ErrorCode {
             | ErrorCode::Refused => 2,
             ErrorCode::BudgetExhausted
             | ErrorCode::WallGuard
+            | ErrorCode::Interrupted
             | ErrorCode::TargetNotReached
             | ErrorCode::RevMismatch
             | ErrorCode::SessionBusy
@@ -127,6 +133,10 @@ impl ErrorCode {
             ErrorCode::WallGuard => {
                 "host time ran out, not the emulated budget: raise --wall-guard SECONDS (up to 3600), \
                  or split the work with --checkpoint and continue with --at"
+            }
+            ErrorCode::Interrupted => {
+                "the program driving this server set its interrupt flag; repeat the request \
+                 to finish it, or ask that program why it stopped the request"
             }
             ErrorCode::TargetNotReached => {
                 "the stop record says where the CPU locked up; step toward the target from an earlier state"
@@ -195,6 +205,7 @@ impl fmt::Display for ErrorCode {
             ErrorCode::Refused => "refused",
             ErrorCode::BudgetExhausted => "budget_exhausted",
             ErrorCode::WallGuard => "wall_guard",
+            ErrorCode::Interrupted => "interrupted",
             ErrorCode::TargetNotReached => "target_not_reached",
             ErrorCode::RevMismatch => "rev_mismatch",
             ErrorCode::SessionBusy => "session_busy",
@@ -296,6 +307,7 @@ mod tests {
         ErrorCode::Refused,
         ErrorCode::BudgetExhausted,
         ErrorCode::WallGuard,
+        ErrorCode::Interrupted,
         ErrorCode::TargetNotReached,
         ErrorCode::RevMismatch,
         ErrorCode::SessionBusy,
@@ -331,6 +343,7 @@ mod tests {
             | ErrorCode::Refused
             | ErrorCode::BudgetExhausted
             | ErrorCode::WallGuard
+            | ErrorCode::Interrupted
             | ErrorCode::TargetNotReached
             | ErrorCode::RevMismatch
             | ErrorCode::SessionBusy
@@ -390,6 +403,7 @@ mod tests {
             (ErrorCode::Refused, 2),
             (ErrorCode::BudgetExhausted, 3),
             (ErrorCode::WallGuard, 3),
+            (ErrorCode::Interrupted, 3),
             (ErrorCode::TargetNotReached, 3),
             (ErrorCode::RevMismatch, 3),
             (ErrorCode::SessionBusy, 3),
@@ -445,5 +459,15 @@ mod tests {
         assert_ne!(ErrorCode::WallGuard, ErrorCode::BudgetExhausted);
         let remedy = ErrorCode::WallGuard.default_remedy();
         assert!(remedy.contains("--wall-guard"), "{remedy}");
+    }
+
+    /// A stop the server's caller asked for isn't the wall guard: a caller
+    /// tells them apart by the code, and no flag would have prevented it.
+    #[test]
+    fn a_callers_stop_is_its_own_code_whose_remedy_names_no_flag() {
+        assert_eq!(ErrorCode::Interrupted.to_string(), "interrupted");
+        assert_ne!(ErrorCode::Interrupted, ErrorCode::WallGuard);
+        let remedy = ErrorCode::Interrupted.default_remedy();
+        assert!(!remedy.contains("--"), "{remedy}");
     }
 }

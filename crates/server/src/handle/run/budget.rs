@@ -49,9 +49,8 @@ pub(in crate::handle) const CALLER_STOP_REMEDY: &str = "the program driving this
      its interrupt flag; repeat the request to finish it, or ask that program why it stopped \
      the request";
 
-/// Who ended the current request early, as its answer names them. Both
-/// answer `wall_guard`, the code for a stop from outside the emulation; the
-/// message, remedy and stop reason tell them apart.
+/// Who ended the current request early, as its answer names them: the
+/// code, message, remedy and stop reason all tell them apart.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::handle) enum Interruption {
     /// The request's allowance ran out.
@@ -68,10 +67,18 @@ impl Interruption {
             Interruption::Caller => StopReason::UserBreak,
         }
     }
+
+    /// The error code of a request it ended.
+    fn code(self) -> ErrorCode {
+        match self {
+            Interruption::WallGuard(_) => ErrorCode::WallGuard,
+            Interruption::Caller => ErrorCode::Interrupted,
+        }
+    }
 }
 
-/// The answer to a run or step `by` ended: `wall_guard`, and not
-/// reproducible.
+/// The answer to a run or step `by` ended: `wall_guard` or `interrupted`,
+/// and not reproducible.
 pub(super) fn interrupted_error(by: Interruption, stop: StopRecord) -> ErrorBody {
     let (message, remedy) = match by {
         Interruption::WallGuard(guard) => (
@@ -83,7 +90,7 @@ pub(super) fn interrupted_error(by: Interruption, stop: StopRecord) -> ErrorBody
             CALLER_STOP_REMEDY,
         ),
     };
-    ErrorBody::new(ErrorCode::WallGuard, message, remedy).with_stop(stop)
+    ErrorBody::new(by.code(), message, remedy).with_stop(stop)
 }
 
 /// The answer to work with no stop of its own (a measurement, an
@@ -94,18 +101,17 @@ pub(in crate::handle) fn interrupted_ended(
     reached: &str,
     guard_remedy: &str,
 ) -> ErrorBody {
-    match by {
-        Interruption::WallGuard(guard) => ErrorBody::new(
-            ErrorCode::WallGuard,
+    let (message, remedy) = match by {
+        Interruption::WallGuard(guard) => (
             format!("the {guard:?} wall guard ended the request {reached}"),
             guard_remedy,
         ),
-        Interruption::Caller => ErrorBody::new(
-            ErrorCode::WallGuard,
+        Interruption::Caller => (
             format!("the caller stopped the request {reached}"),
             CALLER_STOP_REMEDY,
         ),
-    }
+    };
+    ErrorBody::new(by.code(), message, remedy)
 }
 
 /// What a targeted run's stop means for its target (design §11, the

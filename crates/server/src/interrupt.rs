@@ -1,8 +1,9 @@
 //! What ends a request early (design §3). The handler arms an [`Interrupt`]
 //! at the start of every request with the request's allowance
 //! (`wall_guard_s`, else the handler's default), and emulation polls the
-//! flag it returns. A request it ends answers `wall_guard`, saying who set
-//! the flag ([`StoppedBy`]): the wall guard, or the caller. The caller
+//! flag it returns. A request it ends answers by who set the flag
+//! ([`StoppedBy`]): `wall_guard` for the wall guard, `interrupted` for the
+//! caller. The caller
 //! supplies it: natively the [`crate::Watchdog`] thread sets the flag when
 //! the allowance runs out; a host that can't start a thread passes an
 //! [`InterruptFlag`] and sets the flag itself, or never.

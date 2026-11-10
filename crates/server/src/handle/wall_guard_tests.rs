@@ -103,9 +103,9 @@ pub(super) fn stop_after(
 }
 
 /// The caller ends a request in flight by setting its flag, from another
-/// thread here. The request answers `wall_guard`, the code for a stop from
-/// outside the emulation, but says the caller stopped it, not the guard,
-/// and its stop is the caller's (`user_break`); the next request runs.
+/// thread here. The request answers `interrupted`, not `wall_guard`, says
+/// the caller stopped it, and its stop is the caller's (`user_break`); the
+/// next request runs.
 #[test]
 fn the_caller_setting_its_flag_ends_the_request_in_flight_as_the_callers_stop() {
     let f = Fixture::new("guard-caller");
@@ -116,7 +116,7 @@ fn the_caller_setting_its_flag_ends_the_request_in_flight_as_the_callers_stop() 
         .outcome
         .expect_err("the caller stopped it");
     setter.join().unwrap();
-    assert_eq!(error.code, ErrorCode::WallGuard);
+    assert_eq!(error.code, ErrorCode::Interrupted);
     assert_eq!(error.stop.map(|s| s.reason), Some(StopReason::UserBreak));
     assert!(error.message.contains("the caller"), "{}", error.message);
     assert!(!error.message.contains("wall guard"), "{}", error.message);

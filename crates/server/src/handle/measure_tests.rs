@@ -215,7 +215,7 @@ fn the_callers_stop_ends_a_measurement_as_the_callers() {
     let setter = super::wall_guard_tests::stop_after(&interrupt, Duration::from_millis(50));
     let error = measure(&mut h, args).outcome.expect_err("stopped");
     setter.join().unwrap();
-    assert_eq!(error.code, ErrorCode::WallGuard);
+    assert_eq!(error.code, ErrorCode::Interrupted);
     assert!(error.message.contains("the caller"), "{}", error.message);
     assert!(!error.message.contains("wall guard"), "{}", error.message);
     assert!(!error.remedy.contains("--wall-guard"), "{}", error.remedy);

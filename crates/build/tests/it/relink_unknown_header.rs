@@ -20,7 +20,7 @@ const ROM0_BIG: &str = "SECTION \"Tables\", ROM0\nds $3C00, 1\n";
 const SOUND_DRIVER_UNPLACED: &str = "Unable to place \"Sound Driver\" (ROM0 section) anywhere";
 
 /// How a row true only of the one-bank layout begins.
-const ONE_BANK_ONLY: &str = "only if the header names no MBC";
+const ONE_BANK_ONLY: &str = "from the one-bank link";
 
 fn cart_type(project: &Path, kind: u8) {
     let main = project.join("src/main.asm");

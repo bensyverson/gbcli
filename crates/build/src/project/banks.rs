@@ -37,8 +37,10 @@ pub(super) fn unplaced(d: &Diagnostic) -> Option<&str> {
 
 /// rgblink's refusal of a section bigger than its type allows in 16 KB banks
 /// (RGBDS 1.0.4: `Section "NAME" is bigger than the max size for that type:
-/// $5000 > $4000`). The max of $4000 is a ROM bank's; linked as one bank,
-/// ROM0 and ROMX sections alike may fill 32 KB.
+/// $5000 > $4000`). The max of $4000 is a ROM bank's; linked as one bank, a
+/// ROM0 section (or ROM0 fragments adding up past 16 KB) may fill 32 KB.
+/// rgbasm refuses a single ROMX section over 16 KB before the link, so none
+/// reaches here.
 pub(super) fn outgrows_a_bank(d: &Diagnostic) -> bool {
     d.tool == Tool::Rgblink
         && d.severity == Severity::Error

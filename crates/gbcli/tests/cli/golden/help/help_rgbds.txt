@@ -42,13 +42,15 @@ watches kept, following their labels).
 Banks: a header with no MBC (the byte at $0147 is $00, $08 or $09, as the
 starter's is) maps 32 KB, banks 0 and 1, and nothing else. rgblink fills
 16 KB banks; when that puts a section past bank 1, finds no room in bank 0
-or meets a section bigger than 16 KB, the build links again as one 32 KB
-bank (rgblink -t), and a warning row says so: any section may then sit
-anywhere in $0000-$7FFF. If that fails too (past 32 KB, a pinned section
-splitting the space, an overlap), the build fails; when the first link
-wrote no ROM, the one-bank link's rows follow as warnings that hold only if
-the header names no MBC. Name an MBC at $0147 (e.g. $01 for MBC1) and
-switch banks to grow.
+or meets a ROM0 section (or ROM0 fragments) past 16 KB, the build links
+again as one 32 KB bank (rgblink -t), and a warning row says so: any
+section may then sit anywhere in $0000-$7FFF. (A single ROMX section over
+16 KB is refused by rgbasm before any link; split it.) If that fails too
+(past 32 KB, a pinned section splitting the space, an overlap), the build
+fails; when the first link wrote no ROM, the first link's error leads, an
+undefined symbol still leads as an error, and the one-bank link's other
+rows follow as warnings that may hold only if the header names no MBC.
+Name an MBC at $0147 (e.g. $01 for MBC1) and switch banks to grow.
 
 Constants other files assemble against (in ds, IF, REPT) belong in include/:
 an EXPORTed symbol is resolved only at link time, so it isn't constant there.

@@ -301,10 +301,7 @@ fn extra_a_mbc_full_bank_0_plus_a_bank_2_section_leads_with_bank_0() {
         })
     {
         assert_eq!(d.severity, Severity::Warning, "{rws}");
-        assert!(
-            d.message.starts_with("only if the header names no MBC"),
-            "{rws}"
-        );
+        assert!(d.message.starts_with("from the one-bank link"), "{rws}");
     }
     assert!(
         rws.contains("must be in bank 1"),

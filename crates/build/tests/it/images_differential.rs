@@ -23,6 +23,12 @@
 //!   (rgbgfx may pick another palette that holds a tile's colors, research
 //!   §3; gbcli always draws from the slot it packed).
 //!
+//! The two fixture tests then build the same project under `--gbc` and read
+//! what `assets` never writes: each background's `.tilemap` file must hold
+//! its (checked) tile map's indices, and `images.asm`'s palette words must be
+//! the report's palettes, in order. The example games' written files are
+//! not read.
+//!
 //! What it cannot see: an image whose source isn't a PNG (`.pixels` text,
 //! 3 of 5 example games): its DMG data is not compared, and its GBC data is
 //! compared with a PNG painted from gbcli's own data, a round trip. A
@@ -38,7 +44,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use gbcli_build::{AssetsInput, AssetsOptions, assets};
+use gbcli_build::{AssetsInput, AssetsOptions, BuildOptions, assets, build};
 use gbcli_protocol::{
     AssetsMade, BuildTarget, Flip, GbcPalette, ImageArt, ImageAsset, ImageKind, ImagesMade,
     KnownPalette, Rgb555, ShadeChoice, ShadeRule,
@@ -504,6 +510,93 @@ fn check_gbc(
     }
 }
 
+/// The `dw` rows between `label::` and `labelEnd::` of generated assembly,
+/// each as its four words.
+fn dw_rows(asm: &str, label: &str) -> Vec<Vec<u16>> {
+    let start = format!("{label}::");
+    let end = format!("{label}End::");
+    let body = asm
+        .split_once(&start)
+        .and_then(|(_, rest)| rest.split_once(&end))
+        .unwrap_or_else(|| panic!("{label} between {start} and {end} in\n{asm}"))
+        .0;
+    body.lines()
+        .filter_map(|line| line.trim().strip_prefix("dw "))
+        .map(|words| {
+            words
+                .split(',')
+                .map(|w| u16::from_str_radix(w.trim().trim_start_matches('$'), 16).unwrap())
+                .collect()
+        })
+        .collect()
+}
+
+/// A palette's words as the hardware reads them, red in the low bits.
+fn words(palettes: &[GbcPalette]) -> Vec<Vec<u16>> {
+    palettes
+        .iter()
+        .map(|GbcPalette(colors)| {
+            colors
+                .iter()
+                .map(|c| {
+                    let [r, g, b] = c.channels().map(u16::from);
+                    r | g << 5 | b << 10
+                })
+                .collect()
+        })
+        .collect()
+}
+
+/// Builds `demo` under `--gbc` and checks the files the build writes and
+/// assembles, which `assets` and the oracle never read, against the report
+/// the oracle did check: each background's `.tilemap` holds its tile map's
+/// indices, and the generated assembly's palette words are the report's
+/// palettes, in order. Appends mismatches to `bad`.
+fn check_written(options: &BuildOptions, demo: &Path, bad: &mut Vec<String>) {
+    let mut options = options.clone();
+    options.target = BuildTarget::Gbc;
+    let made = build(&common::rgbds(), &options).unwrap_or_else(|e| panic!("{:?}", e.body()));
+    let images = made.images.expect("the project has images");
+    let root = demo.join("build/images");
+    let asm = fs::read_to_string(root.join("images.asm")).unwrap();
+    for asset in &images.images {
+        if asset.kind == ImageKind::Bg {
+            let file = fs::read(data_path(&root, asset, "tilemap")).unwrap();
+            let want: Vec<u8> = asset
+                .tile_map
+                .iter()
+                .map(|e| e.as_ref().expect("a background cell").index as u8)
+                .collect();
+            if file != want {
+                bad.push(format!(
+                    "{}: the .tilemap file {file:?} isn't its tile map {want:?}",
+                    asset.source
+                ));
+            }
+        }
+        if let Some(g) = &asset.gbc
+            && asset.kind != ImageKind::Sprites
+        {
+            let got = dw_rows(&asm, &format!("{}Palettes", asset.label));
+            if got != words(&g.palettes) {
+                bad.push(format!(
+                    "{}: the generated palettes {got:04X?} aren't its slots' {:04X?}",
+                    asset.source,
+                    words(&g.palettes)
+                ));
+            }
+        }
+    }
+    let gbc = images.gbc.expect("a --gbc build reports its palettes");
+    let got = dw_rows(&asm, "ObjPalettesGbc");
+    if got != words(&gbc.obj_palettes) {
+        bad.push(format!(
+            "the generated OBJ palettes {got:04X?} aren't the report's {:04X?}",
+            words(&gbc.obj_palettes)
+        ));
+    }
+}
+
 /// Converts `project` and checks every image against rgbgfx; the
 /// mismatches, and the project's shade choice.
 fn check(project: &Path, base: &Path, name: &str) -> (Vec<String>, Option<ShadeChoice>) {
@@ -568,7 +661,7 @@ fn every_example_games_images_match_rgbgfx() {
 /// A fixture of every kind and art matches rgbgfx, a 16-bit PNG among them.
 #[test]
 fn every_kind_and_art_matches_rgbgfx() {
-    let (temp, _options) = common::starter("differ");
+    let (temp, options) = common::starter("differ");
     let demo = temp.path("demo");
     // Indexed art: its own DMG version, one palette.
     write_png(&demo.join("assets/bg/sky.png"), 16, 8, |x, y| {
@@ -641,7 +734,8 @@ fn every_kind_and_art_matches_rgbgfx() {
     write_png(&demo.join("assets/tiles/blocks.png"), 8, 8, |x, y| {
         if (x + y) % 2 == 0 { LIGHT } else { DARK }
     });
-    let (bad, _) = check(&demo, &temp.0, "fixtures");
+    let (mut bad, _) = check(&demo, &temp.0, "fixtures");
+    check_written(&options, &demo, &mut bad);
     assert!(bad.is_empty(), "rgbgfx disagrees:\n{}", bad.join("\n"));
 }
 
@@ -653,7 +747,7 @@ fn every_kind_and_art_matches_rgbgfx() {
 /// color's shade.
 #[test]
 fn gray_art_matches_rgbgfx_on_the_source_and_in_its_shades() {
-    let (temp, _options) = common::starter("differ-grays");
+    let (temp, options) = common::starter("differ-grays");
     let demo = temp.path("demo");
     write_png(&demo.join("assets/bg/sky.png"), 16, 8, |x, y| {
         if (x / 8 + y / 8) % 2 == 0 {
@@ -664,7 +758,8 @@ fn gray_art_matches_rgbgfx_on_the_source_and_in_its_shades() {
     });
     write_png(&demo.join("assets/sprites/bugs.png"), 24, 16, |x, y| {
         let (u, fx) = (x / 8, x % 8);
-        match (u + fx + y) % 4 {
+        // The `y / 8` makes an 8x16 unit's halves differ, so a swap shows.
+        match (u + fx + y + y / 8) % 4 {
             0 => CLEAR,
             1 => [DARK, WHITE, BLACK][u as usize],
             2 => WHITE,
@@ -691,7 +786,8 @@ fn gray_art_matches_rgbgfx_on_the_source_and_in_its_shades() {
             DARK
         }
     });
-    let (bad, shades) = check(&demo, &temp.0, "grays");
+    let (mut bad, shades) = check(&demo, &temp.0, "grays");
+    check_written(&options, &demo, &mut bad);
     assert_eq!(
         shades,
         Some(ShadeChoice {

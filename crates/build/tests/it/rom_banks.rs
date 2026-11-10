@@ -248,7 +248,7 @@ fn a_rom_only_bank_0_past_32_kb_fails_with_a_hint_naming_an_mbc() {
     assert!(
         warnings
             .iter()
-            .all(|w| w.message.starts_with("only if the header names no MBC")),
+            .all(|w| w.message.starts_with("from the one-bank link")),
         "{:?}",
         made.diagnostics
     );

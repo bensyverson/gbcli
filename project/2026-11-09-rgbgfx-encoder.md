@@ -79,6 +79,17 @@ change; nothing produces them.
 > elsewhere gbcli's shade choice is taken, not checked. `assets` is not run
 > with a recording rgbgfx; it takes no toolchain and the protocol has no
 > rgbgfx tool to find.
+>
+> **Correction (nWjPtM, verification of 2bb9bff).** The differential test
+> read the report's `tile_map` and `gbc.palettes`, never the shipped
+> `.tilemap` file or the emitted palette words, so a reversed `.tilemap` or
+> a reversed `dw` order passed it. The two fixture tests (`every_kind_and_art`
+> and the grays one) now also build under `--gbc` and read both: each
+> background's `.tilemap` must equal its tile map's indices and
+> `images.asm`'s palette words (`<Label>Palettes`, `ObjPalettesGbc`) must be
+> the report's palettes in order. The example games' written files are still
+> not read. Checked by reversing the `.tilemap` bytes and, separately, the
+> `dw` word order: both fixture tests went red each time.
 
 `crates/build/tests/it/images_differential.rs` converts every example
 game's images and a fixture of each kind and art with `assets` (no tool),

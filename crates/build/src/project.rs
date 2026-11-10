@@ -665,14 +665,16 @@ fn tiny_message(spill: &Spill) -> String {
 }
 
 /// `d`, from a one-bank link made when the header is unknown, as a warning
-/// that says it holds only for a header with no MBC. It keeps `d`'s tool and
-/// place, so an assert's row still names its file and line.
+/// that says where it came from and that it may hold only for a header with no
+/// MBC. "May" because the allow-list is fail-closed: an error that holds in
+/// any layout but isn't on it lands here too. It keeps `d`'s tool and place,
+/// so an assert's row still names its file and line.
 fn only_without_mbc(d: Diagnostic) -> Diagnostic {
     Diagnostic {
         severity: Severity::Warning,
         message: format!(
-            "only if the header names no MBC (unknown: the first link wrote no ROM), which \
-             links as one 32 KB bank (rgblink -t): {}",
+            "from the one-bank link (rgblink -t), which may hold only if the header names no \
+             MBC (unknown: the first link wrote no ROM): {}",
             d.message
         ),
         ..d

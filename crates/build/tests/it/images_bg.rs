@@ -1,4 +1,4 @@
-//! `build` over backgrounds in `assets/bg/`: converted by rgbgfx into unique
+//! `build` over backgrounds in `assets/bg/`: converted (in Rust) into unique
 //! tiles and a tilemap the program includes, previewed, and refused with a
 //! structured problem at each DMG background limit.
 

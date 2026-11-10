@@ -243,6 +243,122 @@ mod tests {
         }
     }
 
+    /// Every `Verb` variant, as a match no variant can be left out of:
+    /// adding one stops this compiling until it is listed here, and
+    /// `every_variant_has_a_table_entry` then holds it to the table. (The
+    /// table test above walks the table, so it never meets a variant the
+    /// table lacks, and `Verb::spec` would panic for it.)
+    fn listed(verb: Verb) -> Verb {
+        match verb {
+            Verb::Run
+            | Verb::Step
+            | Verb::Checkpoint
+            | Verb::Restore
+            | Verb::Undo
+            | Verb::Write
+            | Verb::Poke
+            | Verb::Patch
+            | Verb::Show
+            | Verb::Read
+            | Verb::Shot
+            | Verb::View
+            | Verb::Sym
+            | Verb::Checkpoints
+            | Verb::Measure
+            | Verb::Equiv
+            | Verb::Events
+            | Verb::Gaps
+            | Verb::Sessions
+            | Verb::Prune
+            | Verb::Rm
+            | Verb::Break
+            | Verb::Watch
+            | Verb::Delete
+            | Verb::New
+            | Verb::Build
+            | Verb::Assets
+            | Verb::Song
+            | Verb::Pixels
+            | Verb::Font
+            | Verb::FontEdit
+            | Verb::FontSave
+            | Verb::FontImport
+            | Verb::FontExport
+            | Verb::FontNew
+            | Verb::FontDiff
+            | Verb::Serve
+            | Verb::Batch
+            | Verb::Help
+            | Verb::Recipes
+            | Verb::Schema
+            | Verb::Doctor
+            | Verb::Opcode
+            | Verb::Version
+            | Verb::PowerCycle
+            | Verb::Sav => verb,
+        }
+    }
+
+    #[test]
+    fn every_variant_has_a_table_entry() {
+        const EVERY: [Verb; 46] = [
+            Verb::Run,
+            Verb::Step,
+            Verb::Checkpoint,
+            Verb::Restore,
+            Verb::Undo,
+            Verb::Write,
+            Verb::Poke,
+            Verb::Patch,
+            Verb::Show,
+            Verb::Read,
+            Verb::Shot,
+            Verb::View,
+            Verb::Sym,
+            Verb::Checkpoints,
+            Verb::Measure,
+            Verb::Equiv,
+            Verb::Events,
+            Verb::Gaps,
+            Verb::Sessions,
+            Verb::Prune,
+            Verb::Rm,
+            Verb::Break,
+            Verb::Watch,
+            Verb::Delete,
+            Verb::New,
+            Verb::Build,
+            Verb::Assets,
+            Verb::Song,
+            Verb::Pixels,
+            Verb::Font,
+            Verb::FontEdit,
+            Verb::FontSave,
+            Verb::FontImport,
+            Verb::FontExport,
+            Verb::FontNew,
+            Verb::FontDiff,
+            Verb::Serve,
+            Verb::Batch,
+            Verb::Help,
+            Verb::Recipes,
+            Verb::Schema,
+            Verb::Doctor,
+            Verb::Opcode,
+            Verb::Version,
+            Verb::PowerCycle,
+            Verb::Sav,
+        ];
+        for verb in EVERY {
+            assert!(
+                VERBS.iter().any(|s| s.verb == listed(verb)),
+                "{verb:?} has no entry in VERBS"
+            );
+            assert!(!verb.name().is_empty());
+        }
+        assert_eq!(EVERY.len(), VERBS.len(), "a table entry for no variant");
+    }
+
     #[test]
     fn no_verb_takes_one_flag_name_twice() {
         for spec in VERBS {

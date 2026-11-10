@@ -2,8 +2,9 @@
 //! under the source directories is assembled with the include directories on
 //! rgbasm's include path, the objects are linked into one ROM with its `.sym`
 //! and `.map`, and rgbfix fixes the header. A header with no MBC that the
-//! link spills past bank 1, or past bank 0, is linked again as one 32 KB
-//! bank (`banks`). Each step's outputs are checked to exist and be
+//! link spills past bank 1, or past bank 0, or that holds a section bigger
+//! than a 16 KB bank, is linked again as one 32 KB bank (`banks`). Each
+//! step's outputs are checked to exist and be
 //! non-empty (DX 10). The ROM, `.sym` and `.map` are written to a staging
 //! directory of this build's own beside the final ones and moved into place
 //! only when every step passed, the ROM last, so a failed build never leaves
@@ -285,8 +286,8 @@ pub fn build(tools: &Toolchain, options: &BuildOptions) -> Result<BuildMade, Bui
     } else {
         run.made.diagnostics[before_link..]
             .iter()
-            .any(banks::bank_0_full)
-            .then_some(Spill::Bank0Full)
+            .any(|d| banks::bank_0_full(d) || banks::outgrows_a_bank(d))
+            .then_some(Spill::NoRom)
     };
     match spill {
         None if !linked => return Err(run.failed()),
@@ -299,12 +300,12 @@ pub fn build(tools: &Toolchain, options: &BuildOptions) -> Result<BuildMade, Bui
             // When the one-bank link succeeds, its ROM's header decides
             // whether the build is accepted. When it fails after the first
             // link wrote a ROM, its rows lead: the first link stopped short
-            // of them. After a failed first link (a full bank 0) there is no
-            // ROM, so the header is unknown: a row that is true only when it
-            // names no MBC can't lead there. A full bank 0 under an MBC
-            // still pays a one-bank link it discards: the header byte is in
-            // the objects, and nothing short of parsing them reads it
-            // without a ROM.
+            // of them. After a failed first link (a full bank 0, or a section
+            // bigger than a bank) there is no ROM, so the header is unknown:
+            // only a row true whatever the layout can lead there. A full bank
+            // 0 under an MBC still pays a one-bank link it discards: the
+            // header byte is in the objects, and nothing short of parsing
+            // them reads it without a ROM.
             let first = run.made.diagnostics.split_off(before_link);
             let one_bank = run.link(&objects, &staged, options.target, Banks::Tiny)?;
             if one_bank && (matches!(spill, Spill::PastBank1(_)) || run.names_no_mbc(&staged[0])?) {
@@ -348,20 +349,26 @@ pub fn build(tools: &Toolchain, options: &BuildOptions) -> Result<BuildMade, Bui
                         run.made.diagnostics.extend(first);
                         run.made.overflow = Some(overflow);
                     }
-                    Spill::Bank0Full => {
+                    Spill::NoRom => {
                         // The first link wrote no ROM, so the header is
-                        // unknown: a row that is true only when it names no
-                        // MBC can't lead, and its hint can't attach. Any
-                        // other one-bank error (an undefined symbol, say) is
-                        // real, and the first link's row follows it.
-                        let tiny: Vec<Diagnostic> = tiny
-                            .into_iter()
-                            .filter(|d| !banks::romx_bank_past_1(d))
-                            .collect();
-                        if !one_bank && !tiny.is_empty() && !tiny.iter().any(banks::bank_0_full) {
-                            run.made.diagnostics.extend(tiny);
-                        }
+                        // unknown. A one-bank error true whatever the layout
+                        // (an undefined symbol) leads: the first link
+                        // stopped short of it. Then the first link's rows.
+                        // Every other one-bank row holds only for a header
+                        // with no MBC, so it follows as a warning that says
+                        // so, never leading and never lending its hint. A
+                        // one-bank link that passed under an MBC header said
+                        // nothing about this cartridge.
+                        let (any_layout, one_bank_only) = if one_bank {
+                            (Vec::new(), Vec::new())
+                        } else {
+                            tiny.into_iter().partition(banks::true_in_any_layout)
+                        };
+                        run.made.diagnostics.extend(any_layout);
                         run.made.diagnostics.extend(first);
+                        run.made
+                            .diagnostics
+                            .extend(one_bank_only.into_iter().map(only_without_mbc));
                     }
                 }
                 return Err(run.failed());
@@ -634,8 +641,9 @@ fn tiny_failed_message(o: &BankOverflow) -> String {
 enum Spill {
     /// The header names no MBC and rgblink placed sections past bank 1.
     PastBank1(BankOverflow),
-    /// rgblink couldn't fit the ROM0 sections in bank 0, so it wrote no ROM.
-    Bank0Full,
+    /// rgblink found no room in bank 0 for a ROM0 section, or a section was
+    /// bigger than a 16 KB bank, so it wrote no ROM.
+    NoRom,
 }
 
 /// The warning row for a build linked again as one bank.
@@ -646,14 +654,29 @@ fn tiny_message(spill: &Spill) -> String {
             o.cart_type,
             past_bank_1(o)
         ),
-        Spill::Bank0Full => "the header names no MBC and in 16 KB banks the ROM0 sections \
-                             didn't fit in bank 0"
+        Spill::NoRom => "the header names no MBC and in 16 KB banks the link found no room in \
+                         bank 0 or a section bigger than a bank"
             .to_string(),
     };
     format!(
         "linked as one 32 KB bank (rgblink -t), since {why}; ROM0 and ROMX sections alike \
          may sit anywhere in $0000-$7FFF"
     )
+}
+
+/// `d`, from a one-bank link made when the header is unknown, as a warning
+/// that says it holds only for a header with no MBC. It keeps `d`'s tool and
+/// place, so an assert's row still names its file and line.
+fn only_without_mbc(d: Diagnostic) -> Diagnostic {
+    Diagnostic {
+        severity: Severity::Warning,
+        message: format!(
+            "only if the header names no MBC (unknown: the first link wrote no ROM), which \
+             links as one 32 KB bank (rgblink -t): {}",
+            d.message
+        ),
+        ..d
+    }
 }
 
 /// What to do about a one-bank link that couldn't place a section on a

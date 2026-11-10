@@ -273,8 +273,10 @@ fn case5_pure_undefined_symbol_is_not_an_overflow() {
 }
 
 // 6. An MBC header with a full bank 0 and a legal ROMX BANK[2] section. The
-// first link wrote no ROM, so the header is unknown: the discarded one-bank
-// link's bank-1 refusal must not lead, and its no-MBC hint must not attach.
+// first link wrote no ROM, so the header is unknown: the one-bank link's
+// bank-1 refusal must not lead or be an error, and its no-MBC hint must not
+// attach. It is kept only as a warning saying it holds for a header with no
+// MBC (leaf 5x5Z42), which for this header it doesn't.
 #[test]
 fn extra_a_mbc_full_bank_0_plus_a_bank_2_section_leads_with_bank_0() {
     let (f, files) = failed(
@@ -293,8 +295,21 @@ fn extra_a_mbc_full_bank_0_plus_a_bank_2_section_leads_with_bank_0() {
         "{message}\n{rws}"
     );
     assert!(!message.contains("must be in bank 1"), "{message}");
-    assert!(!rws.contains("must be in bank 1"), "{rws}");
-    assert!(!rws.contains("names no MBC"), "{rws}");
+    for d in
+        f.made.diagnostics.iter().filter(|d| {
+            d.message.contains("must be in bank 1") || d.message.contains("names no MBC")
+        })
+    {
+        assert_eq!(d.severity, Severity::Warning, "{rws}");
+        assert!(
+            d.message.starts_with("only if the header names no MBC"),
+            "{rws}"
+        );
+    }
+    assert!(
+        rws.contains("must be in bank 1"),
+        "the row was dropped:\n{rws}"
+    );
     // The surviving hint is the full-bank-0 one; the no-MBC hint's claim
     // and its BANK[n] advice must not appear.
     assert!(!remedy.contains("the header names no MBC, so"), "{remedy}");

@@ -46,6 +46,7 @@ mod pixels;
 mod pixels_outputs;
 mod player;
 mod pngs;
+mod relink_unknown_header;
 mod rom_banks;
 mod scaffold;
 mod text;

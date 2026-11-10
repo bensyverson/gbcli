@@ -230,7 +230,10 @@ fn a_full_bank_0_under_an_mbc_fails_with_rgblinks_error_and_a_hint() {
 }
 
 /// Past 32 KB of ROM0 with no MBC, linking as one bank fails too: rgblink's
-/// error, with the hint naming an MBC.
+/// error, with the hint naming an MBC. The first link wrote no ROM, so the
+/// header is unknown and the one-bank link's own refusal follows only as a
+/// warning saying it holds for a header with no MBC; no warning says the
+/// build was linked as one bank.
 #[test]
 fn a_rom_only_bank_0_past_32_kb_fails_with_a_hint_naming_an_mbc() {
     let (temp, options) = starter("banks-rom0-too-big");
@@ -241,7 +244,21 @@ fn a_rom_only_bank_0_past_32_kb_fails_with_a_hint_naming_an_mbc() {
         panic!("expected a failed build, got {err:?}");
     };
     assert!(made.overflow.is_none());
-    assert!(warnings(made).is_empty(), "{:?}", made.diagnostics);
+    let warnings = warnings(made);
+    assert!(
+        warnings
+            .iter()
+            .all(|w| w.message.starts_with("only if the header names no MBC")),
+        "{:?}",
+        made.diagnostics
+    );
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.message.contains("(ROM0 section) anywhere")),
+        "the one-bank link's refusal was dropped: {:?}",
+        made.diagnostics
+    );
     let body = err.body();
     assert!(
         body.message.contains("(ROM0 section) anywhere"),

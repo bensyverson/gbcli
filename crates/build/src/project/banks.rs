@@ -4,8 +4,8 @@
 //! that reads it reads bank 1's bytes. rgblink doesn't know the cartridge
 //! and says nothing; this reads the header byte and the `.map`. Such a
 //! cartridge maps 32 KB flat, so the build links it again as one bank
-//! (`rgblink --tiny`) when rgblink spreads it past bank 1, or can't fit
-//! bank 0.
+//! (`rgblink --tiny`) when rgblink spreads it past bank 1, can't fit bank 0,
+//! or refuses a section bigger than a 16 KB bank.
 
 use gbcli_protocol::{BankOverflow, Diagnostic, PlacedSection, Severity, Tool};
 
@@ -35,15 +35,33 @@ pub(super) fn unplaced(d: &Diagnostic) -> Option<&str> {
         .strip_suffix("\" (ROM0 section) anywhere")
 }
 
-/// rgblink's `-t` refusal of a ROMX section fixed past bank 1. It is true
-/// only when the header names no MBC, so a report made when the first link
-/// wrote no ROM — and the header is therefore unknown — must not lead with
-/// it.
-pub(super) fn romx_bank_past_1(d: &Diagnostic) -> bool {
+/// rgblink's refusal of a section bigger than its type allows in 16 KB banks
+/// (RGBDS 1.0.4: `Section "NAME" is bigger than the max size for that type:
+/// $5000 > $4000`). The max of $4000 is a ROM bank's; linked as one bank,
+/// ROM0 and ROMX sections alike may fill 32 KB.
+pub(super) fn outgrows_a_bank(d: &Diagnostic) -> bool {
     d.tool == Tool::Rgblink
         && d.severity == Severity::Error
+        && d.message.starts_with("Section \"")
         && d.message
-            .contains(crate::diagnostics::hints::ROMX_BANK_PAST_1)
+            .contains("\" is bigger than the max size for that type: $")
+        && d.message.ends_with(" > $4000")
+}
+
+/// The starts of the one-bank link's errors that no placement changes. An
+/// undefined symbol is undefined in any layout; RGBDS 1.0.4 prints
+/// ``Undefined symbol `NAME` ``.
+const ANY_LAYOUT: [&str; 1] = ["Undefined symbol `"];
+
+/// Whether a one-bank link's error holds whatever the layout, so it may
+/// lead a report made when the first link wrote no ROM and the header is
+/// unknown. An allow-list: any row not on it (an overlap, an assert, a `jr`
+/// out of range, an unplaced section, a ROMX bank past 1) may exist only
+/// because the one-bank link placed things where 16 KB banks wouldn't.
+pub(super) fn true_in_any_layout(d: &Diagnostic) -> bool {
+    d.tool == Tool::Rgblink
+        && d.severity == Severity::Error
+        && ANY_LAYOUT.iter().any(|start| d.message.starts_with(start))
 }
 
 /// Whether `rom`'s header names no MBC: a cartridge that maps 32 KB flat.
@@ -188,21 +206,49 @@ mod tests {
         );
     }
 
-    /// The one-bank link's bank-1 refusal is recognized on rgblink errors
-    /// only, by the fragment its hint shares.
+    /// A section bigger than a 16 KB bank is a refusal one flat 32 KB bank
+    /// may cure; a RAM section past its own size, or the message from
+    /// rgbasm, isn't.
     #[test]
-    fn the_one_bank_links_bank_1_refusal_is_recognized() {
-        let d = Diagnostic::new(
+    fn a_section_bigger_than_a_rom_bank_is_recognized() {
+        let d = |tool, message: &str| Diagnostic::new(tool, Severity::Error, message);
+        let huge = "Section \"Huge\" is bigger than the max size for that type: $5000 > $4000";
+        assert!(outgrows_a_bank(&d(Tool::Rgblink, huge)));
+        assert!(!outgrows_a_bank(&d(Tool::Rgbasm, huge)));
+        assert!(!outgrows_a_bank(&Diagnostic::new(
             Tool::Rgblink,
-            Severity::Error,
+            Severity::Warning,
+            huge
+        )));
+        assert!(!outgrows_a_bank(&d(
+            Tool::Rgblink,
+            "Section \"Vars\" is bigger than the max size for that type: $1100 > $1000"
+        )));
+    }
+
+    /// Only a row whose truth no placement changes may lead a report made
+    /// without the header: an undefined symbol. An overlap, an assert, an
+    /// unplaced section, a `jr` out of range and the bank-1 refusal all
+    /// depend on where the one-bank link put things.
+    #[test]
+    fn only_an_undefined_symbol_is_true_in_any_layout() {
+        let d = |message: &str| Diagnostic::new(Tool::Rgblink, Severity::Error, message);
+        assert!(true_in_any_layout(&d("Undefined symbol `Nowhere`")));
+        for layout in [
+            "Unable to place \"Left\" (ROM0 section) at address $4000: section overlaps with \
+             \"Right\"",
+            "Banked code must live in ROMX",
+            "Unable to place \"Wide\" (ROM0 section) anywhere",
+            "jr target must be between -128 and 127 bytes away, not 300; use jp instead",
             "Section \"Fixed\" has type `ROMX`, which must be in bank 1 (if any) with option '-t'",
+        ] {
+            assert!(!true_in_any_layout(&d(layout)), "{layout}");
+        }
+        let warning = Diagnostic::new(
+            Tool::Rgblink,
+            Severity::Warning,
+            "Undefined symbol `Nowhere`",
         );
-        assert!(romx_bank_past_1(&d));
-        let mut warning = d.clone();
-        warning.severity = Severity::Warning;
-        assert!(!romx_bank_past_1(&warning));
-        let mut assembler = d;
-        assembler.tool = Tool::Rgbasm;
-        assert!(!romx_bank_past_1(&assembler));
+        assert!(!true_in_any_layout(&warning));
     }
 }

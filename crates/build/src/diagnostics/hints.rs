@@ -15,9 +15,9 @@ struct Hint {
 }
 
 /// The `-t` refusal of a ROMX section fixed past bank 1. Its truth depends on
-/// the header naming no MBC, so both this hint and `project::banks`'s filter
-/// find the row by this one fragment.
-pub(crate) const ROMX_BANK_PAST_1: &str = "must be in bank 1 (if any) with option '-t'";
+/// the header naming no MBC, so `project` lets it lead only once a one-bank
+/// ROM's header said so.
+const ROMX_BANK_PAST_1: &str = "must be in bank 1 (if any) with option '-t'";
 
 /// RGBDS 1.0.4's wording.
 const HINTS: &[Hint] = &[
@@ -43,15 +43,18 @@ const HINTS: &[Hint] = &[
     Hint {
         tool: Tool::Rgblink,
         // `Unable to place "Sound Driver" (ROM0 section) anywhere`: bank 0
-        // is full or, for a header with no MBC, which the build then links
-        // as one bank (`project`), all 32 KB is.
+        // has no gap big enough, because it is full or because a section
+        // pinned to a fixed address splits it, so this claims no total size.
+        // It leads only from the 16 KB-bank link: a one-bank link's
+        // unplaced section gets its own row (`project`).
         fragment: "(ROM0 section) anywhere",
-        remedy: "the sections don't fit: bank 0 holds 16 KB ($0000-$3FFF), or 32 KB when the \
-                 header names no MBC and the build links it as one bank. Shrink them or move \
-                 what needn't be in bank 0 into ROMX (`SECTION \"Name\", ROMX`); past 32 KB, \
-                 name an MBC in the header (the byte at $0147, e.g. $01 for MBC1) and switch \
-                 banks (write the bank number to $2000) around the code that reads each \
-                 section past bank 1",
+        remedy: "bank 0 ($0000-$3FFF, 16 KB) has no room left for the section: it is full, or a \
+                 section pinned to a fixed address splits it. Shrink the sections, move what \
+                 needn't be in bank 0 into ROMX (`SECTION \"Name\", ROMX`) or move the pinned \
+                 section; a header that names no MBC is linked again as one 32 KB bank, and any \
+                 row for that link says what failed there. Past 32 KB, name an MBC in the header \
+                 (the byte at $0147, e.g. $01 for MBC1) and switch banks (write the bank number \
+                 to $2000) around the code that reads each section past bank 1",
     },
     Hint {
         tool: Tool::Rgblink,
@@ -165,6 +168,10 @@ mod tests {
         for needed in ["ROMX", "MBC", "$0147", "32 KB"] {
             assert!(text.contains(needed), "{needed}: {text}");
         }
+        // A pinned section may split bank 0 with room to spare, so the hint
+        // claims no total size and offers moving the pin.
+        assert!(!text.contains("don't fit"), "{text}");
+        assert!(text.contains("pinned"), "{text}");
         let assembler = Diagnostic {
             tool: Tool::Rgbasm,
             ..d.clone()

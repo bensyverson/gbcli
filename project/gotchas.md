@@ -62,9 +62,9 @@ A `git merge --squash` that conflicted in two files was resolved in one (crates/
 
 `scripts/music/export-reference.sh` builds hUGETracker's `uge2source` from its source. Claude Code's auto-mode check refused the first run of that binary as "code from external" until Ben approved it in the session; a later agent ran the script without a prompt. If it is refused, ask Ben, and don't work around it. Two more traps on the same path. The sandbox refuses to extract a tarball's `.gitmodules` ("Operation not permitted"), so the script extracts only `src/`. And parallel agents share `$TMPDIR`: a reviewer's scratch folder replaced the hand-built binary, so build through the script, which keeps its build under `target/uge2source`.
 
-## 2026-11-07 — in a worktree, run cargo by its full path
+## 2026-11-07 — in a worktree, run cargo as plain `cargo`, not rustup's
 
-Rust was installed with rustup this session, and `~/.cargo/bin` isn't on agents' `PATH`. In a worktree, the guard refused `. ~/.cargo/env; cargo …` and any command that put a `/Users/ben/git/...` path next to `cargo`. Run `/Users/ben/.cargo/bin/cargo` directly from the worktree, one plain command per call, with the sandbox off. The main thread can source `~/.cargo/env` (leaves DkhKgi, a1393ec).
+Corrected 2026-11-09: this entry used to say to run `/Users/ben/.cargo/bin/cargo`, which was wrong by then. That path is unreadable in the sandbox, and its toolchain rejects `resolver = 3`. Homebrew's `cargo` (`/opt/homebrew/bin/cargo`, 1.99.1) is on `PATH` and works. In a worktree, the guard still refuses any command that puts a `/Users/ben/git/...` path next to `cargo`, so run `cargo` from the worktree, one plain command per call (leaves DkhKgi, a1393ec, 5x5Z42).
 
 ## 2026-11-07 — `.jobs/log/*.jsonl` is tracked, so a `git reset --hard` erases every uncommitted `job` write
 

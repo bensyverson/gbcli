@@ -74,7 +74,7 @@ impl Bundle {
 
     /// Whether two project paths name one file: the store gives them one key.
     fn same_file(&self, a: &Path, b: &Path) -> bool {
-        self.file_key(a) == self.file_key(b)
+        self.canonical_file_key(a) == self.canonical_file_key(b)
     }
 
     /// The `.sym` beside a ROM (its basename with `.sym`), as a path against
@@ -482,5 +482,20 @@ mod tests {
         let mut source = f.source();
         source.rom = PathBuf::from("./demo.gb");
         assert!(f.bundle.open_session("demo", Some(&source)).is_ok());
+    }
+
+    /// A session records the file a link named, and the link still names
+    /// that file when the session is reopened through it.
+    #[test]
+    fn a_rom_named_through_a_link_is_recorded_as_its_target() {
+        let f = Fixture::new("open-link");
+        let link = f.root.join("current.gb");
+        std::os::unix::fs::symlink("demo.gb", &link).unwrap();
+        let mut source = f.source();
+        source.rom = link;
+        let store = f.bundle.open_session("demo", Some(&source)).unwrap();
+        assert_eq!(store.read_meta().unwrap().rom, "demo.gb");
+        assert!(f.bundle.open_session("demo", Some(&source)).is_ok());
+        assert!(f.bundle.open_session("demo", Some(&f.source())).is_ok());
     }
 }

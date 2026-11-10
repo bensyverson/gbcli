@@ -32,7 +32,9 @@ pub use events::EVENTS_ROTATE_AT;
 pub use file_store::{FileStore, SystemClock};
 pub use history::HISTORY_BACK;
 pub use lock::{LOCK_WAIT, SessionLock};
-pub use project_store::{Clock, Entry, Guard, Key, Kind, LockError, ProjectStore, PutAllError};
+pub use project_store::{
+    ChangeToken, Clock, Entry, Guard, Key, Kind, LockError, ProjectStore, PutAllError,
+};
 pub use prune::{PruneReport, parse_duration};
 pub use session::RomSource;
 pub use stamp::FilesStamp;

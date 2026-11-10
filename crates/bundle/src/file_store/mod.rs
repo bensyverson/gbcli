@@ -16,7 +16,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use crate::io::{append, atomic_write, ensure_dir, temp_path};
 mod open;
 
-use crate::project_store::{Clock, Entry, Guard, Key, Kind, LockError, ProjectStore, PutAllError};
+use crate::project_store::{
+    ChangeToken, Clock, Entry, Guard, Key, Kind, LockError, ProjectStore, PutAllError,
+};
 
 /// A project directory as a [`ProjectStore`].
 #[derive(Debug)]
@@ -40,6 +42,57 @@ impl FileStore {
             self.root.join(key.as_str())
         }
     }
+
+    fn joined(&self, path: &Path) -> PathBuf {
+        if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            self.root.join(path)
+        }
+    }
+
+    /// The key for a resolved path: relative when it is inside the project.
+    fn key_from(&self, resolved: &Path) -> Key {
+        let project = fs::canonicalize(&self.root).unwrap_or_else(|_| self.root.clone());
+        match resolved.strip_prefix(&project) {
+            Ok(inside) => Key::new(inside.to_string_lossy()),
+            Err(_) => Key::new(resolved.to_string_lossy()),
+        }
+    }
+}
+
+/// `path` with its directory resolved and its own name kept; `None` when
+/// the name is `..` or `.`, or the directory can't be resolved.
+fn in_resolved_dir(path: &Path) -> Option<PathBuf> {
+    let name = match path.components().next_back()? {
+        Component::Normal(name) => name,
+        _ => return None,
+    };
+    let parent = fs::canonicalize(path.parent()?).ok()?;
+    Some(parent.join(name))
+}
+
+/// A file modified this close to now could be rewritten within the same
+/// mtime tick (two seconds on FAT) and keep its size and time.
+const RACY: Duration = Duration::from_secs(2);
+
+/// Whether a file modified at `modified` could change again, by `now`,
+/// without its mtime changing. A time in the future is racy.
+fn racy(modified: SystemTime, now: SystemTime) -> bool {
+    now.duration_since(modified).map_or(true, |age| age < RACY)
+}
+
+/// The device and inode, where the host has them: a file replaced by a
+/// rename (or a link retargeted) at the same size and time is another file.
+#[cfg(unix)]
+fn file_id(stat: &fs::Metadata) -> (u64, u64) {
+    use std::os::unix::fs::MetadataExt;
+    (stat.dev(), stat.ino())
+}
+
+#[cfg(not(unix))]
+fn file_id(_: &fs::Metadata) -> (u64, u64) {
+    (0, 0)
 }
 
 /// The host's clock.
@@ -70,8 +123,30 @@ impl ProjectStore for FileStore {
         Ok(bytes)
     }
 
+    /// A symbolic link's own length, not its target's, so a size total
+    /// never counts a file outside the tree.
     fn size(&self, key: &Key) -> io::Result<u64> {
-        fs::metadata(self.path(key)).map(|m| m.len())
+        fs::symlink_metadata(self.path(key)).map(|m| m.len())
+    }
+
+    /// Size, modification time and inode, following a symbolic link. A file
+    /// modified within [`RACY`] of now is unsettled: rewritten in place
+    /// within the same mtime tick, it would keep all three.
+    fn change_token(&self, key: &Key) -> io::Result<ChangeToken> {
+        let stat = fs::metadata(self.path(key))?;
+        let modified = stat.modified()?;
+        if racy(modified, SystemTime::now()) {
+            return Ok(ChangeToken::unsettled());
+        }
+        let since = modified.duration_since(UNIX_EPOCH).unwrap_or_default();
+        let (dev, ino) = file_id(&stat);
+        Ok(ChangeToken::settled([
+            stat.len(),
+            since.as_secs(),
+            u64::from(since.subsec_nanos()),
+            dev,
+            ino,
+        ]))
     }
 
     fn put(&self, key: &Key, bytes: &[u8]) -> io::Result<()> {
@@ -120,7 +195,10 @@ impl ProjectStore for FileStore {
     fn list(&self, key: &Key) -> io::Result<Vec<Entry>> {
         let mut entries = Vec::new();
         for entry in fs::read_dir(self.path(key))? {
-            let entry = entry?;
+            // An entry that can't be read is skipped, not the whole listing.
+            let Ok(entry) = entry else {
+                continue;
+            };
             // A name that isn't UTF-8 can't be a key.
             let Some(name) = entry.file_name().to_str().map(str::to_string) else {
                 continue;
@@ -192,27 +270,27 @@ impl ProjectStore for FileStore {
         hasher.finish()
     }
 
-    /// Resolves symbolic links, as the project's own path is resolved, so
-    /// one file named two ways is one key. A path that doesn't exist yet
-    /// (an image about to be written) is judged by its directory.
+    /// Resolves the directory, as the project's own path is resolved, so a
+    /// path into the project by any route is a key inside it; the file's
+    /// own name is kept, so a link there is followed at each access and a
+    /// rename over it replaces the link.
     fn key_of(&self, path: &Path) -> Key {
-        let joined = if path.is_absolute() {
-            path.to_path_buf()
-        } else {
-            self.root.join(path)
-        };
+        let joined = self.joined(path);
+        let resolved = in_resolved_dir(&joined)
+            .or_else(|| fs::canonicalize(&joined).ok())
+            .unwrap_or_else(|| normalize(&joined));
+        self.key_from(&resolved)
+    }
+
+    /// Resolves every symbolic link, so one file named two ways is one key.
+    /// A path that doesn't exist yet is judged by its directory.
+    fn canonical_key(&self, path: &Path) -> Key {
+        let joined = self.joined(path);
         let resolved = fs::canonicalize(&joined)
             .ok()
-            .or_else(|| {
-                let parent = fs::canonicalize(joined.parent()?).ok()?;
-                Some(parent.join(joined.file_name()?))
-            })
+            .or_else(|| in_resolved_dir(&joined))
             .unwrap_or_else(|| normalize(&joined));
-        let project = fs::canonicalize(&self.root).unwrap_or_else(|_| self.root.clone());
-        match resolved.strip_prefix(&project) {
-            Ok(inside) => Key::new(inside.to_string_lossy()),
-            Err(_) => Key::new(resolved.to_string_lossy()),
-        }
+        self.key_from(&resolved)
     }
 
     fn locate(&self, key: &Key) -> PathBuf {
@@ -263,182 +341,4 @@ pub(super) fn normalize(path: &Path) -> PathBuf {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    struct Scratch(PathBuf);
-
-    impl Scratch {
-        fn new(name: &str) -> Scratch {
-            let dir =
-                std::env::temp_dir().join(format!("gbcli-files-{}-{name}", std::process::id()));
-            let _ = fs::remove_dir_all(&dir);
-            fs::create_dir_all(&dir).unwrap();
-            Scratch(dir)
-        }
-
-        fn store(&self) -> FileStore {
-            FileStore::new(self.0.clone())
-        }
-    }
-
-    impl Drop for Scratch {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
-        }
-    }
-
-    #[test]
-    fn a_key_is_a_path_under_the_root_or_an_absolute_one() {
-        let s = Scratch::new("locate");
-        let store = s.store();
-        assert_eq!(store.locate(&Key::root()), s.0);
-        assert_eq!(
-            store.locate(&Key::new(".gbcli/sessions")),
-            s.0.join(".gbcli").join("sessions")
-        );
-        assert_eq!(
-            store.locate(&Key::new("/elsewhere/game.gb")),
-            PathBuf::from("/elsewhere/game.gb")
-        );
-    }
-
-    #[test]
-    fn a_path_inside_the_project_is_a_relative_key_and_one_outside_stays_absolute() {
-        let s = Scratch::new("key-of");
-        let store = s.store();
-        fs::create_dir_all(s.0.join("build")).unwrap();
-        fs::write(s.0.join("build").join("game.gb"), b"rom").unwrap();
-        assert_eq!(
-            store.key_of(&s.0.join("build").join("game.gb")),
-            Key::new("build/game.gb")
-        );
-        assert_eq!(
-            store.key_of(Path::new("./build/../build/game.gb")),
-            Key::new("build/game.gb")
-        );
-        // Not there yet: its directory decides.
-        assert_eq!(
-            store.key_of(&s.0.join("build").join("shot.png")),
-            Key::new("build/shot.png")
-        );
-        let outside = Path::new("/nowhere-gbcli/x.gb");
-        assert_eq!(store.key_of(outside), Key::new("/nowhere-gbcli/x.gb"));
-    }
-
-    #[test]
-    fn put_replaces_a_blob_and_never_creates_its_parent() {
-        let s = Scratch::new("put");
-        let store = s.store();
-        let key = Key::new("a.bin");
-        store.put(&key, b"one").unwrap();
-        store.put(&key, b"two").unwrap();
-        assert_eq!(store.get(&key).unwrap(), b"two");
-        assert_eq!(store.size(&key).unwrap(), 3);
-        assert_eq!(store.get_range(&key, 1, 8).unwrap(), b"wo");
-        let orphan = Key::new("gone/session.json");
-        assert!(store.put(&orphan, b"{}").is_err());
-        assert!(store.append(&orphan, b"{}").is_err());
-        assert_eq!(store.kind(&Key::new("gone")), None);
-        let missing = store.get(&Key::new("nope")).unwrap_err();
-        assert_eq!(missing.kind(), io::ErrorKind::NotFound);
-    }
-
-    #[test]
-    fn put_all_writes_nothing_when_one_blob_fails() {
-        let s = Scratch::new("put-all");
-        let store = s.store();
-        store.put(&Key::new("a.sav"), b"old").unwrap();
-        let blobs: [(Key, &[u8]); 2] = [
-            (Key::new("a.sav"), b"new"),
-            (Key::new("missing-dir/a.flash.gb"), b"chip"),
-        ];
-        let err = store.put_all(&blobs).unwrap_err();
-        assert_eq!(err.index, 1);
-        assert_eq!(store.get(&Key::new("a.sav")).unwrap(), b"old");
-        let names: Vec<String> = store
-            .list(&Key::root())
-            .unwrap()
-            .into_iter()
-            .map(|e| e.name)
-            .collect();
-        assert_eq!(names, vec!["a.sav".to_string()], "a temp file is left");
-    }
-
-    #[test]
-    fn directories_list_their_children_and_move_and_go_as_a_tree() {
-        let s = Scratch::new("tree");
-        let store = s.store();
-        let dir = Key::new("sessions");
-        assert_eq!(
-            store.list(&dir).unwrap_err().kind(),
-            io::ErrorKind::NotFound
-        );
-        store.make_dir(&dir).unwrap();
-        store.make_dir(&dir).unwrap();
-        assert!(store.make_dir(&Key::new("x/y")).is_err(), "a parent made");
-        store.make_dir(&dir.join("demo")).unwrap();
-        store
-            .put(&dir.join("demo").join("session.json"), b"{}")
-            .unwrap();
-        store.put(&dir.join("note"), b"").unwrap();
-        let mut listed = store.list(&dir).unwrap();
-        listed.sort_by(|a, b| a.name.cmp(&b.name));
-        assert_eq!(
-            listed,
-            vec![
-                Entry {
-                    name: "demo".into(),
-                    kind: Kind::Dir
-                },
-                Entry {
-                    name: "note".into(),
-                    kind: Kind::Blob
-                },
-            ]
-        );
-        store.make_dirs(&Key::new("removed/deep")).unwrap();
-        store
-            .rename(&dir.join("demo"), &Key::new("removed/demo-1"))
-            .unwrap();
-        assert_eq!(store.kind(&dir.join("demo")), None);
-        assert_eq!(
-            store.kind(&Key::new("removed/demo-1/session.json")),
-            Some(Kind::Blob)
-        );
-        store.remove_tree(&Key::new("removed")).unwrap();
-        assert_eq!(store.kind(&Key::new("removed")), None);
-        store.remove(&dir.join("note")).unwrap();
-        assert!(store.list(&dir).unwrap().is_empty());
-    }
-
-    #[test]
-    fn a_lock_is_exclusive_records_no_use_until_touched_and_frees_on_drop() {
-        let s = Scratch::new("lock");
-        let store = s.store();
-        let key = Key::new("demo.lock");
-        let held = store.lock(&key, Duration::from_millis(1)).unwrap();
-        assert_eq!(store.last_used(&key), Some(0), "a new lock is unused");
-        let Err(LockError::Busy { .. }) = store.lock(&key, Duration::from_millis(10)) else {
-            panic!("a second holder got the lock");
-        };
-        store.touch(&key, 1_700_000_000).unwrap();
-        assert_eq!(store.last_used(&key), Some(1_700_000_000));
-        drop(held);
-        assert!(store.lock(&key, Duration::from_millis(10)).is_ok());
-    }
-
-    #[test]
-    fn incarnations_differ_call_to_call() {
-        let s = Scratch::new("incarnation");
-        let store = s.store();
-        let a = store.new_incarnation();
-        let b = store.new_incarnation();
-        assert_ne!(a, b);
-    }
-
-    #[test]
-    fn the_system_clock_is_after_2026() {
-        assert!(SystemClock.now_secs() > 1_767_225_600);
-    }
-}
+mod tests;

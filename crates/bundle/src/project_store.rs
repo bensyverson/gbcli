@@ -98,6 +98,37 @@ pub struct PutAllError {
     pub error: io::Error,
 }
 
+/// What a backing can say about a blob's version without reading it, so a
+/// caller that already knows the blob's bytes can skip rereading them. Opaque
+/// to the bundle: it only asks whether a later token vouches for an earlier
+/// one.
+///
+/// A *settled* token promises the blob is unchanged for as long as the
+/// backing answers an equal one (a memory backing's write counter; a file's
+/// size, modification time and inode once that time is safely past). An
+/// *unsettled* one promises nothing (a file modified so recently that a
+/// rewrite could keep all three), and the caller must read the bytes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChangeToken(Option<Box<[u64]>>);
+
+impl ChangeToken {
+    /// A token that vouches for every earlier settled token with the same
+    /// parts.
+    pub fn settled(parts: impl Into<Box<[u64]>>) -> ChangeToken {
+        ChangeToken(Some(parts.into()))
+    }
+
+    /// A token that vouches for nothing.
+    pub fn unsettled() -> ChangeToken {
+        ChangeToken(None)
+    }
+
+    /// Whether the blob is unchanged since `earlier` was taken.
+    pub fn vouches_for(&self, earlier: &ChangeToken) -> bool {
+        self.0.is_some() && self.0 == earlier.0
+    }
+}
+
 /// Held while a session is read and written; dropping it unlocks.
 pub type Guard = Box<dyn fmt::Debug + Send>;
 
@@ -125,6 +156,10 @@ pub trait ProjectStore: Send + Sync + fmt::Debug {
 
     /// The blob's length in bytes.
     fn size(&self, key: &Key) -> io::Result<u64>;
+
+    /// The blob's [`ChangeToken`] now; cheap, reading no bytes. `NotFound`
+    /// when there is no blob.
+    fn change_token(&self, key: &Key) -> io::Result<ChangeToken>;
 
     /// Replaces the blob at `key`, atomically: a reader sees the old blob or
     /// the new one, never part of either. The crash-consistency of heads,
@@ -179,9 +214,17 @@ pub trait ProjectStore: Send + Sync + fmt::Debug {
     /// the store: what tells a recreated session from the one it replaced.
     fn new_incarnation(&self) -> u64;
 
-    /// The key for `path`: relative to the project when it is relative, or
-    /// when it names a place inside the project; else the path itself.
+    /// The key a read or write of `path` goes through: relative to the
+    /// project when it is relative, or when it names a place inside the
+    /// project; else the path itself. The key keeps `path`'s own name, so
+    /// where a backing has aliases (a symbolic link), every access follows
+    /// the alias as it stands then, and a write replaces the alias itself.
     fn key_of(&self, path: &Path) -> Key;
+
+    /// The key for the blob `path` names, with every alias resolved: one
+    /// blob named two ways is one key. For telling whether two paths are
+    /// the same file, and for recording which file a session was made from.
+    fn canonical_key(&self, path: &Path) -> Key;
 
     /// Where `key` lives, for messages and for tools that need a host path.
     fn locate(&self, key: &Key) -> PathBuf;
@@ -199,6 +242,16 @@ mod tests {
             Key::new(".gbcli/sessions/demo")
         );
         assert_eq!(Key::new("/").join("x.gb"), Key::new("/x.gb"));
+    }
+
+    #[test]
+    fn only_settled_equal_tokens_vouch() {
+        let a = ChangeToken::settled([1, 2]);
+        assert!(a.vouches_for(&ChangeToken::settled([1, 2])));
+        assert!(!a.vouches_for(&ChangeToken::settled([1, 3])));
+        assert!(!a.vouches_for(&ChangeToken::unsettled()));
+        assert!(!ChangeToken::unsettled().vouches_for(&ChangeToken::unsettled()));
+        assert!(!ChangeToken::unsettled().vouches_for(&a));
     }
 
     #[test]

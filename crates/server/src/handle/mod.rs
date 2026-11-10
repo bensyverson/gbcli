@@ -324,7 +324,7 @@ impl Handler {
             (None, need) => {
                 // Stamped before the files are read: a rebuild in between
                 // reads as a change next time.
-                let files = store.files_stamp(meta);
+                let mut files = store.files_stamp(meta);
                 let (machine, warnings) = match need {
                     Need::Start(from) => {
                         store.start_machine(meta, at, from, load, Some(&self.interrupt))
@@ -333,6 +333,7 @@ impl Handler {
                     Need::Replace | Need::Rom => store.machine(meta).map(|m| (m, Vec::new())),
                 }
                 .map_err(|e| Failure::from_store(&e))?;
+                files.built(&machine);
                 (machine, warnings, files)
             }
         };

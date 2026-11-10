@@ -213,7 +213,7 @@ impl SessionStore {
     /// A path as `session.json` stores it: its key, relative to the project
     /// when it is inside it.
     pub(crate) fn stored(&self, path: &Path) -> String {
-        self.bundle.file_key(path).as_str().to_string()
+        self.bundle.canonical_file_key(path).as_str().to_string()
     }
 
     /// A path under the session directory, for display.
@@ -281,6 +281,23 @@ mod tests {
         assert!(!lock_file.starts_with(store.dir()), "{lock_file:?}");
         store.remove(true, SHORT).unwrap();
         assert!(lock_file.is_file());
+    }
+
+    /// A late write to a session another process removed fails and brings
+    /// nothing back: session.json, an event append, a checkpoint.
+    #[test]
+    fn a_late_write_after_removal_resurrects_nothing() {
+        let f = Fixture::new("late-write");
+        let store = f.bundle.session("demo").unwrap();
+        let mut machine = store.create(&f.source()).unwrap();
+        let meta = store.read_meta().unwrap();
+        let cp = machine.capture(Default::default());
+        let other = crate::Bundle::open_in(&f.root, None).unwrap();
+        other.session("demo").unwrap().remove(true, SHORT).unwrap();
+        assert!(store.write_meta(&meta).is_err());
+        assert!(store.append_events(&[]).is_err() || !store.dir().exists());
+        assert!(store.write_checkpoint("late", &cp).is_err());
+        assert!(!store.dir().exists(), "the session directory came back");
     }
 
     #[test]

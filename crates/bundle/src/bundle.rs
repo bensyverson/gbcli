@@ -199,9 +199,17 @@ impl Bundle {
 /// path relative to the project or absolute, read and written through the
 /// store, so a backing that isn't the filesystem holds them too.
 impl Bundle {
-    /// The store's key for a project file.
+    /// The store's key for reading and writing a project file
+    /// ([`ProjectStore::key_of`]): a symbolic link is followed at each read
+    /// and replaced by a write.
     pub fn file_key(&self, path: &Path) -> Key {
         self.store.key_of(path)
+    }
+
+    /// The store's key for the file itself, links resolved
+    /// ([`ProjectStore::canonical_key`]).
+    pub(crate) fn canonical_file_key(&self, path: &Path) -> Key {
+        self.store.canonical_key(path)
     }
 
     pub fn read_file(&self, path: &Path) -> io::Result<Vec<u8>> {
@@ -254,7 +262,51 @@ pub fn next(rev: Rev) -> Rev {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
+    use crate::test_fixture::Fixture;
+
+    /// A shot, WAV, dump or `.sav` written to a path that is a symbolic
+    /// link replaces the link, as a rename over it does, and leaves the
+    /// file it pointed at alone.
+    #[test]
+    fn a_write_to_a_symlinked_path_replaces_the_link() {
+        let f = Fixture::new("symlink-write");
+        let elsewhere = f.root.join("elsewhere");
+        fs::create_dir_all(&elsewhere).unwrap();
+        let target = elsewhere.join("real.png");
+        fs::write(&target, b"old").unwrap();
+        let link = f.root.join("shot.png");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        let sav = f.root.join("game.sav");
+        std::os::unix::fs::symlink(&target, &sav).unwrap();
+
+        f.bundle.write_file(&link, b"new").unwrap();
+        f.bundle.write_files(&[(&sav, b"sav")]).unwrap();
+
+        for (path, bytes) in [(&link, b"new"), (&sav, b"sav")] {
+            let meta = fs::symlink_metadata(path).unwrap();
+            assert!(!meta.file_type().is_symlink(), "{path:?} is still a link");
+            assert_eq!(fs::read(path).unwrap(), bytes);
+        }
+        assert_eq!(
+            fs::read(&target).unwrap(),
+            b"old",
+            "the target was replaced"
+        );
+    }
+
+    /// Reading a link reads what it points at now.
+    #[test]
+    fn a_read_through_a_symlinked_path_follows_it() {
+        let f = Fixture::new("symlink-read");
+        fs::write(f.root.join("v2.gb"), b"two").unwrap();
+        let link = f.root.join("game.gb");
+        std::os::unix::fs::symlink("v2.gb", &link).unwrap();
+        assert_eq!(f.bundle.read_file(&link).unwrap(), b"two");
+        assert!(f.bundle.is_file(&link));
+    }
 
     #[test]
     fn names_are_lowercase_digits_and_dashes() {

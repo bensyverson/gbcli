@@ -105,6 +105,42 @@ mod tests {
         assert!(store.lock(Duration::from_millis(10)).is_ok());
     }
 
+    /// Two processes never both hold one session's lock: two bundles (two
+    /// stores, separate descriptors) on one project, in threads.
+    #[test]
+    fn two_stores_never_hold_one_session_lock_together() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+        let f = Fixture::new("two-lockers");
+        f.demo();
+        let held = Arc::new(AtomicBool::new(false));
+        let overlaps = Arc::new(AtomicUsize::new(0));
+        let threads: Vec<_> = (0..2)
+            .map(|_| {
+                let bundle = crate::Bundle::open_in(&f.root, None).unwrap();
+                let held = held.clone();
+                let overlaps = overlaps.clone();
+                std::thread::spawn(move || {
+                    let store = bundle.session("demo").unwrap();
+                    for _ in 0..200 {
+                        let _lock = store.lock(Duration::from_secs(5)).unwrap();
+                        if held.swap(true, Ordering::SeqCst) {
+                            overlaps.fetch_add(1, Ordering::SeqCst);
+                        }
+                        let meta = store.read_meta().unwrap();
+                        store.write_meta(&meta).unwrap();
+                        held.store(false, Ordering::SeqCst);
+                    }
+                })
+            })
+            .collect();
+        for thread in threads {
+            thread.join().unwrap();
+        }
+        assert_eq!(overlaps.load(Ordering::SeqCst), 0);
+    }
+
     #[test]
     fn locking_a_missing_session_is_no_session_and_leaves_no_trace() {
         let f = Fixture::new("lock-missing");

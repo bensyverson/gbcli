@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use crate::bundle::{Bundle, now_secs};
+use crate::bundle::Bundle;
 use crate::error::StoreError;
 use crate::store::SessionStore;
 
@@ -20,11 +20,12 @@ pub struct PruneReport {
 }
 
 impl Bundle {
-    /// Removes sessions whose last recorded use is older than `unused_for`.
-    /// Each is judged again under its lock, which it waits up to `wait` for;
-    /// one still held after that is skipped and reported as busy.
+    /// Removes sessions whose last recorded use is older than `unused_for`,
+    /// counted back from now by the bundle's clock. Each is judged again
+    /// under its lock, which it waits up to `wait` for; one still held after
+    /// that is skipped and reported as busy.
     pub fn prune(&self, unused_for: Duration, wait: Duration) -> Result<PruneReport, StoreError> {
-        let cutoff = now_secs().saturating_sub(unused_for.as_secs());
+        let cutoff = self.now().saturating_sub(unused_for.as_secs());
         let idle = |store: &SessionStore| store.last_used().is_some_and(|t| t < cutoff);
         let mut report = PruneReport::default();
         self.sweep_removed();
@@ -45,7 +46,7 @@ impl Bundle {
                 Err(e) => return Err(e),
             };
             // Judged again: a request may have used it while we waited.
-            if !idle(&store) || !store.dir().is_dir() {
+            if !idle(&store) || !store.is_dir() {
                 continue;
             }
             if !store.checkpoint_names()?.is_empty() {
@@ -83,7 +84,6 @@ pub fn parse_duration(text: &str) -> Result<Duration, StoreError> {
         .map(Duration::from_secs)
         .ok_or_else(bad)
 }
-
 #[cfg(test)]
 mod tests {
     use std::fs;

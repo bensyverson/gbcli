@@ -1,40 +1,29 @@
-//! Filesystem helpers the store shares. Writes are atomic against a killed
-//! process (temp file, then rename) but not against power loss: nothing is
-//! fsynced (design §1, "Durability").
+//! Filesystem helpers for [`crate::FileStore`]. Writes are atomic against a
+//! killed process (temp file, then rename) but not against power loss:
+//! nothing is fsynced (design §1, "Durability").
 
 use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-
-use crate::error::StoreError;
 
 /// Distinguishes temp files written by threads of one process.
 static TEMP_SEQ: AtomicU64 = AtomicU64::new(0);
 
-/// A closure that wraps an `io::Error` with the path it concerns.
-pub(crate) fn io_at(path: &Path) -> impl FnOnce(std::io::Error) -> StoreError + '_ {
-    move |source| StoreError::Io {
-        path: path.to_path_buf(),
-        source,
-    }
-}
-
 /// Writes `bytes` to a temp file beside `path`, then renames it over `path`.
 /// The parent must exist: creating it here could resurrect a session another
 /// process just removed. A failed write or rename removes the temp file.
-pub(crate) fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), StoreError> {
+pub(crate) fn atomic_write(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let temp = temp_path(path);
-    let result = fs::write(&temp, bytes)
-        .map_err(io_at(&temp))
-        .and_then(|()| fs::rename(&temp, path).map_err(io_at(path)));
+    let result = fs::write(&temp, bytes).and_then(|()| fs::rename(&temp, path));
     if result.is_err() {
         let _ = fs::remove_file(&temp);
     }
     result
 }
 
-fn temp_path(path: &Path) -> PathBuf {
+/// A temp file's name beside `path`, unique to this process and call.
+pub(crate) fn temp_path(path: &Path) -> PathBuf {
     let parent = path.parent().unwrap_or(Path::new("."));
     let name = path
         .file_name()
@@ -46,46 +35,19 @@ fn temp_path(path: &Path) -> PathBuf {
 
 /// Creates one directory level; an existing directory is fine. The parent must
 /// exist, for the reason [`atomic_write`] gives.
-pub(crate) fn ensure_dir(dir: &Path) -> Result<(), StoreError> {
+pub(crate) fn ensure_dir(dir: &Path) -> io::Result<()> {
     match fs::create_dir(dir) {
         Ok(()) => Ok(()),
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
-        Err(source) => Err(StoreError::Io {
-            path: dir.to_path_buf(),
-            source,
-        }),
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(()),
+        Err(e) => Err(e),
     }
 }
 
-/// Appends `text` to `path`, creating the file but not its directory, for
+/// Appends `bytes` to `path`, creating the file but not its directory, for
 /// the reason [`atomic_write`] gives.
-pub(crate) fn append(path: &Path, text: &str) -> Result<(), StoreError> {
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-        .map_err(io_at(path))?;
-    file.write_all(text.as_bytes()).map_err(io_at(path))
-}
-
-/// Bytes under `dir`, skipping `exclude`.
-pub(crate) fn dir_size(dir: &Path, exclude: &Path) -> u64 {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return 0;
-    };
-    let mut total = 0;
-    for entry in entries.filter_map(Result::ok) {
-        let path = entry.path();
-        if path == exclude {
-            continue;
-        }
-        match entry.metadata() {
-            Ok(meta) if meta.is_dir() => total += dir_size(&path, exclude),
-            Ok(meta) => total += meta.len(),
-            Err(_) => {}
-        }
-    }
-    total
+pub(crate) fn append(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    let mut file = OpenOptions::new().create(true).append(true).open(path)?;
+    file.write_all(bytes)
 }
 
 #[cfg(test)]

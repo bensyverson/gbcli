@@ -1,8 +1,6 @@
 //! Start states (design §9): the head, a named or history checkpoint, power-on,
 //! or the boot handoff, which the bundle caches in `cache/boot-<key>.gbck`.
 
-use std::fs;
-use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 
 use gbcli_core::Budget;
@@ -10,7 +8,7 @@ use gbcli_engine::{Checkpoint, LoadOptions, Machine, RunOptions, SaveMeta, sha25
 use gbcli_protocol::{Location, SessionFile, StopReason, model_name};
 
 use crate::error::StoreError;
-use crate::io::{atomic_write, io_at};
+use crate::project_store::Key;
 use crate::store::SessionStore;
 
 /// Frames the open boot ROM may take before the handoff. The real one takes
@@ -117,14 +115,14 @@ impl SessionStore {
         interrupt: Option<&AtomicBool>,
     ) -> Result<Vec<String>, StoreError> {
         let probe = machine.capture(SaveMeta::default());
-        let path = self.boot_cache_path(&probe);
-        if let Ok(bytes) = fs::read(&path)
+        let key = self.boot_cache_key(&probe);
+        if let Ok(bytes) = self.files().get(&key)
             && let Ok(cp) = Checkpoint::decode(&bytes)
             && let Ok(warnings) = self.restore(meta, machine, &cp, load)
         {
             return Ok(warnings);
         }
-        let _ = fs::remove_file(&path);
+        let _ = self.files().remove(&key);
         let mut run = RunOptions::new(Budget::frames(BOOT_FRAMES));
         run.interrupt = interrupt;
         let outcome = machine
@@ -151,7 +149,7 @@ impl SessionStore {
     /// Keyed on the ROM, model, boot ROM, seed, flash board and core identity: an entry
     /// another build of the core wrote is never reused, as its state may have
     /// another layout. Symbols aren't in the key; the entry carries none.
-    fn boot_cache_path(&self, cp: &Checkpoint) -> PathBuf {
+    fn boot_cache_key(&self, cp: &Checkpoint) -> Key {
         let h = &cp.header;
         let core = sha256(format!("{}\0{}", h.core.backend, h.core.commit).as_bytes());
         let key = format!(
@@ -165,26 +163,37 @@ impl SessionStore {
         // A flash board's name ends the key; mask ROM's keys are unchanged.
         let board = h.flash.as_ref().map_or(String::new(), |b| format!("-{b}"));
         self.bundle()
-            .cache_dir()
-            .join(format!("boot-{key}{board}.gbck"))
+            .cache_key()
+            .join(&format!("boot-{key}{board}.gbck"))
+    }
+
+    #[cfg(test)]
+    fn boot_cache_path(&self, cp: &Checkpoint) -> std::path::PathBuf {
+        self.files().locate(&self.boot_cache_key(cp))
     }
 
     /// Writes a boot cache entry. Sessions over one ROM share it whatever
     /// their `.sym`, so the entry carries no symbol fields; a machine restored
     /// from it captures its own.
     fn write_boot_cache(&self, cp: &Checkpoint) -> Result<(), StoreError> {
-        let dir = self.bundle().cache_dir();
-        fs::create_dir_all(&dir).map_err(io_at(&dir))?;
+        let dir = self.bundle().cache_key();
+        self.files()
+            .make_dirs(&dir)
+            .map_err(self.bundle().io_at(&dir))?;
         let mut entry = cp.clone();
         entry.header.sym_sha256 = None;
         entry.header.symbols_live.clear();
-        atomic_write(&self.boot_cache_path(&entry), &entry.encode())
+        let key = self.boot_cache_key(&entry);
+        self.files()
+            .put(&key, &entry.encode())
+            .map_err(self.bundle().io_at(&key))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::path::PathBuf;
 
     use gbcli_core::Model;
 

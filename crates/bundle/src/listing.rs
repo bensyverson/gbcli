@@ -1,7 +1,6 @@
 //! What `--at` can name in a session (design §12 `checkpoints`): named
 //! checkpoints, sorted by name, then history entries, newest first.
 
-use std::fs;
 use std::path::Path;
 
 use gbcli_engine::{Checkpoint, sha256};
@@ -16,7 +15,9 @@ impl SessionStore {
     /// saved from the ROM file the session names now. An entry that doesn't
     /// load is a row carrying its error, so one bad file hides nothing else.
     pub fn checkpoint_rows(&self, meta: &SessionFile) -> Result<Vec<CheckpointRow>, StoreError> {
-        let rom = fs::read(self.resolve(Path::new(&meta.rom)))
+        let rom = self
+            .bundle()
+            .read_file(Path::new(&meta.rom))
             .ok()
             .map(|bytes| sha256(&bytes));
         let row = |at: String, rev: Option<Rev>, cp: Result<Checkpoint, StoreError>| match cp {

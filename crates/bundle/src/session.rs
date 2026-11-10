@@ -2,7 +2,7 @@
 //! session creates it: [`Bundle::open_session`] holds that decision so every
 //! client applies the same rule.
 
-use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 
 use gbcli_core::flash::FlashProfile;
@@ -12,7 +12,6 @@ use gbcli_protocol::{RenderConfig, Rev, SessionFile, model_name};
 
 use crate::bundle::Bundle;
 use crate::error::{Setting, StoreError};
-use crate::io::ensure_dir;
 use crate::lock::LOCK_WAIT;
 use crate::store::SessionStore;
 
@@ -62,16 +61,32 @@ impl Bundle {
             }
         }
         let meta = store.read_meta()?;
-        let given = store.resolve(&source.rom);
-        if !same_file(&store.resolve(Path::new(&meta.rom)), &given) {
+        if !self.same_file(Path::new(&meta.rom), &source.rom) {
             return Err(StoreError::RomMismatch {
                 name: name.to_string(),
                 stored: meta.rom,
-                given,
+                given: store.resolve(&source.rom),
             });
         }
         check_settings(&store, &meta, source)?;
         Ok(store)
+    }
+
+    /// Whether two project paths name one file: the store gives them one key.
+    fn same_file(&self, a: &Path, b: &Path) -> bool {
+        self.file_key(a) == self.file_key(b)
+    }
+
+    /// The `.sym` beside a ROM (its basename with `.sym`), as a path against
+    /// the project, when the store holds one.
+    pub fn sibling_sym(&self, rom: &Path) -> Option<PathBuf> {
+        let rom = if rom.is_absolute() {
+            rom.to_path_buf()
+        } else {
+            self.project().join(rom)
+        };
+        let sibling = rom.with_extension("sym");
+        self.is_file(&sibling).then_some(sibling)
     }
 }
 
@@ -103,13 +118,13 @@ fn check_settings(
         ));
     }
     if let Some(sym) = &source.sym {
-        let given = store.resolve(sym);
         let same = meta
             .sym
             .as_ref()
-            .is_some_and(|s| same_file(&store.resolve(Path::new(s)), &given));
+            .is_some_and(|s| store.bundle().same_file(Path::new(s), sym));
         if !same {
             let session = meta.sym.clone().unwrap_or_else(|| "no .sym".into());
+            let given = store.resolve(sym);
             return Err(differs(Setting::Sym, session, given.display().to_string()));
         }
     }
@@ -127,16 +142,6 @@ fn check_settings(
     Ok(())
 }
 
-/// A value no earlier creation of a session by this name holds: host time in
-/// nanoseconds, mixed with the process id for two creations in one tick.
-/// Host time is fine here; it never reaches emulation.
-pub(crate) fn new_incarnation() -> u64 {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_nanos() as u64);
-    nanos ^ (u64::from(std::process::id()) << 48)
-}
-
 impl SessionStore {
     /// Creates the session from a ROM. Refuses an existing name. The ROM and
     /// symbols are read and the machine built before anything is written.
@@ -147,15 +152,21 @@ impl SessionStore {
             });
         }
         let rom_path = self.resolve(&source.rom);
-        let rom = fs::read(&rom_path).map_err(|e| StoreError::RomUnreadable {
-            path: rom_path.clone(),
-            reason: e.to_string(),
-        })?;
-        let sym_path = source.sym.as_deref().map(|p| self.resolve(p)).or_else(|| {
-            let sibling = rom_path.with_extension("sym");
-            sibling.is_file().then_some(sibling)
-        });
-        let sym = sym_path.as_deref().map(read_symbols).transpose()?;
+        let rom = self
+            .bundle()
+            .read_file(&source.rom)
+            .map_err(|e| StoreError::RomUnreadable {
+                path: rom_path.clone(),
+                reason: e.to_string(),
+            })?;
+        let sym_path = match &source.sym {
+            Some(sym) => Some(self.resolve(sym)),
+            None => self.bundle().sibling_sym(&source.rom),
+        };
+        let sym = sym_path
+            .as_deref()
+            .map(|p| self.read_symbols(p))
+            .transpose()?;
         let config = default_config();
         let meta = SessionFile {
             name: self.name().to_string(),
@@ -168,7 +179,7 @@ impl SessionStore {
             config,
             debugger: Default::default(),
             last_stop: None,
-            incarnation: new_incarnation(),
+            incarnation: self.files().new_incarnation(),
             undo: None,
         };
         let machine = build(&meta, rom, sym.as_deref(), sym_path.as_deref())?;
@@ -179,8 +190,7 @@ impl SessionStore {
                 name: self.name().to_string(),
             });
         }
-        let dir = self.dir();
-        if dir.is_dir() {
+        if self.is_dir() {
             // Not a session: a create killed before its session.json, or the
             // lock-only directory older builds left for a mistyped name.
             let checkpoints = self.checkpoint_names()?;
@@ -192,26 +202,51 @@ impl SessionStore {
             }
             self.remove_locked()?;
         }
-        ensure_dir(&self.bundle().sessions_dir())?;
-        ensure_dir(&dir)?;
-        ensure_dir(&self.history_dir())?;
-        ensure_dir(&self.checkpoints_dir())?;
+        for key in [
+            self.bundle().sessions_key(),
+            self.dir_key(),
+            self.history_key(),
+            self.checkpoints_key(),
+        ] {
+            self.files()
+                .make_dir(&key)
+                .map_err(self.bundle().io_at(&key))?;
+        }
         // session.json last: until it is written, this is not a session.
         self.write_meta(&meta)?;
-        lock.record_use(&self.lock_path())?;
+        self.record_use(&lock)?;
         Ok(machine)
     }
 
     /// Builds a machine from the session's metadata at power-on.
     pub fn machine(&self, meta: &SessionFile) -> Result<Machine, StoreError> {
-        let rom_path = self.resolve(Path::new(&meta.rom));
-        let rom = fs::read(&rom_path).map_err(|e| StoreError::RomUnreadable {
-            path: rom_path,
-            reason: e.to_string(),
+        let rom = self.bundle().read_file(Path::new(&meta.rom)).map_err(|e| {
+            StoreError::RomUnreadable {
+                path: self.resolve(Path::new(&meta.rom)),
+                reason: e.to_string(),
+            }
         })?;
         let sym_path = meta.sym.as_deref().map(|p| self.resolve(Path::new(p)));
-        let sym = sym_path.as_deref().map(read_symbols).transpose()?;
+        let sym = sym_path
+            .as_deref()
+            .map(|p| self.read_symbols(p))
+            .transpose()?;
         build(meta, rom, sym.as_deref(), sym_path.as_deref())
+    }
+
+    /// Reads a `.sym`, naming the path it read when it can't.
+    fn read_symbols(&self, path: &Path) -> Result<String, StoreError> {
+        let unreadable = |e: io::Error| StoreError::SymbolsUnreadable {
+            path: path.to_path_buf(),
+            reason: e.to_string(),
+        };
+        let bytes = self.bundle().read_file(path).map_err(unreadable)?;
+        String::from_utf8(bytes).map_err(|_| {
+            unreadable(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "stream did not contain valid UTF-8",
+            ))
+        })
     }
 }
 
@@ -249,22 +284,6 @@ fn flash_board(name: &str) -> Result<FlashProfile, StoreError> {
     })
 }
 
-/// Whether two paths name one file. Paths that don't resolve compare as text.
-fn same_file(a: &Path, b: &Path) -> bool {
-    match (fs::canonicalize(a), fs::canonicalize(b)) {
-        (Ok(a), Ok(b)) => a == b,
-        _ => a == b,
-    }
-}
-
-/// Reads a `.sym`, naming the path it read when it can't.
-fn read_symbols(path: &Path) -> Result<String, StoreError> {
-    fs::read_to_string(path).map_err(|e| StoreError::SymbolsUnreadable {
-        path: path.to_path_buf(),
-        reason: e.to_string(),
-    })
-}
-
 fn default_config() -> RenderConfig {
     RenderConfig {
         rtc: gbcli_core::RtcMode::Accurate,
@@ -276,6 +295,8 @@ fn default_config() -> RenderConfig {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
     use crate::test_fixture::{Fixture, SYM};
 

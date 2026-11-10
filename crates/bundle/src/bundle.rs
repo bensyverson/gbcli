@@ -1,119 +1,85 @@
-//! Where a project's bundle lives and what it holds (design §1): sessions,
-//! the boot cache, and the gap ledger. `.gbcli/` is found by walking up from
-//! the working directory, like `.git`; `GBCLI_DIR` overrides it.
+//! What a project's bundle holds and where (design §1): sessions, the boot
+//! cache, and the gap ledger, as keys in the project's [`ProjectStore`]
+//! under the bundle's own prefix (`.gbcli/`). Opening a bundle on disk is
+//! the file backing's (`file_store/open.rs`).
 
-use std::env;
-use std::fs;
-use std::path::{Component, Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::io;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use gbcli_protocol::{Rev, SessionRow};
 
 use crate::error::StoreError;
+use crate::project_store::{Clock, Key, Kind, ProjectStore, PutAllError};
 use crate::store::SessionStore;
 
-/// The project's bundle: the `.gbcli/` directory.
+/// The project's bundle: its store, the prefix the bundle lives under, and
+/// the clock its decisions read the time from.
 #[derive(Clone, Debug)]
 pub struct Bundle {
+    store: Arc<dyn ProjectStore>,
+    dir: Key,
+    clock: Arc<dyn Clock>,
+    /// Where the store puts the bundle and the project, for messages.
     root: PathBuf,
+    project: PathBuf,
 }
 
 impl Bundle {
-    /// Opens an existing bundle: `GBCLI_DIR` when it is set, else the first
-    /// `.gbcli/` found searching upwards from `start`.
-    pub fn open(start: &Path) -> Result<Bundle, StoreError> {
-        Bundle::locate(start, gbcli_dir().as_deref())
-    }
-
-    /// Opens a bundle, creating it if there is none: `GBCLI_DIR` when it is
-    /// set, else an existing `.gbcli/` above `start`, else `start/.gbcli/`.
-    pub fn open_or_create(start: &Path) -> Result<Bundle, StoreError> {
-        Bundle::open_or_create_in(start, gbcli_dir().as_deref())
-    }
-
-    /// [`Bundle::open`] with `GBCLI_DIR`'s value passed in, so tests don't
-    /// depend on the environment. Never creates anything; no bundle is
-    /// `NoBundle`, naming where it looked.
-    pub fn open_in(start: &Path, gbcli_dir: Option<&Path>) -> Result<Bundle, StoreError> {
-        Bundle::locate(start, gbcli_dir)
-    }
-
-    pub(crate) fn locate(start: &Path, gbcli_dir: Option<&Path>) -> Result<Bundle, StoreError> {
-        if let Some(dir) = gbcli_dir {
-            let root = absolute(dir);
-            if root.is_dir() {
-                return Ok(Bundle { root });
-            }
-            return Err(StoreError::NoBundle {
-                start: absolute(start),
-                gbcli_dir: Some(root),
-            });
-        }
-        let start = absolute(start);
-        let mut dir = start.as_path();
-        loop {
-            let candidate = dir.join(".gbcli");
-            if candidate.is_dir() {
-                return Ok(Bundle { root: candidate });
-            }
-            let Some(parent) = dir.parent() else {
-                break;
-            };
-            dir = parent;
-        }
-        Err(StoreError::NoBundle {
-            start,
-            gbcli_dir: None,
-        })
-    }
-
-    /// [`Bundle::open_or_create`] with `GBCLI_DIR`'s value passed in, for callers
-    /// (tests above all) that must not depend on the environment.
-    pub fn open_or_create_in(start: &Path, gbcli_dir: Option<&Path>) -> Result<Bundle, StoreError> {
-        if let Some(dir) = gbcli_dir {
-            let root = absolute(dir);
-            fs::create_dir_all(&root).map_err(|source| StoreError::NoRoot {
-                start: root.clone(),
-                source,
-            })?;
-            return Ok(Bundle { root });
-        }
-        match Bundle::locate(start, None) {
-            Ok(bundle) => Ok(bundle),
-            Err(StoreError::NoBundle { .. }) => {
-                let root = absolute(start).join(".gbcli");
-                fs::create_dir_all(&root).map_err(|source| StoreError::NoRoot {
-                    start: root.clone(),
-                    source,
-                })?;
-                Ok(Bundle { root })
-            }
-            Err(e) => Err(e),
+    /// A bundle under `dir` in `store` (`.gbcli` for a project's own),
+    /// reading host time from `clock`.
+    pub fn new(store: Arc<dyn ProjectStore>, dir: Key, clock: Arc<dyn Clock>) -> Bundle {
+        let root = store.locate(&dir);
+        let project = store.locate(&Key::root());
+        Bundle {
+            store,
+            dir,
+            clock,
+            root,
+            project,
         }
     }
 
-    /// The `.gbcli/` directory itself.
+    pub(crate) fn store(&self) -> &Arc<dyn ProjectStore> {
+        &self.store
+    }
+
+    /// Host time in Unix seconds, from the bundle's clock. Only logs,
+    /// listing and pruning read it; emulation never does (design §10).
+    pub fn now(&self) -> u64 {
+        self.clock.now_secs()
+    }
+
+    /// The bundle directory itself, where the store puts it.
     pub fn root(&self) -> &Path {
         &self.root
     }
 
-    /// The project directory: the bundle directory's parent, whatever the
-    /// bundle directory is called. Under `GBCLI_DIR=/work/state` the project
-    /// is `/work`. Stored ROM and `.sym` paths are relative to it, and so are
-    /// relative paths in a [`crate::RomSource`].
+    /// The project directory, where the store puts it. Stored ROM and `.sym`
+    /// paths are relative to it, and so are relative paths in a
+    /// [`crate::RomSource`].
     pub fn project(&self) -> &Path {
-        self.root.parent().unwrap_or(&self.root)
+        &self.project
+    }
+
+    /// A key under the bundle.
+    pub(crate) fn key(&self, part: &str) -> Key {
+        self.dir.join(part)
+    }
+
+    pub(crate) fn sessions_key(&self) -> Key {
+        self.key("sessions")
     }
 
     pub fn sessions_dir(&self) -> PathBuf {
-        self.root.join("sessions")
+        self.store.locate(&self.sessions_key())
     }
 
-    /// Session lock files live here, outside the session directories, so
+    /// Session locks live here, outside the session directories, so
     /// removing a session never unlinks a lock another process holds or
     /// waits on. They are never deleted.
-    pub(crate) fn locks_dir(&self) -> PathBuf {
-        self.root.join("locks")
+    pub(crate) fn locks_key(&self) -> Key {
+        self.key("locks")
     }
 
     /// A session store by name; the session need not exist yet.
@@ -123,13 +89,18 @@ impl Bundle {
 
     /// Where a removal moves a session directory before deleting it, so a
     /// removal killed midway never leaves part of a session under its name.
-    pub(crate) fn removed_dir(&self) -> PathBuf {
-        self.root.join("removed")
+    pub(crate) fn removed_key(&self) -> Key {
+        self.key("removed")
     }
 
-    /// Deletes what removals left in [`Bundle::removed_dir`], best effort.
+    #[cfg(test)]
+    pub(crate) fn removed_dir(&self) -> PathBuf {
+        self.store.locate(&self.removed_key())
+    }
+
+    /// Deletes what removals left in [`Bundle::removed_key`], best effort.
     pub(crate) fn sweep_removed(&self) {
-        let _ = fs::remove_dir_all(self.removed_dir());
+        let _ = self.store.remove_tree(&self.removed_key());
     }
 
     /// The sessions: directories with a valid name and a `session.json`,
@@ -144,26 +115,17 @@ impl Bundle {
 
     /// Every directory under `sessions/`, sorted, session or not.
     pub(crate) fn session_dirs(&self) -> Result<Vec<String>, StoreError> {
-        let dir = self.sessions_dir();
-        let entries = match fs::read_dir(&dir) {
+        let key = self.sessions_key();
+        let entries = match self.store.list(&key) {
             Ok(entries) => entries,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-            Err(source) => {
-                return Err(StoreError::Io { path: dir, source });
-            }
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(source) => return Err(self.io_error(&key, source)),
         };
-        let mut names = Vec::new();
-        for entry in entries {
-            let entry = entry.map_err(|source| StoreError::Io {
-                path: dir.clone(),
-                source,
-            })?;
-            if entry.file_type().is_ok_and(|t| t.is_dir())
-                && let Some(name) = entry.file_name().to_str()
-            {
-                names.push(name.to_string());
-            }
-        }
+        let mut names: Vec<String> = entries
+            .into_iter()
+            .filter(|e| e.kind == Kind::Dir)
+            .map(|e| e.name)
+            .collect();
         names.sort();
         Ok(names)
     }
@@ -184,49 +146,94 @@ impl Bundle {
         Ok(rows)
     }
 
+    pub(crate) fn gaps_key(&self) -> Key {
+        self.key("gaps.jsonl")
+    }
+
     pub fn gaps_path(&self) -> PathBuf {
-        self.root.join("gaps.jsonl")
+        self.store.locate(&self.gaps_key())
+    }
+
+    pub(crate) fn cache_key(&self) -> Key {
+        self.key("cache")
     }
 
     pub fn cache_dir(&self) -> PathBuf {
-        self.root.join("cache")
+        self.store.locate(&self.cache_key())
     }
-}
 
-fn gbcli_dir() -> Option<PathBuf> {
-    env::var_os("GBCLI_DIR").map(PathBuf::from)
-}
-
-/// Absolute without requiring the path to exist.
-fn absolute(path: &Path) -> PathBuf {
-    if path.is_absolute() {
-        return normalize(path);
-    }
-    env::current_dir()
-        .map(|cwd| normalize(&cwd.join(path)))
-        .unwrap_or_else(|_| path.to_path_buf())
-}
-
-fn normalize(path: &Path) -> PathBuf {
-    let mut out = PathBuf::new();
-    for part in path.components() {
-        match part {
-            Component::ParentDir => {
-                out.pop();
-            }
-            Component::CurDir => {}
-            other => out.push(other.as_os_str()),
+    /// An `io::Error` about `key`, naming where the store puts it.
+    pub(crate) fn io_error(&self, key: &Key, source: io::Error) -> StoreError {
+        StoreError::Io {
+            path: self.store.locate(key),
+            source,
         }
     }
-    out
+
+    /// A closure for `map_err` that wraps an `io::Error` about `key`.
+    pub(crate) fn io_at<'a>(&'a self, key: &'a Key) -> impl FnOnce(io::Error) -> StoreError + 'a {
+        move |source| self.io_error(key, source)
+    }
+
+    /// Bytes under `key`, skipping `exclude`.
+    pub(crate) fn tree_size(&self, key: &Key, exclude: &Key) -> u64 {
+        let Ok(entries) = self.store.list(key) else {
+            return 0;
+        };
+        let mut total = 0;
+        for entry in entries {
+            let child = key.join(&entry.name);
+            if &child == exclude {
+                continue;
+            }
+            total += match entry.kind {
+                Kind::Dir => self.tree_size(&child, exclude),
+                Kind::Blob => self.store.size(&child).unwrap_or(0),
+            };
+        }
+        total
+    }
 }
 
-/// Host time in Unix seconds. Only logs, listing and pruning read it; emulation
-/// never does (design §10).
-pub fn now_secs() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| d.as_secs())
+/// A project file a request names (a ROM, a `.sym`, a shot, a `.sav`): a
+/// path relative to the project or absolute, read and written through the
+/// store, so a backing that isn't the filesystem holds them too.
+impl Bundle {
+    /// The store's key for a project file.
+    pub fn file_key(&self, path: &Path) -> Key {
+        self.store.key_of(path)
+    }
+
+    pub fn read_file(&self, path: &Path) -> io::Result<Vec<u8>> {
+        self.store.get(&self.file_key(path))
+    }
+
+    /// Replaces a file atomically: a reader never sees half of it.
+    pub fn write_file(&self, path: &Path, bytes: &[u8]) -> io::Result<()> {
+        self.store.put(&self.file_key(path), bytes)
+    }
+
+    /// Replaces several files, each atomically, as
+    /// [`ProjectStore::put_all`] does.
+    pub fn write_files(&self, files: &[(&Path, &[u8])]) -> Result<(), PutAllError> {
+        let blobs: Vec<(Key, &[u8])> = files
+            .iter()
+            .map(|(path, bytes)| (self.file_key(path), *bytes))
+            .collect();
+        self.store.put_all(&blobs)
+    }
+
+    pub fn is_dir(&self, path: &Path) -> bool {
+        self.store.kind(&self.file_key(path)) == Some(Kind::Dir)
+    }
+
+    pub fn is_file(&self, path: &Path) -> bool {
+        self.store.kind(&self.file_key(path)) == Some(Kind::Blob)
+    }
+
+    pub fn exists(&self, path: &Path) -> bool {
+        self.store.kind(&self.file_key(path)).is_some()
+    }
 }
 
 /// A session name: `[a-z0-9-]{1,40}`, not starting with `-`, which a CLI would read as a flag.
@@ -249,13 +256,6 @@ pub fn next(rev: Rev) -> Rev {
 mod tests {
     use super::*;
 
-    fn scratch(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("gbcli-bundle-{}-{name}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        dir
-    }
-
     #[test]
     fn names_are_lowercase_digits_and_dashes() {
         for name in ["dx", "demo-1", "a", "a-", &"x".repeat(40)] {
@@ -271,51 +271,5 @@ mod tests {
         for name in ["-", "-x", "--rom"] {
             assert!(validate_name(name).is_err(), "{name}");
         }
-    }
-
-    #[test]
-    fn finding_a_bundle_walks_up_from_a_nested_directory() {
-        let tmp = scratch("walk-up");
-        let nested = tmp.join("a").join("b");
-        fs::create_dir_all(&nested).unwrap();
-        let root = tmp.join(".gbcli");
-        fs::create_dir_all(&root).unwrap();
-        let found = Bundle::locate(&nested, None).unwrap();
-        assert_eq!(found.root(), root.as_path());
-        assert_eq!(found.project(), tmp.as_path());
-        fs::remove_dir_all(&tmp).unwrap();
-    }
-
-    #[test]
-    fn gbcli_dir_wins_over_the_walk_up_and_its_parent_is_the_project() {
-        let tmp = scratch("gbcli-dir");
-        fs::create_dir_all(tmp.join(".gbcli")).unwrap();
-        let state = tmp.join("elsewhere").join("state");
-        fs::create_dir_all(&state).unwrap();
-        let found = Bundle::locate(&tmp, Some(&state)).unwrap();
-        assert_eq!(found.root(), state.as_path());
-        assert_eq!(found.project(), tmp.join("elsewhere").as_path());
-        fs::remove_dir_all(&tmp).unwrap();
-    }
-
-    #[test]
-    fn a_gbcli_dir_that_does_not_exist_is_refused_by_open_and_made_by_open_or_create() {
-        let tmp = scratch("gbcli-dir-missing");
-        let state = tmp.join("state");
-        assert!(matches!(
-            Bundle::locate(&tmp, Some(&state)),
-            Err(StoreError::NoBundle { .. })
-        ));
-        let made = Bundle::open_or_create_in(&tmp, Some(&state)).unwrap();
-        assert_eq!(made.root(), state.as_path());
-        assert!(state.is_dir());
-        fs::remove_dir_all(&tmp).unwrap();
-    }
-
-    #[test]
-    fn a_relative_gbcli_dir_is_made_absolute_so_the_project_is_a_real_directory() {
-        let found = Bundle::locate(Path::new("/"), Some(Path::new("."))).unwrap();
-        assert!(found.root().is_absolute(), "{:?}", found.root());
-        assert!(found.project().is_absolute(), "{:?}", found.project());
     }
 }

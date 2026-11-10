@@ -2,17 +2,16 @@
 //! one line, and `gbcli gaps` counts them by feature.
 
 use std::collections::BTreeMap;
-use std::fs;
+use std::io;
 
 use gbcli_core::Feature;
 use gbcli_protocol::{GapCount, GapLine};
 
-use crate::bundle::{Bundle, now_secs};
+use crate::bundle::Bundle;
 use crate::error::StoreError;
-use crate::io::append;
 
 impl Bundle {
-    /// Adds one gap to the project's ledger.
+    /// Adds one gap to the project's ledger, dated by the bundle's clock.
     pub fn append_gap(
         &self,
         session: Option<&str>,
@@ -21,7 +20,7 @@ impl Bundle {
         reason: &str,
     ) -> Result<(), StoreError> {
         let line = GapLine {
-            at: now_secs(),
+            at: self.now(),
             session: session.map(str::to_string),
             op: op.to_string(),
             feature: feature.name().to_string(),
@@ -29,7 +28,10 @@ impl Bundle {
         };
         let mut text = serde_json::to_string(&line).expect("a gap line serializes");
         text.push('\n');
-        append(&self.gaps_path(), &text)
+        let key = self.gaps_key();
+        self.store()
+            .append(&key, text.as_bytes())
+            .map_err(self.io_at(&key))
     }
 
     /// Counts by feature across the project, most frequent first.
@@ -46,12 +48,21 @@ impl Bundle {
         &self,
         keep: impl Fn(&GapLine) -> bool,
     ) -> Result<Vec<GapCount>, StoreError> {
-        let path = self.gaps_path();
-        let text = match fs::read_to_string(&path) {
-            Ok(text) => text,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-            Err(source) => return Err(StoreError::Io { path, source }),
+        let key = self.gaps_key();
+        let bytes = match self.store().get(&key) {
+            Ok(bytes) => bytes,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(source) => return Err(self.io_error(&key, source)),
         };
+        let text = String::from_utf8(bytes).map_err(|_| {
+            self.io_error(
+                &key,
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "stream did not contain valid UTF-8",
+                ),
+            )
+        })?;
         let mut counts: BTreeMap<String, u64> = BTreeMap::new();
         for line in text.lines() {
             if let Ok(line) = serde_json::from_str::<GapLine>(line)
@@ -68,9 +79,10 @@ impl Bundle {
         Ok(rows)
     }
 }
-
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
 
     #[test]

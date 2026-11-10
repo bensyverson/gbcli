@@ -415,7 +415,7 @@ fn sav_writes_both_files_or_neither() {
         .unwrap()
         .flatten()
         .map(|e| e.file_name().to_string_lossy().into_owned())
-        .filter(|n| n.ends_with(".tmp"))
+        .filter(|n| n.contains(".tmp"))
         .collect();
     assert!(strays.is_empty(), "{strays:?}");
 }

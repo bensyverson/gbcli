@@ -2,7 +2,6 @@
 //! the battery's RAM and clock across a power cycle, and to and from a
 //! `.sav` file only when asked.
 
-use std::fs;
 use std::path::Path;
 
 use gbcli_bundle::{SessionStore, StoreError, parse_duration};
@@ -13,8 +12,7 @@ use gbcli_protocol::{
     ResultBody, SavArgs, SavClockState, SavMade, SessionFile,
 };
 
-use super::build::Host;
-use super::shot::write_all_atomically;
+use super::files::Files;
 use super::{Failure, Handler, HeadChange, Need, save_head};
 
 /// The remedy for a cart that keeps nothing with the power off.
@@ -40,10 +38,11 @@ impl Handler {
             None => 0,
         };
         let flash_session = meta.flash.is_some();
+        let files = self.files();
         let (file, image) = match args.sav.as_deref() {
             None => (None, None),
-            Some(path) if flash_session => read_flash_pair(path, &self.host, warnings)?,
-            Some(path) => (Some(read_sav(path, &self.host)?), None),
+            Some(path) if flash_session => read_flash_pair(path, &files, warnings)?,
+            Some(path) => (Some(read_sav(path, &files)?), None),
         };
         self.forget_warm(store.name());
         let stored = |e| Failure::from_store(&e);
@@ -216,20 +215,17 @@ impl Handler {
         // A flash session's save may live in the chip (GB Studio's
         // batteryless saves do), so the chip image goes beside the `.sav`;
         // both are written or neither, as one alone is half a save (short
-        // of a kill between the two renames: `write_all_atomically`).
+        // of a kill between the two replaces: `Files::write_all`).
         let image_path = flash_image_path(Path::new(&args.path));
-        let (sav_at, image_at) = (
-            self.host.resolve(&args.path),
-            self.host.resolve(&image_path),
-        );
-        let mut files: Vec<(&Path, &[u8])> = Vec::new();
+        let sav_at = Path::new(&args.path);
+        let mut written: Vec<(&Path, &[u8])> = Vec::new();
         if let Some(sav) = &sav {
-            files.push((&sav_at, sav));
+            written.push((sav_at, sav));
         }
         if let Some(image) = &image {
-            files.push((&image_at, image));
+            written.push((&image_path, image));
         }
-        write_all_atomically(&files)?;
+        self.files().write_all(&written)?;
         let flash = image.as_ref().map(|image| FlashFileMade {
             path: image_path.display().to_string(),
             bytes: image.len() as u64,
@@ -290,14 +286,11 @@ type SavFiles = (Option<Vec<u8>>, Option<Vec<u8>>);
 /// half that is missing keeps the head's own, with a warning.
 fn read_flash_pair(
     path: &str,
-    host: &Host,
+    files: &Files,
     warnings: &mut Vec<String>,
 ) -> Result<SavFiles, Failure> {
     let image_path = flash_image_path(Path::new(path));
-    let (sav_there, image_there) = (
-        host.resolve(path).exists(),
-        host.resolve(&image_path).exists(),
-    );
+    let (sav_there, image_there) = (files.exists(path), files.exists(&image_path));
     if !sav_there && !image_there {
         return Err(Failure::new(ErrorBody::new(
             ErrorCode::IoFailed,
@@ -308,9 +301,9 @@ fn read_flash_pair(
             "check the path; `gbcli sav <file>` writes both from a flash session",
         )));
     }
-    let sav = sav_there.then(|| read_sav(path, host)).transpose()?;
+    let sav = sav_there.then(|| read_sav(path, files)).transpose()?;
     let image = image_there
-        .then(|| read_sav(&image_path.display().to_string(), host))
+        .then(|| read_sav(&image_path.display().to_string(), files))
         .transpose()?;
     if sav.is_none() {
         warnings.push(format!("no .sav at {path}: the cart RAM is the head's"));
@@ -324,8 +317,8 @@ fn read_flash_pair(
     Ok((sav, image))
 }
 
-fn read_sav(path: &str, host: &Host) -> Result<Vec<u8>, Failure> {
-    fs::read(host.resolve(path)).map_err(|e| {
+fn read_sav(path: &str, files: &Files) -> Result<Vec<u8>, Failure> {
+    files.read(path).map_err(|e| {
         Failure::new(ErrorBody::new(
             ErrorCode::IoFailed,
             format!("couldn't read the .sav {path}: {e}"),

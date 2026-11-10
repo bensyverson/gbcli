@@ -7,9 +7,8 @@ use gbcli_engine::cond::{BlockStart, EvalCtx, EvalWarning, MAX_BLOCK};
 use gbcli_engine::{Machine, Since};
 use gbcli_protocol::{ErrorBody, ErrorCode, MemoryMade, ResultBody, SessionFile, ViewArgs};
 
-use super::build::Host;
+use super::files::Files;
 use super::reads::warning_text;
-use super::shot::write_atomically;
 use super::{Failure, Handler, Need};
 use crate::convert;
 
@@ -24,7 +23,7 @@ impl Handler {
         let (text, len) = checked(args)?;
         let (machine, loaded) = self.machine_for(store, meta, Need::Head, None)?;
         warnings.extend(loaded);
-        let made = block(&machine, text, len, args, &self.host, warnings);
+        let made = block(&machine, text, len, args, &self.files(), warnings);
         self.keep_warm(store, meta, machine);
         Ok(ResultBody {
             memory: Some(made?),
@@ -68,7 +67,7 @@ fn block(
     text: &str,
     len: u32,
     args: &ViewArgs,
-    host: &Host,
+    files: &Files,
     warnings: &mut Vec<String>,
 ) -> Result<MemoryMade, Failure> {
     let start = BlockStart::compile(text, machine.symbols())
@@ -87,7 +86,7 @@ fn block(
     })?;
     warnings.extend(read.iter().map(warning_text));
     if let Some(out) = &args.out {
-        write_atomically(&host.resolve(out), &block.bytes)?;
+        files.write(out, &block.bytes)?;
     }
     Ok(MemoryMade {
         expr: text.to_string(),

@@ -53,7 +53,7 @@ impl Handler {
         }
         let (response, stop) = response;
         let _ = store.append_events(&[EventLogLine {
-            at: gbcli_bundle::now_secs(),
+            at: self.bundle.now(),
             actor,
             op: request.op.clone(),
             allow_rom_change: request.allow_rom_change,

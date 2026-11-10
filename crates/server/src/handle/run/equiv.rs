@@ -135,10 +135,10 @@ fn side_b(store: &SessionStore, meta: &SessionFile, args: &EquivArgs) -> Session
     if let Some(rom) = &args.b.rom {
         b.rom = rom.clone();
         b.sym = args.b.sym.clone().or_else(|| {
-            let sibling = store.bundle().project().join(rom).with_extension("sym");
-            sibling
-                .is_file()
-                .then(|| sibling.to_string_lossy().into_owned())
+            store
+                .bundle()
+                .sibling_sym(Path::new(rom))
+                .map(|sibling| sibling.to_string_lossy().into_owned())
         });
     } else if let Some(sym) = &args.b.sym {
         b.sym = Some(sym.clone());

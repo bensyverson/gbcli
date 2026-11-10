@@ -21,8 +21,8 @@ use gbcli_protocol::{
 use gbcli_view::Image;
 
 use super::super::Failure;
-use super::super::build::Host;
-use super::super::shot::{check_image, write_atomically};
+use super::super::files::Files;
+use super::super::shot::check_image;
 
 /// The piano roll's scale when the request gives none. At 1 a short clip is
 /// a few dots (four columns a frame, three rows a semitone); its native width
@@ -44,7 +44,7 @@ pub(super) struct Collected {
 }
 
 /// What can be refused before anything loads: the files' paths and scales.
-pub(super) fn check(args: &AudioArgs, host: &Host) -> Result<(), Failure> {
+pub(super) fn check(args: &AudioArgs, files: &Files) -> Result<(), Failure> {
     if !args.channels.is_empty() && !args.log && !args.summary {
         return Err(bad(
             "a channel filter narrows the write log or its summary, and the run asks for neither"
@@ -53,7 +53,7 @@ pub(super) fn check(args: &AudioArgs, host: &Host) -> Result<(), Failure> {
         ));
     }
     if let Some(w) = &args.wav {
-        check_wav(&w.path, host)?;
+        check_wav(&w.path, files)?;
     }
     let images = [
         (&args.piano, PIANO_SCALE),
@@ -61,13 +61,13 @@ pub(super) fn check(args: &AudioArgs, host: &Host) -> Result<(), Failure> {
     ];
     for (image, default) in images {
         if let Some(image) = image {
-            check_image(&image.path, Some(image.scale.unwrap_or(default)), host)?;
+            check_image(&image.path, Some(image.scale.unwrap_or(default)), files)?;
         }
     }
     Ok(())
 }
 
-fn check_wav(path_text: &str, host: &Host) -> Result<(), Failure> {
+fn check_wav(path_text: &str, files: &Files) -> Result<(), Failure> {
     let path = Path::new(path_text);
     if path_text.is_empty() || path.file_name().is_none() {
         return Err(bad(
@@ -76,7 +76,7 @@ fn check_wav(path_text: &str, host: &Host) -> Result<(), Failure> {
         ));
     }
     match path.parent().filter(|d| !d.as_os_str().is_empty()) {
-        Some(dir) if !host.resolve(dir).is_dir() => Err(bad(
+        Some(dir) if !files.is_dir(dir) => Err(bad(
             format!("the directory {} doesn't exist", dir.display()),
             format!("create {} first, or write the WAV elsewhere", dir.display()),
         )),
@@ -159,7 +159,7 @@ pub(super) fn deliver(
     collected: Collected,
     machine: &Machine,
     since: &Since,
-    host: &Host,
+    files: &Files,
     replay: impl FnMut() -> Result<Takes, Failure>,
 ) -> Result<AudioMade, Failure> {
     let (base, mark) = machine.named_base(since);
@@ -191,7 +191,7 @@ pub(super) fn deliver(
     });
     let mut wavs = Vec::new();
     if let (Some(w), Some(mixed)) = (&args.wav, &collected.samples) {
-        wavs = write_wavs(w, mixed, host, replay)?;
+        wavs = write_wavs(w, mixed, files, replay)?;
     }
     let piano = match &args.piano {
         Some(out) => {
@@ -201,7 +201,7 @@ pub(super) fn deliver(
                 out,
                 roll.map_err(audio_failure)?,
                 PIANO_SCALE,
-                host,
+                files,
             )?)
         }
         None => None,
@@ -209,7 +209,7 @@ pub(super) fn deliver(
     let spectrogram = match (&args.spectrogram, &collected.samples) {
         (Some(out), Some(mixed)) => {
             let image = spectrogram(mixed, "mixed").map_err(audio_failure)?;
-            Some(write_image(out, image, SPECTROGRAM_SCALE, host)?)
+            Some(write_image(out, image, SPECTROGRAM_SCALE, files)?)
         }
         _ => None,
     };
@@ -227,7 +227,7 @@ pub(super) fn deliver(
 fn write_wavs(
     args: &WavArgs,
     mixed: &AudioSamples,
-    host: &Host,
+    files: &Files,
     mut replay: impl FnMut() -> Result<Takes, Failure>,
 ) -> Result<Vec<WavMade>, Failure> {
     let mut takes = vec![(WavTake::Mixed, PathBuf::from(&args.path), mixed.clone())];
@@ -249,7 +249,7 @@ fn write_wavs(
     }
     let mut made = Vec::new();
     for (take, path, audio) in takes {
-        write_atomically(&host.resolve(&path), &wav(&audio.samples))?;
+        files.write(&path, &wav(&audio.samples))?;
         made.push(WavMade {
             path: path.to_string_lossy().into_owned(),
             take,
@@ -275,7 +275,7 @@ fn write_image(
     out: &ImageOut,
     image: Image,
     default: u32,
-    host: &Host,
+    files: &Files,
 ) -> Result<ImageMade, Failure> {
     let scale = out.scale.unwrap_or(default);
     let image = image
@@ -284,7 +284,7 @@ fn write_image(
     let bytes = image
         .png()
         .map_err(|e| audio_failure(AudioError::Image(e)))?;
-    write_atomically(&host.resolve(&out.path), &bytes)?;
+    files.write(&out.path, &bytes)?;
     Ok(ImageMade {
         path: out.path.clone(),
         width: image.width,

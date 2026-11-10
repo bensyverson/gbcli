@@ -3,14 +3,12 @@
 //! newest line backwards, so asking for the last few never reads the whole
 //! log.
 
-use std::fs::{self, File};
-use std::io::{Read, Seek, SeekFrom};
-use std::path::{Path, PathBuf};
+use std::io;
 
 use gbcli_protocol::{EventLogLine, Rev};
 
 use crate::error::StoreError;
-use crate::io::{append, io_at};
+use crate::project_store::Key;
 use crate::store::SessionStore;
 
 /// Where the log rotates (design §10).
@@ -20,29 +18,43 @@ pub const EVENTS_ROTATE_AT: u64 = 10 * 1024 * 1024;
 const CHUNK: u64 = 64 * 1024;
 
 impl SessionStore {
-    fn events_path(&self) -> PathBuf {
-        self.dir().join("events.jsonl")
+    fn events_key(&self) -> Key {
+        self.dir_key().join("events.jsonl")
     }
 
-    fn rotated_events_path(&self) -> PathBuf {
-        self.dir().join("events.1.jsonl")
+    fn rotated_events_key(&self) -> Key {
+        self.dir_key().join("events.1.jsonl")
+    }
+
+    #[cfg(test)]
+    fn events_path(&self) -> std::path::PathBuf {
+        self.files().locate(&self.events_key())
+    }
+
+    #[cfg(test)]
+    fn rotated_events_path(&self) -> std::path::PathBuf {
+        self.files().locate(&self.rotated_events_key())
     }
 
     /// Appends lines, first rotating the log if they would take it past the
     /// limit. The previous rotation is replaced: one old file is kept.
     pub fn append_events(&self, lines: &[EventLogLine]) -> Result<(), StoreError> {
-        let path = self.events_path();
+        let key = self.events_key();
         let mut text = String::new();
         for line in lines {
             text.push_str(&serde_json::to_string(line).expect("an event line serializes"));
             text.push('\n');
         }
-        let size = fs::metadata(&path).map_or(0, |m| m.len());
+        let size = self.files().size(&key).unwrap_or(0);
         if size > 0 && size + text.len() as u64 > self.events_rotate_at() {
-            let rotated = self.rotated_events_path();
-            fs::rename(&path, &rotated).map_err(io_at(&rotated))?;
+            let rotated = self.rotated_events_key();
+            self.files()
+                .rename(&key, &rotated)
+                .map_err(self.bundle().io_at(&rotated))?;
         }
-        append(&path, &text)
+        self.files()
+            .append(&key, text.as_bytes())
+            .map_err(self.bundle().io_at(&key))
     }
 
     /// The newest `limit` lines, oldest first; every kept line without one.
@@ -72,15 +84,15 @@ impl SessionStore {
         Ok(None)
     }
 
-    /// Every kept line, newest first, across the current and rotated files.
+    /// Every kept line, newest first, across the current and rotated logs.
     /// A line that doesn't parse (another version wrote it) is skipped.
-    fn events_newest_first(&self) -> impl Iterator<Item = Result<EventLogLine, StoreError>> {
-        type Lines = Box<dyn Iterator<Item = Result<Vec<u8>, StoreError>>>;
-        // Lazy: the rotated file is opened only if the current one runs out.
-        [self.events_path(), self.rotated_events_path()]
+    fn events_newest_first(&self) -> impl Iterator<Item = Result<EventLogLine, StoreError>> + '_ {
+        type Lines<'a> = Box<dyn Iterator<Item = Result<Vec<u8>, StoreError>> + 'a>;
+        // Lazy: the rotated log is opened only if the current one runs out.
+        [self.events_key(), self.rotated_events_key()]
             .into_iter()
-            .flat_map(|path| -> Lines {
-                match Backward::open(&path) {
+            .flat_map(move |key| -> Lines<'_> {
+                match Backward::open(self, key) {
                     Ok(lines) => Box::new(lines),
                     Err(e) => Box::new(std::iter::once(Err(e))),
                 }
@@ -92,10 +104,10 @@ impl SessionStore {
     }
 }
 
-/// A file's lines from the last to the first, read in chunks from the end.
-struct Backward {
-    path: PathBuf,
-    file: Option<File>,
+/// A blob's lines from the last to the first, read in chunks from the end.
+struct Backward<'a> {
+    store: &'a SessionStore,
+    key: Key,
     /// Bytes before this offset are unread.
     pos: u64,
     /// The start of a line whose beginning is in an unread chunk.
@@ -104,25 +116,17 @@ struct Backward {
     ready: Vec<Vec<u8>>,
 }
 
-impl Backward {
-    /// A missing file has no lines.
-    fn open(path: &Path) -> Result<Backward, StoreError> {
-        let (file, pos) = match File::open(path) {
-            Ok(file) => {
-                let len = file.metadata().map_err(io_at(path))?.len();
-                (Some(file), len)
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => (None, 0),
-            Err(source) => {
-                return Err(StoreError::Io {
-                    path: path.to_path_buf(),
-                    source,
-                });
-            }
+impl<'a> Backward<'a> {
+    /// A missing log has no lines.
+    fn open(store: &'a SessionStore, key: Key) -> Result<Backward<'a>, StoreError> {
+        let pos = match store.files().size(&key) {
+            Ok(len) => len,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => 0,
+            Err(source) => return Err(store.bundle().io_error(&key, source)),
         };
         Ok(Backward {
-            path: path.to_path_buf(),
-            file,
+            store,
+            key,
             pos,
             partial: Vec::new(),
             ready: Vec::new(),
@@ -130,14 +134,19 @@ impl Backward {
     }
 
     fn read_chunk(&mut self) -> Result<(), StoreError> {
-        let Some(file) = self.file.as_mut() else {
-            return Ok(());
-        };
         let start = self.pos.saturating_sub(CHUNK);
-        let mut chunk = vec![0; (self.pos - start) as usize];
-        file.seek(SeekFrom::Start(start))
-            .and_then(|_| file.read_exact(&mut chunk))
-            .map_err(io_at(&self.path))?;
+        let want = self.pos - start;
+        let mut chunk = self
+            .store
+            .files()
+            .get_range(&self.key, start, want)
+            .map_err(self.store.bundle().io_at(&self.key))?;
+        if (chunk.len() as u64) < want {
+            return Err(self.store.bundle().io_error(
+                &self.key,
+                io::Error::new(io::ErrorKind::UnexpectedEof, "failed to fill whole buffer"),
+            ));
+        }
         self.pos = start;
         chunk.append(&mut self.partial);
         let mut parts = chunk.split(|&b| b == b'\n');
@@ -151,7 +160,7 @@ impl Backward {
     }
 }
 
-impl Iterator for Backward {
+impl Iterator for Backward<'_> {
     type Item = Result<Vec<u8>, StoreError>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -170,10 +179,10 @@ impl Iterator for Backward {
         }
     }
 }
-
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
+    use std::fs;
 
     use gbcli_protocol::{EventsArgs, Op};
 

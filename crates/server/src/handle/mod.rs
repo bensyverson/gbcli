@@ -8,6 +8,7 @@ mod build;
 mod bundle_ops;
 mod config;
 mod failure;
+mod files;
 mod font;
 mod head;
 mod history;
@@ -146,6 +147,11 @@ impl Handler {
 
     pub fn bundle(&self) -> &Bundle {
         &self.bundle
+    }
+
+    /// Where the current request's own files (shots, WAVs, saves) go.
+    fn files(&self) -> files::Files {
+        files::Files::new(self.host.clone(), self.bundle.clone())
     }
 
     /// Answers one request. Every request takes the session's lock, so two

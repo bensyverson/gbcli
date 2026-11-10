@@ -3,7 +3,6 @@
 //! The frame number is rebased to the request's time base, as the stop
 //! record's `frame_shown` is, and the PNG's label says the same.
 
-use std::fs;
 use std::path::Path;
 
 use gbcli_bundle::SessionStore;
@@ -14,7 +13,7 @@ use gbcli_protocol::{
 };
 use gbcli_view::{DEFAULT_SCALE, FrameChoice, FrameSource, LabelKey, MAX_SCALE, Rect, ViewError};
 
-use super::build::Host;
+use super::files::Files;
 use super::{Failure, Handler, Need};
 
 impl Handler {
@@ -25,11 +24,12 @@ impl Handler {
         args: &ShotReadArgs,
         warnings: &mut Vec<String>,
     ) -> Result<ResultBody, Failure> {
-        check(&args.shot, &self.host)?;
+        let files = self.files();
+        check(&args.shot, &files)?;
         let since = self.since(store, args.since.as_ref())?;
         let (machine, loaded) = self.machine_for(store, meta, Need::Head, None)?;
         warnings.extend(loaded);
-        let shot = take(&machine, &args.shot, &since, &self.host);
+        let shot = take(&machine, &args.shot, &since, &files);
         self.keep_warm(store, meta, machine);
         Ok(ResultBody {
             shot: Some(shot?),
@@ -40,8 +40,8 @@ impl Handler {
 
 /// What a shot can get wrong before the machine moves: the scale, an empty
 /// crop, and a directory that isn't there.
-pub(super) fn check(args: &ShotArgs, host: &Host) -> Result<(), Failure> {
-    check_image(&args.path, args.scale, host)?;
+pub(super) fn check(args: &ShotArgs, files: &Files) -> Result<(), Failure> {
+    check_image(&args.path, args.scale, files)?;
     if args.live && args.any_frame {
         // A live shot is the frame being drawn, never a stored one, so
         // any_frame would be ignored.
@@ -62,8 +62,12 @@ pub(super) fn check(args: &ShotArgs, host: &Host) -> Result<(), Failure> {
 }
 
 /// A PNG's path and scale, checked before anything is drawn; the path is
-/// the request's, resolved by `host`.
-pub(super) fn check_image(path_text: &str, scale: Option<u32>, host: &Host) -> Result<(), Failure> {
+/// the request's, resolved by the host.
+pub(super) fn check_image(
+    path_text: &str,
+    scale: Option<u32>,
+    files: &Files,
+) -> Result<(), Failure> {
     let scale = scale.unwrap_or(DEFAULT_SCALE);
     if !(1..=MAX_SCALE).contains(&scale) {
         return Err(bad(
@@ -79,7 +83,7 @@ pub(super) fn check_image(path_text: &str, scale: Option<u32>, host: &Host) -> R
         ));
     }
     if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty())
-        && !host.resolve(dir).is_dir()
+        && !files.is_dir(dir)
     {
         return Err(bad(
             format!("the directory {} doesn't exist", dir.display()),
@@ -95,7 +99,7 @@ pub(super) fn take(
     machine: &Machine,
     args: &ShotArgs,
     since: &Since,
-    host: &Host,
+    files: &Files,
 ) -> Result<ShotMade, Failure> {
     let (base, mark) = machine.named_base(since);
     let rebase = |n: u64| n as i64 - mark.frame as i64;
@@ -148,69 +152,8 @@ pub(super) fn take(
         }
     }
     let bytes = image.png().map_err(|e| view_failure(&e, &rebase, &base))?;
-    write_atomically(&host.resolve(&args.path), &bytes)?;
+    files.write(&args.path, &bytes)?;
     Ok(made)
-}
-
-/// Writes through a temporary file beside the target, so a reader never
-/// sees half a PNG.
-pub(super) fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), Failure> {
-    let temp = temp_beside(path);
-    let written = fs::write(&temp, bytes).and_then(|()| fs::rename(&temp, path));
-    written.map_err(|e| {
-        let _ = fs::remove_file(&temp);
-        Failure::new(ErrorBody::new(
-            ErrorCode::IoFailed,
-            format!("couldn't write {}: {e}", path.display()),
-            ErrorCode::IoFailed.default_remedy(),
-        ))
-    })
-}
-
-/// Writes every file or none: a directory in a file's place is refused
-/// before anything is written, then each goes to a temporary file beside it,
-/// and only once all of them are written does each replace its file, by a
-/// rename in its own directory. Every reported failure but one leaves the
-/// files as they were and no temporary file behind; the exception, a rename
-/// refused after another succeeded, needs a change on disk between the two.
-/// The renames are one at a time, so a process killed between them leaves
-/// the files it renamed new beside the rest old, and the rest's temporary
-/// files behind: atomic for each file, not for the set.
-pub(super) fn write_all_atomically(files: &[(&Path, &[u8])]) -> Result<(), Failure> {
-    let io = |path: &Path, e: &dyn std::fmt::Display| {
-        Failure::new(ErrorBody::new(
-            ErrorCode::IoFailed,
-            format!("couldn't write {}: {e}", path.display()),
-            ErrorCode::IoFailed.default_remedy(),
-        ))
-    };
-    if let Some((path, _)) = files.iter().find(|(path, _)| path.is_dir()) {
-        return Err(io(path, &"a directory has its name"));
-    }
-    let temps: Vec<_> = files.iter().map(|(path, _)| temp_beside(path)).collect();
-    let clean = || {
-        for temp in &temps {
-            let _ = fs::remove_file(temp);
-        }
-    };
-    for ((path, bytes), temp) in files.iter().zip(&temps) {
-        if let Err(e) = fs::write(temp, bytes) {
-            clean();
-            return Err(io(path, &e));
-        }
-    }
-    for ((path, _), temp) in files.iter().zip(&temps) {
-        if let Err(e) = fs::rename(temp, path) {
-            clean();
-            return Err(io(path, &e));
-        }
-    }
-    Ok(())
-}
-
-fn temp_beside(path: &Path) -> std::path::PathBuf {
-    let name = path.file_name().unwrap_or_default().to_string_lossy();
-    path.with_file_name(format!(".{name}.{}.tmp", std::process::id()))
 }
 
 fn bad(message: String, remedy: String) -> Failure {

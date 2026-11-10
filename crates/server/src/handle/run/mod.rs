@@ -111,14 +111,15 @@ impl Handler {
         if let Some(name) = &args.checkpoint {
             validate_checkpoint_name(name).map_err(|e| Failure::from_store(&e))?;
         }
+        let files = self.files();
         if let Some(shot) = &args.shot {
-            shot::check(shot, &self.host)?;
+            shot::check(shot, &files)?;
         }
         if let Some(strip) = &args.filmstrip {
-            filmstrip::check(strip, &self.host)?;
+            filmstrip::check(strip, &files)?;
         }
         if let Some(sound) = &args.audio {
-            audio::check(sound, &self.host)?;
+            audio::check(sound, &files)?;
         }
 
         // What needs the machine's symbols and sizes. A refusal here hands
@@ -161,11 +162,10 @@ impl Handler {
         };
         let (budget, limits, defaulted) = budget_of(args);
         let interrupt = self.interrupt.clone();
-        let host = self.host.clone();
         let collector = args
             .filmstrip
             .as_deref()
-            .map(|strip| filmstrip::Collector::new(strip, &host));
+            .map(|strip| filmstrip::Collector::new(strip, &files));
         let oam_log = args.oam_log.then(oam_log::Collector::default);
         let sinks = plan.probes.sinks.as_ref();
         let sink = |m: &Machine, done: u64| {
@@ -247,7 +247,7 @@ impl Handler {
         let shot = args
             .shot
             .as_ref()
-            .map(|s| shot::take(&machine, s, &since, &host));
+            .map(|s| shot::take(&machine, s, &since, &files));
         let answered = self.answered(args, defaulted, guarded, &stop);
         warnings.extend(short_of_target(args, &stop));
         // Step 5, on a copy of the stop; and what the run's sinks collected.
@@ -274,7 +274,7 @@ impl Handler {
             (Some(a), Some(collected)) if so_far => Some(collected.and_then(|c| {
                 let guard = self.wall_guard;
                 let drive = |m: &mut Machine| replay(m, &plan.target, &replay_opts, guard);
-                audio::deliver(a, c, &machine, &since, &host, || {
+                audio::deliver(a, c, &machine, &since, &files, || {
                     audio::takes(replay_from.as_mut(), drive)
                 })
             })),

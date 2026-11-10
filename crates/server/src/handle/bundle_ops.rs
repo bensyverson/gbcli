@@ -130,7 +130,9 @@ mod tests {
         assert!(made.is_ok());
         // Last use is the lock file's mtime (design §1): date it a day back.
         let lock = f.bundle.root().join("locks").join("demo.lock");
-        let day_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(2 * 86_400);
+        // Now is the bundle's clock, as the prune's cut reads it.
+        let two_days_ago = f.bundle.now() - 2 * 86_400;
+        let day_ago = std::time::UNIX_EPOCH + std::time::Duration::from_secs(two_days_ago);
         std::fs::File::options()
             .write(true)
             .open(&lock)

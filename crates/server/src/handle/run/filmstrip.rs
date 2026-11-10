@@ -12,15 +12,15 @@ use gbcli_protocol::{
 use gbcli_view::{Frame, FrameChoice, FrameSource, LabelKey, ViewError};
 
 use super::super::Failure;
-use super::super::build::Host;
-use super::super::shot::{check_image, view_failure, write_atomically};
+use super::super::files::Files;
+use super::super::shot::{check_image, view_failure};
 
 /// A filmstrip's scale when the request gives none: 16 frames already make
 /// a strip 2,575 pixels wide.
 const FILMSTRIP_SCALE: u32 = 1;
 
 /// What can be refused before anything loads.
-pub(super) fn check(args: &FilmstripArgs, host: &Host) -> Result<(), Failure> {
+pub(super) fn check(args: &FilmstripArgs, files: &Files) -> Result<(), Failure> {
     if args.every == 0 {
         return Err(Failure::new(ErrorBody::new(
             ErrorCode::BadRequest,
@@ -31,24 +31,24 @@ pub(super) fn check(args: &FilmstripArgs, host: &Host) -> Result<(), Failure> {
     check_image(
         &args.path,
         Some(args.scale.unwrap_or(FILMSTRIP_SCALE)),
-        host,
+        files,
     )
 }
 
 /// Collects frames as the run passes vblanks.
 pub(super) struct Collector<'a> {
     args: &'a FilmstripArgs,
-    host: &'a Host,
+    files: &'a Files,
     frames: RefCell<Vec<Frame>>,
     beyond_cap: Cell<u64>,
     error: RefCell<Option<ViewError>>,
 }
 
 impl<'a> Collector<'a> {
-    pub(super) fn new(args: &'a FilmstripArgs, host: &'a Host) -> Self {
+    pub(super) fn new(args: &'a FilmstripArgs, files: &'a Files) -> Self {
         Collector {
             args,
-            host,
+            files,
             frames: RefCell::new(Vec::new()),
             beyond_cap: Cell::new(0),
             error: RefCell::new(None),
@@ -125,7 +125,7 @@ impl<'a> Collector<'a> {
             }
         }
         let bytes = image.png().map_err(fail)?;
-        write_atomically(&self.host.resolve(&self.args.path), &bytes)?;
+        self.files.write(&self.args.path, &bytes)?;
         let beyond_cap = self.beyond_cap.get();
         if beyond_cap > 0 {
             warnings.push(format!(

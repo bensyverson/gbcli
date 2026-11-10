@@ -1,40 +1,29 @@
-//! Which ROM and `.sym` files a machine was built from, cheaply rechecked
-//! (design §1): a server keeps a machine warm only while the files on disk
-//! are still the ones it read, so a rebuild is loaded as a fresh process
-//! would load it.
+//! Which ROM and `.sym` a machine was built from, rechecked by content
+//! (design §1): a server keeps a machine warm only while the store still
+//! holds the bytes it read, so a rebuild is loaded as a fresh process would
+//! load it. The stamp hashes what the store returns, so it needs no clock
+//! and no file times, and a backing with neither answers it the same way.
 
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime};
+use std::path::Path;
+use std::sync::Arc;
 
 use gbcli_engine::sha256;
 use gbcli_protocol::{SessionFile, Sha256};
 
+use crate::project_store::{Key, ProjectStore};
 use crate::store::SessionStore;
-
-/// A file written this close to its stamp could be rewritten within the same
-/// mtime tick (two seconds on FAT), so its contents are hashed as well.
-const RACY: Duration = Duration::from_secs(2);
 
 /// The session's ROM and `.sym` as they were when stamped.
 #[derive(Clone, Debug)]
 pub struct FilesStamp {
+    store: Arc<dyn ProjectStore>,
     files: Vec<FileStamp>,
 }
 
 #[derive(Clone, Debug)]
 struct FileStamp {
-    path: PathBuf,
-    seen: Option<Seen>,
-}
-
-/// What a stat (and, when racy, a read) found; `None` above is a file that
-/// couldn't be read.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct Seen {
-    len: u64,
-    modified: SystemTime,
-    /// The contents' hash, kept only while the stamp is racy.
+    key: Key,
+    /// The contents' hash; `None` for a file that couldn't be read.
     digest: Option<Sha256>,
 }
 
@@ -42,81 +31,45 @@ impl SessionStore {
     /// Stamps the files a machine for `meta` is built from. Take it before
     /// reading them: a rebuild between the two then reads as a change.
     pub fn files_stamp(&self, meta: &SessionFile) -> FilesStamp {
-        let mut paths = vec![self.resolve(Path::new(&meta.rom))];
-        paths.extend(meta.sym.as_deref().map(|p| self.resolve(Path::new(p))));
-        FilesStamp {
-            files: paths
-                .into_iter()
-                .map(|path| FileStamp {
-                    seen: look(&path, SystemTime::now()),
-                    path,
-                })
-                .collect(),
-        }
+        let store = self.bundle().store().clone();
+        let mut keys = vec![self.bundle().file_key(Path::new(&meta.rom))];
+        keys.extend(
+            meta.sym
+                .as_deref()
+                .map(|p| self.bundle().file_key(Path::new(p))),
+        );
+        let files = keys
+            .into_iter()
+            .map(|key| FileStamp {
+                digest: digest(store.as_ref(), &key),
+                key,
+            })
+            .collect();
+        FilesStamp { store, files }
     }
 }
 
 impl FilesStamp {
-    /// Whether every file is still the one stamped. A file that couldn't be
-    /// read is never current. A racy stamp that still matches, and is no
-    /// longer racy, drops its hash so later checks are a stat.
+    /// Whether every file still holds the bytes stamped. A file that
+    /// couldn't be read is never current.
     pub fn still_current(&mut self) -> bool {
-        self.files.iter_mut().all(FileStamp::still_current)
+        self.files.iter().all(|file| {
+            file.digest.is_some() && digest(self.store.as_ref(), &file.key) == file.digest
+        })
     }
 }
 
-impl FileStamp {
-    fn still_current(&mut self) -> bool {
-        let Some(seen) = &mut self.seen else {
-            return false;
-        };
-        let Ok(stat) = fs::metadata(&self.path) else {
-            return false;
-        };
-        let Ok(modified) = stat.modified() else {
-            return false;
-        };
-        if stat.len() != seen.len || modified != seen.modified {
-            return false;
-        }
-        let Some(digest) = &seen.digest else {
-            return true;
-        };
-        let same = fs::read(&self.path).is_ok_and(|bytes| sha256(&bytes) == *digest);
-        if same && !racy(modified, SystemTime::now()) {
-            seen.digest = None;
-        }
-        same
-    }
-}
-
-fn look(path: &Path, now: SystemTime) -> Option<Seen> {
-    let stat = fs::metadata(path).ok()?;
-    let modified = stat.modified().ok()?;
-    let digest = if racy(modified, now) {
-        Some(sha256(&fs::read(path).ok()?))
-    } else {
-        None
-    };
-    Some(Seen {
-        len: stat.len(),
-        modified,
-        digest,
-    })
-}
-
-/// Whether a file modified at `modified` could change again, by `now`,
-/// without its mtime changing.
-fn racy(modified: SystemTime, now: SystemTime) -> bool {
-    now.duration_since(modified).map_or(true, |age| age < RACY)
+fn digest(store: &dyn ProjectStore, key: &Key) -> Option<Sha256> {
+    store.get(key).ok().map(|bytes| sha256(&bytes))
 }
 
 #[cfg(test)]
 mod tests {
-    use std::fs::File;
+    use std::fs::{self, File};
+    use std::time::{Duration, SystemTime};
 
     use super::*;
-    use crate::test_fixture::{Fixture, ROM};
+    use crate::test_fixture::{Fixture, ROM, SYM};
 
     fn stamp(f: &Fixture) -> FilesStamp {
         let store = f.demo();
@@ -163,13 +116,27 @@ mod tests {
         assert!(!s.still_current(), "same size and mtime, other bytes");
     }
 
+    /// The stamp is the bytes, not the file's times: a touch that leaves
+    /// them alone builds the same machine, so the warm one stays.
     #[test]
-    fn an_old_file_touched_to_a_new_mtime_is_a_change() {
+    fn a_touch_that_keeps_the_bytes_is_not_a_change() {
         let f = Fixture::new("stamp-mtime");
         let rom = f.root.join("demo.gb");
         set_modified(&rom, SystemTime::now() - Duration::from_secs(3600));
         let mut s = stamp(&f);
         set_modified(&rom, SystemTime::now());
+        assert!(s.still_current());
+    }
+
+    #[test]
+    fn a_sym_rewritten_to_the_same_length_is_a_change() {
+        let f = Fixture::new("stamp-sym");
+        fs::write(f.root.join("demo.sym"), SYM).unwrap();
+        let mut s = stamp(&f);
+        assert!(s.still_current());
+        let edited = SYM.replacen('0', "1", 1);
+        assert_eq!(edited.len(), SYM.len());
+        fs::write(f.root.join("demo.sym"), edited).unwrap();
         assert!(!s.still_current());
     }
 

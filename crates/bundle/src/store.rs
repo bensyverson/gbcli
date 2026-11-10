@@ -1,19 +1,18 @@
-//! One session on disk (design §1): where its files live, its metadata,
-//! listing and removal. Heads and history are in `history.rs`, named
-//! checkpoints in `checkpoints.rs`, the event log in `events.rs`, the lock in `lock.rs`, creation in
-//! `session.rs` and start states in `boot.rs`.
+//! One session in the store (design §1): its keys, its metadata, listing
+//! and removal. Heads and history are in `history.rs`, named checkpoints in
+//! `checkpoints.rs`, the event log in `events.rs`, the lock in `lock.rs`,
+//! creation in `session.rs` and start states in `boot.rs`.
 
-use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use gbcli_protocol::{SessionFile, SessionRow, TimeBase};
 
-use crate::bundle::{Bundle, now_secs, validate_name};
+use crate::bundle::{Bundle, validate_name};
 use crate::error::StoreError;
 use crate::events::EVENTS_ROTATE_AT;
-use crate::io::{atomic_write, dir_size, io_at};
-use crate::session::new_incarnation;
+use crate::project_store::{Key, Kind, ProjectStore};
 
 /// A session directory. `name` is validated when the store is made.
 #[derive(Clone, Debug)]
@@ -51,26 +50,44 @@ impl SessionStore {
         &self.bundle
     }
 
+    pub(crate) fn files(&self) -> &dyn ProjectStore {
+        self.bundle.store().as_ref()
+    }
+
+    pub(crate) fn dir_key(&self) -> Key {
+        self.bundle.sessions_key().join(&self.name)
+    }
+
+    /// Where the store puts the session directory.
     pub fn dir(&self) -> PathBuf {
-        self.bundle.sessions_dir().join(&self.name)
+        self.files().locate(&self.dir_key())
     }
 
     /// Whether the session exists: its `session.json` is there. A directory
     /// without one is not a session.
     pub fn exists(&self) -> bool {
-        self.meta_path().is_file()
+        self.files().kind(&self.meta_key()) == Some(Kind::Blob)
     }
 
-    pub(crate) fn meta_path(&self) -> PathBuf {
-        self.dir().join("session.json")
+    pub(crate) fn is_dir(&self) -> bool {
+        self.files().kind(&self.dir_key()) == Some(Kind::Dir)
     }
 
+    pub(crate) fn meta_key(&self) -> Key {
+        self.dir_key().join("session.json")
+    }
+
+    pub(crate) fn history_key(&self) -> Key {
+        self.dir_key().join("history")
+    }
+
+    pub(crate) fn checkpoints_key(&self) -> Key {
+        self.dir_key().join("checkpoints")
+    }
+
+    #[cfg(test)]
     pub(crate) fn history_dir(&self) -> PathBuf {
-        self.dir().join("history")
-    }
-
-    pub(crate) fn checkpoints_dir(&self) -> PathBuf {
-        self.dir().join("checkpoints")
+        self.files().locate(&self.history_key())
     }
 
     pub(crate) fn no_session(&self) -> StoreError {
@@ -82,35 +99,38 @@ impl SessionStore {
 
     /// The session's metadata; `no_session` when it is missing.
     pub fn read_meta(&self) -> Result<SessionFile, StoreError> {
-        let path = self.meta_path();
-        let text = match fs::read(&path) {
+        let key = self.meta_key();
+        let text = match self.files().get(&key) {
             Ok(bytes) => bytes,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {
                 return Err(self.no_session());
             }
-            Err(source) => return Err(StoreError::Io { path, source }),
+            Err(source) => return Err(self.bundle.io_error(&key, source)),
         };
         serde_json::from_slice(&text).map_err(|e| StoreError::SessionUnreadable {
             name: self.name.clone(),
-            path,
+            path: self.files().locate(&key),
             reason: e.to_string(),
         })
     }
 
     pub fn write_meta(&self, meta: &SessionFile) -> Result<(), StoreError> {
         let bytes = serde_json::to_vec_pretty(meta).expect("session metadata always serializes");
-        atomic_write(&self.meta_path(), &bytes)
+        let key = self.meta_key();
+        self.files()
+            .put(&key, &bytes)
+            .map_err(self.bundle.io_at(&key))
     }
 
     /// Removes the session once it holds the lock, waiting up to `wait`.
     /// Refuses while named checkpoints exist unless `with_checkpoints`. A
     /// directory with no `session.json` can be removed too. The lock file stays.
     pub fn remove(&self, with_checkpoints: bool, wait: Duration) -> Result<(), StoreError> {
-        if !self.dir().is_dir() {
+        if !self.is_dir() {
             return Err(self.no_session());
         }
         let _lock = self.acquire(wait)?;
-        if !self.dir().is_dir() {
+        if !self.is_dir() {
             return Err(self.no_session());
         }
         let checkpoints = self.checkpoint_names()?;
@@ -124,18 +144,22 @@ impl SessionStore {
     }
 
     /// Removes the session directory; the caller holds the lock. The
-    /// directory is first renamed into `removed/`, one atomic step, so a
+    /// directory is first moved into `removed/`, one atomic step, so a
     /// process killed while deleting leaves no part of a session under its
     /// name (a `session.json` without its head). Deleting is then best
     /// effort: what is left goes with the next `rm` or `prune`.
     pub(crate) fn remove_locked(&self) -> Result<(), StoreError> {
         self.bundle.sweep_removed();
-        let dir = self.dir();
-        let removed = self.bundle.removed_dir();
-        fs::create_dir_all(&removed).map_err(io_at(&removed))?;
-        let aside = removed.join(format!("{}-{}", self.name, new_incarnation()));
-        fs::rename(&dir, &aside).map_err(io_at(&dir))?;
-        let _ = fs::remove_dir_all(&aside);
+        let dir = self.dir_key();
+        let removed = self.bundle.removed_key();
+        self.files()
+            .make_dirs(&removed)
+            .map_err(self.bundle.io_at(&removed))?;
+        let aside = removed.join(&format!("{}-{}", self.name, self.files().new_incarnation()));
+        self.files()
+            .rename(&dir, &aside)
+            .map_err(self.bundle.io_at(&dir))?;
+        let _ = self.files().remove_tree(&aside);
         Ok(())
     }
 
@@ -160,24 +184,24 @@ impl SessionStore {
             head_frame,
             head_since,
             rev: meta.rev,
-            size_bytes: dir_size(&self.dir(), &self.checkpoints_dir()),
-            last_used: self.last_used().unwrap_or_else(now_secs),
+            size_bytes: self
+                .bundle
+                .tree_size(&self.dir_key(), &self.checkpoints_key()),
+            last_used: self.last_used().unwrap_or_else(|| self.bundle.now()),
             checkpoints: self.checkpoint_names()?.len(),
         })
     }
 
-    /// The first $150 bytes of the session's ROM file as it is on disk now,
+    /// The first $150 bytes of the session's ROM as it is in the store now,
     /// or `None` when it can't be read: enough for the header, without
     /// reading a whole cart per row.
     fn rom_header(&self, meta: &SessionFile) -> Option<Vec<u8>> {
-        use std::io::Read;
-        let file = fs::File::open(self.resolve(Path::new(&meta.rom))).ok()?;
-        let mut header = Vec::with_capacity(0x150);
-        file.take(0x150).read_to_end(&mut header).ok()?;
-        Some(header)
+        let key = self.bundle.file_key(Path::new(&meta.rom));
+        self.files().get_range(&key, 0, 0x150).ok()
     }
 
-    /// Resolves a stored or given path against the project directory.
+    /// A stored or given path against the project directory, as messages
+    /// name it. Reading goes through [`Bundle::file_key`].
     pub(crate) fn resolve(&self, path: &Path) -> PathBuf {
         if path.is_absolute() {
             path.to_path_buf()
@@ -186,15 +210,10 @@ impl SessionStore {
         }
     }
 
-    /// Stores a path relative to the project when it is inside it.
+    /// A path as `session.json` stores it: its key, relative to the project
+    /// when it is inside it.
     pub(crate) fn stored(&self, path: &Path) -> String {
-        let absolute = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
-        let project = fs::canonicalize(self.bundle.project())
-            .unwrap_or_else(|_| self.bundle.project().to_path_buf());
-        absolute
-            .strip_prefix(&project)
-            .map(|p| p.to_string_lossy().into_owned())
-            .unwrap_or_else(|_| absolute.to_string_lossy().into_owned())
+        self.bundle.file_key(path).as_str().to_string()
     }
 
     /// A path under the session directory, for display.
@@ -214,6 +233,7 @@ impl SessionStore {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
     use std::time::Duration;
 
     use super::*;

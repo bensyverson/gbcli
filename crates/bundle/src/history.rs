@@ -4,22 +4,21 @@
 //! writes leaves an entry no metadata names, which the next save overwrites,
 //! so real history is never lost.
 
-use std::fs;
-use std::path::PathBuf;
+use std::io;
 
 use gbcli_engine::Checkpoint;
 use gbcli_protocol::{Rev, SessionFile, UndoWalk};
 
 use crate::error::StoreError;
-use crate::io::{atomic_write, ensure_dir};
+use crate::project_store::Key;
 use crate::store::SessionStore;
 
 /// Heads kept behind the current one: `~1` through `~8`.
 pub const HISTORY_BACK: u64 = 8;
 
 impl SessionStore {
-    fn history_path(&self, rev: Rev) -> PathBuf {
-        self.history_dir().join(format!("{rev}.gbck"))
+    fn history_entry(&self, rev: Rev) -> Key {
+        self.history_key().join(&format!("{rev}.gbck"))
     }
 
     /// The head at `rev`; `None` at rev 0, which has none.
@@ -27,16 +26,16 @@ impl SessionStore {
         if rev.0 == 0 {
             return Ok(None);
         }
-        let path = self.history_path(rev);
-        match fs::read(&path) {
+        let key = self.history_entry(rev);
+        match self.files().get(&key) {
             Ok(bytes) => Checkpoint::decode(&bytes)
                 .map(Some)
                 .map_err(StoreError::Checkpoint),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(StoreError::HeadMissing {
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Err(StoreError::HeadMissing {
                 name: self.name().to_string(),
                 rev: rev.0,
             }),
-            Err(source) => Err(StoreError::Io { path, source }),
+            Err(source) => Err(self.bundle().io_error(&key, source)),
         }
     }
 
@@ -50,8 +49,14 @@ impl SessionStore {
         rev: Rev,
         walk: Option<&UndoWalk>,
     ) -> Result<(), StoreError> {
-        ensure_dir(&self.history_dir())?;
-        atomic_write(&self.history_path(rev), &cp.encode())?;
+        let dir = self.history_key();
+        self.files()
+            .make_dir(&dir)
+            .map_err(self.bundle().io_at(&dir))?;
+        let key = self.history_entry(rev);
+        self.files()
+            .put(&key, &cp.encode())
+            .map_err(self.bundle().io_at(&key))?;
         self.prune_history(walk.map_or(rev, |w| w.origin.min(rev)));
         Ok(())
     }
@@ -115,14 +120,13 @@ impl SessionStore {
 
     /// Revisions with a stored entry, oldest first.
     pub(crate) fn history_revs(&self) -> Vec<u64> {
-        let Ok(entries) = fs::read_dir(self.history_dir()) else {
+        let Ok(entries) = self.files().list(&self.history_key()) else {
             return Vec::new();
         };
         let mut revs: Vec<u64> = entries
-            .filter_map(Result::ok)
+            .iter()
             .filter_map(|e| {
-                e.file_name()
-                    .to_str()?
+                e.name
                     .strip_suffix(".gbck")?
                     .strip_prefix('s')?
                     .parse()
@@ -146,12 +150,12 @@ impl SessionStore {
     }
 
     /// Drops entries more than [`HISTORY_BACK`] behind `head`. Best effort: an
-    /// entry left behind costs disk, not correctness.
+    /// entry left behind costs space, not correctness.
     fn prune_history(&self, head: Rev) {
         let oldest = head.0.saturating_sub(HISTORY_BACK);
         for rev in self.history_revs() {
             if rev < oldest {
-                let _ = fs::remove_file(self.history_path(Rev(rev)));
+                let _ = self.files().remove(&self.history_entry(Rev(rev)));
             }
         }
     }

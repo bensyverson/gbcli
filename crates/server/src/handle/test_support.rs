@@ -3,10 +3,20 @@
 use gbcli_protocol::{Op, Request, Response, RunArgs};
 
 use super::Handler;
+use crate::Watchdog;
 use crate::fixture::Fixture;
 
+/// A handler as the CLI builds one: the native watchdog, the host in the
+/// project.
 pub(super) fn handler(f: &Fixture) -> Handler {
-    Handler::new(f.bundle.clone(), Some("demo".into()), Some("tester".into()))
+    handler_on(f, "demo")
+}
+
+/// [`handler`], with `session` the default.
+pub(super) fn handler_on(f: &Fixture, session: &str) -> Handler {
+    let watchdog = Watchdog::start().expect("the wall guard's thread");
+    Handler::new(f.host(), f.bundle.clone(), Box::new(watchdog))
+        .with_defaults(Some(session.into()), Some("tester".into()))
 }
 
 pub(super) fn request(op: Op) -> Request {

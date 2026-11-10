@@ -6,7 +6,6 @@
 //! A build that restores nothing refuses the fields only a restore uses
 //! (`session`, `rev`, `allow_rom_change`), rather than ignore them.
 
-use std::ffi::OsString;
 use std::path::PathBuf;
 
 use gbcli_build::{BuildOptions, DoctorInput, Toolchain};
@@ -16,32 +15,9 @@ use gbcli_protocol::{
 };
 
 use super::Handler;
+use super::host::Host;
 use crate::convert;
 use crate::serve::Answer;
-
-/// The machine around the server: where relative paths start, and the
-/// `PATH` RGBDS is found on.
-#[derive(Clone, Debug)]
-pub struct Host {
-    pub cwd: PathBuf,
-    pub path: Option<OsString>,
-}
-
-impl Host {
-    /// This process's working directory and `PATH`.
-    pub fn from_process() -> Host {
-        Host {
-            cwd: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-            path: std::env::var_os("PATH"),
-        }
-    }
-
-    /// A path a request gave, where the server reads or writes it: a
-    /// relative one starts at `cwd`.
-    pub fn resolve(&self, path: impl AsRef<std::path::Path>) -> PathBuf {
-        self.cwd.join(path)
-    }
-}
 
 /// Answers the ops that need no project bundle, for a client with no
 /// `.gbcli/` yet: `doctor`, `new`, `assets`, `opcode`, `version`, and
@@ -311,11 +287,11 @@ fn build(host: &Host, request: &Request, args: &BuildArgs) -> Result<Built, Box<
         );
         return Err(Box::new(Response::failed(id, None, body)));
     }
-    let tools = Toolchain::discover(host.path.as_deref(), &host.cwd)
+    let tools = Toolchain::discover(host.path(), host.cwd())
         .map_err(|e| Box::new(Response::failed(id, None, e.body())))?;
     let warnings = tools.warnings();
-    let project = host.cwd.join(args.dir.as_deref().unwrap_or("."));
-    let mut options = BuildOptions::new(project.clone(), host.cwd.clone());
+    let project = host.resolve(args.dir.as_deref().unwrap_or("."));
+    let mut options = BuildOptions::new(project.clone(), host.cwd().to_path_buf());
     options.src = args.src.iter().map(PathBuf::from).collect();
     options.include = args.include.iter().map(PathBuf::from).collect();
     options.out = args.out.as_ref().map(PathBuf::from);
@@ -325,7 +301,7 @@ fn build(host: &Host, request: &Request, args: &BuildArgs) -> Result<Built, Box<
     })?;
     let rom = made.outputs.first().expect("a good build wrote a ROM");
     let rom = Rom {
-        path: host.cwd.join(&rom.path),
+        path: host.resolve(&rom.path),
         shown: rom.path.clone(),
         project,
         target: args.target,
@@ -367,9 +343,9 @@ fn doctor(host: &Host, id: String) -> Response {
         ("agb", b::AGB),
     ];
     let outcome = gbcli_build::doctor(&DoctorInput {
-        path_var: host.path.as_deref(),
-        cwd: &host.cwd,
-        project: &host.cwd,
+        path_var: host.path(),
+        cwd: host.cwd(),
+        project: host.cwd(),
         boot_roms,
     });
     match outcome {
@@ -386,7 +362,7 @@ fn doctor(host: &Host, id: String) -> Response {
 }
 
 fn new(host: &Host, id: String, args: &NewArgs) -> Response {
-    match gbcli_build::new_project(&host.cwd.join(&args.dir), &host.cwd) {
+    match gbcli_build::new_project(&host.resolve(&args.dir), host.cwd()) {
         Ok(made) => Response::ok(
             id,
             None,

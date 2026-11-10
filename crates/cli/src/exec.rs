@@ -4,7 +4,7 @@ use std::io::{Cursor, Write};
 
 use gbcli_bundle::{Bundle, RomSource, StoreError};
 use gbcli_protocol::{ErrorBody, ErrorCode, Op, Request, Response};
-use gbcli_server::{Answer, Handler, Host, Tooling, serve};
+use gbcli_server::{Answer, Handler, Host, Interrupt, InterruptFlag, Tooling, Watchdog, serve};
 
 use crate::build::Target;
 use crate::{Env, Io, render};
@@ -23,16 +23,33 @@ pub fn request(target: &Target, op: Op, env: &Env, io: Io) -> u8 {
         };
         answer(&mut handler, &request)
     } else {
-        answer(&mut Tooling::new(host(env)), &request)
+        match host(env) {
+            Ok(host) => answer(&mut Tooling::new(host), &request),
+            Err(body) => return render::error(io.err, &body),
+        }
     };
     render::response(&response, target.json, io.out, io.err)
 }
 
-/// Where the server resolves paths and finds RGBDS: the CLI's own.
-fn host(env: &Env) -> Host {
-    Host {
-        cwd: env.cwd.clone(),
-        path: env.path.clone(),
+/// Where the server resolves paths and finds RGBDS: the CLI's own. A
+/// relative working directory (the process's couldn't be read) is refused:
+/// the server would otherwise resolve paths against the project instead.
+fn host(env: &Env) -> Result<Host, Box<ErrorBody>> {
+    Host::new(env.cwd.clone(), env.path.clone()).map_err(|e| {
+        Box::new(ErrorBody::new(
+            ErrorCode::IoFailed,
+            e.to_string(),
+            "run gbcli from a directory that exists, or pass --dir with an absolute path",
+        ))
+    })
+}
+
+/// What ends a request early: the wall guard's thread, or, on a host that
+/// can't start one (wasm32), a flag nothing sets, so the guard never fires.
+fn interrupt() -> Box<dyn Interrupt> {
+    match Watchdog::start() {
+        Ok(watchdog) => Box::new(watchdog),
+        Err(_) => Box::new(InterruptFlag::new()),
     }
 }
 
@@ -77,7 +94,7 @@ pub fn responder(target: &Target, env: &Env) -> Result<Responder, Box<ErrorBody>
     match start_handler(target, env, true) {
         Ok(handler) => Ok(Responder::Bundled(Box::new(handler))),
         Err(Opening::NoBundle(why)) => Ok(Responder::Bare(Box::new(Tooling::without_bundle(
-            host(env),
+            host(env)?,
             named_session(*why, target),
         )))),
         Err(Opening::Refused(body)) => Err(body),
@@ -113,6 +130,8 @@ fn open_handler(target: &Target, env: &Env, opens: bool) -> Result<Handler, Box<
 }
 
 fn start_handler(target: &Target, env: &Env, opens: bool) -> Result<Handler, Opening> {
+    // Before anything is opened or created: a refusal leaves no trace.
+    let host = host(env).map_err(Opening::Refused)?;
     let source = target.create.as_ref().map(|create| RomSource {
         rom: create.rom.clone(),
         sym: create.sym.clone(),
@@ -154,9 +173,8 @@ fn start_handler(target: &Target, env: &Env, opens: bool) -> Result<Handler, Ope
             .open_session(name, source.as_ref())
             .map_err(|e| Opening::Refused(Box::new(store(e))))?;
     }
-    let mut handler = Handler::new(bundle, target.session.clone(), target.actor.clone());
-    handler.set_host(host(env));
-    Ok(handler)
+    Ok(Handler::new(host, bundle, interrupt())
+        .with_defaults(target.session.clone(), target.actor.clone()))
 }
 
 pub fn store(e: StoreError) -> ErrorBody {
@@ -203,4 +221,89 @@ pub fn answer_line<A: Answer>(handler: &mut A, line: &str) -> Response {
 /// Writes, ignoring a closed stream: the exit code still tells the story.
 pub fn emit(w: &mut dyn Write, text: &str) {
     let _ = w.write_all(text.as_bytes());
+}
+
+#[cfg(test)]
+mod tests {
+    use std::ffi::OsString;
+    use std::path::PathBuf;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    use crate::{Env, Io};
+
+    const V1: &[u8] = include_bytes!("../../engine/tests/roms/rebuild_v1.gb");
+
+    /// `gbcli ARGS` in-process: the exit code and stderr.
+    fn gbcli(env: &Env, args: &[&str]) -> (u8, String) {
+        let mut stdin: &[u8] = &[];
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let code = crate::run(
+            args.iter().map(OsString::from).collect(),
+            env,
+            Io {
+                stdin: &mut stdin,
+                out: &mut out,
+                err: &mut err,
+            },
+        );
+        (code, String::from_utf8_lossy(&err).into_owned())
+    }
+
+    fn project(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("gbcli-exec-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("demo.gb"), V1).unwrap();
+        dir
+    }
+
+    /// The CLI starts the watchdog thread: a run of a million frames, which
+    /// takes minutes, ends at its one-second guard. Waited on with a
+    /// timeout, so a guard that never fires fails rather than hangs.
+    #[test]
+    fn a_native_run_still_enforces_its_wall_guard() {
+        let dir = project("wall-guard");
+        let env = Env {
+            cwd: dir.clone(),
+            ..Env::default()
+        };
+        let (sent, got) = mpsc::channel();
+        std::thread::spawn(move || {
+            let args = [
+                "run",
+                "demo.gb",
+                "--session",
+                "g",
+                "--frames",
+                "1000000",
+                "--wall-guard",
+                "1",
+            ];
+            let _ = sent.send(gbcli(&env, &args));
+        });
+        let (code, err) = got
+            .recv_timeout(Duration::from_secs(30))
+            .expect("the guard never fired");
+        assert_eq!(code, 3, "{err}");
+        assert!(err.contains("1s wall guard"), "{err}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_relative_working_directory_is_refused_and_an_absolute_one_answers() {
+        let relative = Env {
+            cwd: PathBuf::from("."),
+            ..Env::default()
+        };
+        let (code, err) = gbcli(&relative, &["version"]);
+        assert_ne!(code, 0);
+        assert!(err.contains("isn't absolute"), "{err}");
+        let absolute = Env {
+            cwd: std::env::temp_dir(),
+            ..Env::default()
+        };
+        let (code, err) = gbcli(&absolute, &["version"]);
+        assert_eq!(code, 0, "{err}");
+    }
 }

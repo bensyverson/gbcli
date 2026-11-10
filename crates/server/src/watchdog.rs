@@ -1,15 +1,21 @@
-//! The wall-clock guard (design §3): one thread per handler, armed for each
-//! request, that sets the request's interrupt flag if the request outlives
-//! its allowance. Emulation polls the flag; the thread is joined on drop.
+//! The wall-clock guard (design §3), the native [`Interrupt`]: one thread
+//! per handler, armed for each request, that sets the request's interrupt
+//! flag if the request outlives its allowance. Emulation polls the flag; the
+//! thread is joined on drop. The caller starts it (the CLI and `serve` do);
+//! the handler only arms it.
 
+use std::io;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+use crate::interrupt::Interrupt;
+
 /// The default allowance: a safety net, not a budget.
 pub const WALL_GUARD: Duration = Duration::from_secs(60);
 
+/// The wall guard's thread.
 pub struct Watchdog {
     shared: Arc<Shared>,
     thread: Option<JoinHandle<()>>,
@@ -28,46 +34,37 @@ struct State {
     shutdown: bool,
 }
 
-/// One request's arming; dropping it disarms the guard.
-pub struct Armed {
-    shared: Arc<Shared>,
-    flag: Arc<AtomicBool>,
-}
-
 impl Watchdog {
-    pub fn new() -> Watchdog {
+    /// Starts the thread; an error when the host can't start one (wasm32).
+    pub fn start() -> io::Result<Watchdog> {
         let shared = Arc::new(Shared::default());
         let thread = {
             let shared = shared.clone();
             std::thread::Builder::new()
                 .name("gbcli-wall-guard".into())
-                .spawn(move || shared.watch())
-                .expect("spawn the wall-guard thread")
+                .spawn(move || shared.watch())?
         };
-        Watchdog {
+        Ok(Watchdog {
             shared,
             thread: Some(thread),
-        }
+        })
     }
+}
 
-    /// Arms the guard: the returned flag is set `after` from now, unless the
-    /// arming is dropped first. A fresh flag per arming, so a late firing can
-    /// never reach the next request.
-    pub fn arm(&self, after: Duration) -> Armed {
+impl Interrupt for Watchdog {
+    /// The returned flag is set `after` from now, unless the guard is
+    /// disarmed or armed again first. A fresh flag per arming, so a late
+    /// firing can never reach the next request.
+    fn arm(&mut self, after: Duration) -> Arc<AtomicBool> {
         let flag = Arc::new(AtomicBool::new(after.is_zero()));
         let deadline = Instant::now() + after;
         self.shared.lock().armed = Some((deadline, flag.clone()));
         self.shared.wake.notify_one();
-        Armed {
-            shared: self.shared.clone(),
-            flag,
-        }
+        flag
     }
-}
 
-impl Default for Watchdog {
-    fn default() -> Self {
-        Watchdog::new()
+    fn disarm(&mut self) {
+        self.shared.lock().armed = None;
     }
 }
 
@@ -77,26 +74,6 @@ impl Drop for Watchdog {
         self.shared.wake.notify_one();
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
-        }
-    }
-}
-
-impl Armed {
-    /// The flag a run polls as its interrupt.
-    pub fn flag(&self) -> &Arc<AtomicBool> {
-        &self.flag
-    }
-}
-
-impl Drop for Armed {
-    fn drop(&mut self) {
-        let mut state = self.shared.lock();
-        if state
-            .armed
-            .as_ref()
-            .is_some_and(|(_, flag)| Arc::ptr_eq(flag, &self.flag))
-        {
-            state.armed = None;
         }
     }
 }
@@ -141,10 +118,10 @@ mod tests {
 
     #[test]
     fn the_flag_is_set_after_the_allowance() {
-        let dog = Watchdog::new();
-        let armed = dog.arm(Duration::from_millis(5));
+        let mut dog = Watchdog::start().unwrap();
+        let flag = dog.arm(Duration::from_millis(5));
         let start = Instant::now();
-        while !armed.flag().load(Ordering::Relaxed) {
+        while !flag.load(Ordering::Relaxed) {
             assert!(start.elapsed() < Duration::from_secs(5), "never fired");
             std::thread::yield_now();
         }
@@ -152,17 +129,25 @@ mod tests {
 
     #[test]
     fn a_disarmed_guard_never_sets_the_flag() {
-        let dog = Watchdog::new();
-        let armed = dog.arm(Duration::from_millis(20));
-        let flag = armed.flag().clone();
-        drop(armed);
+        let mut dog = Watchdog::start().unwrap();
+        let flag = dog.arm(Duration::from_millis(20));
+        dog.disarm();
         std::thread::sleep(Duration::from_millis(60));
         assert!(!flag.load(Ordering::Relaxed));
     }
 
     #[test]
+    fn arming_again_leaves_the_earlier_flag_unset() {
+        let mut dog = Watchdog::start().unwrap();
+        let first = dog.arm(Duration::from_millis(20));
+        let _second = dog.arm(Duration::from_secs(60));
+        std::thread::sleep(Duration::from_millis(60));
+        assert!(!first.load(Ordering::Relaxed));
+    }
+
+    #[test]
     fn a_zero_allowance_is_already_expired() {
-        let dog = Watchdog::new();
-        assert!(dog.arm(Duration::ZERO).flag().load(Ordering::Relaxed));
+        let mut dog = Watchdog::start().unwrap();
+        assert!(dog.arm(Duration::ZERO).load(Ordering::Relaxed));
     }
 }

@@ -12,6 +12,7 @@ mod files;
 mod font;
 mod head;
 mod history;
+mod host;
 mod listing;
 mod log;
 mod memory;
@@ -33,10 +34,12 @@ use gbcli_engine::{LoadOptions, Machine};
 use gbcli_protocol::{ErrorBody, ErrorCode, Op, Request, Response, ResultBody, Rev, SessionFile};
 
 use crate::convert;
-use crate::watchdog::{WALL_GUARD, Watchdog};
-pub use build::{Host, Tooling};
+use crate::interrupt::Interrupt;
+use crate::watchdog::WALL_GUARD;
+pub use build::Tooling;
 use failure::Failure;
 use head::{HeadChange, save_head};
+pub use host::{Host, RelativeCwd};
 
 /// One server side: a project's bundle, a default session and actor, and the
 /// machine kept warm between requests.
@@ -49,19 +52,21 @@ pub struct Handler {
     loaded: Option<Loaded>,
     /// How the current request loads a stored state: its `allow_rom_change`.
     load: LoadOptions,
-    watchdog: Watchdog,
+    /// What the caller supplied to end a request early, armed per request.
+    interrupter: Box<dyn Interrupt>,
     /// The allowance a request gets when it names none (`wall_guard_s`).
     default_wall_guard: Duration,
     /// The current request's allowance: its own, else the default.
     wall_guard: Duration,
-    /// The current request's interrupt flag, which the watchdog sets when
-    /// the request outlives `wall_guard`; runs poll it.
+    /// The current request's interrupt flag, from `interrupter`; runs poll
+    /// it.
     interrupt: Arc<AtomicBool>,
     /// What the core said it can't do during the current request, for the
     /// gap ledger whether the request succeeds or fails (a run's raster
     /// timeline names them without failing).
     gaps_found: Vec<gbcli_core::Gap>,
-    /// Where `build`, `doctor` and `new` resolve paths and find RGBDS.
+    /// Where a request's own paths start, and where `build` and `doctor`
+    /// find RGBDS.
     host: Host,
 }
 
@@ -112,31 +117,34 @@ enum Need {
 }
 
 impl Handler {
-    pub fn new(
-        bundle: Bundle,
-        default_session: Option<String>,
-        default_actor: Option<String>,
-    ) -> Handler {
+    /// A handler over `bundle` (and so its store, filesystem or memory),
+    /// resolving a request's relative paths against `host`'s working
+    /// directory, and arming `interrupt` for each request with its
+    /// allowance. It reads nothing from the process: the caller builds all
+    /// three, and starts a [`crate::Watchdog`] to enforce `wall_guard_s`.
+    pub fn new(host: Host, bundle: Bundle, interrupt: Box<dyn Interrupt>) -> Handler {
         Handler {
             bundle,
-            default_session,
-            default_actor,
+            default_session: None,
+            default_actor: None,
             warm: None,
             loaded: None,
             load: LoadOptions::default(),
-            watchdog: Watchdog::new(),
+            interrupter: interrupt,
             default_wall_guard: WALL_GUARD,
             wall_guard: WALL_GUARD,
             interrupt: Arc::new(AtomicBool::new(false)),
             gaps_found: Vec::new(),
-            host: Host::from_process(),
+            host,
         }
     }
 
-    /// Sets where `build`, `doctor` and `new` resolve paths and find RGBDS;
-    /// the default is this process's working directory and `PATH`.
-    pub fn set_host(&mut self, host: Host) {
-        self.host = host;
+    /// Sets the session and actor a request falls back to when it names
+    /// neither (`serve`'s and `batch`'s request lines).
+    pub fn with_defaults(mut self, session: Option<String>, actor: Option<String>) -> Handler {
+        self.default_session = session;
+        self.default_actor = actor;
+        self
     }
 
     /// Sets the wall-clock guard (design §3) for the requests that follow
@@ -161,8 +169,18 @@ impl Handler {
         self.wall_guard = request
             .wall_guard_s
             .map_or(self.default_wall_guard, |s| Duration::from_secs(s.get()));
-        let armed = self.watchdog.arm(self.wall_guard);
-        self.interrupt = armed.flag().clone();
+        self.interrupt = self.interrupter.arm(self.wall_guard);
+        let response = self.answer_armed(request);
+        self.disarm();
+        response
+    }
+
+    /// Ends the current request's arming.
+    pub(crate) fn disarm(&mut self) {
+        self.interrupter.disarm();
+    }
+
+    fn answer_armed(&mut self, request: &Request) -> Response {
         if let Some(response) = self.toolchain_op(request) {
             return response;
         }
@@ -444,6 +462,9 @@ mod view_tests;
 
 #[cfg(test)]
 mod memory_tests;
+
+#[cfg(test)]
+mod memory_store_tests;
 
 #[cfg(test)]
 mod debugger_tests;

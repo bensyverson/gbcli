@@ -5,11 +5,14 @@
 
 mod convert;
 mod handle;
+mod interrupt;
 mod serve;
 mod watchdog;
 
 #[cfg(test)]
 mod fixture;
 
-pub use handle::{Handler, Host, Tooling};
+pub use handle::{Handler, Host, RelativeCwd, Tooling};
+pub use interrupt::{Interrupt, InterruptFlag};
 pub use serve::{Answer, answer, serve};
+pub use watchdog::Watchdog;

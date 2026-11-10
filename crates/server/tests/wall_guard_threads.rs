@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use gbcli_bundle::{Bundle, RomSource};
 use gbcli_core::Model;
 use gbcli_protocol::{Op, Request, StepArgs, StepKind};
-use gbcli_server::Handler;
+use gbcli_server::{Handler, Host, Watchdog};
 
 const V1: &[u8] = include_bytes!("../../engine/tests/roms/rebuild_v1.gb");
 const STEPS: usize = 1000;
@@ -49,7 +49,10 @@ fn a_thousand_steps_leave_no_threads_behind() {
             flash: None,
         })
         .unwrap();
-    let mut handler = Handler::new(bundle, Some("demo".into()), None);
+    let host = Host::new(dir.clone(), None).unwrap();
+    let watchdog = Watchdog::start().unwrap();
+    let mut handler =
+        Handler::new(host, bundle, Box::new(watchdog)).with_defaults(Some("demo".into()), None);
     let step = Request {
         id: "1".into(),
         session: None,

@@ -6,11 +6,11 @@
 
 use gbcli_protocol::{ErrorBody, FontArgs, FontWritten, Op, Response, ResultBody};
 
-use super::build::Host;
+use super::host::Host;
 
 /// Reads the font `args` names, as `host` sees it.
 pub(super) fn font(host: &Host, id: String, args: &FontArgs) -> Response {
-    match gbcli_build::font(&host.cwd, args) {
+    match gbcli_build::font(host.cwd(), args) {
         Ok(made) => Response::ok(
             id,
             None,
@@ -38,7 +38,7 @@ pub(super) fn is_authoring(op: &Op) -> bool {
 
 /// A font authoring op, from `host`'s working directory.
 pub(super) fn author(host: &Host, id: String, op: &Op) -> Response {
-    let cwd = &host.cwd;
+    let cwd = host.cwd();
     let written = |r: Result<FontWritten, Box<ErrorBody>>| {
         r.map(|w| ResultBody {
             font_written: Some(w),
@@ -68,9 +68,9 @@ mod tests {
     use gbcli_protocol::{ErrorCode, FontArgs, Op};
 
     use super::super::test_support::{handler, request};
-    use crate::fixture::Fixture;
+    use crate::Tooling;
+    use crate::fixture::{Fixture, bare_host};
     use crate::serve::Answer;
-    use crate::{Host, Tooling};
 
     fn op(file: &str) -> Op {
         Op::Font(FontArgs {
@@ -85,12 +85,8 @@ mod tests {
         let f = Fixture::new("font");
         let rows = "    @.\n".repeat(8);
         std::fs::write(f.dir.join("main.yaff"), format!("'i':\n{rows}")).unwrap();
-        let host = || Host {
-            cwd: f.dir.clone(),
-            ..Host::from_process()
-        };
+        let host = || f.host();
         let mut h = handler(&f);
-        h.set_host(host());
         let response = h.handle(&request(op("main.yaff")));
         assert_eq!(response.rev, None, "font names no session");
         let made = response.outcome.expect("ok").font.expect("a font result");
@@ -104,17 +100,13 @@ mod tests {
         let f = Fixture::new("font-author");
         let rows = "    @.\n".repeat(8);
         std::fs::write(f.dir.join("main.yaff"), format!("'i':\n{rows}")).unwrap();
-        let host = || Host {
-            cwd: f.dir.clone(),
-            ..Host::from_process()
-        };
+        let host = || f.host();
         let diff = Op::FontDiff(gbcli_protocol::FontDiffArgs {
             a: "main.yaff".into(),
             b: "main.yaff".into(),
             png: None,
         });
         let mut h = handler(&f);
-        h.set_host(host());
         let made = h.handle(&request(diff.clone())).outcome.expect("ok");
         assert_eq!(made.font_diff.expect("a diff").glyphs, vec![]);
         let edit = Op::FontEdit(gbcli_protocol::FontEditArgs {
@@ -128,7 +120,7 @@ mod tests {
 
     #[test]
     fn a_missing_font_is_font_unreadable() {
-        let bare = Tooling::new(Host::from_process()).answer(&request(op("no/such.yaff")));
+        let bare = Tooling::new(bare_host()).answer(&request(op("no/such.yaff")));
         assert_eq!(
             bare.outcome.expect_err("missing").code,
             ErrorCode::FontUnreadable

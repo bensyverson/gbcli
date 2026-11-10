@@ -11,7 +11,7 @@ use gbcli_protocol::{
 };
 
 use super::Handler;
-use super::test_support::{handler, request, run_frames};
+use super::test_support::{handler, handler_on, request, run_frames};
 use crate::fixture::{Fixture, V2, V2_SYM, V3, V3_SYM};
 
 fn poke(target: &str, byte: u8) -> Op {
@@ -257,7 +257,7 @@ fn a_bank_qualified_poke_writes_that_bank() {
             flash: None,
         })
         .unwrap();
-    let mut h = Handler::new(f.bundle.clone(), Some("cgb".into()), None);
+    let mut h = handler_on(&f, "cgb");
     let written = h.handle(&request(poke("03:D000", 0x5A)));
     assert!(written.is_ok(), "{:?}", written.error());
     let machine = &h.warm.as_ref().expect("kept warm").machine;

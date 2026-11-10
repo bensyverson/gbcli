@@ -16,6 +16,7 @@ mod io;
 mod listing;
 mod lock;
 mod log;
+mod memory_store;
 mod project_store;
 mod prune;
 mod session;
@@ -32,6 +33,7 @@ pub use events::EVENTS_ROTATE_AT;
 pub use file_store::{FileStore, SystemClock};
 pub use history::HISTORY_BACK;
 pub use lock::{LOCK_WAIT, SessionLock};
+pub use memory_store::MemoryStore;
 pub use project_store::{
     ChangeToken, Clock, Entry, Guard, Key, Kind, LockError, ProjectStore, PutAllError,
 };

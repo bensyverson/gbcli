@@ -4,11 +4,11 @@
 
 use gbcli_protocol::{PixelsArgs, Response, ResultBody};
 
-use super::build::Host;
+use super::host::Host;
 
 /// Reads and converts what `args` names, as `host` sees it.
 pub(super) fn pixels(host: &Host, id: String, args: &PixelsArgs) -> Response {
-    match gbcli_build::pixels(&host.cwd, args) {
+    match gbcli_build::pixels(host.cwd(), args) {
         Ok(made) => Response::ok(
             id,
             None,
@@ -26,9 +26,9 @@ mod tests {
     use gbcli_protocol::{ErrorCode, Op, PixelsArgs, PixelsForm};
 
     use super::super::test_support::{handler, request};
-    use crate::fixture::Fixture;
+    use crate::Tooling;
+    use crate::fixture::{Fixture, bare_host};
     use crate::serve::Answer;
-    use crate::{Host, Tooling};
 
     fn op(file: &str) -> Op {
         Op::Pixels(PixelsArgs {
@@ -41,12 +41,8 @@ mod tests {
     fn both_sides_answer_pixels_from_the_hosts_directory_with_no_session() {
         let f = Fixture::new("pixels");
         std::fs::write(f.dir.join("hero.pixels"), gbcli_pixels::EXAMPLE).unwrap();
-        let host = || Host {
-            cwd: f.dir.clone(),
-            ..Host::from_process()
-        };
+        let host = || f.host();
         let mut h = handler(&f);
-        h.set_host(host());
         let response = h.handle(&request(op("hero.pixels")));
         assert_eq!(response.rev, None, "pixels names no session");
         let made = response
@@ -64,7 +60,7 @@ mod tests {
 
     #[test]
     fn a_missing_image_is_pixels_unreadable() {
-        let bare = Tooling::new(Host::from_process()).answer(&request(op("no/such.pixels")));
+        let bare = Tooling::new(bare_host()).answer(&request(op("no/such.pixels")));
         let body = bare.outcome.expect_err("missing");
         assert_eq!(body.code, ErrorCode::PixelsUnreadable);
     }

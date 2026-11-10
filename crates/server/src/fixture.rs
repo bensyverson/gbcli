@@ -7,6 +7,8 @@ use std::path::PathBuf;
 use gbcli_bundle::{Bundle, RomSource};
 use gbcli_core::Model;
 
+use crate::Host;
+
 pub struct Fixture {
     pub dir: PathBuf,
     pub bundle: Bundle,
@@ -159,6 +161,16 @@ impl Fixture {
         fs::write(self.dir.join("demo.gb"), rom).expect("rom");
         fs::write(self.dir.join("demo.sym"), sym).expect("sym");
     }
+
+    /// A host working in the project, with no `PATH`.
+    pub fn host(&self) -> Host {
+        Host::new(self.dir.clone(), None).expect("the temp dir is absolute")
+    }
+}
+
+/// A host for the ops that need no project: the temp directory, no `PATH`.
+pub fn bare_host() -> Host {
+    Host::new(std::env::temp_dir(), None).expect("the temp dir is absolute")
 }
 
 impl Drop for Fixture {

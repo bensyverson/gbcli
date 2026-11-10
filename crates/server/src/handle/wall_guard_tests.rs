@@ -9,6 +9,7 @@ use gbcli_protocol::{ErrorCode, Op, RunArgs, StopReason, WallGuardSeconds};
 
 use super::run::WALL_GUARD_REMEDY;
 use super::test_support::{handler, request, run_frames};
+use crate::InterruptFlag;
 use crate::fixture::Fixture;
 
 fn guarded_run(frames: u64, seconds: u64) -> gbcli_protocol::Request {
@@ -65,6 +66,48 @@ fn a_requests_wall_guard_replaces_the_default_for_that_request_only() {
         .outcome
         .expect_err("the default again");
     assert_eq!(next.code, ErrorCode::WallGuard);
+}
+
+/// A handler whose caller supplies the interrupt and starts no watchdog.
+fn flagged(f: &Fixture) -> (super::Handler, InterruptFlag) {
+    let interrupt = InterruptFlag::new();
+    let h = super::Handler::new(f.host(), f.bundle.clone(), Box::new(interrupt.clone()))
+        .with_defaults(Some("demo".into()), None);
+    (h, interrupt)
+}
+
+#[test]
+fn with_no_watchdog_short_requests_are_answered_and_a_zero_allowance_still_stops() {
+    let f = Fixture::new("guard-flag");
+    let (mut h, _interrupt) = flagged(&f);
+    for _ in 0..3 {
+        let response = run_frames(&mut h, 2);
+        assert!(response.is_ok(), "{:?}", response.error());
+    }
+    h.set_wall_guard(Duration::ZERO);
+    let error = run_frames(&mut h, 2).outcome.expect_err("stopped");
+    assert_eq!(error.code, ErrorCode::WallGuard);
+}
+
+/// The caller ends a request in flight by setting its flag, from another
+/// thread here; the request answers `wall_guard`, and the next one runs.
+#[test]
+fn the_caller_setting_its_flag_ends_the_request_in_flight() {
+    let f = Fixture::new("guard-caller");
+    let (mut h, interrupt) = flagged(&f);
+    assert!(run_frames(&mut h, 1).is_ok(), "past the boot run");
+    let flag = interrupt.flag();
+    let setter = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(50));
+        flag.store(true, std::sync::atomic::Ordering::Relaxed);
+    });
+    let error = run_frames(&mut h, 1_000_000)
+        .outcome
+        .expect_err("the caller stopped it");
+    setter.join().unwrap();
+    assert_eq!(error.code, ErrorCode::WallGuard);
+    let next = run_frames(&mut h, 2);
+    assert!(next.is_ok(), "{:?}", next.error());
 }
 
 /// The request's own allowance arms the guard, and the message names it.

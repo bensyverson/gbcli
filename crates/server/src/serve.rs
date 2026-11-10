@@ -23,6 +23,7 @@ impl Answer for Handler {
 
     fn after_panic(&mut self) {
         self.forget_all_warm();
+        self.disarm();
     }
 }
 
@@ -101,10 +102,16 @@ mod tests {
     use crate::fixture::Fixture;
     use std::io::Cursor;
 
+    fn handler(fixture: &Fixture, session: Option<&str>) -> Handler {
+        let watchdog = crate::Watchdog::start().expect("the wall guard's thread");
+        Handler::new(fixture.host(), fixture.bundle.clone(), Box::new(watchdog))
+            .with_defaults(session.map(str::to_string), None)
+    }
+
     fn run_script(fixture: &Fixture, lines: &[&str]) -> Vec<Response> {
         let input = lines.join("\n") + "\n";
         let mut out = Vec::new();
-        let mut handler = Handler::new(fixture.bundle.clone(), Some("demo".into()), None);
+        let mut handler = handler(fixture, Some("demo"));
         serve(Cursor::new(input), &mut out, &mut handler).unwrap();
         String::from_utf8(out)
             .unwrap()
@@ -173,7 +180,7 @@ mod tests {
         let mut input = b"{\"id\":\"1\",\"op\":\"sh\xFFow\"}\n".to_vec();
         input.extend_from_slice(b"{\"id\":\"2\",\"op\":\"show\"}\n");
         let mut out = Vec::new();
-        let mut handler = Handler::new(fixture.bundle.clone(), Some("demo".into()), None);
+        let mut handler = handler(&fixture, Some("demo"));
         serve(Cursor::new(input), &mut out, &mut handler).unwrap();
         let responses: Vec<Response> = String::from_utf8(out)
             .unwrap()
@@ -247,7 +254,7 @@ mod tests {
         let fixture = Fixture::new("serve-nosession");
         let input = r#"{"id":"1","op":"show"}"#;
         let mut out = Vec::new();
-        let mut handler = Handler::new(fixture.bundle.clone(), None, None);
+        let mut handler = handler(&fixture, None);
         serve(Cursor::new(format!("{input}\n")), &mut out, &mut handler).unwrap();
         let response: Response = serde_json::from_slice(&out).unwrap();
         let error = response.outcome.expect_err("an error");

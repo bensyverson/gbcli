@@ -41,8 +41,9 @@ fn row(f: &Form) -> OpcodeRow {
 mod tests {
     use gbcli_protocol::{Op, OpcodeArgs, Request};
 
+    use crate::Tooling;
+    use crate::fixture::bare_host;
     use crate::serve::Answer;
-    use crate::{Host, Tooling};
 
     fn ask(query: &str) -> gbcli_protocol::Response {
         let request = Request {
@@ -56,7 +57,7 @@ mod tests {
                 query: query.into(),
             }),
         };
-        Tooling::new(Host::from_process()).answer(&request)
+        Tooling::new(bare_host()).answer(&request)
     }
 
     #[test]

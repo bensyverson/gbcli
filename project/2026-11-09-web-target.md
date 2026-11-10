@@ -17,12 +17,12 @@ Lantern's bot (examples/raycaster/tools/bot.py) settled whether driving gbcli fr
 ## What doesn't, today (known debt, not to be fixed for its own sake)
 
 - **Some of what an agent needs lives only in the CLI crate:** the help topics, recipes, primer and per-verb help (`crates/cli/src/help/`), and the rendering of results as rows. A tool-calling agent needs the help as text it can be given, and the results as data, which the protocol already is.
-- **The host comes from the process:** `Host::from_process` reads the working directory and `PATH` (`crates/server/src/handle/build.rs`). That's fine at the edge, but a library caller must be able to pass its own.
+- **The host comes from the process:** `Host::from_process` reads the working directory and `PATH` (`crates/server/src/handle/build.rs`). That's fine at the edge, but a library caller must be able to pass its own. Resolved 2026-11-09 (leaf sBZOk6): `Host::from_process` is gone; `Handler::new` takes the host, the bundle and an interrupt, and `Host::new` refuses a relative working directory. Only the binary reads the process (`Env::from_process`); the entry point is documented in `docs/architecture.md` ▸ `crates/server`.
 
 - **The build runs RGBDS as subprocesses** (`crates/build/src/toolchain.rs`, `project/tool.rs`), and `doctor` reads `PATH` and git.
 - **The bundle store is the filesystem** (`.gbcli/` sessions, checkpoints, caches, `crates/bundle`), with file locks (`crates/bundle/src/lock.rs`).
 - **Font authoring's save decides on files** (`crates/build/src/font_author/`): which glyphs come from the working copy and which comments and properties from the `.yaff` is interleaved with reading and writing them, and the newer-copy check reads file times. The conversions themselves (`gbcli-font`) are data in, data out. Found by review on 2026-11-09 (leaf 2xiOiv); Resolved by that fix: `base::drift` and `save::merged` take data, and only the file reads and writes stay around them (the hash replaced file times).
-- **`serve`'s watchdog is a thread** (`crates/server/src/watchdog.rs`).
+- **`serve`'s watchdog is a thread** (`crates/server/src/watchdog.rs`). Resolved 2026-11-09 (leaf sBZOk6): the thread is one `Interrupt` the caller passes in; the CLI and `serve` start it, and a host with no thread passes an `InterruptFlag` it sets itself. The bundle store has a memory backing too (`MemoryStore`).
 - **Example tools and bots are Python.** That's fine for examples, but it means a bot isn't portable to a web host.
 
 ## What the ruling asks of new work

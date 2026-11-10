@@ -10,7 +10,7 @@ use gbcli_bundle::Bundle;
 use gbcli_protocol::{ErrorBody, ErrorCode};
 
 use super::Failure;
-use super::build::Host;
+use super::host::Host;
 
 /// A request's own paths: resolved by the host, kept by the bundle's store.
 #[derive(Clone, Debug)]

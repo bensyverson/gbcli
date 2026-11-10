@@ -6,11 +6,11 @@
 use gbcli_build::AssetsOptions;
 use gbcli_protocol::{AssetsArgs, Response, ResultBody};
 
-use super::build::Host;
+use super::host::Host;
 
 /// Converts what `args` names, as `host` sees it.
 pub(super) fn assets(host: &Host, id: String, args: &AssetsArgs) -> Response {
-    let options = match AssetsOptions::from_args(args, host.cwd.clone()) {
+    let options = match AssetsOptions::from_args(args, host.cwd().to_path_buf()) {
         Ok(options) => options,
         Err(e) => return Response::failed(id, None, e.body()),
     };
@@ -32,9 +32,9 @@ mod tests {
     use gbcli_protocol::{AssetManifest, AssetsArgs, Op, Response};
 
     use super::super::test_support::{handler, request};
-    use crate::fixture::Fixture;
+    use crate::Tooling;
+    use crate::fixture::{Fixture, bare_host};
     use crate::serve::Answer;
-    use crate::{Host, Tooling};
 
     fn empty_manifest() -> Op {
         Op::Assets(AssetsArgs {
@@ -56,7 +56,7 @@ mod tests {
         let mut h = handler(&f);
         let response = h.handle(&request(empty_manifest()));
         assert_eq!(response.rev, None, "assets names no session");
-        let bare = Tooling::new(Host::from_process()).answer(&request(empty_manifest()));
+        let bare = Tooling::new(bare_host()).answer(&request(empty_manifest()));
         let made = ok(response);
         assert!(made.images.images.is_empty());
         assert_eq!(made, ok(bare));
@@ -69,7 +69,7 @@ mod tests {
             manifest: Some(AssetManifest::default()),
             ..AssetsArgs::default()
         });
-        let response = Tooling::new(Host::from_process()).answer(&request(op));
+        let response = Tooling::new(bare_host()).answer(&request(op));
         let body = response.outcome.expect_err("refused");
         assert_eq!(body.code, gbcli_protocol::ErrorCode::BadRequest);
         assert!(body.remedy.contains("manifest"), "{}", body.remedy);

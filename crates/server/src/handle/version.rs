@@ -25,9 +25,10 @@ mod tests {
     use gbcli_protocol::{Op, PROTOCOL_VERSION, Request, Response, VersionMade};
 
     use super::super::test_support::{handler, request};
+    use crate::Tooling;
     use crate::fixture::Fixture;
+    use crate::fixture::bare_host;
     use crate::serve::Answer;
-    use crate::{Host, Tooling};
 
     fn made(response: Response) -> VersionMade {
         response.outcome.expect("ok").version.expect("a version")
@@ -39,7 +40,7 @@ mod tests {
 
     #[test]
     fn version_answers_without_a_bundle() {
-        let v = made(Tooling::new(Host::from_process()).answer(&version_request()));
+        let v = made(Tooling::new(bare_host()).answer(&version_request()));
         assert_eq!(v.protocol, PROTOCOL_VERSION);
         assert_eq!(v.gbcli, env!("CARGO_PKG_VERSION"));
         assert_eq!(v.sameboy, sameboy_sys::SAMEBOY_COMMIT);
@@ -52,7 +53,7 @@ mod tests {
         let mut h = handler(&f);
         let response = h.handle(&version_request());
         assert_eq!(response.rev, None, "a version names no session");
-        let bare = Tooling::new(Host::from_process()).answer(&version_request());
+        let bare = Tooling::new(bare_host()).answer(&version_request());
         assert_eq!(made(response), made(bare));
     }
 }

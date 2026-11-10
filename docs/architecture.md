@@ -89,4 +89,7 @@ Write one sentence per line (continuation lines indented under their bullet), so
   `--raster` text is one budget of at most 64 lines: 20 writer rows and a `more` row adding up the hidden writers' risky writes, then a 40-row timeline (`render::profile::RASTER_TIMELINE_ROWS`).
   Every server op is a verb;
   `gbcli --help` lists them, and `crates/cli/src/verbs/` holds the table.
+  The help is public as `gbcli_cli::help`, for a library caller with no argv, `Env` or process: `primer()`, `verb(Verb)`, `Topic::text()`, `RECIPES` and `SCHEMA`, with `Verb` and `Topic` looked up by name (`from_name`) or listed (`Verb::all()`, `Topic::ALL`); the CLI prints exactly these strings (`crates/cli/tests/help.rs`).
+  It stays in this crate rather than a crate of its own because the verb table it renders lives here, and the crate already builds for `wasm32` and links into the web spike; a help crate is only worth splitting off for a caller that can't take `gbcli-cli` as a dependency.
+  Everything else in the crate stays private: the verb table's `VerbSpec`, `FlagSpec` and `Class` aren't public, so the table can change without breaking a caller.
 - **`crates/gbcli`**: the binary, and the CLI's golden transcripts (`tests/cli/`).

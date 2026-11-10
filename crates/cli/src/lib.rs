@@ -3,12 +3,15 @@
 //! rows, or the protocol's result object with `--json`. Help, the primer,
 //! recipes and the schema live here too, so all of it is testable without
 //! the binary, which only wires argv, the environment and stdio.
+//!
+//! The public surface is [`run`] for a command line and [`help`] for the
+//! help as text, which a library caller reads with no argv and no [`Env`].
 
 mod argv;
 mod batch;
 mod build;
 mod exec;
-mod help;
+pub mod help;
 mod render;
 mod rgbds;
 mod serve_cmd;
@@ -92,7 +95,7 @@ pub fn run(args: Vec<OsString>, env: &Env, io: Io) -> u8 {
     };
     let printed = match command {
         Command::Primer => io.out.write_all(help::primer().as_bytes()),
-        Command::VerbHelp(spec) => io.out.write_all(help::verb(spec).as_bytes()),
+        Command::VerbHelp(spec) => io.out.write_all(help::verb(spec.verb).as_bytes()),
         Command::Topic(topic) => io.out.write_all(topic.text().as_bytes()),
         Command::Recipes => io.out.write_all(help::RECIPES.as_bytes()),
         Command::Schema => io.out.write_all(help::SCHEMA.as_bytes()),

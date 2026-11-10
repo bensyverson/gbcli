@@ -2,6 +2,7 @@
 //! A test parses every example line with the protocol's own parser, so the
 //! text can't drift from the types.
 
+/// What `gbcli schema` prints: the JSON request grammar.
 pub const SCHEMA: &str = r#"Requests — one JSON object per line, for `gbcli serve` and `gbcli batch -F`.
 
   {"id": TEXT, "session"?: NAME, "as"?: NAME, "rev"?: "sN",

@@ -77,7 +77,8 @@ impl Class {
     }
 }
 
-/// Every verb gbcli has.
+/// Every verb gbcli has. Public as [`crate::help::Verb`], the typed name
+/// a library caller asks for help by.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Verb {
     Run,
@@ -126,6 +127,30 @@ pub enum Verb {
     Version,
     PowerCycle,
     Sav,
+}
+
+impl Verb {
+    /// Every verb, in the verb table's order.
+    pub fn all() -> impl Iterator<Item = Verb> {
+        VERBS.iter().map(|spec| spec.verb)
+    }
+
+    /// As typed: `run`, or `sessions rm`.
+    pub fn name(self) -> &'static str {
+        self.spec().name
+    }
+
+    /// The verb typed as `name` (`run`, `sessions rm`).
+    pub fn from_name(name: &str) -> Option<Verb> {
+        by_name(name).map(|spec| spec.verb)
+    }
+
+    pub(crate) fn spec(self) -> &'static VerbSpec {
+        VERBS
+            .iter()
+            .find(|spec| spec.verb == self)
+            .expect("every verb has an entry in the table")
+    }
 }
 
 /// One flag. `value` names its argument; `None` makes it a switch.

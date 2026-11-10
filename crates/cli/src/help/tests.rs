@@ -48,14 +48,14 @@ fn the_primer_fits_in_40_lines_and_names_every_verb_and_topic() {
 
 #[test]
 fn verb_help_carries_the_class_flags_and_one_example() {
-    let run = verb(crate::verbs::by_name("run").unwrap());
+    let run = render_verb(crate::verbs::by_name("run").unwrap());
     assert!(run.starts_with("gbcli run — "), "{run}");
     assert!(run.contains("CLASS\n  act: "), "{run}");
     assert!(run.contains("  --frames N"), "{run}");
     assert!(run.contains("  -s, --session NAME"), "{run}");
     assert_eq!(run.matches("EXAMPLE").count(), 1);
     for spec in VERBS {
-        let text = verb(spec);
+        let text = render_verb(spec);
         assert!(text.contains(spec.example.0), "{}", spec.name);
         assert!(text.contains(spec.class.name()), "{}", spec.name);
         for flag in spec.all_flags() {
@@ -141,7 +141,7 @@ fn the_recipes_compare_a_build_they_made() {
 /// symbol.
 #[test]
 fn equiv_ram_shows_an_address_with_a_length_and_a_symbol() {
-    let text = verb(crate::verbs::by_name("equiv").unwrap());
+    let text = render_verb(crate::verbs::by_name("equiv").unwrap());
     assert!(text.contains("--ram '$C0A0,4'"), "{text}");
     assert!(text.contains("--ram wPlayerX"), "{text}");
 }
@@ -150,7 +150,7 @@ fn equiv_ram_shows_an_address_with_a_length_and_a_symbol() {
 /// made before it, aren't in it.
 #[test]
 fn the_audio_log_says_it_holds_only_this_runs_writes() {
-    let text = verb(crate::verbs::by_name("run").unwrap());
+    let text = render_verb(crate::verbs::by_name("run").unwrap());
     assert!(text.contains("writes made before the run"), "{text}");
 }
 
@@ -182,11 +182,11 @@ fn the_music_topic_says_the_wave_channel_sounds_an_octave_lower() {
 /// The audio log's filter and summary, and the OAM log, say what they hold.
 #[test]
 fn run_help_describes_the_audio_filter_and_the_oam_log() {
-    let text = verb(crate::verbs::by_name("run").unwrap());
+    let text = render_verb(crate::verbs::by_name("run").unwrap());
     assert!(text.contains("--audio-channel N"), "{text}");
     assert!(text.contains("NR50-NR52"), "{text}");
     assert!(text.contains("--oam-log"), "{text}");
-    let view = verb(crate::verbs::by_name("view").unwrap());
+    let view = render_verb(crate::verbs::by_name("view").unwrap());
     assert!(view.contains("palettes"), "{view}");
 }
 
@@ -195,7 +195,7 @@ fn run_help_describes_the_audio_filter_and_the_oam_log() {
 /// expressions after one --read" (review item E-3).
 #[test]
 fn a_repeatable_flag_shows_one_value_and_says_to_repeat_it() {
-    let run = verb(crate::verbs::by_name("run").unwrap());
+    let run = render_verb(crate::verbs::by_name("run").unwrap());
     let read = run
         .lines()
         .find(|l| l.trim_start().starts_with("--read "))
@@ -226,7 +226,7 @@ fn a_repeatable_flag_shows_one_value_and_says_to_repeat_it() {
 /// budget and audio log say their rows carry frames.
 #[test]
 fn run_help_offers_expect_and_keys_since() {
-    let run = verb(crate::verbs::by_name("run").unwrap());
+    let run = render_verb(crate::verbs::by_name("run").unwrap());
     for needed in [
         "--expect EXPR",
         "exit 1 (predicate_false)",
@@ -248,7 +248,7 @@ fn the_music_topic_shows_scale_for_a_short_clips_spectrogram() {
 /// its address).
 #[test]
 fn run_example_reads_a_variables_byte() {
-    let text = verb(crate::verbs::by_name("run").unwrap());
+    let text = render_verb(crate::verbs::by_name("run").unwrap());
     assert!(text.contains("--read '[wSpriteX]'"), "{text}");
 }
 
@@ -256,7 +256,7 @@ fn run_example_reads_a_variables_byte() {
 /// forms that read what a variable holds.
 #[test]
 fn read_help_says_a_bare_symbol_is_its_address() {
-    let text = verb(crate::verbs::by_name("read").unwrap());
+    let text = render_verb(crate::verbs::by_name("read").unwrap());
     assert!(text.contains("A bare symbol is its address"), "{text}");
     for form in ["[wX]", "u8[wX]", "u16[wX]"] {
         assert!(text.contains(form), "{form}: {text}");
@@ -268,7 +268,7 @@ fn read_help_says_a_bare_symbol_is_its_address() {
 /// both, so neither refusal is a surprise.
 #[test]
 fn view_help_names_the_blocks_it_refuses() {
-    let view = verb(crate::verbs::by_name("view").unwrap());
+    let view = render_verb(crate::verbs::by_name("view").unwrap());
     for word in ["FEA0-FEFF", "refused whole", "area's end"] {
         assert!(view.contains(word), "{word}: {view}");
     }
@@ -278,11 +278,11 @@ fn view_help_names_the_blocks_it_refuses() {
 /// help, read's help (which pointed nowhere for a block), and the schema.
 #[test]
 fn view_memory_is_in_view_help_read_help_and_the_schema() {
-    let view = verb(crate::verbs::by_name("view").unwrap());
+    let view = render_verb(crate::verbs::by_name("view").unwrap());
     for word in ["memory ADDR LEN", "--out FILE", "--allow-uninit", "hexdump"] {
         assert!(view.contains(word), "{word}: {view}");
     }
-    let read = verb(crate::verbs::by_name("read").unwrap());
+    let read = render_verb(crate::verbs::by_name("read").unwrap());
     assert!(read.contains("view memory"), "{read}");
     let schema = crate::help::schema::SCHEMA;
     assert!(schema.contains(r#""memory""#), "the what value");
@@ -299,7 +299,7 @@ fn view_memory_is_in_view_help_read_help_and_the_schema() {
 
 #[test]
 fn measure_help_offers_the_key_timeline() {
-    let text = verb(crate::verbs::by_name("measure").unwrap());
+    let text = render_verb(crate::verbs::by_name("measure").unwrap());
     assert!(text.contains("--keys TOKENS"), "{text}");
     assert!(text.contains("--keys-file FILE"), "{text}");
 }
@@ -308,7 +308,7 @@ fn measure_help_offers_the_key_timeline() {
 /// built a closed-loop bot on it; neither was documented (leaf emtFvQ).
 #[test]
 fn the_help_says_held_keys_carry_over_and_offers_the_bot_recipe() {
-    let run = verb(crate::verbs::by_name("run").unwrap());
+    let run = render_verb(crate::verbs::by_name("run").unwrap());
     assert!(run.contains("stays held into the next run"), "{run}");
     let recipes = RECIPES;
     let bot = recipes
@@ -350,7 +350,7 @@ fn the_de_review_help_items_are_in_place() {
     // stops after its halt and a busy loop in the loop, so the topic must not
     // name $0040 as where a run stops.
     assert!(!time.contains("$0040"), "{time}");
-    let run = verb(crate::verbs::by_name("run").unwrap());
+    let run = render_verb(crate::verbs::by_name("run").unwrap());
     for flag in ["--frames N", "--keys TOKENS"] {
         let at = run
             .lines()
@@ -409,7 +409,7 @@ fn wrap_breaks_at_the_width() {
 #[test]
 fn verb_help_heads_each_flag_group_by_name() {
     let run = VERBS.iter().find(|s| s.name == "run").unwrap();
-    let text = verb(run);
+    let text = render_verb(run);
     for heading in [
         "SHOT FLAGS (how the PNG is taken)",
         "SESSION FLAGS (every session verb)",
@@ -428,7 +428,7 @@ fn the_primer_says_json_prints_the_response_line() {
 
 #[test]
 fn the_scale_flag_states_the_servers_range() {
-    let text = verb(VERBS.iter().find(|s| s.name == "run").unwrap());
+    let text = render_verb(VERBS.iter().find(|s| s.name == "run").unwrap());
     assert!(text.contains("1 to 16"), "{text}");
 }
 
@@ -436,7 +436,7 @@ fn the_scale_flag_states_the_servers_range() {
 /// reaches them, and the help says so.
 #[test]
 fn the_scale_flag_names_the_run_images_it_scales() {
-    let text = verb(VERBS.iter().find(|s| s.name == "run").unwrap());
+    let text = render_verb(VERBS.iter().find(|s| s.name == "run").unwrap());
     assert!(
         text.contains("--filmstrip, --piano and --spectrogram"),
         "{text}"
@@ -447,7 +447,7 @@ fn the_scale_flag_names_the_run_images_it_scales() {
 /// at 1; the flag states both.
 #[test]
 fn the_scale_flag_states_each_run_images_default() {
-    let text = verb(VERBS.iter().find(|s| s.name == "run").unwrap()).replace('\n', " ");
+    let text = render_verb(VERBS.iter().find(|s| s.name == "run").unwrap()).replace('\n', " ");
     let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(text.contains("default 2 for --piano"), "{text}");
     assert!(text.contains("1 for the others"), "{text}");

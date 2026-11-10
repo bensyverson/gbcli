@@ -1,5 +1,20 @@
 //! The primer, each verb's `--help`, the topics, recipes and the schema.
 //! None of it needs a session, a ROM or the network (cli-design ▸ Grammar).
+//!
+//! This is the help's public surface, for a caller that wants the text
+//! without a command line: [`primer`], [`verb`] for a [`Verb`], each
+//! [`Topic`]'s text, [`RECIPES`] and [`SCHEMA`]. The CLI prints exactly
+//! these strings.
+//!
+//! ```
+//! use gbcli_cli::help::{self, Topic, Verb};
+//!
+//! assert!(help::primer().starts_with("gbcli — "));
+//! let run = Verb::from_name("run").unwrap();
+//! assert!(help::verb(run).contains("EXAMPLE"));
+//! assert!(Topic::from_name("time").unwrap().text().starts_with("Time — "));
+//! assert!(!help::RECIPES.is_empty() && !help::SCHEMA.is_empty());
+//! ```
 
 mod flash;
 mod fonts;
@@ -13,6 +28,7 @@ mod schema;
 mod topics;
 mod traps;
 
+pub use crate::verbs::Verb;
 pub use recipes::RECIPES;
 pub use schema::SCHEMA;
 pub use topics::Topic;
@@ -78,7 +94,11 @@ fn title(class: Class) -> &'static str {
 
 /// `gbcli VERB --help`: what it does, its class, its flags and one worked
 /// example.
-pub fn verb(spec: &VerbSpec) -> String {
+pub fn verb(verb: Verb) -> String {
+    render_verb(verb.spec())
+}
+
+fn render_verb(spec: &VerbSpec) -> String {
     let mut out = format!(
         "gbcli {} — {}\n\nUSAGE\n  gbcli {} {}\n\n{}\n\nCLASS\n  {}: {}.\n",
         spec.name,

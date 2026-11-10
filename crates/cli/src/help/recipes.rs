@@ -1,5 +1,6 @@
 //! `gbcli recipes`: goal → command.
 
+/// What `gbcli recipes` prints: goal → command.
 pub const RECIPES: &str = "\
 Recipes — goal → command. Add --session NAME to each, or set GBCLI_SESSION.
 

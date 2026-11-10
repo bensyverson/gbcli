@@ -23,6 +23,7 @@ pub enum Topic {
 }
 
 impl Topic {
+    /// Every topic, in the order the primer lists them.
     pub const ALL: [Topic; 16] = [
         Topic::Addresses,
         Topic::Expressions,
@@ -42,6 +43,7 @@ impl Topic {
         Topic::Flash,
     ];
 
+    /// As typed after `gbcli help`.
     pub fn name(self) -> &'static str {
         match self {
             Topic::Addresses => "addresses",
@@ -67,6 +69,7 @@ impl Topic {
         Topic::ALL.into_iter().find(|t| t.name() == name)
     }
 
+    /// What `gbcli help TOPIC` prints.
     pub fn text(self) -> &'static str {
         match self {
             Topic::Addresses => ADDRESSES,

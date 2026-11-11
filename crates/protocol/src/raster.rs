@@ -44,9 +44,13 @@ pub struct RasterLineRow {
 /// `first_line` 0 and 144 entries in each array; a run that starts or stops
 /// mid-frame has fewer. Entry `i` is line `first_line + i`.
 ///
-/// Each value is the register as that line's mode 3 began. A write during
-/// the line's mode 3 is not in its entry: the rest of that line shows it, and
-/// the write is in the line's row, `mode` drawing; the next line has it.
+/// Each value is the register as that line's first tile fetch began, a few
+/// dots after STAT reads 3. A later write is not in the line's entry: the
+/// rest of that line shows it, the write is in the line's row, `mode`
+/// drawing, and the next line has it. A write in those first few dots also
+/// reports `mode` drawing, but is in the entry, since the line is drawn with
+/// it. The frame after the LCD comes on is listed too, though the core
+/// publishes that frame blank.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RasterFrameScroll {
     /// The same count as [`RasterLineRow::frame`].
@@ -69,7 +73,7 @@ pub struct RasterMade {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub drawn: Vec<RasterFrameScroll>,
     /// What the core can't place, by feature name (`ppu_dot`,
-    /// `ppu_mode_events`); each is also in the gap ledger.
+    /// `ppu_mode_events`, `line_scroll`); each is also in the gap ledger.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub unsupported: Vec<String>,
 }

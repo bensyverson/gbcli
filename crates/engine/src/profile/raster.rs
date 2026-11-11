@@ -1,10 +1,11 @@
 //! The raster timeline: the PPU's lines and the IO-register writes that land
 //! on each, for checking mid-frame and mid-scanline effects. Design §11.
 //!
-//! Rows come from the core's line starts ([`Event::Scanline`]) and each
-//! write's own line ([`Event::IoWrite`]), so a line the core reported no
-//! start for (SameBoy skips line 153 and the first line after the LCD turns
-//! on) still gets a row when something was written on it, with no start.
+//! Rows come from the core's line starts ([`Event::Scanline`]), each write's
+//! own line ([`Event::IoWrite`]) and each drawn line's scroll
+//! ([`Event::LineScroll`]), so a line the core reported no start for (SameBoy
+//! skips line 153 and the first line after the LCD turns on) still gets a
+//! row, with no start, when something was written or drawn on it.
 
 use gbcli_core::{
     Budget, Core, CoreError, Event, EventKinds, EventSink, Feature, Gap, IoReg, PpuMode,
@@ -72,7 +73,7 @@ impl RasterLine {
 pub struct RasterTimeline {
     pub lines: Vec<RasterLine>,
     /// One entry per missing feature ([`Feature::PpuDot`],
-    /// [`Feature::PpuModeEvents`]), for the gap ledger.
+    /// [`Feature::PpuModeEvents`], [`Feature::LineScroll`]), for the gap ledger.
     pub gaps: Vec<Gap>,
 }
 

@@ -52,6 +52,19 @@ fn run_raster_gives_the_scroll_each_visible_line_began_with() {
         .filter(|d| d.first_line == 0 && d.scx.len() == 144)
         .collect();
     assert!(whole.len() >= 2, "{:?}", t.drawn);
+    // The frame after the LCD comes on is whole: SameBoy reports no start for
+    // its line 0, the path this ROM toggles the LCD to reach.
+    let lit = t
+        .rows
+        .iter()
+        .find(|r| r.writes.iter().any(|w| w.reg == "rLCDC" && w.value == 0x91))
+        .expect("the ROM turns the LCD on");
+    let after = t
+        .drawn
+        .iter()
+        .find(|d| d.frame > lit.frame)
+        .expect("a frame");
+    assert_eq!((after.first_line, after.scx.len()), (0, 144));
     // The ROM's three writes landed in the modes the expectation rests on.
     let mode_of = |line: u8, reg: &str| {
         t.rows

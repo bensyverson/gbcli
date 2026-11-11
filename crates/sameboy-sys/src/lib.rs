@@ -382,6 +382,10 @@ pub type GB_lcd_status_callback_t = Option<unsafe extern "C" fn(gb: *mut GB_game
 /// CPU write to `addr`, VRAM in mode 3 or $FE00-$FEFF in modes 2-3.
 pub type gbcli_ignored_write_callback_t =
     Option<unsafe extern "C" fn(gb: *mut GB_gameboy_t, addr: u16)>;
+/// `gbcli_line_scroll_callback_t` (the patched gb.h): visible line `line`
+/// began drawing with this scroll.
+pub type gbcli_line_scroll_callback_t =
+    Option<unsafe extern "C" fn(gb: *mut GB_gameboy_t, line: u8, scx: u8, scy: u8)>;
 
 unsafe extern "C" {
     /// SameBoy calls this at the start of every line but 153 and the first
@@ -394,6 +398,12 @@ unsafe extern "C" {
     pub fn gbcli_set_ignored_write_callback(
         gb: *mut GB_gameboy_t,
         callback: gbcli_ignored_write_callback_t,
+    );
+    /// Called at the start of each visible line's mode 3 (the line-scroll
+    /// patch), from inside the display run.
+    pub fn gbcli_set_line_scroll_callback(
+        gb: *mut GB_gameboy_t,
+        callback: gbcli_line_scroll_callback_t,
     );
     /// The display's own line, or -1 with the LCD off.
     pub fn gbcli_ppu_line(gb: *mut GB_gameboy_t) -> c_int;

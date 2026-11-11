@@ -337,6 +337,18 @@ pub struct ShadeChoice {
     pub palette: Option<KnownPalette>,
 }
 
+/// A named palette as the DMG shows it, by the project's [`ShadeChoice`], so
+/// a palette and the art agree on what a color's shade is.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DmgPalette {
+    /// The palette's name in [`crate::NamedPalette`].
+    pub name: String,
+    /// What to write to BGP (or an OBP, whose index 0 is never drawn): entry
+    /// `i`'s shade in bits `2i` and `2i + 1`. Two entries may share a shade;
+    /// the byte says so and nothing warns, since BGP allows it.
+    pub byte: u8,
+}
+
 /// One image, converted. On read, its tile map must agree with it
 /// (`asset::Unchecked`): one entry a cell, or none on a DMG image; a tile
 /// it has in each, a sheet unit's even; a slot in every entry exactly when
@@ -404,6 +416,11 @@ pub struct ImagesMade {
     /// build stopped before choosing (a bad `assets/palettes.txt`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shades: Option<ShadeChoice>,
+    /// Each named palette as DMG shades, in the palettes' order, whether or
+    /// not an image uses it; empty when the project names none or the build
+    /// stopped before choosing `shades`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dmg_palettes: Vec<DmgPalette>,
     /// What the images share on the GBC, when the target is the GBC.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gbc: Option<GbcImagesMade>,

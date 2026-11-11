@@ -289,6 +289,8 @@ typedef void (*GB_lcd_status_callback_t)(GB_gameboy_t *gb, bool on);
 /* gbcli: a CPU write the PPU ignored, to VRAM while VRAM is blocked (mode 3)
    or to $FE00-$FEFF while OAM is blocked (modes 2-3). */
 typedef void (*gbcli_ignored_write_callback_t)(GB_gameboy_t *gb, uint16_t addr);
+/* gbcli: the PPU is starting to draw visible line `line` with this scroll. */
+typedef void (*gbcli_line_scroll_callback_t)(GB_gameboy_t *gb, uint8_t line, uint8_t scx, uint8_t scy);
 
 struct GB_breakpoint_s;
 struct GB_watchpoint_s;
@@ -752,6 +754,9 @@ struct GB_gameboy_internal_s {
            unset (gbcli_set_ignored_write_callback). Observation only: no
            state depends on it. */
         gbcli_ignored_write_callback_t ignored_write_callback;
+        /* gbcli: called from display.c at mode 3's start; NULL when unset
+           (gbcli_set_line_scroll_callback). Observation only. */
+        gbcli_line_scroll_callback_t line_scroll_callback;
                
 #ifndef GB_DISABLE_DEBUGGER
         /*** Debugger ***/

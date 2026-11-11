@@ -10,7 +10,7 @@ use std::path::Path;
 
 use gbcli_build::{AssetsInput, AssetsOptions, BuildOptions, assets, build};
 use gbcli_protocol::{
-    AssetManifest, BuildTarget, ErrorCode, ImageArt, ImageKind, ImageLimit, ImagesMade,
+    AssetManifest, BuildTarget, DmgPalette, ErrorCode, ImageArt, ImageKind, ImageLimit, ImagesMade,
     ManifestImage, NamedPalette, NamedPalettes, Rgb555,
 };
 
@@ -210,6 +210,73 @@ fn a_manifest_with_named_palettes_and_a_tileset_converts_without_a_project() {
             "tiles/font.preview.png"
         ]
     );
+}
+
+/// LoadHigh's ask: each named palette's DMG byte, used by an image or not,
+/// and with no images at all.
+#[test]
+fn every_named_palette_comes_back_as_its_dmg_byte() {
+    let color = |c: u32| Rgb555::from_rgb888((c >> 16) as u8, (c >> 8) as u8, c as u8);
+    let grays = gbcli_protocol::GbcPalette([0xFFFFFF, 0xAAAAAA, 0x555555, 0].map(color));
+    let inverted = gbcli_protocol::GbcPalette([0, 0x555555, 0xAAAAAA, 0xFFFFFF].map(color));
+    let palettes = NamedPalettes {
+        dmg: Some(grays),
+        palettes: vec![
+            NamedPalette {
+                name: "inverted".into(),
+                colors: inverted,
+            },
+            NamedPalette {
+                name: "plain".into(),
+                colors: grays,
+            },
+        ],
+        ..NamedPalettes::default()
+    };
+    let bytes = vec![
+        DmgPalette {
+            name: "inverted".into(),
+            byte: 0x1B,
+        },
+        DmgPalette {
+            name: "plain".into(),
+            byte: 0xE4,
+        },
+    ];
+
+    let temp = Temp::new("assets-dmg-bytes");
+    write_png(&temp.path("art/a.png"), 8, 8, |x, _| {
+        if x < 4 { BLACK } else { WHITE }
+    });
+    let with_image = AssetManifest {
+        images: vec![ManifestImage {
+            image: "tiles/a.png".into(),
+            file: "art/a.png".into(),
+            dmg: None,
+        }],
+        palettes: palettes.clone(),
+        objects: None,
+        fonts: Vec::new(),
+    };
+    let made = assets(&AssetsOptions::new(
+        AssetsInput::Manifest(with_image),
+        temp.0.clone(),
+    ))
+    .unwrap();
+    assert_eq!(made.images.dmg_palettes, bytes);
+
+    let no_images = AssetManifest {
+        images: Vec::new(),
+        palettes,
+        objects: None,
+        fonts: Vec::new(),
+    };
+    let made = assets(&AssetsOptions::new(
+        AssetsInput::Manifest(no_images),
+        temp.0.clone(),
+    ))
+    .unwrap();
+    assert_eq!(made.images.dmg_palettes, bytes);
 }
 
 fn gbc_preview(images: &ImagesMade) -> Option<&str> {

@@ -41,6 +41,8 @@ pub enum Feature {
     EventSinks,
     /// Scanline and IO-write events on a run (the raster timeline).
     RasterEvents,
+    /// The scroll each visible line began drawing with, as events on a run.
+    LineScroll,
     /// PPU mode transitions as events on a run, each at the time it happened.
     PpuModeEvents,
     /// The live, partly drawn framebuffer (`Core::live_frame`).
@@ -88,6 +90,7 @@ impl Feature {
             Feature::Mmm01RomPatch => "mmm01_rom_patch",
             Feature::EventSinks => "event_sinks",
             Feature::RasterEvents => "raster_events",
+            Feature::LineScroll => "line_scroll",
             Feature::PpuModeEvents => "ppu_mode_events",
             Feature::LiveFrame => "live_frame",
             Feature::DisplayColors => "display_colors",

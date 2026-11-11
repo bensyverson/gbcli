@@ -1,0 +1,46 @@
+gbcli's line-scroll patch for SameBoy ea667ad (leaf EnbBKc).
+
+Observation only: display.c calls an optional callback as a visible line's
+mode 3 begins, with SCX and SCY as they stand, so the raster report can say
+what each line was drawn with without inferring it from a write's mode. gb.h
+declares the callback type and holds the pointer in the unsaved section, so
+no save state changes; gbcli's shim sets it (gbcli_set_line_scroll_callback).
+With no callback set, the work left is a null test once a line.
+
+Applied by scripts/vendor-sameboy.sh after re-vendoring, after
+mode-blocked-writes.patch (name order). The vendored tree in this repository
+already has it applied, so a normal build needs no patch step. Rebase it (do
+not drop it) if SameBoy's commit moves.
+--- a/crates/sameboy-sys/SameBoy/Core/display.c
++++ b/crates/sameboy-sys/SameBoy/Core/display.c
+@@ -1873,6 +1873,9 @@ void GB_display_run(GB_gameboy_t *gb, unsigned cycles, bool force)
+             GB_SLEEP(gb, display, 32, 2);
+         mode_3_start:
+             gb->disable_window_pixel_insertion_glitch = false;
++            if (gb->line_scroll_callback) {
++                gb->line_scroll_callback(gb, gb->current_line, gb->io_registers[GB_IO_SCX], gb->io_registers[GB_IO_SCY]);
++            }
+ 
+             fifo_clear(&gb->bg_fifo);
+             fifo_clear(&gb->oam_fifo);
+--- a/crates/sameboy-sys/SameBoy/Core/gb.h
++++ b/crates/sameboy-sys/SameBoy/Core/gb.h
+@@ -289,6 +289,8 @@ typedef void (*GB_lcd_status_callback_t)(GB_gameboy_t *gb, bool on);
+ /* gbcli: a CPU write the PPU ignored, to VRAM while VRAM is blocked (mode 3)
+    or to $FE00-$FEFF while OAM is blocked (modes 2-3). */
+ typedef void (*gbcli_ignored_write_callback_t)(GB_gameboy_t *gb, uint16_t addr);
++/* gbcli: the PPU is starting to draw visible line `line` with this scroll. */
++typedef void (*gbcli_line_scroll_callback_t)(GB_gameboy_t *gb, uint8_t line, uint8_t scx, uint8_t scy);
+ 
+ struct GB_breakpoint_s;
+ struct GB_watchpoint_s;
+@@ -752,6 +754,9 @@ struct GB_gameboy_internal_s {
+            unset (gbcli_set_ignored_write_callback). Observation only: no
+            state depends on it. */
+         gbcli_ignored_write_callback_t ignored_write_callback;
++        /* gbcli: called from display.c at mode 3's start; NULL when unset
++           (gbcli_set_line_scroll_callback). Observation only. */
++        gbcli_line_scroll_callback_t line_scroll_callback;
+                
+ #ifndef GB_DISABLE_DEBUGGER
+         /*** Debugger ***/

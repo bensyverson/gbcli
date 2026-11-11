@@ -312,6 +312,7 @@ mod tests {
             frames: 1,
             lines: 154,
             rows,
+            drawn: Vec::new(),
             unsupported: vec!["ppu_dot".into()],
         });
         let lines: Vec<&str> = text.lines().collect();
@@ -364,6 +365,7 @@ mod tests {
                     writes,
                 })
                 .collect(),
+            drawn: Vec::new(),
             unsupported: Vec::new(),
         }
     }

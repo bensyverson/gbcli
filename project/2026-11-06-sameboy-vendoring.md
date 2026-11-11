@@ -8,6 +8,8 @@
 
 > **Correction, 2026-11-06 (leaf n2WX5r): `Core/` is no longer unmodified.** It carries one observation-only patch of ours, [the layer-identity patch](#gbclis-layer-identity-patch), applied by `scripts/vendor-sameboy.sh`. Everything else is still upstream's.
 >
+> **Update, 2026-11-10 (leaf EnbBKc): a third observation-only patch,** `crates/sameboy-sys/patches/raster-line-scroll.patch`, calls an optional callback at `mode_3_start` with the line, SCX and SCY, for `RasterMade::drawn`. Its pointer sits in the unsaved section, so no save state changes, but the patch-set hash does: a checkpoint from before it is refused as a mismatch.
+
 > **Update, 2026-11-09 (leaf si5fnG): a second observation-only patch,** [the mode-blocked-writes patch](#gbclis-mode-blocked-writes-patch), reports the CPU writes the PPU ignores. It adds no saved state, but like any patch it changes the core identity, so states saved by earlier builds are refused ([The core identity](#the-core-identity)).
 
 **Why this commit:** it was the latest `master` when the scaffold was built (a `git clone --depth 1` on 2026-11-06 resolved to it), and it is the commit the backend evaluation read and measured, so every line reference and measured figure in [2026-11-06-backend-evaluation.md](2026-11-06-backend-evaluation.md) applies to the vendored code as is.

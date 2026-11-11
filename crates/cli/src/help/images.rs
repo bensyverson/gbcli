@@ -45,8 +45,10 @@ first rule that applies:
                 0 and its darkest shade 3, then the nearest shade (nearest:
                 one lightness only, so nothing to stretch)
 The images row says which: shades=declared|known|stretched|nearest, and
-palette= for a known one. Colors in one shade draw alike, with a
-shared_shade warning. Color art's, in a plain build, warns once a shade
+palette= for a known one. With --json, images.dmg_palettes gives each named
+palette as the byte for BGP or an OBP, by the same rule, used by art or not.
+Colors in one shade draw alike, with a shared_shade warning. Color art's,
+in a plain build, warns once a shade
 for colors that share it anywhere in the image; under --gbc, whose color
 version keeps them apart, once per image, only for two in one tile (a
 sheet: one object). Indexed art (and a .dmg.png) warns once a shade for

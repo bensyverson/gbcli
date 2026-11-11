@@ -73,6 +73,7 @@ pub(crate) fn support(feature: Feature) -> Support {
         Feature::Mmm01RomPatch => "MMM01 rotates its ROM in memory, so file offsets don't map",
         Feature::EventSinks => return Support::Yes,
         Feature::RasterEvents => return Support::Yes,
+        Feature::LineScroll => return Support::Yes,
         Feature::PpuModeEvents => {
             "SameBoy has no PPU mode callback, so a mode change can't be timed; each \
              raster write carries the mode it landed in instead"

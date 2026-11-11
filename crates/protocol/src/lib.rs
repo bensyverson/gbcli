@@ -66,9 +66,9 @@ pub use font_author::{
 };
 pub use ignored::IgnoredWritesRow;
 pub use images::{
-    Flip, GbcImage, GbcImagesMade, ImageArt, ImageAsset, ImageKind, ImageLimit, ImageProblem,
-    ImagesMade, KnownPalette, NotPaletteSlot, ObjectSize, PaletteSlot, ShadeChoice, ShadeRule,
-    TileAt, TileEntry,
+    DmgPalette, Flip, GbcImage, GbcImagesMade, ImageArt, ImageAsset, ImageKind, ImageLimit,
+    ImageProblem, ImagesMade, KnownPalette, NotPaletteSlot, ObjectSize, PaletteSlot, ShadeChoice,
+    ShadeRule, TileAt, TileEntry,
 };
 pub use keys::{Button, KEY_GRAMMAR, KeyAction, KeyError, KeyEvent, parse_keys};
 pub use listing::{CheckpointRow, SymArgs, SymbolArea, SymbolRow};
@@ -85,7 +85,7 @@ pub use profile::{
     CpuSpeedName, CycleStats, FrameBudgetMade, FrameBudgetRow, LagRun, MeasureArgs, MeasureMade,
     PercentStats, ProfileArgs, ProfileMade, Real, RoutineRow, RunMeasure,
 };
-pub use raster::{RasterLineRow, RasterMade, RasterWriteRow, RasterWriter};
+pub use raster::{RasterFrameScroll, RasterLineRow, RasterMade, RasterWriteRow, RasterWriter};
 pub use request::{
     BreakArgs, CheckpointArgs, DeleteArgs, EventsArgs, Op, PruneArgs, ReadArgs, Request,
     RestoreArgs, RmArgs, RunArgs, Start, StepArgs, WatchArgs, WriteArg, WriteArgs, WriteKind,

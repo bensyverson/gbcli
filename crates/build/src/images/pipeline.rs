@@ -70,10 +70,17 @@ pub(crate) fn convert(
         stopped: true,
     };
     if sources.is_empty() {
+        // A client may ask `assets` for its palettes' bytes alone; a build
+        // with no images reports no images.
+        if place.generated.is_none() && !named_palettes.palettes.is_empty() {
+            let shading = shades::choose(&palettes, named_palettes.dmg.as_ref(), &[]);
+            made.shades = Some(shading.choice);
+            made.dmg_palettes = shading.named(&named_palettes.palettes);
+        }
         // No images to shade, but a malformed palette file is still the
         // project's mistake to hear about.
         made.problems.extend(font_problems);
-        if made.problems.is_empty() && fonts.is_empty() {
+        if made.problems.is_empty() && fonts.is_empty() && made.dmg_palettes.is_empty() {
             return Ok(None);
         }
         let stops = made.first_error().is_some();
@@ -186,6 +193,7 @@ pub(crate) fn convert(
     }));
     let shading = shades::choose(&palettes, named_palettes.dmg.as_ref(), &colors);
     made.shades = Some(shading.choice);
+    made.dmg_palettes = shading.named(&named_palettes.palettes);
     // Colors shared across images are named only among DMG art: a derived
     // version's shares are its own image's (a plain build) or its tiles'
     // and objects' (--gbc, plan question 2), in `derive`.

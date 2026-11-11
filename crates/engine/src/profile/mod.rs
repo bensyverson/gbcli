@@ -12,7 +12,9 @@ mod routines_tests;
 
 pub use frames::{FrameBudget, FrameSplit};
 pub use measure::{Leg, MeasureError, MeasureSpec, Measurement, Stats};
-pub use raster::{ModeChange, Raster, RasterLine, RasterRun, RasterTimeline, RasterWrite};
+pub use raster::{
+    LineScroll, ModeChange, Raster, RasterLine, RasterRun, RasterTimeline, RasterWrite,
+};
 pub use routines::{Entry, Profile, RoutineCost, Routines, ShadowStats};
 
 use gbcli_core::{Core, Ticks};

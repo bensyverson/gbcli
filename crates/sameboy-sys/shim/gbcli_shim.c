@@ -73,6 +73,13 @@ void gbcli_set_ignored_write_callback(GB_gameboy_t *gb, gbcli_ignored_write_call
     gb->ignored_write_callback = callback;
 }
 
+// The callback the line-scroll patch calls as each visible line's mode 3
+// begins; NULL removes it.
+void gbcli_set_line_scroll_callback(GB_gameboy_t *gb, gbcli_line_scroll_callback_t callback)
+{
+    gb->line_scroll_callback = callback;
+}
+
 // Whether the vblank ending now belongs to the blank frame SameBoy substitutes
 // after the LCD is turned on: display.c scrubs the screen to the LCD-off colour
 // at that vblank, then clears the state. Read from inside the vblank callback,

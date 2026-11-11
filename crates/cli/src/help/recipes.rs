@@ -95,6 +95,11 @@ Find who writes a variable
   with budget_exhausted if none comes in 600 frames)
 Stop at a routine only in some cases
   gbcli break Main.loop --if 'a == 3', then gbcli run
+What scroll was each line drawn with?
+  gbcli run --frames 2 --raster --json: result.raster.drawn has one entry a
+  frame, {frame, first_line, scx: [...], scy: [...]}, entry i for line
+  first_line + i, each the register as that line's drawing began. A write
+  during the line's drawing shows on the rest of it, and the next line has it.
 Does every scroll or palette write land in HBlank?
   gbcli run --frames 2 --raster (mode= on each IO write is the mode it landed
   in: hblank, oam_scan, drawing or vblank; none where the emulator can't

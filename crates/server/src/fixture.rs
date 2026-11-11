@@ -33,6 +33,7 @@ pub const JOYPAD: &[u8] = include_bytes!("../../engine/tests/roms/joypad.gb");
 /// 144 (`raster.asm`).
 pub const RASTER: &[u8] = include_bytes!("../../engine/tests/roms/raster.gb");
 pub const RASTER_SYM: &str = include_str!("../../engine/tests/roms/raster.sym");
+pub const SCROLL_LINES: &[u8] = include_bytes!("../../engine/tests/roms/scroll_lines.gb");
 /// Executes STOP with the direction row selected, so only a direction key
 /// wakes it (`stop_wake.asm`).
 pub const STOP_WAKE: &[u8] = include_bytes!("../../sameboy/tests/roms/stop_wake.gb");

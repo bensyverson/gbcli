@@ -15,7 +15,9 @@
 
 use std::collections::HashMap;
 
-use gbcli_protocol::{GbcPalette, KnownPalette, ShadeChoice, ShadeRule};
+use gbcli_protocol::{
+    DmgPalette, GbcPalette, KnownPalette, NamedPalette, Rgb555, ShadeChoice, ShadeRule,
+};
 
 use super::census::{Key, key};
 use super::input::PaletteSource;
@@ -51,6 +53,31 @@ pub(crate) struct Shading {
     /// Where the palettes came from, whose `dmg` setting a remedy names.
     pub source: PaletteSource,
     by_key: HashMap<Key, u8>,
+    mapping: Mapping,
+}
+
+/// What a rule makes of a color, including one no image has.
+#[derive(Clone, Copy, Debug)]
+enum Mapping {
+    /// The nearest of four colors, shade 0 first (declared and known).
+    Entries(GbcPalette),
+    /// Lightness over the art's range; a color past either end takes that
+    /// end's shade.
+    Stretched { lightest: u32, darkest: u32 },
+    /// The plain nearest shade of its lightness.
+    Lightness,
+}
+
+impl Mapping {
+    fn shade(self, c: Rgba) -> u8 {
+        match self {
+            Mapping::Entries(entries) => nearest_entry(&entries, c),
+            Mapping::Stretched { lightest, darkest } => {
+                round_shade(lightest.saturating_sub(luminance(c)), lightest - darkest).min(3)
+            }
+            Mapping::Lightness => nearest(c),
+        }
+    }
 }
 
 /// A color the stretch put two or more shades from its plain nearest one.
@@ -72,6 +99,34 @@ impl Shading {
     /// The shade of `c`, a color `choose` was given (by RGB555).
     pub fn shade(&self, c: Rgba) -> u8 {
         self.by_key[&key(c)]
+    }
+
+    /// `palette`'s entries as one BGP byte: entry `i`'s shade in bits `2i`
+    /// and `2i + 1`.
+    pub fn palette_byte(&self, palette: &GbcPalette) -> u8 {
+        (0..4).fold(0, |byte, i| byte | self.any(palette.0[i]) << (2 * i))
+    }
+
+    /// The named palettes as DMG bytes, in their order.
+    pub fn named(&self, palettes: &[NamedPalette]) -> Vec<DmgPalette> {
+        palettes
+            .iter()
+            .map(|p| DmgPalette {
+                name: p.name.clone(),
+                byte: self.palette_byte(&p.colors),
+            })
+            .collect()
+    }
+
+    /// The shade of any color: an art color's own, so a palette and the art
+    /// can't disagree, else what the project's rule makes of it.
+    fn any(&self, c: Rgb555) -> u8 {
+        let [r, g, b] = c.to_rgb888();
+        let c = [r, g, b, 0xFF];
+        self.by_key
+            .get(&key(c))
+            .copied()
+            .unwrap_or_else(|| self.mapping.shade(c))
     }
 
     /// Whether the stretch moved `c` far from its nearest shade (Ben's
@@ -99,34 +154,40 @@ pub(crate) fn choose(
     declared: Option<&GbcPalette>,
     colors: &[Rgba],
 ) -> Shading {
-    let shading = |rule, palette, shade: &dyn Fn(Rgba) -> u8| Shading {
+    let shading = |rule, palette, mapping: Mapping| Shading {
         choice: ShadeChoice { rule, palette },
         source: source.clone(),
-        by_key: colors.iter().map(|&c| (key(c), shade(c))).collect(),
+        by_key: colors.iter().map(|&c| (key(c), mapping.shade(c))).collect(),
+        mapping,
     };
     if let Some(entries) = declared {
-        return shading(ShadeRule::Declared, None, &|c| nearest_entry(entries, c));
+        return shading(ShadeRule::Declared, None, Mapping::Entries(*entries));
     }
     // Without colors no palette holds them: the plain nearest rule, rather
     // than a known palette by vacuous truth.
     if colors.is_empty() {
-        return shading(ShadeRule::Nearest, None, &nearest);
+        return shading(ShadeRule::Nearest, None, Mapping::Lightness);
     }
     for p in KnownPalette::ALL {
-        let keys = known_colors(p).map(|hex| key(rgba(hex)));
+        let entries = GbcPalette(known_colors(p).map(|hex| {
+            let [r, g, b, _] = rgba(hex);
+            Rgb555::from_rgb888(r, g, b)
+        }));
+        let keys = entries.0.map(Rgb555::channels);
         if colors.iter().all(|&c| keys.contains(&key(c))) {
-            let shade = |c| keys.iter().position(|&k| k == key(c)).unwrap() as u8;
-            return shading(ShadeRule::Known, Some(p), &shade);
+            return shading(ShadeRule::Known, Some(p), Mapping::Entries(entries));
         }
     }
     let lightest = colors.iter().map(|&c| luminance(c)).max().unwrap_or(0);
     let darkest = colors.iter().map(|&c| luminance(c)).min().unwrap_or(0);
     if lightest == darkest {
-        return shading(ShadeRule::Nearest, None, &nearest);
+        return shading(ShadeRule::Nearest, None, Mapping::Lightness);
     }
-    shading(ShadeRule::Stretched, None, &|c| {
-        round_shade(lightest - luminance(c), lightest - darkest)
-    })
+    shading(
+        ShadeRule::Stretched,
+        None,
+        Mapping::Stretched { lightest, darkest },
+    )
 }
 
 /// `dark` of `span` as the nearest of shades 0-3.
@@ -156,7 +217,6 @@ pub(crate) fn name(shade: u8) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gbcli_protocol::Rgb555;
 
     fn file() -> PaletteSource {
         PaletteSource::File("assets/palettes.txt".into())
@@ -192,6 +252,61 @@ mod tests {
             rule: ShadeRule::Known,
             palette: Some(p),
         }
+    }
+
+    fn palette(colors: [Rgba; 4]) -> GbcPalette {
+        GbcPalette(colors.map(|c| Rgb555::from_rgb888(c[0], c[1], c[2])))
+    }
+
+    /// LoadHigh's example: `palette inverted (black, darkgray, lightgray,
+    /// white)` is $1B.
+    #[test]
+    fn a_palette_byte_holds_entry_is_shade_in_bits_2i_and_2i_plus_1() {
+        let s = choose(&file(), Some(&palette([W, L, D, B])), &[]);
+        assert_eq!(s.palette_byte(&palette([B, D, L, W])), 0x1B);
+        assert_eq!(s.palette_byte(&palette([W, L, D, B])), 0xE4);
+    }
+
+    /// Under a `dmg` line a color no image has takes its nearest entry.
+    #[test]
+    fn a_declared_rule_gives_a_palette_color_no_image_uses_its_nearest_entry() {
+        let s = choose(&file(), Some(&palette([W, L, D, B])), &[W]);
+        assert_eq!(s.palette_byte(&palette([NEAR_B, W, W, W])), 0x03);
+    }
+
+    /// Two entries of one shade are the byte's business, not a refusal.
+    #[test]
+    fn two_entries_of_one_shade_both_write_that_shade() {
+        let s = choose(&file(), Some(&palette([W, L, D, B])), &[]);
+        assert_eq!(s.palette_byte(&palette([B, B, W, W])), 0x0F);
+    }
+
+    /// Art in a known palette: its own colors map exactly, and another
+    /// color takes the nearest of that palette.
+    #[test]
+    fn a_known_rule_maps_its_colors_and_gives_others_the_nearest() {
+        let s = choose(&file(), None, &PEA);
+        assert_eq!(s.choice.rule, ShadeRule::Known);
+        assert_eq!(s.palette_byte(&palette(PEA)), 0xE4);
+        assert_eq!(s.palette_byte(&palette([B, PEA[1], PEA[1], PEA[1]])), 0x57);
+    }
+
+    /// The stretch's own colors take what the art took, and one past either
+    /// end of the art's range stays on the scale.
+    #[test]
+    fn a_stretched_rule_clamps_a_palette_color_past_the_arts_range() {
+        let (light, dark) = (rgb(0xC0C0C0), rgb(0x404040));
+        let s = choose(&file(), None, &[light, dark]);
+        assert_eq!(s.choice.rule, ShadeRule::Stretched);
+        assert_eq!(s.palette_byte(&palette([light, dark, W, B])), 0b11_00_11_00);
+    }
+
+    /// With no art there is no range: the plain nearest shade.
+    #[test]
+    fn with_no_art_and_no_dmg_line_a_palette_takes_the_nearest_shades() {
+        let s = choose(&file(), None, &[]);
+        assert_eq!(s.choice.rule, ShadeRule::Nearest);
+        assert_eq!(s.palette_byte(&palette([B, D, L, W])), 0x1B);
     }
 
     fn rule(rule: ShadeRule) -> ShadeChoice {

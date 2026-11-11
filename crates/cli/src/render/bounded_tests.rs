@@ -82,6 +82,7 @@ fn raster() -> Case {
                 frames: (N / 144 + 1) as u32,
                 lines: N as u64,
                 rows,
+                drawn: Vec::new(),
                 unsupported: Vec::new(),
             }),
             ..ResultBody::default()
@@ -115,6 +116,7 @@ fn raster_one_line() -> Case {
                     start: None,
                     writes,
                 }],
+                drawn: Vec::new(),
                 unsupported: Vec::new(),
             }),
             ..ResultBody::default()
@@ -131,6 +133,7 @@ fn raster_of(name: &'static str, rows: Vec<RasterLineRow>) -> Case {
                 frames: (N / 144 + 1) as u32,
                 lines: N as u64,
                 rows,
+                drawn: Vec::new(),
                 unsupported: vec!["ppu_dot".into(), "ppu_mode_events".into()],
             }),
             ..ResultBody::default()

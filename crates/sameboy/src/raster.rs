@@ -102,6 +102,32 @@ pub(crate) unsafe extern "C" fn on_line(gb: *mut sb::GB_gameboy_t, line: u8) {
     });
 }
 
+/// The patched display calls this at `mode_3_start`, every visible line
+/// including the first after the LCD comes on.
+pub(crate) unsafe extern "C" fn on_line_scroll(
+    gb: *mut sb::GB_gameboy_t,
+    line: u8,
+    scx: u8,
+    scy: u8,
+) {
+    guard(gb, (), |hooks| {
+        if hooks.raster.is_none() {
+            return;
+        }
+        // SAFETY: a plain read of the live instance, inside its callback.
+        let unrun = u64::from(unsafe { sb::gbcli_display_unrun(gb) });
+        let at = Ticks(tap_time(gb, hooks).0.saturating_sub(unrun));
+        if let Some(events) = &mut hooks.raster {
+            events.push(Event::LineScroll {
+                ly: line,
+                scx,
+                scy,
+                at,
+            });
+        }
+    });
+}
+
 /// SameBoy calls this from the LCDC write just before `GB_lcd_off` fires the
 /// line callback with line 0, so the flag marks that call as no line start.
 /// LCDC still has the LCD on at that point, so the display's line counter is

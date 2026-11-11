@@ -244,6 +244,11 @@ pub enum Event {
     /// The PPU started a line. A core may miss some line starts; a write
     /// still carries its line.
     Scanline { ly: u8, at: Ticks },
+    /// The PPU began drawing a visible line, with the scroll registers as
+    /// they stood then ([`Feature::LineScroll`](crate::Feature::LineScroll)).
+    /// A later write in the same mode 3 shows on the rest of the line but
+    /// doesn't change this.
+    LineScroll { ly: u8, scx: u8, scy: u8, at: Ticks },
     /// One CPU step, sent after it completes. A step that leaves HALT to
     /// dispatch or run an instruction is sent as two, when the core can
     /// split it: the HALT cycles it ran first as [`CpuStep::Idle`], then the
@@ -272,7 +277,7 @@ pub enum Event {
 pub struct EventKinds {
     /// [`Event::Exec`] ([`Feature::EventSinks`](crate::Feature::EventSinks)).
     pub exec: bool,
-    /// [`Event::IoWrite`] and [`Event::Scanline`]
+    /// [`Event::IoWrite`], [`Event::Scanline`] and [`Event::LineScroll`]
     /// ([`Feature::RasterEvents`](crate::Feature::RasterEvents)).
     pub raster: bool,
     /// [`Event::PpuMode`] ([`Feature::PpuModeEvents`](crate::Feature::PpuModeEvents)).

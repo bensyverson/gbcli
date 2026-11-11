@@ -40,6 +40,22 @@ pub struct RasterLineRow {
     pub writes: Vec<RasterWriteRow>,
 }
 
+/// The scroll one frame's visible lines were drawn with. A whole frame has
+/// `first_line` 0 and 144 entries in each array; a run that starts or stops
+/// mid-frame has fewer. Entry `i` is line `first_line + i`.
+///
+/// Each value is the register as that line's mode 3 began. A write during
+/// the line's mode 3 is not in its entry: the rest of that line shows it, and
+/// the write is in the line's row, `mode` drawing; the next line has it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RasterFrameScroll {
+    /// The same count as [`RasterLineRow::frame`].
+    pub frame: u32,
+    pub first_line: u8,
+    pub scx: Vec<u8>,
+    pub scy: Vec<u8>,
+}
+
 /// What `run --raster` found. Only the lines with writes are listed; `lines`
 /// counts every line the run passed through.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -49,6 +65,9 @@ pub struct RasterMade {
     /// Lines the run passed through, with or without writes.
     pub lines: u64,
     pub rows: Vec<RasterLineRow>,
+    /// The scroll every drawn line began with, a frame at a time.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub drawn: Vec<RasterFrameScroll>,
     /// What the core can't place, by feature name (`ppu_dot`,
     /// `ppu_mode_events`); each is also in the gap ledger.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -156,6 +175,7 @@ mod tests {
                 line(42, vec![write("rSCX", 0x200, Some(PpuModeView::Vblank))]),
                 line(43, vec![write("rSCX", 0x16B, Some(PpuModeView::Hblank))]),
             ],
+            drawn: Vec::new(),
             unsupported: Vec::new(),
         };
         assert_eq!(
@@ -207,6 +227,7 @@ mod tests {
                 line(16, vec![write("rSCX", 0xF, Some(Vblank))]),
                 line(17, vec![write("rSCX", 0x10, None)]),
             ],
+            drawn: Vec::new(),
             unsupported: Vec::new(),
         };
         let order: Vec<u16> = made.writers().iter().map(|w| w.pc).collect();
@@ -232,6 +253,7 @@ mod tests {
                 off,
                 line(20, vec![write("rSCX", 0x200, Some(PpuModeView::OamScan))]),
             ],
+            drawn: Vec::new(),
             unsupported: Vec::new(),
         };
         let writers = made.writers();

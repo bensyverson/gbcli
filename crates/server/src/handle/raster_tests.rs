@@ -2,11 +2,11 @@
 //! line, the gaps that reach the ledger from a run that succeeds, how the
 //! run ended, and the STOP warning.
 
-use gbcli_protocol::{Op, RasterMade, Response, RunArgs, StopReason};
+use gbcli_protocol::{Op, PpuModeView, RasterMade, Response, RunArgs, StopReason};
 
 use super::Handler;
 use super::test_support::{handler, request};
-use crate::fixture::{Fixture, ILLEGAL, RASTER, RASTER_SYM, STOP_WAKE};
+use crate::fixture::{Fixture, ILLEGAL, RASTER, RASTER_SYM, SCROLL_LINES, STOP_WAKE};
 
 fn run(h: &mut Handler, args: RunArgs) -> Response {
     h.handle(&request(Op::Run(args)))
@@ -38,6 +38,42 @@ type WrittenLine<'a> = (Option<u8>, Vec<(&'a str, u8)>);
 
 fn made(response: Response) -> RasterMade {
     response.outcome.expect("ran").raster.expect("a timeline")
+}
+
+/// LoadHigh's ask: the scroll each line was drawn with, around a write in
+/// each mode (`roms/scroll_lines.asm`).
+#[test]
+fn run_raster_gives_the_scroll_each_visible_line_began_with() {
+    let f = Fixture::with_rom("raster-scroll", SCROLL_LINES);
+    let t = made(raster_run(&f, 4));
+    let whole: Vec<_> = t
+        .drawn
+        .iter()
+        .filter(|d| d.first_line == 0 && d.scx.len() == 144)
+        .collect();
+    assert!(whole.len() >= 2, "{:?}", t.drawn);
+    // The ROM's three writes landed in the modes the expectation rests on.
+    let mode_of = |line: u8, reg: &str| {
+        t.rows
+            .iter()
+            .filter(|r| r.line == Some(line))
+            .flat_map(|r| &r.writes)
+            .find(|w| w.reg == reg)
+            .and_then(|w| w.mode)
+    };
+    assert_eq!(mode_of(20, "rSCY"), Some(PpuModeView::OamScan));
+    assert_eq!(mode_of(40, "rSCX"), Some(PpuModeView::Drawing));
+    assert_eq!(mode_of(60, "rSCX"), Some(PpuModeView::Hblank));
+    for d in whole {
+        assert_eq!(d.scy.len(), 144);
+        let mut scx = vec![0u8; 41];
+        scx.resize(61, 16);
+        scx.resize(144, 32);
+        assert_eq!(d.scx, scx, "frame {}", d.frame);
+        let mut scy = vec![0u8; 20];
+        scy.resize(144, 7);
+        assert_eq!(d.scy, scy, "frame {}", d.frame);
+    }
 }
 
 #[test]

@@ -66,6 +66,7 @@ fn generate(r: &mut Rng) -> RasterMade {
         frames: 1,
         lines: 154,
         rows,
+        drawn: Vec::new(),
         unsupported,
     }
 }

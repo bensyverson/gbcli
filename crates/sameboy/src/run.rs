@@ -64,6 +64,7 @@ impl Arming {
             }
             if raster {
                 sb::GB_set_lcd_line_callback(gb, Some(raster::on_line));
+                sb::gbcli_set_line_scroll_callback(gb, Some(raster::on_line_scroll));
             }
             if exec {
                 sb::GB_set_execution_callback(gb, Some(on_exec));
@@ -106,6 +107,7 @@ impl Drop for Arming {
             if self.raster {
                 hooks.raster = None;
                 sb::GB_set_lcd_line_callback(self.gb, None);
+                sb::gbcli_set_line_scroll_callback(self.gb, None);
             }
         }
     }

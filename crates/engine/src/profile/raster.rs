@@ -27,6 +27,13 @@ pub struct RasterWrite {
     pub mode: Option<PpuMode>,
 }
 
+/// The scroll registers as a visible line began drawing (at mode 3's start).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LineScroll {
+    pub scx: u8,
+    pub scy: u8,
+}
+
 /// A PPU mode change, where the core reports them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ModeChange {
@@ -46,6 +53,9 @@ pub struct RasterLine {
     pub start: Option<Ticks>,
     pub modes: Vec<ModeChange>,
     pub writes: Vec<RasterWrite>,
+    /// The line's scroll, where the core reported it; none on a line that
+    /// wasn't drawn (VBlank, the LCD off, or its mode 3 outside the run).
+    pub scroll: Option<LineScroll>,
 }
 
 impl RasterLine {
@@ -86,7 +96,7 @@ impl Raster {
     /// A sink asking `core` for what it can report; the rest become gaps.
     pub fn new(core: &dyn Core) -> Raster {
         let mut gaps = Vec::new();
-        for feature in [Feature::PpuDot, Feature::PpuModeEvents] {
+        for feature in [Feature::PpuDot, Feature::PpuModeEvents, Feature::LineScroll] {
             if let Support::No { reason } = core.supports(feature) {
                 gaps.push(Gap { feature, reason });
             }
@@ -120,6 +130,7 @@ impl Raster {
             start,
             modes: Vec::new(),
             writes: Vec::new(),
+            scroll: None,
         });
         lines.last_mut().expect("just pushed")
     }
@@ -177,6 +188,12 @@ impl EventSink for Raster {
             Event::PpuMode { mode, ly, at } => {
                 self.row_for(Some(ly)).modes.push(ModeChange { mode, at })
             }
+            Event::LineScroll {
+                ly,
+                scx,
+                scy,
+                at: _,
+            } => self.row_for(Some(ly)).scroll = Some(LineScroll { scx, scy }),
             Event::Exec { .. } => {}
         }
     }
@@ -307,6 +324,30 @@ mod tests {
                 mode: PpuMode::Drawing,
                 at: Ticks(160)
             }]
+        );
+    }
+
+    #[test]
+    fn a_lines_scroll_joins_its_row_and_opens_one_when_the_core_gave_no_start() {
+        let scroll = |ly, scx, at| Event::LineScroll {
+            ly,
+            scx,
+            scy: 9,
+            at: Ticks(at),
+        };
+        let mut s = sink();
+        // Line 0 after the LCD comes on has no start event.
+        s.event(scroll(0, 1, 160));
+        s.event(start(1, 912));
+        s.event(scroll(1, 2, 1072));
+        let t = s.finish();
+        let got: Vec<_> = t.lines.iter().map(|l| (l.line, l.scroll)).collect();
+        assert_eq!(
+            got,
+            vec![
+                (Some(0), Some(LineScroll { scx: 1, scy: 9 })),
+                (Some(1), Some(LineScroll { scx: 2, scy: 9 })),
+            ]
         );
     }
 

@@ -60,6 +60,9 @@ pattern3: dw
 pattern4: dw
 
 ;; How long a row lasts in ticks (1 = one row per call to `hUGE_dosound`, etc. 0 translates to 256)
+;; Teddy & Toys: exported as hUGE_ticks_per_row (with hUGE_tick below) so
+;; src/music.asm can change the tempo while the song plays.
+hUGE_ticks_per_row::
 ticks_per_row: db
 
 _hUGE_current_wave::
@@ -76,6 +79,7 @@ _hUGE_mute_mask::
 mute_channels: db
 
 counter: db
+hUGE_tick::
 tick: db
 row_break: db
 next_order: db

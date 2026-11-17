@@ -17,7 +17,6 @@ DEF LINE_TILES EQU RESULTS_LINE_TILES
 
 ; Map rows (a big line takes two).
 DEF TITLE_NAME_ROW   EQU 2
-DEF TITLE_BELT_ROW   EQU 6          ; 4 rows
 DEF TITLE_BEST_ROW   EQU 12
 DEF RESULTS_HEAD_ROW EQU 1
 DEF RESULTS_MADE_ROW EQU 3
@@ -38,7 +37,8 @@ ShowResults::
 IF DEF(GBCLI_GBC)
 	ldh a, [hGbc]
 	and a
-	call nz, ColorGbcPlain
+	ld a, [wResultsAfterRound]
+	call nz, ColorGbcScreen
 ENDC
 	call LoadSceneTiles
 	ld hl, TILEMAP0
@@ -53,7 +53,9 @@ ENDC
 	and a
 	jr nz, .results
 
-	; The title: the name big, the six toys riding a belt, the best.
+	; The title: the music at the song's tempo again, the name big, the
+	; six toys riding a belt, the best.
+	call MusicNormal
 	ld hl, TitleText
 	ld c, TITLE_NAME_ROW
 	call DrawBig
@@ -109,7 +111,8 @@ ENDC
 	reti                        ; returns with interrupts on
 
 ; A belt band (4 rows) from map row a, with the six finished toys on it,
-; as in the key column, top toy leftmost.
+; as in the key column, top toy leftmost. On a GBC, in the belt's colors
+; and each toy's.
 DrawToyBelt:
 	ld l, a
 	ld h, 0
@@ -121,6 +124,21 @@ DrawToyBelt:
 	push hl
 	call DrawBeltRows
 	pop hl
+IF DEF(GBCLI_GBC)
+	ldh a, [hGbc]
+	and a
+	jr z, .colored
+	push hl
+	ld a, 1
+	ldh [rVBK], a
+	ld bc, 4 * 32
+	ld a, PAL_SCENE
+	call FillMem
+	xor a
+	ldh [rVBK], a
+	pop hl
+.colored
+ENDC
 	ld de, 32 + TOY_BELT_COL     ; the toys' row, the first toy's column
 	add hl, de
 	ld c, 0
@@ -129,6 +147,11 @@ DrawToyBelt:
 	call ToyTile
 	add 8                       ; the finished frame
 	call Draw2x2                ; keeps hl
+IF DEF(GBCLI_GBC)
+	ld a, c
+	inc a
+	call SlotColors             ; keeps bc, hl
+ENDC
 	ld de, TOY_BELT_STEP
 	add hl, de
 	inc c

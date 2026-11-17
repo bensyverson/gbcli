@@ -19,13 +19,14 @@ DEF BELT_RIGHT EQU 1                ; things on the belt travel left to right
 
 DEF ROUND_SECONDS      EQU 60       ; seconds: the length of a round
 DEF CLOCK_STEPS        EQU 60       ; hand positions over a round (pre-made rotations; must divide ROUND_SECONDS * 60)
-DEF CLOCK_RED_SECONDS  EQU 10       ; seconds left when the clock face turns red (GBC only)
+DEF CLOCK_RED_SECONDS  EQU 10       ; seconds left when the clock face turns red (GBC only), starts ticking, and the music speeds up
+DEF MUSIC_RED_TICKS_PER_ROW EQU 5   ; frames a row of the music lasts once the clock is red (1-255; the song's own is its ticks_per_row, 6: fewer is faster)
 
 ; --- The belts -------------------------------------------------------------
 
-DEF BELT_PARTS_SPEED    EQU 96      ; 1/256 px a frame: the front (parts) belt
+DEF BELT_PARTS_SPEED    EQU 144     ; 1/256 px a frame: the front (parts) belt
 DEF BELT_PARTS_DIR      EQU BELT_LEFT   ; which way the parts belt runs
-DEF BELT_FINISHED_SPEED EQU 96      ; 1/256 px a frame: the back (Finished) belt
+DEF BELT_FINISHED_SPEED EQU 144     ; 1/256 px a frame: the back (Finished) belt
 DEF BELT_FINISHED_DIR   EQU BELT_RIGHT  ; which way the Finished belt runs
 
 ; --- The supply (what the parts belt brings) ---------------------------------
@@ -46,5 +47,8 @@ DEF BUZZ_COOLDOWN EQU 12            ; frames: after a buzz sounds, more refusals
 ; --- Elle --------------------------------------------------------------------
 
 DEF TURN_FRAMES   EQU 8             ; frames (0+): how long Up or Down takes to turn her; A and B do nothing meanwhile (0 = instant)
+DEF ELLE_STEP_RANGE EQU 24          ; px (0-38: her hands must stay left of the key column): how far Left and Right step her each way from her home spot
+DEF ELLE_STEP_SPEED EQU 1           ; px a frame (1+) while Left or Right is held
+DEF SHUFFLE_FRAMES  EQU 8           ; frames (1+): while she steps, the shuffle sound repeats this often
 
 ENDC

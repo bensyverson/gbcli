@@ -2,9 +2,17 @@
 
     python3 tools/review_shots.py [--gbcli PATH] [-v]
 
-  title.png         the title screen (DMG)
+  title.png         the title screen (DMG) after a round: the best, 12
+  title-gbc.png     the same on a GBC (build/gbc/teddy-and-toys.gbc, --model gbc)
   round-dmg.png     mid-round on a DMG, Elle holding a half
-  round-gbc.png     the same moment on a GBC (build/gbc/teddy-and-toys.gbc, --model gbc)
+  round-gbc.png     the same moment on a GBC: the toys in color on the belts,
+                    in her hands and in the key
+  held-gbc.png      Elle holding each finished toy on a GBC, key order
+  pause-dmg.png     the pause menu, START pressed mid-round (DMG)
+  pause-gbc.png     the same on a GBC, the cursor on Quit
+  step-dmg.png      Elle stepped to her left limit, then her right, holding
+                    two halves (DMG)
+  step-gbc.png      the same on a GBC, facing away
   red-gbc.png       the last 10 seconds on a GBC: the clock face red
   turn.png          Elle turning up to the Finished belt, then back down:
                     one crop around her a frame or two apart, with the frame
@@ -28,6 +36,7 @@ import tuning
 
 T = tuning.load()
 TURN = T["TURN_FRAMES"]
+STEP = T["ELLE_STEP_RANGE"] // T["ELLE_STEP_SPEED"]   # frames to walk to a limit
 OUT = g.PROJECT / "build" / "review"
 DMG_RGB = [(255, 255, 255), (170, 170, 170), (85, 85, 85), (0, 0, 0)]
 ELLE_CROP = (36, 36, 64, 76)        # x, y, w, h around Elle and her hands
@@ -98,6 +107,32 @@ def away_strip(cli, session, name):
     png.write(OUT / f"{name}.png", png.hstack(images, gap=6))
 
 
+def title_after_round(cli, session, name):
+    """The title after a round that scored 12 (BCD $12), a new best."""
+    shot(cli, session, "mid", 90, name, keys="START@60 -START@61", pokes=["wRoundLeft=3,0", "wScore=$12,0"])
+
+
+def held_strip(cli, session, name):
+    """Crops around Elle holding each finished toy, facing the parts belt."""
+    images = []
+    for toy in range(1, len(gen_toys.load()) + 1):
+        p = shot(cli, session, "mid", 4, f"{name}-{toy}.png", pokes=[f"wToy={toy}"], crop=ELLE_CROP, scale=1)
+        images.append(scaled(p, 3))
+        p.unlink()
+    png.write(OUT / f"{name}.png", png.hstack(images, gap=6))
+
+
+def step_strip(cli, session, name, pokes=()):
+    """Elle walked (Left or Right held) to each end of her range, holding two halves."""
+    images = []
+    for i, key in enumerate(("LEFT", "RIGHT")):
+        p = shot(cli, session, "mid", STEP + 10, f"{name}-{i}.png", keys=f"{key}@1 -{key}@{STEP + 8}",
+                 pokes=HALVES + list(pokes), scale=1)
+        images.append(scaled(p, 2))
+        p.unlink()
+    png.write(OUT / f"{name}.png", png.hstack(images, gap=6))
+
+
 def toys_sheet():
     toys = gen_toys.load()
     rows = []
@@ -137,10 +172,12 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     cli.text("sessions", "rm", "review")
     cli.run("run", g.ROM, "--session", "review", "--from", "boot", "--frames", "60")
-    shot(cli, "review", None, 1, "title.png")
     cli.run("run", "--session", "review", "--frames", "600", "--keys", "START@1 -START@2",
             "--checkpoint", "mid")
+    title_after_round(cli, "review", "title.png")
     shot(cli, "review", "mid", 2, "round-dmg.png", pokes=HOLD)
+    shot(cli, "review", "mid", 12, "pause-dmg.png", keys="START@1 -START@2", pokes=HOLD)
+    step_strip(cli, "review", "step-dmg")
     shot(cli, "review", "mid", 1, "key.png", crop=(130, 0, 30, 144), scale=1)
     png.write(OUT / "key.png", png.read(OUT / "key.png"), scale=3)
     turn_strip(cli)
@@ -149,7 +186,11 @@ def main():
 
     start(cli, "review-gbc", g.ROM_GBC, ["--model", "gbc"])
     shot(cli, "review-gbc", "mid", 2, "round-gbc.png", pokes=HOLD)
+    held_strip(cli, "review-gbc", "held-gbc")
+    shot(cli, "review-gbc", "mid", 16, "pause-gbc.png", keys="START@1 -START@2 DOWN@8 -DOWN@9", pokes=HOLD)
+    step_strip(cli, "review-gbc", "step-gbc", ["wFacing=1"])
     away_strip(cli, "review-gbc", "away-gbc")
+    title_after_round(cli, "review-gbc", "title-gbc.png")
     # "mid" is 10 s into the round; run on to 3 s into the red zone.
     red_at = (T["ROUND_SECONDS"] - T["CLOCK_RED_SECONDS"] + 3 - 10) * 60
     shot(cli, "review-gbc", "mid", red_at, "red-gbc.png")

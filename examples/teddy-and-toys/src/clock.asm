@@ -92,6 +92,7 @@ ClockTick::
 	ld [wClockPalette], a
 	ld a, SFX_WARN              ; time is running out
 	call SfxPlay
+	call MusicFast              ; and the music speeds up
 	ld a, 60
 	ld [wTickLeft], a
 	jr .hand

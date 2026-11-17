@@ -151,10 +151,14 @@ BeltsUpdate::
 	call QueueSlot
 	; fall through
 
-; wPartsUnder, wPartsInReach and wFinishedUnder from the scrolls.
-BeltsUnderElle:
+; wPartsUnder, wPartsInReach and wFinishedUnder from the scrolls and
+; where Elle stands (wElleX).
+BeltsUnderElle::
+	ld a, [wElleX]
+	add ELLE_CENTER_DX
+	ld c, a                     ; c: Elle's middle, screen x
 	ld a, [wPartsX + 1]
-	add ELLE_CENTER_X           ; the map x under Elle's middle
+	add c                       ; the map x under Elle's middle
 	ld b, a
 	swap a
 	and SLOTS - 1
@@ -173,7 +177,7 @@ BeltsUnderElle:
 .reach
 	ld [wPartsInReach], a
 	ld a, [wFinishedX + 1]
-	add ELLE_CENTER_X
+	add c
 	swap a
 	and SLOTS - 1
 	ld [wFinishedUnder], a
@@ -217,53 +221,67 @@ BeltsVBlank::
 	ld [wDrawCount], a
 	ret
 
-; Draws slot a (belt << 4 | slot) from its contents. VRAM must be open.
-; Keeps c.
+; Draws slot a (belt << 4 | slot) from its contents, and on a GBC
+; colors it with its toy's palette (an empty slot with the belt's). VRAM
+; must be open. Keeps c.
 DrawSlot:
 	ld b, a
 	and SLOTS - 1
-	ld e, a                     ; e: the slot
+	ld e, a
+	ld d, 0                     ; de: the slot
 	add a                       ; its first map column
 	ld l, a
+	ld h, 0
 	bit 4, b
 	jr nz, .finished
-	ld h, 0
+	push de
 	ld de, TILEMAP0 + (FRONT_BELT_ROW + BELT_ITEM_ROW_OFS) * 32
 	add hl, de
+	pop de
 	push hl
-	ld a, b
-	and SLOTS - 1
-	ld e, a
-	ld d, 0
 	ld hl, wPartsSlots
 	add hl, de
-	ld a, [hl]
+	ld a, [hl]                  ; a piece, 1-12, or 0
+	ld e, a
+	and a
+	jr z, .partsToy
+	dec a
+	srl a
+	inc a                       ; its toy + 1
+.partsToy
+	ld b, a
 	ld hl, PartsTiles
 	jr .tile
 .finished
-	ld h, 0
+	push de
 	ld de, TILEMAP0 + (BACK_BELT_ROW + BELT_ITEM_ROW_OFS) * 32
 	add hl, de
+	pop de
 	push hl
-	ld a, b
-	and SLOTS - 1
-	ld e, a
-	ld d, 0
 	ld hl, wFinishedSlots
 	add hl, de
-	ld a, [hl]
+	ld a, [hl]                  ; a toy + 1, or 0
+	ld e, a
+	ld b, a
 	ld hl, FinishedTiles
 .tile
-	and a
-	jr z, .empty
-	ld e, a
+	; e: the table index, 0 for empty; b: the toy + 1, 0 for empty
 	ld d, 0
 	add hl, de
-	ld a, [hl]
-	pop hl
+	ld d, [hl]                  ; the first tile
+	pop hl                      ; the slot's map address
+IF DEF(GBCLI_GBC)
+	push de
+	ld a, b
+	call SlotColors             ; keeps bc, hl
+	pop de
+ENDC
+	ld a, e
+	and a
+	jr z, .empty
+	ld a, d
 	jp Draw2x2
 .empty
-	pop hl
 	ld a, T_BELT
 	ld [hli], a
 	ld [hld], a

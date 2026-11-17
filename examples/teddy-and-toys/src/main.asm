@@ -17,6 +17,8 @@ DEF CART_RAM_8K           EQU $02
 
 DEF STATE_PLAY    EQU 0             ; wGameState: a round is on
 DEF STATE_RESULTS EQU 1             ; the title or results screen
+DEF STATE_PAUSED  EQU 2             ; a round, paused (src/pause.asm)
+EXPORT STATE_PLAY, STATE_RESULTS, STATE_PAUSED
 DEF RANDOM_SEED   EQU $ACE1         ; any nonzero start; START's frame mixes in
 
 SECTION "Restart vectors", ROM0[$0000]
@@ -119,8 +121,20 @@ MainLoop:
 
 	call ReadJoypad
 	ld a, [wGameState]
+	cp STATE_PAUSED
+	jr z, .paused
 	cp STATE_PLAY
 	jr nz, .results
+	; START pauses, anytime in a round (mid-turn too: the turn waits).
+	ldh a, [hJoyPressed]
+	and PAD_START
+	jr z, .play
+	call PauseStart
+	jr MainLoop
+.paused
+	call PauseUpdate
+	jr MainLoop
+.play
 	call BeltsUpdate
 	call PlayUpdate
 	call ClockTick
@@ -149,17 +163,21 @@ StartRound:
 	call LcdOff
 	ld a, [wFrame]              ; when START was pressed varies the round
 	call RandomMix
+	call MusicNormal
+	xor a
+	ld [wPauseDraw], a
 	call ScreenInit
+IF DEF(GBCLI_GBC)
+	; Before the belts: BeltsInit colors each slot it draws.
+	ldh a, [hGbc]
+	and a
+	call nz, ColorGbc
+ENDC
 	call ClockInit
 	call SupplyInit
 	call PlayInit
 	call BeltsInit
 	call ElleDraw
-IF DEF(GBCLI_GBC)
-	ldh a, [hGbc]
-	and a
-	call nz, ColorGbc
-ENDC
 	xor a
 	ldh [rSCX], a
 	ld a, SPLIT_BACK_LYC
@@ -173,6 +191,19 @@ ENDC
 	xor a
 	ldh [rIF], a
 	reti                        ; returns with interrupts on
+
+; Quit from the pause menu: back to the title, with no results screen
+; and the score not kept as a best.
+QuitRound::
+	ld a, $FF                   ; the music's channels back on (PauseStart)
+	ldh [rNR51], a
+	xor a
+	ld [wResultsAfterRound], a
+	ld [wNewBest], a
+	ld [wPauseDraw], a
+	ld a, STATE_RESULTS
+	ld [wGameState], a
+	jp ShowResults              ; the title
 
 ; Time's up: keep a new best, then the results screen.
 EndRound:
@@ -252,11 +283,21 @@ VBlank:
 	ld a, HIGH(wShadowOAM)
 	call hOAMDMA
 	ld a, [wGameState]
+	cp STATE_PAUSED
+	jr z, .paused
 	cp STATE_PLAY
 	jr nz, .sound
+	call PauseVBlank            ; closing the menu: before the score's digits
 	call BeltsVBlank
 	call ScoreVBlank
 	call ClockVBlank
+	jr .sound
+.paused
+	call PauseVBlank
+	call BeltsVBlank            ; what was queued before the pause
+	call ClockVBlank            ; a face copy under way finishes
+	call SfxVBlank              ; the pause sound; the music holds its place
+	jr .bank
 .sound
 	; Sound, on every screen: the effects, then a tick of the music, whose
 	; data is in ROMX. Then the main code's bank back (the clock and the
@@ -265,6 +306,7 @@ VBlank:
 	ld a, BANK(song_theme)
 	ld [rROMB0], a
 	call MusicVBlank
+.bank
 	ldh a, [hRomBank]
 	ld [rROMB0], a
 	ld hl, wFrame

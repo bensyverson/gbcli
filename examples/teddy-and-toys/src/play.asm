@@ -8,6 +8,10 @@
 ;   Finished belt an assembled toy B       puts it on the Finished belt; score +1       ActionB
 ;   anything else                  A or B  nothing, with a buzz                         Buzz
 ;
+; Left and Right step Elle along the belts (StepElle), up to
+; ELLE_STEP_RANGE each way from her home spot, facing either belt, but
+; not during a turn. What is "in front of her" on each belt follows her.
+;
 ; With two halves, A and B wait CHORD_FRAMES (tuning.inc) for each other:
 ; the other button pressed in that window, or both on one frame, makes the
 ; chord; otherwise the press acts alone when its window ends. With fewer
@@ -28,6 +32,9 @@ DEF FACING_FINISHED EQU 1           ; away: we see her back
 EXPORT FACING_PARTS, FACING_FINISHED
 	ASSERT CHORD_FRAMES >= 1, "CHORD_FRAMES must be 1 or more"
 	ASSERT PICKUP_REACH <= 8, "PICKUP_REACH is at most 8: half a slot"
+	ASSERT ELLE_STEP_SPEED >= 1 && SHUFFLE_FRAMES >= 1, "ELLE_STEP_SPEED and SHUFFLE_FRAMES are 1 or more"
+	ASSERT ELLE_X - ELLE_STEP_RANGE + HAND_LEFT_DX >= 0, "ELLE_STEP_RANGE: her left hand would leave the screen"
+	ASSERT ELLE_X + ELLE_STEP_RANGE + HAND_RIGHT_DX + 16 <= KEY_X, "ELLE_STEP_RANGE: her right hand would reach the key column"
 
 DEF ELLE_FRAME_BACK  EQU 0          ; frames of assets/sprites/elle.16x48
 DEF ELLE_FRAME_FRONT EQU 1
@@ -35,7 +42,6 @@ DEF ELLE_FRAME_SIDE  EQU 2          ; mid-turn
 DEF HELD_OBJECTS EQU 4              ; what Elle holds: two 16x16 things
 DEF ELLE_OBJECTS EQU (ELLE_FRAME_WIDTH / 8) * (ELLE_FRAME_HEIGHT / 16)   ; at most, per frame
 DEF ELLE_OAM EQU HELD_OBJECTS * 4   ; facing the parts belt: held things in OAM 0-3, then her
-DEF PIECE_ATTR EQU OBJ_PAL_PIECES   ; a held piece's GBC palette; a DMG ignores bits 0-2
 
 SECTION "Play", ROM0
 
@@ -50,6 +56,8 @@ PlayInit::
 	jr nz, .clear
 	ld a, FACING_PARTS
 	ld [wFacing], a
+	ld a, ELLE_X
+	ld [wElleX], a
 	ld a, 1
 	ld [wScoreDirty], a
 	ret
@@ -102,6 +110,7 @@ ELSE
 	jp ElleDraw
 ENDC
 .buttons
+	call StepElle
 	ld a, [wHeldCount]
 	cp 2
 	jr z, .twoHalves
@@ -155,6 +164,50 @@ ENDC
 	call z, ActionA
 .done
 	jp ElleDraw
+
+; Left or Right held: Elle steps ELLE_STEP_SPEED that way, as far as
+; ELLE_STEP_RANGE from home, with the shuffle sound every SHUFFLE_FRAMES
+; while she moves. Then what is in front of her is worked out again.
+StepElle:
+	ldh a, [hJoyHeld]
+	ld b, a
+	ld a, [wElleX]
+	ld c, a                     ; c: where she stands
+	bit B_PAD_RIGHT, b
+	jr z, .notRight
+	add ELLE_STEP_SPEED
+	cp ELLE_X + ELLE_STEP_RANGE + 1
+	jr c, .moved
+	ld a, ELLE_X + ELLE_STEP_RANGE
+	jr .moved
+.notRight
+	bit B_PAD_LEFT, b
+	jr z, .still
+	sub ELLE_STEP_SPEED
+	jr c, .leftmost
+	cp ELLE_X - ELLE_STEP_RANGE
+	jr nc, .moved
+.leftmost
+	ld a, ELLE_X - ELLE_STEP_RANGE
+.moved
+	cp c
+	jr z, .still                ; at the end of her range
+	ld [wElleX], a
+	ld hl, wShuffleTimer
+	ld a, [hl]
+	and a
+	jr z, .shuffle
+	dec [hl]
+	jp BeltsUnderElle
+.shuffle
+	ld [hl], SHUFFLE_FRAMES - 1
+	ld a, SFX_SHUFFLE
+	call SfxPlayQuiet           ; never cuts off another effect
+	jp BeltsUnderElle
+.still
+	xor a
+	ld [wShuffleTimer], a       ; the next step starts with a shuffle
+	ret
 
 ; A alone: picks up the piece in front, if a hand is free and it fits.
 ActionA:
@@ -368,33 +421,42 @@ ElleDraw::
 	cp ELLE_FRAME_BACK
 	ld a, LOW(wShadowOAM)
 	ld b, LOW(wShadowOAM + ELLE_OAM)
-	ld d, HAND_LEFT_X + OAM_X_OFS
-	ld e, HAND_RIGHT_X + OAM_X_OFS
+	ld d, LOW(HAND_LEFT_DX + OAM_X_OFS)
+	ld e, LOW(HAND_RIGHT_DX + OAM_X_OFS)
 	jr nz, .order
 	ld a, LOW(wShadowOAM + ELLE_OBJECTS * 4)
 	ld b, LOW(wShadowOAM)
-	ld d, HAND_BACK_LEFT_X + OAM_X_OFS
-	ld e, HAND_BACK_RIGHT_X + OAM_X_OFS
+	ld d, LOW(HAND_BACK_LEFT_DX + OAM_X_OFS)
+	ld e, LOW(HAND_BACK_RIGHT_DX + OAM_X_OFS)
 .order
 	ld l, a                     ; hl: the held things' objects
 	ld a, b
 	ld [wElleOam], a
-	ld a, d
+	; Everything she holds is placed relative to where she stands.
+	ld a, [wElleX]
+	ld b, a
+	add d
 	ld [wHandX], a
-	ld a, e
+	ld a, b
+	add e
 	ld [wHandX + 1], a
 	ld a, [wToy]
 	and a
 	jr z, .halves
 	dec a
+	push af
+	call SetPieceAttr
+	pop af
 	call ToyTile
 	add 8                       ; the finished frame
 	ld d, a
 	ld a, [wElleY]
 	add TOY_HELD_DY + OAM_Y_OFS
 	ld b, a
+	ld a, [wElleX]
+	add TOY_HELD_DX + OAM_X_OFS
+	ld c, a
 	ld a, d
-	ld c, TOY_HELD_X + OAM_X_OFS
 	call Put16
 	jr .elle
 .halves
@@ -433,7 +495,11 @@ ElleDraw::
 	inc e
 	ld a, [hli]
 	ld [wElleObjX], a
-	add ELLE_X + OAM_X_OFS
+	push hl
+	ld hl, wElleX
+	add [hl]
+	pop hl
+	add OAM_X_OFS
 	ld [de], a
 	inc e
 	ld a, [hli]
@@ -492,6 +558,9 @@ PutHeldHalf:
 	dec a
 	ld e, a                     ; toy * 2 + half
 	srl a
+	push af
+	call SetPieceAttr
+	pop af
 	call ToyTile                ; the toy's first tile (clobbers b)
 	bit 0, e
 	jr z, .halfA
@@ -504,26 +573,42 @@ PutHeldHalf:
 	ld a, d
 	; fall through
 
-; Two 8x16 objects at OAM y b, x c, tiles a (left column) and a + 2.
+; Two 8x16 objects at OAM y b, x c, tiles a (left column) and a + 2,
+; with attributes wPieceAttr.
 Put16:
+	ld d, a
+	ld a, [wPieceAttr]
+	ld e, a
 	ld [hl], b
 	inc l
 	ld [hl], c
 	inc l
-	ld [hli], a
-	ld [hl], PIECE_ATTR
+	ld [hl], d
+	inc l
+	ld [hl], e
 	inc l
 	ld [hl], b
 	inc l
-	ld d, a
 	ld a, c
 	add 8
 	ld [hli], a
 	ld a, d
 	add 2
 	ld [hli], a
-	ld [hl], PIECE_ATTR
+	ld [hl], e
 	inc l
+	ret
+
+; wPieceAttr: the object attributes for toy a's pieces: its GBC palette
+; (src/colors.asm). A DMG build uses palette 0 (OBP0) for everything.
+; Keeps bc, de, hl.
+SetPieceAttr:
+IF DEF(GBCLI_GBC)
+	call ToyPalette
+ELSE
+	xor a
+ENDC
+	ld [wPieceAttr], a
 	ret
 
 ; Two unused objects (y 0 hides them); hl advances 8.
@@ -537,6 +622,7 @@ Hide2:
 SECTION "Play variables", WRAM0
 
 wFacing:: db                       ; FACING_PARTS or FACING_FINISHED
+wElleX:: db                        ; where Elle stands: her left edge's screen x (ELLE_X is home)
 wPlayVars:
 wHands:: ds 2                      ; the halves held (pieces), first grabbed first; 0 = empty hand
 wHeldCount:: db                    ; how many halves: 0-2
@@ -560,4 +646,6 @@ wElleObjX: db
 wElleObjPal: db                    ; ElleDraw: its GBC palette
 wElleOam: db                       ; ElleDraw: the low byte of her first object in wShadowOAM
 wHandX: ds 2                       ; ElleDraw: the held halves' OAM x, left hand then right
+wPieceAttr: db                     ; ElleDraw: the attributes of the piece being placed
+wShuffleTimer: db                  ; while she steps, frames to the next shuffle sound
 wPlayVarsEnd:

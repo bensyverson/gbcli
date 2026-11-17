@@ -85,3 +85,7 @@ Two background subagents (rgbenc, verifier-relink) stopped mid-edit at the same 
 ## 2026-11-09 — a subagent's shell starts in the main checkout, not its worktree
 
 Even in a harness-made worktree, three agents this session found their Bash calls starting in `/Users/ben/git/gbcli`. One ran its first `cargo test` there, against main's code. A plain `cd` into the worktree trips the guard. Brief agents to run cargo with `--manifest-path <worktree>/Cargo.toml` and git with `git -C <worktree>` (leaves nWjPtM, QWHzSK, sBZOk6). After an interrupted `cargo clean`, a worktree's test binary can fail to link with "symbol(s) not found"; a clean rebuild fixes it — the code was fine.
+
+## 2026-11-17 — in a worktree, the guard refuses gbcli arguments containing `$`
+
+A game agent in an isolated worktree had `--poke 'wScore=$07,0'` and `--read '[$FF25]'` refused, even single-quoted, as were heredocs to Python (leaf Q8KLVV). Use decimal values or an escaped `\$` there; the README commands keep the `$` form for users.

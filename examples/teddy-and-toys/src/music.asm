@@ -12,8 +12,18 @@
 ;
 ; Cost: the driver is about 1.9 KB of ROM0 and 100 bytes of WRAM, and one
 ; tick takes about 2,500-5,900 cycles (4-8% of a frame), more on busy rows.
+;
+; The tempo: a row lasts the song's ticks_per_row ticks (frames), which
+; hUGE_init reads from the song. When the clock turns red, MusicFast asks
+; for MUSIC_RED_TICKS_PER_ROW (tuning.inc) instead, and MusicNormal puts
+; the song's back. The driver compares its tick count with
+; hUGE_ticks_per_row for equality, so a shorter row may only start while
+; the count is below it; MusicVBlank waits for that.
 
 include "hardware.inc"
+include "tuning.inc"
+
+	ASSERT MUSIC_RED_TICKS_PER_ROW >= 1 && MUSIC_RED_TICKS_PER_ROW <= 255, "MUSIC_RED_TICKS_PER_ROW is 1-255"
 
 ; hUGEDriver writes wave RAM by hardware.inc 4's name for it, which the
 ; project's hardware.inc 6 calls AUD3WAVERAM; this gives the driver its name.
@@ -36,6 +46,10 @@ MusicInit::
 	ldh [rNR50], a
 	ld hl, song_theme
 	call hUGE_init
+	ld a, [hUGE_ticks_per_row]
+	ld [wSongTicks], a
+	xor a
+	ld [wMusicFast], a
 	ld a, song_theme_TIMER
 	and a
 	ret z
@@ -49,12 +63,40 @@ MusicInit::
 	ldh [rIE], a
 	ret
 
+; Asks for the faster tempo (MUSIC_RED_TICKS_PER_ROW); MusicVBlank
+; switches as soon as the driver allows.
+MusicFast::
+	ld a, 1
+	ld [wMusicFast], a
+	ret
+
+; The song's own tempo again, now (a longer row is always safe).
+MusicNormal::
+	xor a
+	ld [wMusicFast], a
+	ld a, [wSongTicks]
+	ld [hUGE_ticks_per_row], a
+	ret
+
 ; One driver tick, unless the timer drives the song. Called by the VBlank
 ; handler; keeps every register but AF and HL, which the handler saves.
+; (This song ticks from VBlank; a timer-driven one would switch tempo in
+; MusicTimer instead.)
 MusicVBlank::
 	ld a, song_theme_TIMER
 	and a
 	ret nz
+	ld a, [wMusicFast]
+	and a
+	jr z, .tick
+	ld a, [hUGE_tick]
+	cp MUSIC_RED_TICKS_PER_ROW
+	jr nc, .tick                ; not yet: this row ends at the old tempo
+	ld a, MUSIC_RED_TICKS_PER_ROW
+	ld [hUGE_ticks_per_row], a
+	xor a
+	ld [wMusicFast], a
+.tick
 	push bc
 	push de
 	call hUGE_dosound
@@ -73,3 +115,7 @@ MusicTimer:
 	pop bc
 	pop af
 	reti
+
+SECTION "Music variables", WRAM0
+wSongTicks: db                     ; the song's own ticks_per_row
+wMusicFast: db                     ; 1: switch to MUSIC_RED_TICKS_PER_ROW when the driver allows

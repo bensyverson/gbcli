@@ -19,10 +19,16 @@ DEF SFX_TURN     EQU 5
 DEF SFX_WARN     EQU 6              ; the clock turns red: time is running out
 DEF SFX_TICK     EQU 7              ; each second after that
 DEF SFX_TIMEUP   EQU 8              ; the round is over
+DEF SFX_PAUSE    EQU 9              ; START pauses the round
+DEF SFX_SHUFFLE  EQU 10             ; Elle steps along the belt (SfxPlayQuiet)
+DEF SFX_MENU     EQU 11             ; the pause menu's cursor moves
 EXPORT SFX_GRAB, SFX_ASSEMBLE, SFX_SCORE, SFX_BUZZ, SFX_TURN, SFX_WARN, SFX_TICK, SFX_TIMEUP
+EXPORT SFX_PAUSE, SFX_SHUFFLE, SFX_MENU
 
 ; Channel 1 pitches: 2048 - 131072 / Hz.
 DEF A3 EQU 1452
+DEF B3 EQU 1517
+DEF D4 EQU 1602
 DEF C5 EQU 1798
 DEF E5 EQU 1849
 DEF G5 EQU 1881
@@ -62,12 +68,26 @@ SoundInit::
 	xor a
 	ld [wSfxRequest], a
 	ld [wSfxLeft], a
+	ld [wSfxLast], a
 	ret
 
 ; Asks for effect a (SFX_*); it starts at the next VBlank.
 SfxPlay::
 	ld [wSfxRequest], a
 	ret
+
+; Asks for effect a only if no effect is playing or asked for: for
+; sounds that repeat (the shuffle), which must not cut off the others.
+SfxPlayQuiet::
+	ld l, a
+	ld a, [wSfxRequest]
+	and a
+	ret nz
+	ld a, [wSfxLeft]
+	and a
+	ret nz
+	ld a, l
+	jr SfxPlay
 
 ; The buzz for a refused press.
 SoundBuzz::
@@ -81,6 +101,7 @@ SfxVBlank::
 	jr z, .playing
 	; A new effect: point at its first step.
 	ld l, a
+	ld [wSfxLast], a
 	xor a
 	ld [wSfxRequest], a
 	ld a, l
@@ -134,6 +155,7 @@ SfxVBlank::
 
 SfxTable:
 	dw SfxGrab, SfxAssemble, SfxScore, SfxBuzz, SfxTurn, SfxWarn, SfxTick, SfxTimeUp
+	dw SfxPause, SfxShuffle, SfxMenu
 
 ; A bright pluck that slides up.
 SfxGrab:
@@ -182,7 +204,24 @@ SfxTimeUp:
 	step 24, $00, DUTY_50, $F4, C6
 	end_effect
 
+; Pause: a quick high-low blip.
+SfxPause:
+	step 4, $00, DUTY_25, $C1, G6
+	step 8, $00, DUTY_25, $C2, C6
+	end_effect
+; Elle's feet on the factory floor: two soft, low scuffs, the second
+; lower, both sliding down.
+SfxShuffle:
+	step 3, $1F, DUTY_12, $81, D4
+	step 3, $1F, DUTY_12, $61, B3
+	end_effect
+; The menu's cursor: a short click.
+SfxMenu:
+	step 2, $00, DUTY_25, $A1, E6
+	end_effect
+
 SECTION "Sound variables", WRAM0
 wSfxRequest: db                    ; SFX_* to start at the next VBlank, or 0
 wSfxLeft: db                       ; frames left in the step playing, or 0
 wSfxStep: dw                       ; the next step
+wSfxLast:: db                      ; the effect started last (SFX_*), for the rules check

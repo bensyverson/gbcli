@@ -52,6 +52,9 @@ ScreenInit::
 	ld c, COLOR_WHITE
 	call TextLoadTiles
 
+	; The pause menu's text (the font's bank is in).
+	call PauseTilesInit
+
 	; Elle.
 	SWITCH_BANK ElleTiles
 	ld hl, TILEBLOCK0 + T_ELLE * 16

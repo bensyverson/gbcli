@@ -42,26 +42,30 @@ DEF SCORE_COL EQU 6                 ; and 5 wide: frame, 3 digits, frame
 
 ; Elle's place on screen (top left of her 16x48 frame, in pixels). She
 ; steps toward the belt she faces: up toward the Finished belt, down toward
-; the parts belt, and stands between the two mid-turn.
-DEF ELLE_X EQU 60
+; the parts belt, and stands between the two mid-turn. Left and Right step
+; her along the belts, ELLE_STEP_RANGE (tuning.inc) each way from ELLE_X,
+; her home spot; wElleX holds where she stands now.
+DEF ELLE_X EQU 60                   ; her home spot
 DEF ELLE_Y_PARTS    EQU 58
 DEF ELLE_Y_FINISHED EQU ELLE_Y_PARTS - 8
 DEF ELLE_Y_SIDE     EQU (ELLE_Y_PARTS + ELLE_Y_FINISHED) / 2
-DEF ELLE_CENTER_X EQU ELLE_X + 8    ; the belts' slot "under Elle" is the one under this x
-; Where held things show (top left of each 16x16), relative to Elle.
-; Facing the parts belt they are in front of her: OAM puts them first (a
-; GBC draws the lower index on top), and a DMG draws the smaller X on top,
-; so a held column may overlap hers only from the left. The left half
-; overlaps her by 3 px; the right half sits just clear of her.
-DEF HAND_LEFT_X  EQU ELLE_X - 13
-DEF HAND_RIGHT_X EQU ELLE_X + 16
+DEF ELLE_CENTER_DX EQU 8            ; the belts' slot "under Elle" is the one under wElleX + this
+; Where held things show (top left of each 16x16), relative to Elle's
+; top left. Everything moves with her, so the drawing order holds
+; wherever she stands. Facing the parts belt they are in front of her:
+; OAM puts them first (a GBC draws the lower index on top), and a DMG
+; draws the smaller X on top, so a held column may overlap hers only from
+; the left. The left half overlaps her by 3 px; the right half sits just
+; clear of her.
+DEF HAND_LEFT_DX  EQU -13
+DEF HAND_RIGHT_DX EQU 16
 DEF HAND_DY      EQU 14             ; below Elle's top
 ; Facing away, she is drawn over what she holds: each half's inner column
 ; lines up with one of hers (so a DMG, which draws the smaller X on top,
 ; still puts her in front) and its outer column peeks out at her side.
-DEF HAND_BACK_LEFT_X  EQU ELLE_X - 8
-DEF HAND_BACK_RIGHT_X EQU ELLE_X + 8
-DEF TOY_HELD_X   EQU ELLE_X             ; behind her, facing away: her columns' X exactly
+DEF HAND_BACK_LEFT_DX  EQU -8
+DEF HAND_BACK_RIGHT_DX EQU 8
+DEF TOY_HELD_DX  EQU 0              ; behind her, facing away: her columns' X exactly
 DEF TOY_HELD_DY  EQU 16
 
 ; Color numbers. Pieces are background tiles on the belts and objects in
@@ -75,34 +79,47 @@ DEF BGP_GAME    EQU %11_01_00_10    ; color 0 dark gray, 1 white, 2 light gray, 
 DEF OBP_GAME    EQU %11_01_00_00    ; color 1 white, 2 light gray, 3 black
 
 ; GBC palettes (src/colors.asm). BG:
-DEF PAL_SCENE EQU 0                 ; the belts, the floor, the key column, the pieces on them
+DEF PAL_SCENE EQU 0                 ; the belts, the floor, the key column's panel, empty slots
 DEF PAL_CLOCK EQU 1                 ; the clock face (src/clock.asm swaps it red)
-DEF PAL_WALL  EQU 2                 ; the HUD band: the wall and the score box
-; OBJ: Elle's parts, then the pieces she holds.
+DEF PAL_WALL  EQU 2                 ; the HUD band: the wall, the score box and the pause menu
+DEF PAL_NAME  EQU 1                 ; the title and results screens instead: the name's rows
+DEF PAL_TEXT  EQU 2                 ; and the rest of the text
+; The toys' palettes, the same numbers for BG (on a belt, in the key) and
+; OBJ (in Elle's hands); src/colors.asm says which toy has which.
+DEF PAL_TOY_WARM    EQU 3           ; the teddy bear and the gag glasses
+DEF PAL_TOY_TRAIN   EQU 4
+DEF PAL_TOY_SQUISHY EQU 5
+DEF PAL_TOY_SLINKY  EQU 6
+DEF PAL_TOY_CRAYONS EQU 7
+; OBJ: Elle's parts (the toys' above).
 DEF OBJ_PAL_HEAD   EQU 0
 DEF OBJ_PAL_TOP    EQU 1            ; the denim top from the front
 DEF OBJ_PAL_HAIR   EQU 2            ; the hair down her back
-DEF OBJ_PAL_LEGS   EQU 3
-DEF OBJ_PAL_PIECES EQU 4
+DEF OBJ_PAL_LEGS   EQU OBJ_PAL_TOP  ; the same denim and navy
 
 ; Tile numbers ($8000 addressing: BG, window and objects share them).
 ; The scene's (T_BLANK = 0 ... T_BOX, SCENE_TILES of them) come from
 ; art/scene.pixels by tools/gen_scene.py.
 include "gen/scene.inc"
 DEF T_FLOOR       EQU T_BLANK       ; the floor is white
+DEF T_PAUSE_CONTINUE EQU SCENE_TILES     ; 5 tiles: the pause menu's "Continue" (src/pause.asm)
+DEF T_PAUSE_QUIT     EQU T_PAUSE_CONTINUE + 5   ; 4 tiles: "Quit"
+DEF T_PAUSE_CURSOR   EQU T_PAUSE_QUIT + 4       ; 1 tile: the menu's ">"
+DEF PAUSE_TEXT_TILES EQU T_PAUSE_CURSOR + 1 - T_PAUSE_CONTINUE
 DEF T_CLOCK_A     EQU 32            ; 16 tiles: clock buffer A (256-byte aligned: src/clock.asm sets only the high byte)
 DEF T_CLOCK_B     EQU 48            ; 16 tiles: clock buffer B (aligned too)
 DEF T_DIGITS      EQU 64            ; 10 tiles: 0-9
 DEF T_TOYS        EQU 74            ; TOY_COUNT * TOY_TILES tiles (even, for 8x16 pairs)
 DEF T_ELLE        EQU 146           ; Elle's object tiles (even)
 DEF T_BELT_TOYS   EQU 170           ; the toys again, with the belt's lines behind them (src/screen.asm asserts it fits)
-	ASSERT SCENE_TILES <= T_CLOCK_A && T_CLOCK_A % 16 == 0 && T_CLOCK_B % 16 == 0
+	ASSERT T_PAUSE_CURSOR < T_CLOCK_A && T_CLOCK_A % 16 == 0 && T_CLOCK_B % 16 == 0
 
 ; The title and results screens keep tile 0 (white) and the toys, and
 ; reuse the rest (ScreenInit reloads them for a round): two small lines of
 ; text, a 20-tile buffer each; a scratch line that the big lines are set
 ; in; and the big lines at twice the size, 4 tiles per font tile
 ; (src/bigtext.asm).
+DEF TITLE_BELT_ROW EQU 6            ; the title's toy belt: map rows 6-9 (src/results.asm)
 DEF RESULTS_LINE_TILES EQU 20
 DEF T_RESULTS EQU T_BLANK + 20      ; 2 lines x 20 tiles, to T_TOYS
 DEF T_SCRATCH EQU T_ELLE            ; 20 tiles

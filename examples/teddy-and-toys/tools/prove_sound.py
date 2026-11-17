@@ -49,6 +49,9 @@ EFFECTS = [  # (name, pokes, keys, frames)
     ("turn", [], "UP@2 -UP@3", 20),
     ("warn, then a tick a second", [f"wRoundLeft={(RED_FRAMES + 5) & 255},{(RED_FRAMES + 5) >> 8}"], "", 130),
     ("time's up", ["wRoundLeft=5,0"], "", 60),
+    ("pause", [], "START@2 -START@3", 20),
+    ("shuffle (Elle steps)", [], "RIGHT@2 -RIGHT@20", 20),
+    ("the pause menu's cursor", [], "START@2 -START@3 DOWN@20 -DOWN@21", 30),
 ]
 
 

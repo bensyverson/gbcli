@@ -86,6 +86,17 @@ From the art build (commit `c209b47`). "Elle approves."
 - **Belt lines behind pieces.** Pieces on a belt show the belt's lines behind them, instead of a solid dark-gray cell. Pieces in Elle's hands keep a clear background.
 - **A cheerful jingle** (a short rising run of notes) when a finished toy lands on the Finished belt, replacing the plain score effect.
 
+## Play rulings (Ben, 2026-11-17)
+
+From the finished build (commit `d526f64`), after Ben and Elle played it at home ("Elle is extremely happy"). Ben's six asks are the first line of each bullet. Where Ben left the detail open, the main thread decided it, and says so; each of those is easy to change.
+
+- **Faster belts.** "A bit faster, not double; maybe 50%." Both belts go from 96 to 144 (1/256 px a frame). The supply's spacing stays as it is unless the faster belt makes matches too rare, which the agent checks with the bot and reports.
+- **The best score shows on the title screen.** It is saved and shown on the results screen, but the title doesn't show it. This is a bug: fix it with a rules-check case that fails first.
+- **START pauses.** START during a round pauses with a short sound and opens a small menu: Continue or Quit. Main thread's calls: the clock, the belts, Elle and the music all stop while paused (the music silent, then resumed where it was); Up and Down move the cursor; A or START picks; B or START again also continues. Continue resumes the round. Quit goes back to the title without a results screen and without saving the score as a best. START is ignored during a turn's frames only if pausing there would be hard; otherwise it pauses anytime in a round.
+- **The music speeds up toward the end.** The belts don't. Main thread's call: the tempo steps up once, when the clock turns red (`CLOCK_RED_SECONDS`), by a tuning constant, and returns to normal for the next round and on the title.
+- **Color on the Game Boy Color.** The toys are colored: in Elle's hands, in the key column and on the belts. The title screen gets more color too; today nearly everything is gray. The DMG build keeps its four shades and must read as well as before.
+- **Elle steps left and right.** Left and Right move her along the belt by a small amount: about one to two toy widths each way from her home spot (main thread's call: 24 px each way, a tuning constant), not the belt's full length. A "shuffle" sound plays as she moves. She can step facing either belt, but not during a turn. The pick-up reach is measured from where she stands, and a toy set on the Finished belt lands where she stands.
+
 ## How the game agent works
 
 As [2026-11-08-example-games-plan.md](2026-11-08-example-games-plan.md) ▸ How the game agents work, with the lessons of [2026-11-09-games-de-plan.md](2026-11-09-games-de-plan.md) and [2026-11-09-raycaster-plan.md](2026-11-09-raycaster-plan.md) ▸ What D and E taught the briefs:

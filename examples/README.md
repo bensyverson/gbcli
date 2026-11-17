@@ -9,7 +9,7 @@ Original Game Boy games built entirely by AI agents with gbcli, as a test of the
 | `rhythm/` | Lantern Drum, a rhythm game ([play: `lantern-drum.gb`](rhythm/lantern-drum.gb)) | Notes judged against the music driver's own tick, so the chart can't drift from the song; checked against the audio log |
 | `rogue/` | Lanternfall, a turn-based dungeon crawl down five generated floors ([play: `lanternfall.gb`](rogue/lanternfall.gb)) | Dungeons generated in assembly from a seed, on a map bigger than the background, streamed in as it scrolls |
 | `raycaster/` | Lantern, a first-person maze: find three keys before the lamp runs dry ([play: `lantern.gb`](raycaster/lantern.gb)) | A view raycast into a tile buffer and copied to VRAM in VBlank only, sped up 4.9x in profile-driven rounds, checked pixel for pixel against a host reference |
-| `factory/` | Teddy & Toys: snap matching halves into toys between two factory belts before the clock runs out ([play: `teddy-and-toys.gb`](factory/teddy-and-toys.gb)) | Two belts scrolling opposite ways by mid-frame scroll splits, under a key column in the window that never scrolls; every gameplay number in one tuning file, rechecked by a 36-rule check in about a second |
+| `teddy-and-toys/` | Teddy & Toys: snap matching halves into toys between two factory belts before the clock runs out ([play: `teddy-and-toys.gb`](teddy-and-toys/teddy-and-toys.gb)) | Two belts scrolling opposite ways by mid-frame scroll splits, under a key column in the window that never scrolls; every gameplay number in one tuning file, rechecked by a 36-rule check in about a second |
 
 ## Play one
 

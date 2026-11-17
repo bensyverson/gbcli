@@ -10,8 +10,8 @@ import sys
 import tuning
 
 PROJECT = tuning.PROJECT
-ROM = "build/factory.gb"
-ROM_GBC = "build/gbc/factory.gbc"
+ROM = "build/teddy-and-toys.gb"
+ROM_GBC = "build/gbc/teddy-and-toys.gbc"
 
 
 class Gbcli:

@@ -21,4 +21,4 @@ build shooter vesper-swarm
 build rhythm lantern-drum
 build rogue lanternfall
 build raycaster lantern
-build factory teddy-and-toys
+build teddy-and-toys teddy-and-toys

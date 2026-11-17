@@ -5,7 +5,7 @@
 1. tools/gen_toys.py: data/toys.txt and art/toys/ -> the toy include
 2. tools/gen_clock.py: include/tuning.inc -> the clock's rotations
    tools/gen_scene.py: art/scene.pixels -> the background tiles
-3. gbcli build, then gbcli build --gbc (build/factory.gb, build/gbc/factory.gbc)
+3. gbcli build, then gbcli build --gbc (build/teddy-and-toys.gb, build/gbc/teddy-and-toys.gbc)
 4. tools/rules_check.py: one scenario per rule of the controls table
    (skipped with --no-check)
 5. with --prove, tools/prove_screen.py (the belts, key column, clock and

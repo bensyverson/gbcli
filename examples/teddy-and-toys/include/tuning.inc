@@ -2,7 +2,7 @@
 ;
 ; Each constant has its unit and what it does. Change a number, then run
 ;     python3 tools/make.py
-; from examples/factory/: it regenerates what depends on this file (the
+; from examples/teddy-and-toys/: it regenerates what depends on this file (the
 ; clock's rotations), builds both ROMs, and runs the rules check.
 ;
 ; A frame is 1/60 s here (the Game Boy runs at 59.73 frames a second).

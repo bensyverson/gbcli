@@ -6,7 +6,7 @@ Elle works one shift: one minute on the clock, between two belts that run opposi
 
 ## Play
 
-Open `build/factory.gb` in any Game Boy emulator, or `build/gbc/factory.gbc` for color (it runs on a DMG too). Press START on the title.
+Open `build/teddy-and-toys.gb` in any Game Boy emulator, or `build/gbc/teddy-and-toys.gbc` for color (it runs on a DMG too). Press START on the title.
 
 | Facing | Holding | Press | What happens |
 |---|---|---|---|
@@ -105,7 +105,7 @@ gbcli build && gbcli build --gbc
 **The belts move opposite ways, each at its tuned speed.** Start a round, then read both scrolls 180 frames apart:
 
 ```sh
-gbcli run build/factory.gb --session readme --from boot --frames 300 \
+gbcli run build/teddy-and-toys.gb --session readme --from boot --frames 300 \
   --keys 'START@60 -START@62' --checkpoint early --read '[wPartsX+1]' --read '[wFinishedX+1]'
 # read expr=[wPartsX+1] value=87 ...    read expr=[wFinishedX+1] value=168 ...
 gbcli run --session readme --at early --frames 180 --read '[wPartsX+1]' --read '[wFinishedX+1]' --read '[wClockStep]'
@@ -139,7 +139,7 @@ The two crops are identical pixel for pixel (compare the pixels, not the files: 
 
 ```sh
 python3 tools/bot.py              # writes build/bot.keys
-gbcli run build/factory.gb --session replay --from boot --frames 3665 \
+gbcli run build/teddy-and-toys.gb --session replay --from boot --frames 3665 \
   --keys-file build/bot.keys --keys-since boot --frame-budget --read 'u16[wScore]'
 # read expr=u16[wScore] value=9 ...
 # frame_budget frames=3665 lag=0 lcd_off=10 ... active_max=12120 ...

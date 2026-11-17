@@ -2,7 +2,7 @@
 
     python3 tools/prove_screen.py [--gbcli PATH] [-v]
 
-Claims, each checked on the built ROM (build/factory.gb) in session `prove`:
+Claims, each checked on the built ROM (build/teddy-and-toys.gb) in session `prove`:
   bands     every line of each band is drawn with its band's scroll (the
             raster's drawn SCX): HUD 0, Finished belt, floor 0, parts belt
   hblank    every SCX write the game makes lands in HBlank or VBlank

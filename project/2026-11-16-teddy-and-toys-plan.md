@@ -2,6 +2,8 @@
 
 2026-11-16, twentieth session. Imported into `job` on 2026-11-16 under root `9b5RBA` as Stage 14 (`hmDFvT`; leaves BinRmI, CPtphq, zxwfFU, Zgr9Xh, XLUObc); after import the tracker is the plan, so change leaves with `job edit`, not the YAML below.
 
+> **Renamed, 2026-11-16:** the game's folder is now `examples/teddy-and-toys/` (Ben's call), so its ROMs build as `build/teddy-and-toys.gb` and `build/gbc/teddy-and-toys.gbc`. `examples/factory/` and `build/factory.gb` below are the names at the time.
+
 ## Goal
 
 A sixth example game, and the first whose design is Ben's rather than the agent's: a toy-factory arcade game built from Ben's sketch ([2026-11-16-teddy-and-toys-sketch.jpg](2026-11-16-teddy-and-toys-sketch.jpg)). It is built the way the other five were (an agent using gbcli as a user; [2026-11-08-example-games-plan.md](2026-11-08-example-games-plan.md) ▸ How the game agents work), with one difference that shapes everything: **Ben wants to iterate on the gameplay.** So the game is built to be tuned. Every gameplay number lives in one file, the toys are data, and a rules check reruns every rule in seconds after a change.

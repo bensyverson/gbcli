@@ -8,7 +8,7 @@ just far enough to make it (a piece reaching Elle's reach, a chord, a
 drop). Every key press is logged at its frame since boot in build/bot.keys,
 so the whole round replays in one run:
 
-    gbcli run build/factory.gb --session replay --from boot --frames N \
+    gbcli run build/teddy-and-toys.gb --session replay --from boot --frames N \
         --keys-file build/bot.keys --keys-since boot --frame-budget
 
 After the round: the results screen (build/prove/bot-results.png), a

@@ -4,7 +4,7 @@
 
   title.png         the title screen (DMG)
   round-dmg.png     mid-round on a DMG, Elle holding a half
-  round-gbc.png     the same moment on a GBC (build/gbc/factory.gbc, --model gbc)
+  round-gbc.png     the same moment on a GBC (build/gbc/teddy-and-toys.gbc, --model gbc)
   red-gbc.png       the last 10 seconds on a GBC: the clock face red
   turn.png          Elle turning up to the Finished belt, then back down:
                     one crop around her a frame or two apart, with the frame

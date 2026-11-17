@@ -183,11 +183,3 @@ What: let pixel text (or a sheet's name) name its tiles and frames so `images.in
 **Why parked:** C (the raycaster) wanted it for its speed-ups, but a renderer that takes a new pose each view samples input at different frames once it is faster, so the faster build shows *different* views while keys are held, not only earlier ones. A frame-locked test mode in the ROM is the sound check, and `help optimize` now says so; `equiv --screen off` covers the timing-free `--ram` compare ([2026-11-09-examples-dx-review-c.md](2026-11-09-examples-dx-review-c.md), C-1).
 
 **Un-park when:** a game whose views don't depend on input timing (a demo, a replayed cutscene, a pose taken from a fixed table) needs to check a speed-up and a frame lock won't do.
-
-## 2026-11-09 — The screen's shade indices as data in `shot --json`
-
-**What:** `shot --json` carries the 160x144 screen as shade indices (0-3, or CGB colors), so a caller compares pixels without decoding a PNG. Useful to Rust-library and web callers, who may have no PNG decoder.
-
-**Why parked:** one agent (C) decoded `shot`'s 2-bit palette PNG, once, with a small fix to its decoder; `shot --help` now names the format ([2026-11-09-examples-dx-review-c.md](2026-11-09-examples-dx-review-c.md), C-9).
-
-**Un-park when:** a second agent decodes `shot` PNGs to compare pixels, or a library or web caller needs the screen as data.

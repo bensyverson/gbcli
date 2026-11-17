@@ -91,3 +91,7 @@
    - **help and onboarding text:** the WAV sentence (F-6), images in ROMX (F-7), the keys rule in `run --help` (F-9), the cart-type line (F-10), include files (F-11), the boot ROM after `power-cycle` (F-12), and truncated rows that say what's hidden (F-13);
    - **audio and capture:** per-channel loudness in `--audio-summary` (F-6) and `--crop` with `--filmstrip` (F-8).
 6. **An issue tree in `job`** for discovered work, which today goes under the plan root? *Recommend yes.*
+
+## Ben's decisions (2026-11-16)
+
+- **Question 4 (F-5): yes, both.** `shot` gives a pixel fingerprint (`pixels=` on the row and in `--json`) and the raw screen as data in `--json`: shade indices on a DMG, colors on a GBC. Both honor `--crop`, so a caller can fingerprint or dump just a region, such as the key column or one belt. The backlog entry "The screen's shade indices as data in `shot --json`" is un-parked and removed from backlog.md.

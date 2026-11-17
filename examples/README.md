@@ -1,6 +1,6 @@
 # Example games
 
-Original Game Boy games built entirely by AI agents with gbcli, as a test of the tool: the code, the pixel art, the music and the checks are all theirs. Each agent worked like any gbcli user, from `gbcli help` and this repo's README, never from gbcli's source. Each game is a vertical slice: one level or track, a title screen, music, and a way to win and lose. They run on the original Game Boy and, built with `--gbc`, in color on a Game Boy Color.
+Original Game Boy games built entirely by AI agents with gbcli, as a test of the tool: the code, the pixel art, the music and the checks are all theirs. Five are the agents' own designs; Teddy & Toys is Ben's, built by agents from his sketch and playtest notes. Each agent worked like any gbcli user, from `gbcli help` and this repo's README, never from gbcli's source. Each game is a vertical slice: one level or track, a title screen, music, and a way to win and lose (Teddy & Toys plays for a personal best instead). They run on the original Game Boy and, built with `--gbc`, in color on a Game Boy Color.
 
 | Folder | Game | What it shows |
 |---|---|---|
@@ -9,6 +9,7 @@ Original Game Boy games built entirely by AI agents with gbcli, as a test of the
 | `rhythm/` | Lantern Drum, a rhythm game ([play: `lantern-drum.gb`](rhythm/lantern-drum.gb)) | Notes judged against the music driver's own tick, so the chart can't drift from the song; checked against the audio log |
 | `rogue/` | Lanternfall, a turn-based dungeon crawl down five generated floors ([play: `lanternfall.gb`](rogue/lanternfall.gb)) | Dungeons generated in assembly from a seed, on a map bigger than the background, streamed in as it scrolls |
 | `raycaster/` | Lantern, a first-person maze: find three keys before the lamp runs dry ([play: `lantern.gb`](raycaster/lantern.gb)) | A view raycast into a tile buffer and copied to VRAM in VBlank only, sped up 4.9x in profile-driven rounds, checked pixel for pixel against a host reference |
+| `factory/` | Teddy & Toys: snap matching halves into toys between two factory belts before the clock runs out ([play: `teddy-and-toys.gb`](factory/teddy-and-toys.gb)) | Two belts scrolling opposite ways by mid-frame scroll splits, under a key column in the window that never scrolls; every gameplay number in one tuning file, rechecked by a 36-rule check in about a second |
 
 ## Play one
 

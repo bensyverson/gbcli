@@ -1,22 +1,183 @@
 # Teddy & Toys
 
-A toy-factory game for the Game Boy: grab matching halves off a moving belt, snap them into toys, and send them off before the clock runs out.
+A toy-factory game for the Game Boy. Grab matching halves off a moving belt, snap them into toys, and send them off before the clock runs out.
 
-Stub: the full README (how to play, what's notable, the Tuning section and the proofs) comes with the polish pass. This is the placeholder build for playtesting: the art, sound and music are stand-ins.
+Elle works one shift: one minute on the clock, between two belts that run opposite ways. Parts ride past on the front belt. She picks up two halves that belong together, snaps them into a toy, turns around and sets the toy on the Finished belt behind her. There is no winning or losing. When time runs out you see how many toys you made and your best score, which the cartridge's battery keeps. The game was designed by Ben, from his own sketch. AI agents built it with gbcli, working as users, from `gbcli help` and the repo's README alone. It runs in four shades on the original Game Boy and in color on a Game Boy Color.
 
-## Build, check, play
+## Play
 
-From this folder, with `gbcli` and RGBDS on `PATH`:
+Open `build/factory.gb` in any Game Boy emulator, or `build/gbc/factory.gbc` for color (it runs on a DMG too). Press START on the title.
+
+| Facing | Holding | Press | What happens |
+|---|---|---|---|
+| parts belt (Down) | a free hand | A, with a piece in front of you | Picks it up, if it matches the half you hold |
+| parts belt | one half | B | Puts it back on the belt, where it keeps moving |
+| parts belt | two halves | B | Puts back the half you grabbed last |
+| either belt | two halves | B+A together | Snaps them into the finished toy |
+| Finished belt (Up) | a finished toy | B | Sets it on the Finished belt: one toy made |
+| anything else | | A or B | Nothing, with a buzz |
+
+- **Turning.** Down turns Elle to face the parts belt (you see her face). Up turns her to the Finished belt (you see her back). A turn takes a moment, and buttons do nothing during it.
+- **Halves.** Either half can come first. The slinky's two halves are the same piece, so any two coils make a slinky.
+- **B+A** is a chord. Press them together, or one just after the other.
+- **Missed pieces** cost nothing. When you hold one half, its partner is never far away.
+- **The toys** are listed top to bottom in the key on the right: teddy bear, train, squishy, slinky, gag glasses and crayons.
+- **The clock** ticks each second for the last 10 seconds, and on a Game Boy Color its face turns red.
+- **When time runs out,** the results screen shows your score and your best, with "New best!" when you beat it. START goes back to the title, and START there begins the next shift.
+
+## Build
+
+From this folder, with gbcli and RGBDS installed (see the repo's [README](../../README.md)):
 
 ```sh
-python3 tools/make.py            # regenerate, build both ROMs, run the rules check
-gbcli run build/factory.gb --session play --frames 600 --shot now.png
+mkdir -p .gbcli                   # keeps gbcli's sessions in this folder (it is gitignored)
+python3 tools/make.py             # regenerate, build both ROMs, run the rules check
 ```
 
-The ROMs land in `build/factory.gb` (DMG) and `build/gbc/factory.gbc` (GBC, also runs on a DMG).
+`tools/make.py` regenerates the toy, scene and clock includes, then runs `gbcli build` and `gbcli build --gbc` (both report `errors=0 warnings=0`) and the rules check. Every tool takes `--gbcli PATH` if gbcli isn't on `PATH`. The `.gbcli/` line matters inside the gbcli repo. gbcli looks for the nearest `.gbcli/` above the working directory, and without one here your sessions land in the repo's. The tools create it themselves.
 
-Controls: Down faces the parts belt (front), Up faces the Finished belt (back). A grabs, B puts back or drops, and B+A together assembles. START begins a round.
+## What's technically notable
+
+- **Two belts scroll opposite ways on one background.** The background is one layer with one horizontal scroll register (SCX). A STAT interrupt on LY=LYC fires on the line before each band. Its handler arms the next split, then waits for that line's HBlank to write the band's SCX, so every line of a band draws with the band's scroll (`src/belts.asm`). The HUD and floor keep SCX 0. Each belt's position is 8.8 fixed point, so speeds are sub-pixel.
+- **The key column never scrolls.** It is the window layer, placed at the right edge from line 0 down, so the belts' lines scroll under it. The window can only cover the region right of WX and below WY, which is why the HUD sits to the left of the column (`include/layout.inc`).
+- **Pieces are background tiles, not sprites.** A belt is 16 slots of 16 px, and the hardware scroll moves the pieces. The only objects are Elle and what she holds, at most 6 on a line. A slot is rewritten only while it is hidden, under the key column or off the edge of the screen.
+- **One tile set, two uses.** Color 0 is the belts' dark gray on the background and clear on objects, so the same piece tiles work on a belt and in Elle's hands. A second copy, with the belt's lines composited behind each clear pixel, is generated by `tools/gen_toys.py` from the scene art, so a piece on a belt shows the lines behind it.
+- **Drawing order on both machines.** Facing away, Elle is drawn over what she holds. A Game Boy Color draws the lower OAM index on top. The original Game Boy draws the smaller X on top and breaks ties by index. So her objects go first in OAM, and each held column that overlaps her shares her column's X: the toy hides behind her and the halves peek out at her sides. Facing the camera it is the other way round: what she holds comes first in OAM, and a held column overlaps her only from the left, so its X is the smaller one (`src/play.asm`, `ElleDraw`; `include/layout.inc`).
+- **The clock hand is 60 pre-drawn faces.** `tools/gen_clock.py` draws one face per hand position. When the hand moves, the VBlank handler copies the next face into a hidden tile buffer, 4 tiles a frame, then flips the map to it, so the hand never tears.
+- **Sound effects sit on top of the music.** The tune (`assets/music/theme.song`, gbcli song text, played by hUGEDriver) never uses channel 1. The effects play there at volume 15, against the music's 4 and below. The jingle when a toy lands on the Finished belt runs up C6 D6 E6 G6 A6 to a ringing C7.
+- **Big text from the small font.** The results screen draws its lines at twice the font's size by doubling each glyph's tile into four (`src/bigtext.asm`).
+- **The best score survives power-off,** in MBC5 battery RAM behind a "TOYS" mark (`src/save.asm`).
 
 ## Tuning
 
-Every gameplay number is in `include/tuning.inc`. The toys are `data/toys.txt` with art in `art/toys/`. After any change, `python3 tools/make.py`.
+Every gameplay number is in **`include/tuning.inc`**, each with its unit and a comment. After any change, run the one command that rebuilds and rechecks everything:
+
+```sh
+python3 tools/make.py
+```
+
+It regenerates what depends on the tuning file (the clock's faces), builds both ROMs and reruns the rules check, which reads its numbers from the same file. It takes a few seconds.
+
+| Constant | Unit | What it does | Now |
+|---|---|---|---|
+| `ROUND_SECONDS` | seconds | The length of a round | 60 |
+| `CLOCK_STEPS` | hand positions | How many pre-drawn faces the hand steps through in a round. Must divide `ROUND_SECONDS * 60`, at most 64 | 60 |
+| `CLOCK_RED_SECONDS` | seconds | Seconds left when the clock face turns red (GBC) and starts ticking | 10 |
+| `BELT_PARTS_SPEED` | 1/256 px a frame | The front (parts) belt's speed: 256 is one pixel a frame | 96 |
+| `BELT_PARTS_DIR` | `BELT_LEFT` or `BELT_RIGHT` | Which way the parts belt runs | `BELT_LEFT` |
+| `BELT_FINISHED_SPEED` | 1/256 px a frame | The back (Finished) belt's speed | 96 |
+| `BELT_FINISHED_DIR` | `BELT_LEFT` or `BELT_RIGHT` | Which way the Finished belt runs | `BELT_RIGHT` |
+| `SUPPLY_CHANCE` | out of 256 | The chance that a slot arriving on the parts belt brings a piece | 192 |
+| `SUPPLY_MIN_GAP` | slots | Empty slots forced after each piece: the piece spacing | 1 |
+| `SUPPLY_MATCH_CHANCE` | out of 256 | While Elle holds one half, the chance that a new piece is its partner | 96 |
+| `SUPPLY_MATCH_MAX_GAP` | pieces | After this many new pieces that don't match, the next one does | 3 |
+| `PICKUP_REACH` | px, 0-8 | How far a piece's middle may be from Elle's middle for A to grab it | 6 |
+| `CHORD_FRAMES` | frames, 1+ | The B+A window: the second button up to this many frames minus one after the first still assembles (1 means the same frame only) | 5 |
+| `BUZZ_COOLDOWN` | frames | After a buzz, further refusals stay silent this long | 12 |
+| `TURN_FRAMES` | frames, 0+ | How long a turn takes, with A and B ignored (0 makes it instant) | 8 |
+| `BELT_LEFT`, `BELT_RIGHT` | names | The two values for the `_DIR` constants above, not numbers to tune | 0, 1 |
+
+Other things to edit:
+
+- **The toys** are data. `data/toys.txt` lists them in key order, with their names, halves and art file. The art is in `art/toys/*.pixels` (gbcli pixel text, 48x16 each: half A, half B, the finished toy). A toy whose second half is `same` is one piece used twice, like the slinky. `tools/make.py` regenerates the include.
+- **The scene** is `art/scene.pixels`. Elle is `assets/sprites/elle.16x48.pixels`, and the music is `assets/music/theme.song`. The screen's layout (band rows, Elle's position, the key column's x) is in `include/layout.inc`; changing it means changing the art too.
+
+## Checking the claims
+
+Each claim below has the command that proves it, rerun on the final build (2026-11-16). The commands run from this folder; `gbcli` stands for your gbcli binary. The tools wrap the same gbcli calls and print PASS or FAIL per claim:
+
+```sh
+python3 tools/make.py --prove     # builds, rules check, then prove_screen.py and prove_sound.py
+python3 tools/bot.py              # a bot plays a whole round, then checks the saved best
+python3 tools/review_shots.py     # screenshots for a human, in build/review/
+```
+
+**Both builds are clean.**
+
+```sh
+gbcli build && gbcli build --gbc
+# build rgbds=1.0.4 target=dmg sources=20 errors=0 warnings=0
+# build rgbds=1.0.4 target=gbc sources=20 errors=0 warnings=0
+```
+
+**Every rule in the controls table holds.** `python3 tools/rules_check.py` runs one scripted scenario per rule. Each is one `gbcli run --session rules --at play --frames N --poke ... --keys ... --read ...` call from the same checkpoint. The rules cover the table, the turn, the slinky, the drawing order facing each way, the round's end, the loop back to the title and the saved best. It prints `36/36 rules pass; 44 gbcli calls, 1.2 s`.
+
+**The belts move opposite ways, each at its tuned speed.** Start a round, then read both scrolls 180 frames apart:
+
+```sh
+gbcli run build/factory.gb --session readme --from boot --frames 300 \
+  --keys 'START@60 -START@62' --checkpoint early --read '[wPartsX+1]' --read '[wFinishedX+1]'
+# read expr=[wPartsX+1] value=87 ...    read expr=[wFinishedX+1] value=168 ...
+gbcli run --session readme --at early --frames 180 --read '[wPartsX+1]' --read '[wFinishedX+1]' --read '[wClockStep]'
+# read expr=[wPartsX+1] value=155 ...   (+68: 180 x 96/256)
+# read expr=[wFinishedX+1] value=100 ...  (-68)
+# read expr=[wClockStep] value=6 ...      (the hand moved 3 steps in 3 s)
+```
+
+**Each band draws with its own scroll, written in HBlank.**
+
+```sh
+gbcli run --session readme --at early --frames 2 --raster
+# raster_writer reg=rSCX pc=$1B81 writes=6 hblank=6
+# raster_write reg=rSCX value=$A7 ... mode=hblank   (line 55: the Finished belt)
+# raster_write reg=rSCX value=$00 ... mode=hblank   (line 87: the floor)
+# raster_write reg=rSCX value=$58 ... mode=hblank   (line 111: the parts belt)
+```
+
+`tools/prove_screen.py` checks the same thing with `--raster --json` on every line: one SCX per band, every write in HBlank or VBlank.
+
+**The key column stays still while the belts move.**
+
+```sh
+gbcli run --session readme --at early --frames 0 --shot key-early.png --crop 130,0,30,144
+gbcli run --session readme --at early --frames 180 --shot key-later.png --crop 130,0,30,144
+```
+
+The two crops are identical pixel for pixel (compare the pixels, not the files: gbcli's PNGs carry the frame in a text chunk), while the same crops of the belts differ. `tools/prove_screen.py` compares them: `PASS key: key column x 130-159 identical, belts changed`.
+
+**No lag frames.** The bot's round replays frame for frame from its key log:
+
+```sh
+python3 tools/bot.py              # writes build/bot.keys
+gbcli run build/factory.gb --session replay --from boot --frames 3665 \
+  --keys-file build/bot.keys --keys-since boot --frame-budget --read 'u16[wScore]'
+# read expr=u16[wScore] value=9 ...
+# frame_budget frames=3665 lag=0 lcd_off=10 ... active_max=12120 ...
+```
+
+The busiest frame uses about 17% of a frame. The next frame, where the round ends and the results screen is drawn with the LCD off, counts as one lag frame. It is a screen change, not play.
+
+**The best score survives a power cycle.**
+
+```sh
+gbcli run --session readme --at early --frames 8 --poke 'wRoundLeft=3,0' --poke 'wScore=$07,0' \
+  --read 'u16[wBest]' --read '[wNewBest]'
+# read expr=u16[wBest] value=7 ...   read expr=[wNewBest] value=1 ...
+gbcli power-cycle --session readme
+# power_cycle battery=head bytes=8192 ...
+gbcli run --session readme --to MainLoop --read 'u16[wBest]'
+# read expr=u16[wBest] value=7 ...
+```
+
+**Effects play on channel 1, louder than the music, and scoring plays a rising jingle.**
+
+```sh
+gbcli run --session readme --at early --frames 40 --poke 'wToy=1' --poke 'wFacing=1' \
+  --poke 'wFinishedX=0,4' --poke 'wFinishedSlots+4=0' --keys 'B@2 -B@3' \
+  --audio-log --audio-channel 1 --piano jingle.png
+# ... NR12 $F1: square 1 envelope 15 down, pace 1
+# ... NR14 $87: square 1 trigger, length off, period 1923 = C6 +3.4c (1048.58 Hz)
+# ... NR14 $87: ... period 1936 = D6 -6.5c ..., then E6 and G6 (the text rows stop at 20;
+#     --json has every write: A6 and C7 follow); jingle.png shows all six as a rising staircase
+```
+
+`tools/prove_sound.py` checks that the music never writes channel 1 and starts its channels at volume 4 and below, while every effect starts at 12 or 15. It also checks that the jingle is 6 rising notes, and that its loudest moment is 3.6 times the music's (RMS, from `--wav --channels each`).
+
+## Files
+
+- `src/`: the game. `main.asm` holds start-up, the main loop and the round; `belts.asm` the scroll splits and slots; `play.asm` the controls and Elle; `supply.asm` the parts supply; `clock.asm`; `results.asm` the title and results screens; `sound.asm` the effects; `music.asm`; `save.asm`; `colors.asm` the GBC palettes.
+- `include/tuning.inc`: every gameplay number. `include/layout.inc`: where things are on screen and in tile memory.
+- `data/toys.txt`, `art/`: the toys and the scene, which `tools/gen_toys.py` and `tools/gen_scene.py` turn into `src/gen/` and `include/gen/`.
+- `tools/`: `make.py` (the one command), the generators, `rules_check.py`, `prove_screen.py`, `prove_sound.py`, `bot.py` and `review_shots.py`. Python 3 standard library only.
+
+The agents' notes on building it with gbcli are in [project/2026-11-16-dx-factory.md](../../project/2026-11-16-dx-factory.md).

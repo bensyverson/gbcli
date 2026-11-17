@@ -1,6 +1,7 @@
 format gbcli-pixels 1
-# Slinky: one piece, a coil, used twice (data/toys.txt says `same`, so the
-# half B frame is unused); the finished slinky stands in an arch.
+# Slinky: one piece, a short coil stack, used twice (data/toys.txt says
+# `same`, so the half B frame is unused); two of them make the finished
+# slinky, one full, tall stack (Ben's art review, 2026-11-16).
 # Three 16x16 frames. Pieces are objects too, so no dark gray: clear shows
 # the belt behind them (tools/tiles.py).
 size 48 16
@@ -10,38 +11,38 @@ color l #aaaaaa
 color k #000000
 fill .
 
-rows 0 0    # the coil (both halves)
+rows 0 0    # the short coil stack (both halves), about half the height
+................
+................
+................
 ................
 ....kkkkkkkk....
 ..kkwwwwwwwwkk..
 .kwwkkkkkkkkwwk.
 .kwk........kwk.
 .kwwkkkkkkkkwwk.
-.kkkwwwwwwwwkkk.
-.kllkkkkkkkkllk.
-.kkkllllllllkkk.
-.kwwkkkkkkkkwwk.
-.kkkwwwwwwwwkkk.
-.kllkkkkkkkkllk.
 .kkkllllllllkkk.
 .kwwkkkkkkkkwwk.
 ..kkwwwwwwwwkk..
 ....kkkkkkkk....
+................
+................
+................
 
-rows 32 0   # the slinky, in an arch
-.....kkkkkk.....
-...kkwkwkwkkk...
-..kwkwkwkwkwkk..
-.kwkkk....kkkwk.
-.kwk........kwk.
-kwwk........kwwk
-kkkk........kkkk
-kllk........kllk
-kkkk........kkkk
-kwwk........kwwk
-kkkk........kkkk
-kllk........kllk
-kkkk........kkkk
-kwwk........kwwk
-kkkk........kkkk
+rows 32 0   # the slinky: one full, tall stack
 ................
+....kkkkkkkk....
+..kkwwwwwwwwkk..
+.kwwkkkkkkkkwwk.
+.kwk........kwk.
+.kwwkkkkkkkkwwk.
+.kkkwwwwwwwwkkk.
+.kllkkkkkkkkllk.
+.kkkllllllllkkk.
+.kwwkkkkkkkkwwk.
+.kkkwwwwwwwwkkk.
+.kllkkkkkkkkllk.
+.kkkllllllllkkk.
+.kwwkkkkkkkkwwk.
+..kkwwwwwwwwkk..
+....kkkkkkkk....

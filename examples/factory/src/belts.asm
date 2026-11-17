@@ -277,13 +277,13 @@ DrawSlot:
 PartsTiles:
 	db 0
 	FOR TOY, TOY_COUNT
-		db T_TOYS + TOY * TOY_TILES, T_TOYS + TOY * TOY_TILES + 4
+		db T_BELT_TOYS + TOY * TOY_TILES, T_BELT_TOYS + TOY * TOY_TILES + 4
 	ENDR
 ; The first of a finished toy's four tiles, by toy + 1.
 FinishedTiles:
 	db 0
 	FOR TOY, TOY_COUNT
-		db T_TOYS + TOY * TOY_TILES + 8
+		db T_BELT_TOYS + TOY * TOY_TILES + 8
 	ENDR
 
 ; The LY=LYC handler: one split a call, chosen by LYC.

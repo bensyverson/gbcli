@@ -128,9 +128,19 @@ MainLoop:
 	call EndRound
 	jr MainLoop
 .results
+	; START on the results screen goes back to the title; on the title, it
+	; starts a round.
 	ldh a, [hJoyPressed]
 	and PAD_START
 	jr z, MainLoop
+	ld a, [wResultsAfterRound]
+	and a
+	jr z, .round
+	xor a
+	ld [wResultsAfterRound], a
+	call ShowResults            ; the title
+	jr MainLoop
+.round
 	call StartRound
 	jr MainLoop
 

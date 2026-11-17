@@ -45,20 +45,20 @@ klk..........klk
 ..kkkkkkkkkkkk..
 ................
 
-rows 32 0   # the crayons in their box
-...k...k...k....
-..klk.kwk.klk...
-..klk.kwk.klk...
-..klk.kwk.klk...
-..klk.kwk.klk...
-..kkkkkkkkkkkk..
-..kllllllllllk..
-..klkkkkkkkklk..
-..klkwwwwwwklk..
-..klkwwwwwwklk..
-..kllllllllllk..
-..kllllllllllk..
-..kllllllllllk..
-..kkkkkkkkkkkk..
-................
-................
+rows 32 0   # the crayon box, packed tight: five crayons at uneven heights
+....kk....kk....
+...kwwkkkkwwk...
+.kkkwwkllkwwkkk.
+kllkwwkllkwwkllk
+kllkwwkllkwwkllk
+kllkwwkllkwwkllk
+kllkwwkllkwwkllk
+kkkkkkkkkkkkkkkk
+kwwwwwwwwwwwwwwk
+kllllllllllllllk
+kllkkkkkkkkkkllk
+kllkwwwwwwwwkllk
+kllkwwwwwwwwkllk
+kllkkkkkkkkkkllk
+kllllllllllllllk
+kkkkkkkkkkkkkkkk

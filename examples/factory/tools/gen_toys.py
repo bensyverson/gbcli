@@ -7,7 +7,9 @@ The include gives the game TOY_COUNT, a TOY_<ID> number per toy (its place
 in the key, top first) and SUPPLY_PIECES; the .asm holds ToyTiles: per toy,
 12 tiles in this order: half A, half B, the finished toy, each as 2x2 tiles
 (top left, bottom left, top right, bottom right): a column is an 8x16
-object's tile pair.
+object's tile pair. ToyBeltTiles holds the same tiles with the belt's
+surface (art/scene.pixels, T_BELT) behind each piece's clear pixels, so a
+piece riding a belt shows the belt's lines behind it.
 
 A piece is numbered toy * 2 + half + 1 (half A is 0). A toy whose half B
 is `same` is one piece used twice (the slinky): only its half A piece is
@@ -18,6 +20,7 @@ SUPPLY_PIECES pieces the belt deals).
 
 import sys
 
+import gen_scene
 import pixels
 import tiles
 import tuning
@@ -93,19 +96,44 @@ def render_inc(toys):
     return "\n".join(lines) + "\n"
 
 
-def render_asm(toys):
-    lines = [HEADER, 'SECTION "Toy tiles", ROM0', "ToyTiles::"]
+def belt_tile():
+    """The belt's surface tile (T_BELT) from art/scene.pixels, in color numbers."""
+    img = tiles.indexed(pixels.read(gen_scene.ART), where="art/scene.pixels")
+    return tiles.split(img, len(img[0]) // 8, 1)[gen_scene.NAMES.index("T_BELT")]
+
+
+def on_belt(tile, belt):
+    """A piece tile as it sits on a belt: its clear pixels (color 0, which a
+    piece only uses for clear) show the belt tile's lines instead."""
+    return [[p if p else b for p, b in zip(row, brow)] for row, brow in zip(tile, belt)]
+
+
+def toy_tiles(toys):
+    """Per toy, its 12 tiles in ToyTiles order."""
+    out = []
     for toy in toys:
         path = ART / toy["art"]
         img = tiles.indexed(pixels.read(path, clear=tiles.CLEAR), allow_dark=False, where=f"art/toys/{toy['art']}")
         if len(img) != 16 or len(img[0]) != 48:
             sys.exit(f"art/toys/{toy['art']}: want 48x16 (three 16x16 frames), got {len(img[0])}x{len(img)}")
-        lines.append(f"; {toy['name']}")
         # A one-piece toy's half B is its half A again.
-        for frame in (0, 0 if toy["same"] else 1, 2):
-            for tile in frame_tiles(img, frame):
-                lines.append("\tdb " + ",".join(f"${b:02X}" for b in tiles.encode(tile)))
-    lines.append("ToyTilesEnd::")
+        out.append([t for frame in (0, 0 if toy["same"] else 1, 2) for t in frame_tiles(img, frame)])
+    return out
+
+
+def render_asm(toys):
+    per_toy = toy_tiles(toys)
+    belt = belt_tile()
+    lines = [HEADER, 'SECTION "Toy tiles", ROM0']
+    # ToyTiles for what Elle holds and the key column; ToyBeltTiles, the
+    # same tiles with the belt's lines behind them, for the belts.
+    for label, convert in (("ToyTiles", lambda t: t), ("ToyBeltTiles", lambda t: on_belt(t, belt))):
+        lines.append(f"{label}::")
+        for toy, tile_list in zip(toys, per_toy):
+            lines.append(f"; {toy['name']}")
+            for tile in tile_list:
+                lines.append("\tdb " + ",".join(f"${b:02X}" for b in tiles.encode(convert(tile))))
+        lines.append(f"{label}End::")
     lines.append("")
     lines.append("; Per piece (from 1): the piece that completes it.")
     lines.append("PiecePartner::")

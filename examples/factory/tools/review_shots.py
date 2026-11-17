@@ -9,10 +9,13 @@
   turn.png          Elle turning up to the Finished belt, then back down:
                     one crop around her a frame or two apart, with the frame
                     after Up or Down under each
+  away-dmg.png      Elle facing away holding a toy, then two halves (drawn
+                    over them), then both facing the parts belt (DMG)
+  away-gbc.png      the same on a GBC
   key.png           the key column (the window)
   results.png       the results screen after a round, with "New best!"
   toys.png          every toy from art/toys/: half A, half B, finished, on
-                    the belt's gray and on white, four times the size
+                    the belt (its gray and lines) and on white, four times the size
 Every shot except toys.png is a gbcli shot of the built ROMs; pokes set up
 the moment (what Elle holds, the score), never the pixels.
 """
@@ -29,6 +32,7 @@ OUT = g.PROJECT / "build" / "review"
 DMG_RGB = [(255, 255, 255), (170, 170, 170), (85, 85, 85), (0, 0, 0)]
 ELLE_CROP = (36, 36, 64, 76)        # x, y, w, h around Elle and her hands
 HOLD = ["wHands=1,0", "wHeldCount=1", "wWantedPiece=2"]   # a teddy head
+HALVES = ["wHands=9,10", "wHeldCount=2", "wWantedPiece=0"]  # gag glasses and mustache
 
 
 def shot(cli, session, at, frames, name, keys="", pokes=(), crop=None, extra=(), scale=3):
@@ -81,13 +85,30 @@ def turn_strip(cli):
     png.write(OUT / "turn.png", png.hstack(images, gap=6))
 
 
+def away_strip(cli, session, name):
+    """Crops around Elle facing away (the Finished belt), holding a toy, then
+    two halves, then the same facing the parts belt, for comparison."""
+    away = ["wFacing=1"]
+    cases = [away + ["wToy=1"], away + HALVES, ["wToy=1"], HALVES]
+    images = []
+    for i, pokes in enumerate(cases):
+        p = shot(cli, session, "mid", 4, f"{name}-{i}.png", pokes=pokes, crop=ELLE_CROP, scale=1)
+        images.append(scaled(p, 3))
+        p.unlink()
+    png.write(OUT / f"{name}.png", png.hstack(images, gap=6))
+
+
 def toys_sheet():
     toys = gen_toys.load()
     rows = []
     for toy in toys:
         cells = []
         for clear in (2, 0):
-            img = pixels.read(gen_toys.ART / toy["art"], clear=clear)
+            img = pixels.read(gen_toys.ART / toy["art"], clear=-1)
+            # On the belt: dark gray with its black line every 8 px (the
+            # game's ToyBeltTiles); on white: as Elle holds it, on the floor.
+            img = [[s if s >= 0 else (3 if clear == 2 and x % 8 == 0 else clear) for x, s in enumerate(row)]
+                   for row in img]
             # A one-piece toy (the slinky) shows its one piece as both halves.
             order = (0, 0, 2) if toy["same"] else (0, 1, 2)
             frames = [[row[f * 16:f * 16 + 16] for row in img] for f in order]
@@ -107,13 +128,15 @@ def main():
     cli.run("run", "--session", "review", "--frames", "600", "--keys", "START@1 -START@2",
             "--checkpoint", "mid")
     shot(cli, "review", "mid", 2, "round-dmg.png", pokes=HOLD)
-    shot(cli, "review", "mid", 1, "key.png", crop=(136, 0, 24, 144), scale=1)
+    shot(cli, "review", "mid", 1, "key.png", crop=(130, 0, 30, 144), scale=1)
     png.write(OUT / "key.png", png.read(OUT / "key.png"), scale=3)
     turn_strip(cli)
+    away_strip(cli, "review", "away-dmg")
     shot(cli, "review", "mid", 30, "results.png", pokes=["wRoundLeft=3,0", "wScore=$12,0"])
 
     start(cli, "review-gbc", g.ROM_GBC, ["--model", "gbc"])
     shot(cli, "review-gbc", "mid", 2, "round-gbc.png", pokes=HOLD)
+    away_strip(cli, "review-gbc", "away-gbc")
     # "mid" is 10 s into the round; run on to 3 s into the red zone.
     red_at = (T["ROUND_SECONDS"] - T["CLOCK_RED_SECONDS"] + 3 - 10) * 60
     shot(cli, "review-gbc", "mid", red_at, "red-gbc.png")

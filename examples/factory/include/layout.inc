@@ -5,7 +5,7 @@
 ;   lines  56- 87  the Finished belt, at Elle's waist (its own SCX)
 ;   lines  88-111  the floor Elle stands on (SCX 0)
 ;   lines 112-143  the parts belt, in front (its own SCX)
-;   x 136-159      the key column: the window, from line 0 down, so it
+;   x 130-159      the key column: the window, from line 0 down, so it
 ;                  never scrolls and covers the belts' right ends
 ;
 ; The window covers everything right of WX and below WY, so it can only
@@ -26,8 +26,11 @@ DEF SPLIT_BACK_LYC  EQU BACK_BELT_ROW * 8 - 1    ; 55
 DEF SPLIT_FLOOR_LYC EQU FLOOR_ROW * 8 - 1        ; 87
 DEF SPLIT_FRONT_LYC EQU FRONT_BELT_ROW * 8 - 1   ; 111
 
-; The key column (window): 3 tiles wide; a divider, then 2 tiles of icon.
-DEF KEY_X     EQU 136
+; The key column (window): a 2 px divider (T_KEY_EDGE), then the icons
+; centered in the 28 px panel right of it: 6 px, 16 px of icon, 6 px. Its
+; map is 4 tiles wide (the last is cut by the screen edge).
+DEF KEY_X     EQU 130
+DEF KEY_MAP_COLS EQU 4
 DEF KEY_WX    EQU KEY_X + 7
 DEF KEY_ROWS_PER_TOY EQU 3          ; icon (2 rows) and a gap
 
@@ -46,10 +49,19 @@ DEF ELLE_Y_FINISHED EQU ELLE_Y_PARTS - 8
 DEF ELLE_Y_SIDE     EQU (ELLE_Y_PARTS + ELLE_Y_FINISHED) / 2
 DEF ELLE_CENTER_X EQU ELLE_X + 8    ; the belts' slot "under Elle" is the one under this x
 ; Where held things show (top left of each 16x16), relative to Elle.
+; Facing the parts belt they are in front of her: OAM puts them first (a
+; GBC draws the lower index on top), and a DMG draws the smaller X on top,
+; so a held column may overlap hers only from the left. The left half
+; overlaps her by 3 px; the right half sits just clear of her.
 DEF HAND_LEFT_X  EQU ELLE_X - 13
-DEF HAND_RIGHT_X EQU ELLE_X + 13
+DEF HAND_RIGHT_X EQU ELLE_X + 16
 DEF HAND_DY      EQU 14             ; below Elle's top
-DEF TOY_HELD_X   EQU ELLE_X
+; Facing away, she is drawn over what she holds: each half's inner column
+; lines up with one of hers (so a DMG, which draws the smaller X on top,
+; still puts her in front) and its outer column peeks out at her side.
+DEF HAND_BACK_LEFT_X  EQU ELLE_X - 8
+DEF HAND_BACK_RIGHT_X EQU ELLE_X + 8
+DEF TOY_HELD_X   EQU ELLE_X             ; behind her, facing away: her columns' X exactly
 DEF TOY_HELD_DY  EQU 16
 
 ; Color numbers. Pieces are background tiles on the belts and objects in
@@ -83,6 +95,7 @@ DEF T_CLOCK_B     EQU 48            ; 16 tiles: clock buffer B (aligned too)
 DEF T_DIGITS      EQU 64            ; 10 tiles: 0-9
 DEF T_TOYS        EQU 74            ; TOY_COUNT * TOY_TILES tiles (even, for 8x16 pairs)
 DEF T_ELLE        EQU 146           ; Elle's object tiles (even)
+DEF T_BELT_TOYS   EQU 170           ; the toys again, with the belt's lines behind them (src/screen.asm asserts it fits)
 	ASSERT SCENE_TILES <= T_CLOCK_A && T_CLOCK_A % 16 == 0 && T_CLOCK_B % 16 == 0
 
 ; The title and results screens keep tile 0 (white) and the toys, and

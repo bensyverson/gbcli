@@ -1,6 +1,6 @@
 ; Sound effects, on channel 1, which the music never plays (its orders
 ; give channel 1 an empty pattern, and MusicInit mutes it in the driver).
-; Effects play at volume 15 against the music's 7 and below, so they sit
+; Effects play at volume 15 against the music's 4 and below, so they sit
 ; clearly on top.
 ;
 ; An effect is a list of steps; each step sets channel 1's sweep, duty,
@@ -28,8 +28,10 @@ DEF E5 EQU 1849
 DEF G5 EQU 1881
 DEF A5 EQU 1899
 DEF C6 EQU 1923
+DEF D6 EQU 1936
 DEF E6 EQU 1949
 DEF G6 EQU 1964
+DEF A6 EQU 1974
 DEF C7 EQU 1985
 
 ; NR11's duty bits.
@@ -143,12 +145,15 @@ SfxAssemble:
 	step 3, $00, DUTY_50, $F1, E5
 	step 6, $00, DUTY_50, $F2, G5
 	end_effect
-; A little fanfare: the toy goes off down the belt.
+; The jingle: a toy lands on the Finished belt. A quick run up the major
+; pentatonic, C6 to C7, then the top note rings.
 SfxScore:
-	step 4, $00, DUTY_25, $F1, G5
-	step 4, $00, DUTY_25, $F1, C6
-	step 4, $00, DUTY_25, $F1, E6
-	step 12, $00, DUTY_25, $F3, G6
+	step 3, $00, DUTY_50, $F1, C6
+	step 3, $00, DUTY_50, $F1, D6
+	step 3, $00, DUTY_50, $F1, E6
+	step 3, $00, DUTY_50, $F1, G6
+	step 3, $00, DUTY_50, $F1, A6
+	step 20, $00, DUTY_50, $F4, C7
 	end_effect
 ; A low, rough note that sags.
 SfxBuzz:

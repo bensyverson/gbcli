@@ -7,6 +7,8 @@ Session `sound`, from a round's start (START pressed, 30 frames in):
            and its starting volumes (NRx2's top nibble; the wave's level)
   effects  each effect, set up by pokes and keys, with --audio-log: it
            plays on channel 1, at the volume it starts at
+  jingle   the score effect (a toy lands on the Finished belt) is a run of
+           rising notes on channel 1, with gbcli's piano roll of it
   louder   the score effect over the music, saved with --wav --channels
            each: channel 1's loudest moment against the three music
            channels together (windowed RMS)
@@ -30,6 +32,8 @@ PARTS_AT_SLOT = [f"wPartsX=0,{(SLOT * 16 + 8 - ELLE_CENTER_X) % 256}"]
 FIN_AT_SLOT = [f"wFinishedX=0,{(4 * 16 + 8 - ELLE_CENTER_X) % 256}", "wFinishedSlots+4=0"]
 
 NR12, NR22, NR32, NR42 = 0xFF12, 0xFF17, 0xFF1C, 0xFF21
+NR13, NR14 = 0xFF13, 0xFF14
+JINGLE_MIN_NOTES = 5               # Ben's ruling: a short rising run of notes, not a chord
 CHANNEL_OF = {}
 for ch, base in (("square1", 0xFF10), ("square2", 0xFF15), ("wave", 0xFF1A), ("noise", 0xFF1F)):
     for i in range(5):
@@ -113,6 +117,22 @@ def main():
         ok &= good
         print(f"{'PASS' if good else 'FAIL'} effect {name}: channel 1 starts at volume {vol.get('square1')} "
               f"(music at {music.get('square2')} and below)")
+    # The jingle: the score effect's notes on channel 1, from the decoded log
+    # (a note starts where NR14 is written with its trigger bit), and gbcli's
+    # piano roll of the same run.
+    piano = OUT / "jingle-piano.png"
+    log = run(cli, 60, EFFECTS[2][1], EFFECTS[2][2], ["--piano", str(piano), "--scale", "4"])["audio"]["log"]
+    notes, lo = [], 0
+    for w in log:
+        if w["addr"] == NR13:
+            lo = w["value"]
+        elif w["addr"] == NR14 and w["value"] & 0x80:
+            notes.append(round(131072 / (2048 - (lo | (w["value"] & 7) << 8))))
+    rising = len(notes) >= JINGLE_MIN_NOTES and all(a < b for a, b in zip(notes, notes[1:]))
+    ok &= rising
+    print(f"{'PASS' if rising else 'FAIL'} jingle: the score effect plays {len(notes)} notes on channel 1, "
+          f"{'each higher than the last' if rising else 'not a rising run'} "
+          f"(Hz {notes}; want {JINGLE_MIN_NOTES}+ rising; {piano.relative_to(g.PROJECT)})")
     # The score effect 20 frames in, after the replay's opening step.
     wav = OUT / "sound-score.wav"
     run(cli, 60, EFFECTS[2][1], "B@20 -B@21", ["--wav", str(wav), "--channels", "each"])

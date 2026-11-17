@@ -169,6 +169,11 @@ SCENARIOS = [
      {"[wHeldCount]": 1, f"[wPartsSlots+{NEXT_SLOT}]": ENGINE, "[wBuzzes]": 1}),
     ("The round ends when the clock runs out, on the results screen",
      ["wRoundLeft=3,0"], "", 8, {"[wGameState]": 1, "[wResultsAfterRound]": 1}),
+    ("START on the results screen goes back to the title",
+     ["wRoundLeft=3,0"], press("START", at=30), 50, {"[wGameState]": 1, "[wResultsAfterRound]": 0}),
+    ("... and START on the title starts a new round",
+     ["wRoundLeft=3,0"], press("START", at=30) + " " + press("START", at=70), 90,
+     {"[wGameState]": 0, "u16[wScore]": 0}),
 ]
 
 
@@ -207,6 +212,78 @@ def save_scenario(cli):
                  {"u16[wBest]": 7, "[wNewBest]": 0}, at="second")
 
 
+T_TOYS, T_ELLE = 74, 146           # include/layout.inc: held things' tiles, then Elle's
+OBJECTS = 10                       # OAM entries Elle and what she holds use
+
+
+def objects(cli, pokes):
+    """[(index, y, x, kind)] of the visible objects after a few frames; kind
+    is 'elle' or 'held' by tile number."""
+    exprs = [f"oam[{i}].{f}" for i in range(OBJECTS) for f in ("y", "x", "tile")]
+    args = ["run", "--session", SESSION, "--at", "play", "--frames", "4"]
+    for p in pokes:
+        args += ["--poke", p]
+    for e in exprs:
+        args += ["--read", e]
+    got = {r["expr"]: r.get("value") for r in cli.run(*args)["result"]["reads"]}
+    out = []
+    for i in range(OBJECTS):
+        y, x, tile = (got[f"oam[{i}].{f}"] for f in ("y", "x", "tile"))
+        if 0 < y < 160:
+            out.append((i, y, x, "elle" if tile >= T_ELLE else "held" if tile >= T_TOYS else "?"))
+    return out
+
+
+def draw_order(objs, front):
+    """What's wrong with who draws over whom. On a GBC the lower OAM index
+    draws on top; on a DMG the smaller X does, then the lower index. `front`
+    is the object kind that must win wherever an Elle object and a held one
+    overlap, on both machines."""
+    wrong = []
+    elle = [o for o in objs if o[3] == "elle"]
+    held = [o for o in objs if o[3] == "held"]
+    if not elle or not held:
+        return [f"want Elle and held objects, got {objs}"]
+    for e in elle:
+        for h in held:
+            if abs(e[1] - h[1]) >= 16 or abs(e[2] - h[2]) >= 8:
+                continue                # they don't overlap
+            top, under = (e, h) if front == "elle" else (h, e)
+            if top[0] > under[0]:
+                wrong.append(f"GBC: OAM {under[0]} ({under[3]}) draws over OAM {top[0]} ({top[3]})")
+            if top[2] > under[2] or (top[2] == under[2] and top[0] > under[0]):
+                wrong.append(f"DMG: OAM {under[0]} ({under[3]}, x {under[2]}) draws over "
+                             f"OAM {top[0]} ({top[3]}, x {top[2]})")
+    return wrong
+
+
+def beside(objs):
+    """The held objects that overlap no Elle object: what peeks out at her sides."""
+    elle = [o for o in objs if o[3] == "elle"]
+    return [h for h in objs if h[3] == "held"
+            and all(abs(e[1] - h[1]) >= 16 or abs(e[2] - h[2]) >= 8 for e in elle)]
+
+
+def draw_order_scenarios(cli):
+    """(rule, wrong) for who draws over whom, facing each way."""
+    away = [f"wFacing={FACING_FINISHED}"]
+    out = []
+    objs = objects(cli, away + [f"wToy={TEDDY}"])
+    wrong = draw_order(objs, "elle")
+    if beside(objs):
+        wrong.append(f"the toy shows beside her: {beside(objs)}")
+    out.append(("Facing away, Elle draws over the toy she holds, hidden behind her (DMG and GBC)", wrong))
+    objs = objects(cli, away + holding(HEAD, BODY))
+    wrong = draw_order(objs, "elle")
+    if len(beside(objs)) != 2:
+        wrong.append(f"want one column of each half beside her, got {beside(objs)}")
+    out.append(("Facing away, Elle draws over the halves she holds; each peeks out at a side (DMG and GBC)", wrong))
+    wrong = draw_order(objects(cli, holding(HEAD, BODY)), "held")
+    wrong += draw_order(objects(cli, [f"wToy={TEDDY}"]), "held")
+    out.append(("Facing the parts belt, the halves or toy she holds draw over her (DMG and GBC)", wrong))
+    return out
+
+
 def main():
     p = g.arg_parser(__doc__.splitlines()[0])
     p.add_argument("--only", help="run only rules whose text contains this")
@@ -223,6 +300,11 @@ def main():
         if args.only and args.only not in rule:
             continue
         wrong = check(cli, pokes, keys, frames, expects)
+        results.append(not wrong)
+        print(f"{'PASS' if not wrong else 'FAIL'} {rule}" + (": " + "; ".join(wrong) if wrong else ""))
+    for rule, wrong in draw_order_scenarios(cli):
+        if args.only and args.only not in rule:
+            continue
         results.append(not wrong)
         print(f"{'PASS' if not wrong else 'FAIL'} {rule}" + (": " + "; ".join(wrong) if wrong else ""))
     rule = "A new best is saved in battery RAM, kept across a power cycle, and a lower score keeps it"

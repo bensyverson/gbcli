@@ -159,3 +159,65 @@ Both builds: `gbcli build` and `gbcli build --gbc`, errors=0 warnings=0. `tools/
 - `gbcli song FILE --piano PNG` checks a song with no build. The 128-row tune parsed on the first try.
 - The `images` row and `images.inc` give the sheet's OBP (`ELLE_OBP EQU %11_01_00_00`), so sharing OBP0 between gbcli's sprite and my own piece tiles is an assert, not a guess.
 - `--shot --scale 1 --crop` plus the stdlib PNG reader: the turn strip and the key column are crops stacked by a 100-line tool.
+
+## 2026-11-16 — Factory 3b: Ben's art review fixes (agent factory3)
+
+**What changed.** These are the seven fixes from the plan's ▸ Art review rulings.
+1. **Slinky.** The piece is a short coil stack, 9 rows tall. The finished slinky is the old piece: one tall stack (`art/toys/slinky.pixels`).
+2. **Gag glasses,** after Ben's photo. Half A has bushy black eyebrows over round black frames with white lenses, then a big light nose. Half B is a big black mustache, 16 px wide, with a few light strands so it reads as hair. The finished toy puts the mustache directly under the nose.
+3. **Crayon box.** It is now 16 px wide and packed with five crayons whose tips stand at uneven heights. The old version, with three crayons over a narrow box, read as a cake with candles.
+4. **Key column.** I moved the window, not the tiles: `KEY_X` 136 → 130, and the window map is 4 tiles wide. The 2 px divider is followed by 6 px of panel, the 16 px icon, then 6 px. The belts lose 6 px of visible width. `tools/bot.py`, `prove_screen.py` and `review_shots.py` follow the new x.
+5. **Facing away, Elle is drawn over what she holds.** `ElleDraw` now hides all 10 of its objects, then puts hers first in OAM when she faces away and the held things first otherwise. A GBC draws the lower OAM index on top. A DMG draws the smaller X on top and breaks ties by index. So facing away, each held column that overlaps her has exactly her column's X: the toy sits at `ELLE_X` and is hidden, and the halves sit at `ELLE_X ± 8` (`HAND_BACK_*_X`), each with its inner column behind her and its outer column peeking out. Assembly still works facing either way; that rule is unchanged and still checked. Follow-up, at the integrator's request: facing the parts belt, the right-hand half (x 73) lost its leftmost 3 px to Elle's right column on the DMG, because her column had the smaller X. The front-view rule used to check only the GBC's OAM order. It now checks both machines and the held toy too, and failed first: `DMG: OAM 5 (elle, x 76) draws over OAM 2 (held, x 81)`. The right half now sits at `ELLE_X + 16`, just clear of her. The left half stays at `ELLE_X - 13`: it overlaps her by 3 px, and on a DMG its smaller X puts it on top.
+6. **Belt lines behind pieces.** `tools/gen_toys.py` now also emits `ToyBeltTiles`, the same 72 tiles with the scene's belt tile (`T_BELT`, from `art/scene.pixels`) composited behind each clear pixel. In a round the belts draw from `T_BELT_TOYS` (170, after Elle's 24 tiles; an ASSERT checks that it fits). Elle's hands and the key keep the plain tiles at `T_TOYS`. The title and results screens show toys only on a belt, so they load the belt copies at `T_TOYS`.
+7. **The jingle.** `SfxScore` is now a run up the major pentatonic, C6 D6 E6 G6 A6 at 3 frames each, then C7 rings for 20 frames, duty 50%, volume 15.
+
+**Evidence.**
+- `python3 tools/make.py --gbcli <gbcli> --prove`: both builds `errors=0 warnings=0`, `34/34 rules pass; 41 gbcli calls, 1.0 s`, prove_screen 6/6, prove_sound 10/10.
+- **Draw order, red then green.** There are three new rules in `tools/rules_check.py`. Each reads `oam[N].y/.x/.tile` for N = 0-9 in one `gbcli run --at play --frames 4 --poke ... --read 'oam[0].x' ...` call. It then checks every overlapping Elle/held pair against both machines' priority rules, and that the halves (and not the toy) have a column beside her. Before the code: `FAIL ... GBC: OAM 0 (held) draws over OAM 6 (elle); DMG: OAM 0 (held, x 68) draws over OAM 6 (elle, x 68)`, and for the halves `DMG: OAM 1 (held, x 63) draws over OAM 4 (elle, x 68)`. The third rule ("facing the parts belt, what she holds is in OAM before her") was green on its first run, on purpose: it is the "still works" half.
+- **The jingle, red then green.** The new `jingle` claim in `tools/prove_sound.py` reads channel 1's notes from `--audio-log --json` (NR13, then NR14 with the trigger bit). It wants 5 or more, each higher than the last. Before: `FAIL jingle: the score effect plays 4 notes ... (Hz [785, 1049, 1324, 1560]...)`. After: `PASS jingle: ... 6 notes on channel 1, each higher than the last (Hz [1049, 1170, 1324, 1560, 1771, 2081] ...)`. gbcli's own view of it: `gbcli run --session sound --at play --frames 40 --poke ... --keys 'B@2 -B@3' --audio-log --audio-channel 1` prints `NR14 $87: square 1 trigger, ... period 1923 = C6 +3.4c` and the rest of the run. `--piano build/prove/jingle-piano.png` draws it as a red staircase on square 1. Loudness: `PASS louder: ... RMS 3974, the whole music's 1103, x3.6` (it was x3.1).
+- **No lag.** `python3 tools/bot.py` scored 9 (92 calls, 4.1 s). The replay `gbcli run build/factory.gb --session replay --from boot --frames 3665 --keys-file build/bot.keys --keys-since boot --frame-budget` gives `lag=0 lcd_off=10 active_max=12120`. One frame later is the known round-end screen change.
+- **Shots.** `python3 tools/review_shots.py` (30 gbcli calls) adds `away-dmg.png` and `away-gbc.png`: facing away with a toy, then with halves, then the same two facing the parts belt. `toys.png` now shows each piece on the belt with its lines.
+
+**Stumbles, by time cost.**
+1. **`play.asm` didn't see `ELLE_FRAME_WIDTH` (1 min, my bug).** I sized the OAM block from images.inc's frame size, but play.asm didn't include it. The build error named the file, line and symbol.
+2. **A stray `python3 -` in a shell call waited on stdin for 2 minutes (my bug, not gbcli's).**
+3. Nothing in gbcli cost time this leaf.
+
+**What saved real time.**
+- `oam[N].x` / `.y` / `.tile` in `--read`. A draw-order rule on both machines became 30 reads in one call, with no OAM addresses to work out. The check is plain Python over those numbers.
+- `--audio-log`'s decoded notes ("period 1923 = C6 +3.4c") and `--piano`. The jingle's claim is about ten lines, and the piano roll shows it rising at a glance.
+- Generated tiles. The belt copies are about 15 lines in `gen_toys.py`, because the scene's belt tile is data the tool can read.
+
+## 2026-11-16 — Factory 4: the loop, the README, verification (agent factory3)
+
+**What changed.**
+- **The loop.** START on the results screen now goes back to the title, and START on the title starts a round. Before, results went straight into the next round. Two new rules cover it. "START on the results screen goes back to the title" was red first (`[wGameState] = 0 (want 1)`). "... and START on the title starts a new round" was green on its first run, because the old code also ended in a round; it stays as the "still works" half.
+- **`examples/factory/README.md`** is now the game's README. It covers what the game is, how to play (the controls table), how to build, what's technically notable, a Tuning section with all 17 constants in `include/tuning.inc` (15 knobs and the two direction names) and the one command, then each claim with the gbcli command that proves it and that command's output.
+
+**Evidence, rerun on the final build.**
+- `python3 tools/make.py --gbcli <gbcli> --prove`: `gbcli build` and `gbcli build --gbc` give `errors=0 warnings=0`; `36/36 rules pass; 44 gbcli calls, 1.2 s` (after the front-view follow-up); prove_screen 6/6; prove_sound 10/10. `gen_toys.py --check`, `gen_scene.py --check` and `gen_clock.py --check` pass.
+- `python3 tools/bot.py`: score 9, 88 moves, 92 calls, 4.1 s. The best was kept across `power-cycle`, and a second round kept it.
+- Every README command was run by hand on a fresh session, with the outputs as shown. Those commands are the scrolls 180 frames apart (87→155, 168→100, the clock step 6), `--raster` (`raster_writer reg=rSCX pc=$1B81 writes=6 hblank=6`), the two key-column crops (identical pixels), the replay's `frame_budget frames=3665 lag=0`, the battery sequence (7, `wNewBest` 1, power-cycle, 7), and the jingle's `--audio-log --audio-channel 1 --piano`.
+
+**Stumbles, by time cost.**
+1. **`--audio-log` text stops at 20 rows (1 min).** The jingle's 6 notes are 36 writes on channel 1, so the text view showed C6 to G6 and then `more`. `run --help` says so ("The rows stop at 20 with a more row; --json has every write"). The README shows `--piano` for the whole run and points to `--json`.
+2. **`gbcli sessions rm` refuses a session that has checkpoints (under 1 min).** The refusal named the fix, `--with-checkpoints`.
+3. Nothing else cost time.
+
+**What saved real time.** Every claim was already a tool with PASS/FAIL rows, so the README is those tools' gbcli calls written out, and rerunning it was mechanical.
+
+## Summary (agent factory3, closing the slice)
+
+Teddy & Toys took five leaves: the screen's skeleton, the shift, Ben's playtest changes, art and sound, then the art fixes and this polish. All of it was built from gbcli's help, recipes and README alone. Measured by time lost, here is what cost most and what helped most, drawn from every section above.
+
+**The five costliest stumbles.**
+1. **Loudness from a WAV is mostly pops (about 12 min, Factory 3).** Every DAC switch pops at full scale whatever the volume, and each `--channels each` file starts with a step. So the peaks of a volume-15 effect and the volume-4 music read alike. A windowed RMS that skips the opening fixed it. A note by `--channels each`, or a per-channel loudness figure in `--audio-summary`, would have saved it.
+2. **Identical screens are different PNG files (about 6 min, Factory 1).** gbcli writes the frame into `tEXt` chunks, so a byte compare fails on identical pixels, and I had to write a PNG decoder. A `--no-meta` flag, or a pixel hash in the shot row, would remove that.
+3. **The round's last frame counts as lag (about 6 min, Factory 2).** The frame that turns the LCD off and draws the results screen counts as `lag=1`, not `lcd_off`, unlike the round's start. Every proof now measures the round's own frames and names that one frame as a known screen change.
+4. **Images land in ROMX, and `help images` doesn't say so (about 5 min, Factory 1).** Elle drew as garbage after a bank switch. `gbcli view oam` and `view memory` found it fast.
+5. **Which frame a key press reaches the game (about 5 min, Factory 2b).** A press at `@1` is read on the run's second frame, and a shot shows the frame before the stop. It took a `--read` probe per frame to line up the turn strip. A close sixth (about 4 min, Factory 2b): with no `.gbcli/` in the game folder, a worktree's sessions went to the main checkout's, silently.
+
+**The three things that helped most.**
+1. **One `gbcli run` call per scenario:** `--at CHECKPOINT --poke ... --keys ... --read EXPR`, with comparisons and `oam[N].x` in the reads. It turned the controls table into a 36-rule check that reruns in about a second, so every tuning or art change was checked before anyone looked at it.
+2. **Proofs that are one call each.** `--raster --json` gives the SCX per line and where each write landed. `--frame-budget` counts lag over a whole round. `--audio-log` decodes notes and volumes. The belt, key-column, no-lag and sound claims are each a few lines of Python over one reply.
+3. **Determinism and replay.** The bot's 92 short runs replay as one `--keys-file --keys-since boot` run, frame for frame. That made "no lag in a played round" one command, and `power-cycle` plus `sav` made the saved best a three-call check.

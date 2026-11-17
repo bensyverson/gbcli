@@ -99,7 +99,7 @@ def main():
     # key column and belts, by screenshot
     shots = {}
     for at in ("early", "later"):
-        for name, crop in (("key", "136,0,24,144"), ("belts", "0,56,136,88"), ("full", None)):
+        for name, crop in (("key", "130,0,30,144"), ("belts", "0,56,130,88"), ("full", None)):
             path = f"build/prove/{name}-{at}.png"
             extra = ["--crop", crop] if crop else []
             cli.run("run", "--session", SESSION, "--at", at, "--frames", "0", "--shot", path, *extra)
@@ -107,7 +107,7 @@ def main():
     same_key = shots["key", "early"] == shots["key", "later"]
     same_belts = shots["belts", "early"] == shots["belts", "later"]
     claim("key", same_key and not same_belts,
-          f"key column x 136-159 {'identical' if same_key else 'CHANGED'}, belts "
+          f"key column x 130-159 {'identical' if same_key else 'CHANGED'}, belts "
           f"{'changed' if not same_belts else 'IDENTICAL'} (build/prove/key-*.png, belts-*.png, full-*.png)")
 
     # clock

@@ -21,6 +21,7 @@ include "layout.inc"
 include "tuning.inc"
 include "gen/toys.inc"
 include "bank.inc"
+include "images.inc"
 
 DEF FACING_PARTS    EQU 0           ; toward the camera: we see Elle's face
 DEF FACING_FINISHED EQU 1           ; away: we see her back
@@ -31,8 +32,9 @@ EXPORT FACING_PARTS, FACING_FINISHED
 DEF ELLE_FRAME_BACK  EQU 0          ; frames of assets/sprites/elle.16x48
 DEF ELLE_FRAME_FRONT EQU 1
 DEF ELLE_FRAME_SIDE  EQU 2          ; mid-turn
-DEF HELD_OBJECTS EQU 4              ; OAM 0-3: what Elle holds, over her
-DEF ELLE_OAM EQU HELD_OBJECTS * 4
+DEF HELD_OBJECTS EQU 4              ; what Elle holds: two 16x16 things
+DEF ELLE_OBJECTS EQU (ELLE_FRAME_WIDTH / 8) * (ELLE_FRAME_HEIGHT / 16)   ; at most, per frame
+DEF ELLE_OAM EQU HELD_OBJECTS * 4   ; facing the parts belt: held things in OAM 0-3, then her
 DEF PIECE_ATTR EQU OBJ_PAL_PIECES   ; a held piece's GBC palette; a DMG ignores bits 0-2
 
 SECTION "Play", ROM0
@@ -348,8 +350,39 @@ ElleDraw::
 	ld [wElleFrame], a
 	ld a, c
 	ld [wElleY], a
-	; Held things first, so they draw over her.
+	; Hide every object first: a frame may use fewer than another.
 	ld hl, wShadowOAM
+	ld b, (HELD_OBJECTS + ELLE_OBJECTS) * 4
+	xor a
+.hide
+	ld [hli], a
+	dec b
+	jr nz, .hide
+	; Facing the parts belt (or mid-turn), what she holds is in front of
+	; her: its objects come first in OAM. Facing away, she is in front of
+	; it: hers come first. A GBC draws the lower OAM index on top; a DMG
+	; draws the smaller X on top and breaks ties by index, so facing away
+	; a held thing's columns that overlap her share her columns' X. The
+	; toy is wholly behind her; each half's outer column peeks out.
+	ld a, [wElleFrame]
+	cp ELLE_FRAME_BACK
+	ld a, LOW(wShadowOAM)
+	ld b, LOW(wShadowOAM + ELLE_OAM)
+	ld d, HAND_LEFT_X + OAM_X_OFS
+	ld e, HAND_RIGHT_X + OAM_X_OFS
+	jr nz, .order
+	ld a, LOW(wShadowOAM + ELLE_OBJECTS * 4)
+	ld b, LOW(wShadowOAM)
+	ld d, HAND_BACK_LEFT_X + OAM_X_OFS
+	ld e, HAND_BACK_RIGHT_X + OAM_X_OFS
+.order
+	ld l, a                     ; hl: the held things' objects
+	ld a, b
+	ld [wElleOam], a
+	ld a, d
+	ld [wHandX], a
+	ld a, e
+	ld [wHandX + 1], a
 	ld a, [wToy]
 	and a
 	jr z, .halves
@@ -363,14 +396,15 @@ ElleDraw::
 	ld a, d
 	ld c, TOY_HELD_X + OAM_X_OFS
 	call Put16
-	call Hide2
 	jr .elle
 .halves
+	ld a, [wHandX]
+	ld c, a
 	ld a, [wHands]
-	ld c, HAND_LEFT_X + OAM_X_OFS
 	call PutHeldHalf
+	ld a, [wHandX + 1]
+	ld c, a
 	ld a, [wHands + 1]
-	ld c, HAND_RIGHT_X + OAM_X_OFS
 	call PutHeldHalf
 .elle
 	SWITCH_BANK ElleFrames
@@ -388,7 +422,9 @@ ElleDraw::
 	ld l, a                     ; hl: the frame's object list
 	ld b, [hl]
 	inc hl
-	ld de, wShadowOAM + ELLE_OAM
+	ld a, [wElleOam]
+	ld e, a
+	ld d, HIGH(wShadowOAM)
 .object
 	ld a, [hli]
 	ld [wElleObjY], a
@@ -522,4 +558,6 @@ wElleY:: db                        ; her top's screen y, as ElleDraw last drew h
 wElleObjY: db                      ; ElleDraw: the object's place in her frame
 wElleObjX: db
 wElleObjPal: db                    ; ElleDraw: its GBC palette
+wElleOam: db                       ; ElleDraw: the low byte of her first object in wShadowOAM
+wHandX: ds 2                       ; ElleDraw: the held halves' OAM x, left hand then right
 wPlayVarsEnd:

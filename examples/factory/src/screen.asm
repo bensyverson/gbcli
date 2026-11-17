@@ -14,21 +14,34 @@ DEF GLYPH_ZERO EQU '0'              ; the font's glyph number for 0
 
 SECTION "Screen", ROM0
 
-; The scene's tiles (art/scene.pixels) and the toys' (data/toys.txt),
-; which the title and results screens use too. LCD off.
+	ASSERT T_ELLE + ELLE_TILES <= T_BELT_TOYS && T_BELT_TOYS + TOY_COUNT * TOY_TILES <= 256
+
+; The scene's tiles (art/scene.pixels), then the toys' (data/toys.txt) as
+; they ride a belt, at T_TOYS: the title and results screens show toys
+; only on a belt. ScreenInit puts the plain ones there for a round. LCD off.
 LoadSceneTiles::
 	ld hl, TILEBLOCK0
 	ld de, SceneTiles
 	ld bc, SceneTilesEnd - SceneTiles
 	call CopyMem
 	ld hl, TILEBLOCK0 + T_TOYS * 16
-	ld de, ToyTiles
-	ld bc, ToyTilesEnd - ToyTiles
+	ld de, ToyBeltTiles
+	ld bc, ToyBeltTilesEnd - ToyBeltTiles
 	jp CopyMem
 
 ; Loads every tile and draws both maps. LCD off, interrupts off.
 ScreenInit::
 	call LoadSceneTiles
+	; A round: the plain toys (in Elle's hands, in the key) at T_TOYS and
+	; the belt copies at T_BELT_TOYS.
+	ld hl, TILEBLOCK0 + T_TOYS * 16
+	ld de, ToyTiles
+	ld bc, ToyTilesEnd - ToyTiles
+	call CopyMem
+	ld hl, TILEBLOCK0 + T_BELT_TOYS * 16
+	ld de, ToyBeltTiles
+	ld bc, ToyBeltTilesEnd - ToyBeltTiles
+	call CopyMem
 
 	; Score digits 0-9, from the font, one glyph a tile.
 	SWITCH_BANK MainFontGlyphs
@@ -77,16 +90,18 @@ ScreenInit::
 	ld a, T_BOX + 6
 	call DrawBoxRow
 
-	; The key column: divider and white, then each toy's finished icon.
+	; The key column: the divider and the panel, then each toy's finished
+	; icon in map columns 1-2, centered in the panel (include/layout.inc).
 	ld hl, TILEMAP1
 	ld b, SCREEN_HEIGHT
 .keyRow
 	ld a, T_KEY_EDGE
 	ld [hli], a
 	ld a, T_KEY_BG
+	REPT KEY_MAP_COLS - 1
 	ld [hli], a
-	ld [hli], a
-	ld de, 32 - 3
+	ENDR
+	ld de, 32 - KEY_MAP_COLS
 	add hl, de
 	dec b
 	jr nz, .keyRow

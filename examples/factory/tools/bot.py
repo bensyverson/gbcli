@@ -26,7 +26,7 @@ import tuning
 SESSION = "bot"
 T = tuning.load()
 ELLE_CENTER_X = 68                  # include/layout.inc
-KEY_X = 136
+KEY_X = 130                         # include/layout.inc
 SPEED = T["BELT_PARTS_SPEED"]
 SIGN = 1 if T["BELT_PARTS_DIR"] == T["BELT_LEFT"] else -1
 REACH = T["PICKUP_REACH"]
@@ -76,7 +76,7 @@ class Bot:
             # Only dealt slots count: a slot beyond the arriving one (src/belts.asm,
             # ARRIVING_SLOT) is dealt afresh before it shows.
             if SIGN > 0:
-                if middle >= KEY_X + 24:                # arriving: middle 144-159
+                if middle >= KEY_X + 24:                # arriving: middle 138-153
                     continue
             else:
                 if middle >= KEY_X + 24:

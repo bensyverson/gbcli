@@ -56,6 +56,20 @@ Ben's words: "I'm eager to get the gameplay right, so build it in such a way tha
 - **A playtest checkpoint.** After the gameplay leaf, the chain stops and Ben plays the placeholder build before any art is made.
 - **The README's "Tuning" section** tells a human what to edit for each knob, and the one command that rebuilds and rechecks.
 
+## Playtest rulings (Ben, 2026-11-16)
+
+From the placeholder build (commit `00e8efa`), with the layout as built: HUD lines 0-55, Finished belt 56-87, floor 88-111, parts belt 112-143, and the key column in the window at WX=143.
+
+- **The layout stays.** The belts' size and placement are about right.
+- **The floor is white.** It replaces the placeholder's dotted gray.
+- **The belts are gray with lines across them,** so their motion reads as they scroll. On the DMG the wall takes light gray, so the belts most likely take dark gray with black lines. Pieces and toys must then read against dark gray, for example with black outlines and light fills. This is the art step's call, shown in screenshots.
+- **The wall** (the HUD band behind the clock and score) is light gray on the DMG and pink on the GBC. The clock face and score box need to stand out from it, for example a white face; the art step's call.
+- **Halves must look different.** Each half gets its own silhouette, and only the crayon box is a box. The squishy goes in a clear cylindrical jar. The other pairs are: teddy head with ears and teddy body with limbs; a long engine with wheels and a tall, narrow smokestack; glasses and nose and a wide, flat mustache; a bundle of pointed crayons and an open box.
+- **The slinky's halves are one piece.** Any two slinky halves combine. In the toy data, a toy can say its two halves are the same piece. Then holding one slinky half wants another of the same, and the supply's skew follows that.
+- **Bigger pieces, within their 16x16 cells first.** The placeholder drawings fill about 10 px of each cell. Draw every piece and toy to fill its 16x16 cell, with bold outlines. If the six toys still can't be told apart at 16x16, go to 24x24 (the belts are 32 px tall). That is the art step's call, and it must be shown in screenshots and argued in the report.
+- **Elle steps when she turns, and the turn costs play time.** Facing the Finished belt, she stands a few pixels higher, toward it (about 8 px). Facing the parts belt, she stands lower, toward the front. A side-view frame plays between the two. The turn lasts `TURN_FRAMES`, a new tuning constant starting at 8. During the turn, A and B are ignored with no buzz. That last detail was the main thread's call; Ben ruled only that the turn costs time.
+- **The results screen's text is bigger:** the score, the best score and "New best!" at about twice the current height.
+
 ## How the game agent works
 
 As [2026-11-08-example-games-plan.md](2026-11-08-example-games-plan.md) ▸ How the game agents work, with the lessons of [2026-11-09-games-de-plan.md](2026-11-09-games-de-plan.md) and [2026-11-09-raycaster-plan.md](2026-11-09-raycaster-plan.md) ▸ What D and E taught the briefs:

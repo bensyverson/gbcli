@@ -1,0 +1,19 @@
+# Teddy & Toys: the six toys, in key order (top of the key column first).
+#
+# One toy a line, fields separated by |:
+#   id      a lowercase name for the code (TOY_TEDDY, ...)
+#   name    as a player reads it
+#   half A  the first half's name
+#   half B  the second half's name
+#   art     a gbcli pixel-text file under art/toys/: 48x16, three 16x16
+#           frames left to right: half A, half B, the finished toy
+#
+# After an edit, run python3 tools/make.py: tools/gen_toys.py turns this
+# file into include/gen/toys.inc, the include the game reads.
+
+teddy   | Teddy bear  | head           | body        | teddy.pixels
+train   | Train       | smokestack     | engine      | train.pixels
+squishy | Squishy     | squishy        | container   | squishy.pixels
+slinky  | Slinky      | top half       | bottom half | slinky.pixels
+glasses | Gag glasses | glasses & nose | mustache    | glasses.pixels
+crayons | Crayons     | crayons        | crayon box  | crayons.pixels

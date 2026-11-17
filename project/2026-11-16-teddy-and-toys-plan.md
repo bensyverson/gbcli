@@ -10,7 +10,9 @@ A sixth example game, and the first whose design is Ben's rather than the agent'
 
 **Title:** Teddy & Toys. **Folder:** `examples/factory/`.
 
-**The screen (from the sketch).** A side view from behind the worker, who has long dark hair. There are two horizontal belts: one at waist height behind the worker, and one in the foreground at the bottom. An analog clock sits top left with a score box beside it. A narrow key column runs down the right edge, showing the six finished toys stacked one above another.
+**Elle, the worker (Ben, 2026-11-16).** The main character is Elle, an 8-year-old girl. She has long, wavy, honey-blonde hair with full bangs, and wears a light-blue denim sleeveless top with a row of silver buttons and a purple flower choker. Ben gave a reference photo; it lives untracked at `local/elle-reference.jpg` in the main checkout (absolute path `/Users/ben/git/gbcli/local/elle-reference.jpg`, since a worktree has no `local/`), and must never be committed or copied into the repo. The pencil sketch's dark hair is only the pencil; the description here wins.
+
+**The screen (from the sketch).** A side view from behind Elle. There are two horizontal belts: one at waist height behind the worker, and one in the foreground at the bottom. An analog clock sits top left with a score box beside it. A narrow key column runs down the right edge, showing the six finished toys stacked one above another.
 
 **The belts.** The front belt is the **parts belt** and the back belt is the **Finished belt**. They run in opposite directions at a constant speed; the speed does not ramp. Down turns the worker to face the parts belt, which means facing the camera, so we see their face. Up turns them to face the Finished belt, so we see their back.
 
@@ -133,7 +135,7 @@ tasks:
         desc: |
           Why: a demo has to look and sound like a game. Part of Teddy & Toys (project/2026-11-16-teddy-and-toys-plan.md).
 
-          What: every image as a .pixels file (gbcli help pixels) or drawn by a Python standard-library script in examples/factory/tools/. That covers the worker from behind and from the front with long dark hair as in the sketch, each toy's two halves and its finished form, the key icons, the belts, the clock face and hand rotations, the score box, the title screen and the results screen. Then a bouncy, loopy factory tune as gbcli song text, and sound effects for grab, assemble, score, buzz and time running out on a channel the music gives up, clearly louder than the music. Colors that work on the DMG and with build --gbc, including the clock's red zone.
+          What: every image as a .pixels file (gbcli help pixels) or drawn by a Python standard-library script in examples/factory/tools/. That covers Elle, the worker, from behind and from the front (see ▸ Elle, the worker), each toy's two halves and its finished form, the key icons, the belts, the clock face and hand rotations, the score box, the title screen and the results screen. Then a bouncy, loopy factory tune as gbcli song text, and sound effects for grab, assemble, score, buzz and time running out on a channel the music gives up, clearly louder than the music. Colors that work on the DMG and with build --gbc, including the clock's red zone.
 
           Already decided (Ben, 2026-11-16): the six toys as listed in the plan; effects louder than the music. Agents make all assets; it may look programmer-made, but it should be deliberate and readable at 160x144. Any playtest rulings recorded in the plan bind this leaf.
         criteria:

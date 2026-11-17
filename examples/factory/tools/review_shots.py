@@ -118,8 +118,21 @@ def toys_sheet():
     png.write(OUT / "toys.png", sheet, scale=4)
 
 
+def require_fresh_roms():
+    """Stops if a ROM is older than any source: this tool doesn't build, and
+    shots of a stale ROM look like current art but aren't."""
+    sources = [p for d in ("src", "include", "art", "assets", "data")
+               for p in (g.PROJECT / d).rglob("*") if p.is_file()]
+    newest = max(p.stat().st_mtime for p in sources)
+    for rom in (g.ROM, g.ROM_GBC):
+        path = g.PROJECT / rom
+        if not path.exists() or path.stat().st_mtime < newest:
+            raise SystemExit(f"{rom} is older than its sources: run python3 tools/make.py first")
+
+
 def main():
     args = g.arg_parser(__doc__.splitlines()[0]).parse_args()
+    require_fresh_roms()
     cli = g.Gbcli(args.gbcli, args.verbose)
     OUT.mkdir(parents=True, exist_ok=True)
     cli.text("sessions", "rm", "review")

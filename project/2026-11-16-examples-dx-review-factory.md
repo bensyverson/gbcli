@@ -2,6 +2,8 @@
 
 2026-11-16, twentieth session. This review reads [2026-11-16-dx-factory.md](2026-11-16-dx-factory.md), written by three game agents across five leaves, plus what the main thread hit while integrating their work. It ranks the stumbles by cause and recommends a fix for each. Each item was checked against the pinned binary (commit 74432d7, rebuilt for dispatch) and [backlog.md](backlog.md) before it was listed. Ben's decisions go at the end.
 
+**Ruling (Ben, 2026-11-16): an agent's misreading of gbcli is a flaw in the help or onboarding text.** If an agent was wrong about gbcli, or missed something the help does say, the text failed to reach it where it looked. So no stumble here is dismissed as "my misreading" or "already documented". Each one asks where the agent looked and what it should have found there. The first draft of this review dismissed four stumbles that way; they are now F-9, F-11, F-12 and F-13.
+
 ## gbcli: correctness
 
 **F-1. The frame that turns the LCD off counts as lag, not as a screen change (about 6 min for the agent; still open).**
@@ -46,8 +48,20 @@
 - **Recommendation:** accept `--crop` with `--filmstrip`, cropping every frame. Small and self-contained.
 
 **F-9. Where a key press lands is in `help time`, not where the agent looked (about 5 min).**
-- **Observed:** the agent probed frame by frame to line up a turn strip. `gbcli help time` already says that a key token changes the buttons at the start of the run's frame N and that the stop shows the frame just drawn.
-- **Recommendation:** `run --help`'s keys flags point to `gbcli help time`.
+- **Observed:** the agent probed frame by frame to line up a turn strip. `gbcli help time` says that a key token changes the buttons at the start of the run's frame N and that the stop shows the frame just drawn. The agent read `run --help` and the keys recipe, and neither says it or points there.
+- **Recommendation:** `run --help`'s `--keys` and `--keys-file` lines carry the one-sentence rule ("K@N is seen by every joypad read after frame N's VBlank; a stop shows the frame just drawn") and point to `gbcli help time`. The bot recipe repeats it.
+
+**F-11. Nothing says only `include/` is searched for INCLUDE (about 3 min).**
+- **Observed:** the agent put `tuning.inc` in `src/` because the plan suggested it, and the build failed. `build --help` mentions "with include/ on the include path" in passing. The starter's README and `help rgbds` don't say where a project's own include files belong.
+- **Recommendation:** the `gbcli new` README's layout section and `help rgbds` say it: put your own `.inc` files in `include/`, the only folder INCLUDE searches; or add `--include DIR` to the build. (The plan's suggestion was the main thread's error, and the plan doc now says so.)
+
+**F-12. After `power-cycle`, the first read fails while the boot ROM runs (about 2 min).**
+- **Observed:** `gbcli power-cycle`, then `run --frames 30 --read 'u16[wBest]'`, answered `uninitialized_read`. The remedy was right. The save recipe says to run 300 frames after a power cycle, but the agent went from `power-cycle --help`, which doesn't.
+- **Recommendation:** the `power-cycle` row and `--help` say the machine is at power-on, with the boot ROM to run first, and give the idiom `run --to <your main loop>` before reading the program's state.
+
+**F-13. `--audio-log` text stops at 20 rows (1 min).**
+- **Observed:** the jingle's 36 channel-1 writes showed only C6 to G6, then `more`. `run --help` says the rows stop at 20, but the `more` row doesn't say how many are left or how to see them.
+- **Recommendation:** the `more` row says how many rows are hidden and names `--json` (every write) or `--piano`. This applies wherever a text view truncates.
 
 **F-10. No cartridge-type guidance for a battery save (about 2 min).**
 - **Observed:** the agent wrote `$1B` and `$02` at $0147/$0149 by hand, then checked with `gbcli sav` that rgbfix kept them.
@@ -57,7 +71,8 @@
 
 - **Stale review shots** (main thread). After a squash merge, `examples/factory/tools/review_shots.py` shot the ROMs left in `build/` by an earlier build. Ben saw the old art and a toy drawn over Elle's back, which the current code fixes. The tool now refuses a ROM older than its sources (commit 10480a9).
 - **The warm suite reads 35-37 s in the pre-commit hook** on commits that changed no Rust. It's filed as a leaf under 9b5RBA, since `job` has no issue tree.
-- **`python3 -I` breaks a tool's sibling imports.** That's the agents' own lesson, and the briefs now say to run the tools without `-I`.
+- **`python3 -I` breaks a tool's sibling imports.** The habit comes from the harness's advice for running downloaded files, not from gbcli; the briefs now say to run the tools without `-I`.
+- **F-3's and F-4's surprises are also help gaps.** `gbcli help` says sessions live in `.gbcli/sessions/NAME/` but not how the folder is found. Neither `run --help` nor `help hardware` says that a new session is a DMG unless `--model` says otherwise. The F-3 and F-4 leaf adds those sentences beside the rows.
 
 ## What the briefs got wrong
 
@@ -72,7 +87,7 @@
 2. **F-2:** resolve `build --out` against the working directory (or `--dir`), not the positional project DIR? *Recommend yes.*
 3. **F-3 and F-4:** a session-creation row naming the `.gbcli/` it used, and a note when a color-capable ROM starts as a DMG? *Recommend yes,* one leaf.
 4. **F-5:** un-park the shade data in `shot --json`, plus a `pixels=` hash on the shot row? *Recommend yes.*
-5. **F-6 to F-10:** two leaves? *Recommend yes:*
-   - **docs:** the WAV sentence (F-6), images in ROMX (F-7), the keys pointer (F-9) and the cart-type line (F-10);
+5. **F-6 to F-13:** two leaves? *Recommend yes:*
+   - **help and onboarding text:** the WAV sentence (F-6), images in ROMX (F-7), the keys rule in `run --help` (F-9), the cart-type line (F-10), include files (F-11), the boot ROM after `power-cycle` (F-12), and truncated rows that say what's hidden (F-13);
    - **audio and capture:** per-channel loudness in `--audio-summary` (F-6) and `--crop` with `--filmstrip` (F-8).
 6. **An issue tree in `job`** for discovered work, which today goes under the plan root? *Recommend yes.*

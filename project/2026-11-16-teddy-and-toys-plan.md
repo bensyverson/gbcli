@@ -51,6 +51,8 @@ A sixth example game, and the first whose design is Ben's rather than the agent'
 Ben's words: "I'm eager to get the gameplay right, so build it in such a way that we can iterate easily. That may mean a builder script or constants we can dial."
 
 - **One tuning file** (for example `src/tuning.inc`) holds every gameplay number, each with its unit and a one-line comment. These include belt speeds (sub-pixel), piece spacing, the pick-up zone's width, supply skew, the chord window, round length, the clock's red-zone time and the buzz cooldown. No gameplay number lives anywhere else.
+
+  > **Correction, 2026-11-16:** `src/tuning.inc` was a bad example. rgbasm's INCLUDE searches only `include/`, so the file is `include/tuning.inc`. The help didn't make that clear, so it's also F-11 in [2026-11-16-examples-dx-review-factory.md](2026-11-16-examples-dx-review-factory.md).
 - **The toys are data.** One file lists the six toys: names, halves, art file names and key order. A tool in `tools/` generates the include the game reads. Changing or adding a toy means editing data and rebuilding, not editing code.
 - **A rules check.** A script in `tools/` drives gbcli through one scripted scenario per rule in the controls table: grab, mismatch refused, B returns a half to the belt, B with two halves returns the last one, the chord inside and outside its window, drop only when facing Finished with a whole toy, the round's end and the best-score save. It reports pass or fail per rule in seconds, so a tuning change is checked before anyone plays it.
 - **A playtest checkpoint.** After the gameplay leaf, the chain stops and Ben plays the placeholder build before any art is made.

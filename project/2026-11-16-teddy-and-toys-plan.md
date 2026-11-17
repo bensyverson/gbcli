@@ -70,6 +70,18 @@ From the placeholder build (commit `00e8efa`), with the layout as built: HUD lin
 - **Elle steps when she turns, and the turn costs play time.** Facing the Finished belt, she stands a few pixels higher, toward it (about 8 px). Facing the parts belt, she stands lower, toward the front. A side-view frame plays between the two. The turn lasts `TURN_FRAMES`, a new tuning constant starting at 8. During the turn, A and B are ignored with no buzz. That last detail was the main thread's call; Ben ruled only that the turn costs time.
 - **The results screen's text is bigger:** the score, the best score and "New best!" at about twice the current height.
 
+## Art review rulings (Ben, 2026-11-16)
+
+From the art build (commit `c209b47`). "Elle approves."
+
+- **Slinky.** Each half is a short coil stack, about half the height of the art build's half. The finished slinky looks like the art build's half: one full, tall stack.
+- **Gag glasses.** A reference photo is untracked at `/Users/ben/git/gbcli/local/gag-glasses-reference.jpg`; never commit it. It shows bushy black eyebrows over round black-framed glasses, a big pink nose, and a bushy black mustache directly under the nose. The mustache half is black, and much bigger than in the photo, so it reads as a Groucho-style mustache.
+- **Crayon box.** The finished box holds more crayons packed tightly, so it no longer reads as a birthday cake.
+- **Key column.** The icons are centered horizontally; today they have a margin on the left and none on the right.
+- **What Elle holds, when she faces away.** She is drawn over it, as if it's in front of her. A held toy is hidden behind her body, and held halves may peek out at her sides. Assembly stays allowed facing either belt. If the DMG's X-based sprite priority makes the peeking wrong, hide held things entirely while she faces away.
+- **Belt lines behind pieces.** Pieces on a belt show the belt's lines behind them, instead of a solid dark-gray cell. Pieces in Elle's hands keep a clear background.
+- **A cheerful jingle** (a short rising run of notes) when a finished toy lands on the Finished belt, replacing the plain score effect.
+
 ## How the game agent works
 
 As [2026-11-08-example-games-plan.md](2026-11-08-example-games-plan.md) ▸ How the game agents work, with the lessons of [2026-11-09-games-de-plan.md](2026-11-09-games-de-plan.md) and [2026-11-09-raycaster-plan.md](2026-11-09-raycaster-plan.md) ▸ What D and E taught the briefs:

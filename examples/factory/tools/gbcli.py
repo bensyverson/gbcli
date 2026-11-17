@@ -19,6 +19,10 @@ class Gbcli:
         self.exe = exe
         self.verbose = verbose
         self.calls = 0
+        # gbcli keeps sessions in the nearest .gbcli/ above the working
+        # directory. It is gitignored, so a fresh checkout has none here, and
+        # inside the gbcli repo the sessions would land in the repo's own.
+        (PROJECT / ".gbcli").mkdir(exist_ok=True)
 
     def run(self, *args, check=True):
         """Runs one gbcli command with --json; returns the parsed reply."""

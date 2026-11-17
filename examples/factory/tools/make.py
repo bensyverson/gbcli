@@ -4,11 +4,13 @@
 
 1. tools/gen_toys.py: data/toys.txt and art/toys/ -> the toy include
 2. tools/gen_clock.py: include/tuning.inc -> the clock's rotations
+   tools/gen_scene.py: art/scene.pixels -> the background tiles
 3. gbcli build, then gbcli build --gbc (build/factory.gb, build/gbc/factory.gbc)
 4. tools/rules_check.py: one scenario per rule of the controls table
    (skipped with --no-check)
-5. with --prove, tools/prove_screen.py: the belts, key column, clock and
-   frame budget claims (about a minute)
+5. with --prove, tools/prove_screen.py (the belts, key column, clock and
+   frame budget claims, about a minute) and tools/prove_sound.py (the
+   effects on channel 1, louder than the music)
 Stops at the first step that fails.
 """
 
@@ -34,6 +36,7 @@ def main():
     args = p.parse_args()
     py = sys.executable
     step("toys", [py, str(TOOLS / "gen_toys.py")])
+    step("scene", [py, str(TOOLS / "gen_scene.py")])
     step("clock", [py, str(TOOLS / "gen_clock.py")])
     step("build", [args.gbcli, "build", str(g.PROJECT)])
     step("build --gbc", [args.gbcli, "build", str(g.PROJECT), "--gbc"])
@@ -41,6 +44,7 @@ def main():
         step("rules check", [py, str(TOOLS / "rules_check.py"), "--gbcli", args.gbcli])
     if args.prove:
         step("prove screen", [py, str(TOOLS / "prove_screen.py"), "--gbcli", args.gbcli])
+        step("prove sound", [py, str(TOOLS / "prove_sound.py"), "--gbcli", args.gbcli])
 
 
 if __name__ == "__main__":

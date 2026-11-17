@@ -4,9 +4,16 @@
     python3 tools/gen_toys.py --check  exits 1 if it is out of date
 
 The include gives the game TOY_COUNT, a TOY_<ID> number per toy (its place
-in the key, top first); the .asm holds ToyTiles: per toy, 12 tiles in this order:
-half A, half B, the finished toy, each as 2x2 tiles (top left, bottom left,
-top right, bottom right): a column is an 8x16 object's tile pair.
+in the key, top first) and SUPPLY_PIECES; the .asm holds ToyTiles: per toy,
+12 tiles in this order: half A, half B, the finished toy, each as 2x2 tiles
+(top left, bottom left, top right, bottom right): a column is an 8x16
+object's tile pair.
+
+A piece is numbered toy * 2 + half + 1 (half A is 0). A toy whose half B
+is `same` is one piece used twice (the slinky): only its half A piece is
+ever dealt, and it completes itself. So the .asm also holds PiecePartner
+(per piece, the piece that completes it) and SupplyPieces (the
+SUPPLY_PIECES pieces the belt deals).
 """
 
 import sys
@@ -21,6 +28,24 @@ OUT_INC = tuning.PROJECT / "include" / "gen" / "toys.inc"   # constants
 OUT_ASM = tuning.PROJECT / "src" / "gen" / "toys.asm"       # the tiles
 
 FIELDS = ("id", "name", "half_a", "half_b", "art")
+SAME = "same"                      # as half B: the two halves are one piece
+
+
+def partners(toys):
+    """Per piece (from 1), the piece that completes it."""
+    out = []
+    for i, toy in enumerate(toys):
+        a, b = i * 2 + 1, i * 2 + 2
+        out += [a, a] if toy["same"] else [b, a]
+    return out
+
+
+def supply_pieces(toys):
+    """The pieces the belt deals: both halves, or half A of a one-piece toy."""
+    out = []
+    for i, toy in enumerate(toys):
+        out += [i * 2 + 1] if toy["same"] else [i * 2 + 1, i * 2 + 2]
+    return out
 
 
 def load():
@@ -35,6 +60,7 @@ def load():
         toy = dict(zip(FIELDS, parts))
         if not toy["id"].isidentifier() or toy["id"] != toy["id"].lower():
             sys.exit(f"data/toys.txt:{number}: id {toy['id']!r} must be a lowercase name")
+        toy["same"] = toy["half_b"] == SAME
         toys.append(toy)
     if not 1 <= len(toys) <= 6:
         sys.exit(f"data/toys.txt: {len(toys)} toys; the key column has room for 1 to 6")
@@ -59,8 +85,10 @@ def render_inc(toys):
         f"DEF TOY_COUNT EQU {len(toys)}",
         "DEF TOY_TILES EQU 12             ; per toy: half A, half B, finished; 2x2 tiles each",
     ]
+    lines.append(f"DEF SUPPLY_PIECES EQU {len(supply_pieces(toys))}          ; pieces the belt deals (SupplyPieces)")
     for i, toy in enumerate(toys):
-        lines.append(f"DEF TOY_{toy['id'].upper()} EQU {i}   ; {toy['name']}: {toy['half_a']} + {toy['half_b']}")
+        halves = f"{toy['half_a']} x2 (one piece)" if toy["same"] else f"{toy['half_a']} + {toy['half_b']}"
+        lines.append(f"DEF TOY_{toy['id'].upper()} EQU {i}   ; {toy['name']}: {halves}")
     lines.append("ENDC")
     return "\n".join(lines) + "\n"
 
@@ -69,14 +97,22 @@ def render_asm(toys):
     lines = [HEADER, 'SECTION "Toy tiles", ROM0', "ToyTiles::"]
     for toy in toys:
         path = ART / toy["art"]
-        img = pixels.read(path)
+        img = tiles.indexed(pixels.read(path, clear=tiles.CLEAR), allow_dark=False, where=f"art/toys/{toy['art']}")
         if len(img) != 16 or len(img[0]) != 48:
             sys.exit(f"art/toys/{toy['art']}: want 48x16 (three 16x16 frames), got {len(img[0])}x{len(img)}")
         lines.append(f"; {toy['name']}")
-        for frame in range(3):
+        # A one-piece toy's half B is its half A again.
+        for frame in (0, 0 if toy["same"] else 1, 2):
             for tile in frame_tiles(img, frame):
                 lines.append("\tdb " + ",".join(f"${b:02X}" for b in tiles.encode(tile)))
     lines.append("ToyTilesEnd::")
+    lines.append("")
+    lines.append("; Per piece (from 1): the piece that completes it.")
+    lines.append("PiecePartner::")
+    lines.append("\tdb " + ",".join(str(p) for p in partners(toys)))
+    lines.append("; The pieces the belt deals, each as likely.")
+    lines.append("SupplyPieces::")
+    lines.append("\tdb " + ",".join(str(p) for p in supply_pieces(toys)))
     return "\n".join(lines) + "\n"
 
 

@@ -22,7 +22,9 @@ RADIUS = 15.0
 HAND = 11.5          # px from the center to the hand's tip
 HAND_WIDTH = 0.9     # px either side of the hand's line
 
-WALL, FACE, TICK, INK = 0, 1, 2, 3  # shades: the face is its own color, so it alone turns red
+# Color numbers (tools/tiles.py): the wall gray, the white face, dark gray
+# ticks, black ink. The face is its own color, so on a GBC it alone turns red.
+WALL, FACE, TICK, INK = 2, 1, 0, 3
 
 
 def face(step, steps):

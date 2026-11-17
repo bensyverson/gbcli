@@ -1,26 +1,47 @@
 format gbcli-pixels 1
-# slinky: placeholder art from tools/placeholder_toys.py.
-# Three 16x16 frames: half A, half B, the finished toy.
+# Slinky: one piece, a coil, used twice (data/toys.txt says `same`, so the
+# half B frame is unused); the finished slinky stands in an arch.
+# Three 16x16 frames. Pieces are objects too, so no dark gray: clear shows
+# the belt behind them (tools/tiles.py).
 size 48 16
-color . #ffffff
-color 1 #aaaaaa
-color 2 #555555
-color 3 #000000
+color . clear
+color w #ffffff
+color l #aaaaaa
+color k #000000
+fill .
 
-rows 0 0
-................................................
-...................................3333333333...
-..................................322222222223..
-...................................3333333333...
-..................311111111113....322222222223..
-...3333333333......3333333333......3333333333...
-..322222222223....311111111113....322222222223..
-...3333333333......3333333333......3333333333...
-..322222222223....311111111113....311111111113..
-...3333333333......3333333333......3333333333...
-..322222222223....311111111113....311111111113..
-...3333333333......................3333333333...
-..................................311111111113..
-...................................3333333333...
-..................................311111111113..
-................................................
+rows 0 0    # the coil (both halves)
+................
+....kkkkkkkk....
+..kkwwwwwwwwkk..
+.kwwkkkkkkkkwwk.
+.kwk........kwk.
+.kwwkkkkkkkkwwk.
+.kkkwwwwwwwwkkk.
+.kllkkkkkkkkllk.
+.kkkllllllllkkk.
+.kwwkkkkkkkkwwk.
+.kkkwwwwwwwwkkk.
+.kllkkkkkkkkllk.
+.kkkllllllllkkk.
+.kwwkkkkkkkkwwk.
+..kkwwwwwwwwkk..
+....kkkkkkkk....
+
+rows 32 0   # the slinky, in an arch
+.....kkkkkk.....
+...kkwkwkwkkk...
+..kwkwkwkwkwkk..
+.kwkkk....kkkwk.
+.kwk........kwk.
+kwwk........kwwk
+kkkk........kkkk
+kllk........kllk
+kkkk........kkkk
+kwwk........kwwk
+kkkk........kkkk
+kllk........kllk
+kkkk........kkkk
+kwwk........kwwk
+kkkk........kkkk
+................

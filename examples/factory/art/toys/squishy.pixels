@@ -1,26 +1,64 @@
 format gbcli-pixels 1
-# squishy: placeholder art from tools/placeholder_toys.py.
-# Three 16x16 frames: half A, half B, the finished toy.
+# Squishy: a blob with a face, a clear cylindrical jar, the squishy in it.
+# Three 16x16 frames. Pieces are objects too, so no dark gray: clear shows
+# the belt behind them (tools/tiles.py).
 size 48 16
-color . #ffffff
-color 1 #aaaaaa
-color 2 #555555
-color 3 #000000
+color . clear
+color w #ffffff
+color l #aaaaaa
+color k #000000
+fill .
 
-rows 0 0
-................................................
-......................................2222......
-....................................22111122....
-...................................2113113112...
-.................33333333333333....2111111112...
-......2222.......3............3....2113333112...
-....22111122.....3.2222222222.3.....22111122....
-...2113113112....3.2111111112.3.......2222......
-...2111111112....3.2222222222.3..33333333333333.
-...2113333112....3............3..3............3.
-....22111122.....3............3..3.2222222222.3.
-......2222.......33333333333333..3.2111111112.3.
-.................................3.2222222222.3.
-.................................3............3.
-.................................3............3.
-.................................33333333333333.
+rows 0 0    # half A: the squishy
+................
+................
+....kkkkkkkk....
+..kkwwllllllkk..
+.kwwllllllllllk.
+.kwlllllllllllk.
+kwllkkllllkklllk
+kwllkkllllkklllk
+kllllllllllllllk
+kllkllllllllkllk
+klllkkkkkkkklllk
+kllllllllllllllk
+.kllllllllllllk.
+..kkllllllllkk..
+....kkkkkkkk....
+................
+
+rows 16 0   # half B: the jar
+..kkkkkkkkkkkk..
+..kllllllllllk..
+..kkkkkkkkkkkk..
+.kwwwwwwwwwwwwk.
+.kwlwwwwwwwwwwk.
+.kwlwwwwwwwwwwk.
+.kwlwwwwwwwwlwk.
+.kwlwwwwwwwwlwk.
+.kwlwwwwwwwwlwk.
+.kwlwwwwwwwwlwk.
+.kwlwwwwwwwwlwk.
+.kwlwwwwwwwwwwk.
+.kwlwwwwwwwwwwk.
+.kwlwwwwwwwwwwk.
+..kwwwwwwwwwwk..
+...kkkkkkkkkk...
+
+rows 32 0   # the squishy in its jar
+..kkkkkkkkkkkk..
+..kllllllllllk..
+..kkkkkkkkkkkk..
+.kwwwwwwwwwwwwk.
+.kwlwwwwwwwwwwk.
+.kwlwkkkkkkwwwk.
+.kwlkllllllkwwk.
+.kwlklkllklkwwk.
+.kwlkllllllkwwk.
+.kwlklkkkklkwwk.
+.kwlkllllllkwwk.
+.kwlkkkkkkkkwwk.
+.kwlwwwwwwwwwwk.
+.kwlwwwwwwwwwwk.
+..kwwwwwwwwwwk..
+...kkkkkkkkkk...

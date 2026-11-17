@@ -82,10 +82,17 @@ ENDC
 	ld a, BANK(ClockRotations)  ; any bank: VBlank restores hRomBank
 	ldh [hRomBank], a
 	call SoundInit
+	SWITCH_BANK song_theme
+	call MusicInit
+	ld b, 0                     ; channel 1: the effects', never the music's
+	ld c, 1
+	call hUGE_mute_channel
 	call SaveLoad
 
-	ld a, %11_10_01_00
+	ld a, BGP_GAME
 	ldh [rBGP], a
+	ASSERT ELLE_OBP == OBP_GAME, "Elle and the pieces share OBP0 (include/layout.inc)"
+	ld a, OBP_GAME
 	ldh [rOBP0], a
 	xor a
 	ldh [rSCY], a
@@ -187,6 +194,8 @@ EndRound:
 	ld a, 1
 	ld [wNewBest], a
 .show
+	ld a, SFX_TIMEUP
+	call SfxPlay
 	jp ShowResults
 
 ; hJoyHeld and hJoyPressed (newly down this frame): PAD_* bits.
@@ -234,13 +243,20 @@ VBlank:
 	call hOAMDMA
 	ld a, [wGameState]
 	cp STATE_PLAY
-	jr nz, .count
+	jr nz, .sound
 	call BeltsVBlank
 	call ScoreVBlank
 	call ClockVBlank
-	ldh a, [hRomBank]           ; the main code's bank, which the clock replaced
+.sound
+	; Sound, on every screen: the effects, then a tick of the music, whose
+	; data is in ROMX. Then the main code's bank back (the clock and the
+	; music replaced it).
+	call SfxVBlank
+	ld a, BANK(song_theme)
 	ld [rROMB0], a
-.count
+	call MusicVBlank
+	ldh a, [hRomBank]
+	ld [rROMB0], a
 	ld hl, wFrame
 	inc [hl]
 	jr nz, .done
@@ -275,68 +291,6 @@ ScoreVBlank:
 	add T_DIGITS
 	ld [hl], a
 	ret
-
-; ---------------------------------------------------------------------------
-
-IF DEF(GBCLI_GBC)
-; GBC mode, LCD off: palettes and the attribute maps.
-ColorGbc:
-	ld a, BGPI_AUTOINC
-	ldh [rBCPS], a
-	ld hl, GrayColors
-	ld b, 8
-.bg0
-	ld a, [hli]
-	ldh [rBCPD], a
-	dec b
-	jr nz, .bg0
-	ld hl, ClockNormalColors    ; BG palette 1 follows palette 0
-	ld b, 8
-.bg1
-	ld a, [hli]
-	ldh [rBCPD], a
-	dec b
-	jr nz, .bg1
-	ld a, OBPI_AUTOINC
-	ldh [rOCPS], a
-	ld hl, GrayColors
-	ld b, 8
-.obj
-	ld a, [hli]
-	ldh [rOCPD], a
-	dec b
-	jr nz, .obj
-
-	ld a, 1
-	ldh [rVBK], a
-	ld hl, ATTRMAP0
-	ld bc, 2 * TILEMAP_AREA     ; both maps: palette 0
-	call ClearMem
-	ld hl, ATTRMAP0 + CLOCK_ROW * 32 + CLOCK_COL
-	ld de, 32 - 4
-	ld c, 4
-.clockRow
-	ld a, 1                     ; the clock's palette
-	REPT 4
-	ld [hli], a
-	ENDR
-	add hl, de
-	dec c
-	jr nz, .clockRow
-	xor a
-	ldh [rVBK], a
-	ret
-
-MACRO rgb
-	dw (\1) | (\2) << 5 | (\3) << 10
-ENDM
-
-GrayColors:
-	rgb 31, 31, 31
-	rgb 21, 21, 21
-	rgb 10, 10, 10
-	rgb 0, 0, 0
-ENDC
 
 ; ---------------------------------------------------------------------------
 ; Memory helpers.

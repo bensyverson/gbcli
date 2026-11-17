@@ -3,10 +3,11 @@ IF !DEF(TOYS_INC)
 DEF TOYS_INC EQU 1
 DEF TOY_COUNT EQU 6
 DEF TOY_TILES EQU 12             ; per toy: half A, half B, finished; 2x2 tiles each
+DEF SUPPLY_PIECES EQU 11          ; pieces the belt deals (SupplyPieces)
 DEF TOY_TEDDY EQU 0   ; Teddy bear: head + body
 DEF TOY_TRAIN EQU 1   ; Train: smokestack + engine
 DEF TOY_SQUISHY EQU 2   ; Squishy: squishy + container
-DEF TOY_SLINKY EQU 3   ; Slinky: top half + bottom half
+DEF TOY_SLINKY EQU 3   ; Slinky: coil x2 (one piece)
 DEF TOY_GLASSES EQU 4   ; Gag glasses: glasses & nose + mustache
 DEF TOY_CRAYONS EQU 5   ; Crayons: crayons + crayon box
 ENDC

@@ -53,3 +53,49 @@ def read(path):
             row.append(palette[(byte >> shift) & ((1 << depth) - 1)])
         rows.append(row)
     return rows
+
+
+def _chunk(kind, body):
+    return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body))
+
+
+def write(path, rows, scale=1):
+    """Writes rows of (r, g, b) as an RGB PNG, each pixel scale x scale."""
+    height, width = len(rows) * scale, len(rows[0]) * scale
+    raw = bytearray()
+    for row in rows:
+        line = bytearray(b"\x00")
+        for px in row:
+            line += bytes(px) * scale
+        raw += line * scale
+    data = (b"\x89PNG\r\n\x1a\n"
+            + _chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+            + _chunk(b"IDAT", zlib.compress(bytes(raw), 9))
+            + _chunk(b"IEND", b""))
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    Path(path).write_bytes(data)
+
+
+def hstack(images, gap=2, background=(96, 96, 96)):
+    """Images (rows of (r, g, b)) side by side, top-aligned, gap pixels apart."""
+    height = max(len(img) for img in images)
+    out = [[] for _ in range(height)]
+    for n, img in enumerate(images):
+        if n:
+            for row in out:
+                row.extend([background] * gap)
+        width = len(img[0])
+        for y in range(height):
+            out[y].extend(img[y] if y < len(img) else [background] * width)
+    return out
+
+
+def vstack(images, gap=2, background=(96, 96, 96)):
+    """Images one above another, left-aligned, gap pixels apart."""
+    width = max(len(img[0]) for img in images)
+    out = []
+    for n, img in enumerate(images):
+        if n:
+            out.extend([[background] * width for _ in range(gap)])
+        out.extend(row + [background] * (width - len(row)) for row in img)
+    return out

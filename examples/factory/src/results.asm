@@ -6,13 +6,27 @@ include "hardware.inc"
 include "layout.inc"
 include "images.inc"
 include "bank.inc"
+include "gen/toys.inc"
 
 	MAIN_FONT_CHARMAP text, 0
 	PUSHC text
 DEF GLYPH_ZERO EQU '0'
 	POPC
 
-DEF LINE_TILES EQU 20
+DEF LINE_TILES EQU RESULTS_LINE_TILES
+
+; Map rows (a big line takes two).
+DEF TITLE_NAME_ROW   EQU 2
+DEF TITLE_BELT_ROW   EQU 6          ; 4 rows
+DEF TITLE_BEST_ROW   EQU 12
+DEF RESULTS_HEAD_ROW EQU 1
+DEF RESULTS_MADE_ROW EQU 3
+DEF RESULTS_BEST_ROW EQU 6
+DEF RESULTS_NEW_ROW  EQU 9
+DEF RESULTS_BELT_ROW EQU 11         ; 4 rows
+DEF START_ROW        EQU 16
+DEF TOY_BELT_COL     EQU 1          ; the toys on the belt: the first one's column
+DEF TOY_BELT_STEP    EQU 3          ; columns from one toy to the next
 
 SECTION "Results", ROM0
 
@@ -21,45 +35,67 @@ SECTION "Results", ROM0
 ; are off while the LCD is.
 ShowResults::
 	call LcdOff
+IF DEF(GBCLI_GBC)
+	ldh a, [hGbc]
+	and a
+	call nz, ColorGbcPlain
+ENDC
+	call LoadSceneTiles
 	ld hl, TILEMAP0
 	ld bc, TILEMAP_AREA
-	call ClearMem               ; tile 0: blank wall
-	ld hl, TILEBLOCK0 + T_RESULTS * 16
-	ld bc, 5 * LINE_TILES * 16
-	call ClearMem
+	call ClearMem               ; T_BLANK: white
 	ld hl, wShadowOAM
 	ld bc, OAM_SIZE
 	call ClearMem
 	SWITCH_BANK MainFontGlyphs
-
-	ld hl, TitleText
-	ld bc, 0 << 8 | 3           ; buffer 0, map row 3
-	call DrawLine
+	call BigTextInit
 	ld a, [wResultsAfterRound]
 	and a
-	jr z, .best
-	ld hl, MadeText
-	ld de, wScore
-	call Compose
-	ld hl, wLine
-	ld bc, 1 << 8 | 7
-	call DrawLine
-.best
+	jr nz, .results
+
+	; The title: the name big, the six toys riding a belt, the best.
+	ld hl, TitleText
+	ld c, TITLE_NAME_ROW
+	call DrawBig
+	ld a, TITLE_BELT_ROW
+	call DrawToyBelt
 	ld hl, BestText
 	ld de, wBest
 	call Compose
 	ld hl, wLine
-	ld bc, 2 << 8 | 9
+	ld bc, 0 << 8 | TITLE_BEST_ROW  ; small line buffer 0
 	call DrawLine
+	jr .start
+
+	; After a round: the score, the best and "New best!" big, 2 rows each.
+.results
+	ld hl, TimeUpText
+	ld bc, 0 << 8 | RESULTS_HEAD_ROW
+	call DrawLine
+	ld hl, MadeText
+	ld de, wScore
+	call Compose
+	ld hl, wLine
+	ld c, RESULTS_MADE_ROW
+	call DrawBig
+	ld hl, BestText
+	ld de, wBest
+	call Compose
+	ld hl, wLine
+	ld c, RESULTS_BEST_ROW
+	call DrawBig
 	ld a, [wNewBest]
 	and a
-	jr z, .start
+	jr z, .belt
 	ld hl, NewBestText
-	ld bc, 3 << 8 | 11
-	call DrawLine
+	ld c, RESULTS_NEW_ROW
+	call DrawBig
+.belt
+	ld a, RESULTS_BELT_ROW
+	call DrawToyBelt
 .start
 	ld hl, StartText
-	ld bc, 4 << 8 | 14
+	ld bc, 1 << 8 | START_ROW   ; small line buffer 1
 	call DrawLine
 
 	xor a
@@ -71,6 +107,35 @@ ShowResults::
 	xor a
 	ldh [rIF], a
 	reti                        ; returns with interrupts on
+
+; A belt band (4 rows) from map row a, with the six finished toys on it,
+; as in the key column, top toy leftmost.
+DrawToyBelt:
+	ld l, a
+	ld h, 0
+	REPT 5
+	add hl, hl
+	ENDR
+	ld de, TILEMAP0
+	add hl, de
+	push hl
+	call DrawBeltRows
+	pop hl
+	ld de, 32 + TOY_BELT_COL     ; the toys' row, the first toy's column
+	add hl, de
+	ld c, 0
+.toy
+	ld a, c
+	call ToyTile
+	add 8                       ; the finished frame
+	call Draw2x2                ; keeps hl
+	ld de, TOY_BELT_STEP
+	add hl, de
+	inc c
+	ld a, c
+	cp TOY_COUNT
+	jr nz, .toy
+	ret
 
 ; Turns the LCD off in VBlank and leaves interrupts off.
 LcdOff::
@@ -109,8 +174,8 @@ DrawLine:
 	ld a, d
 	add HIGH(TILEBLOCK0)
 	ld d, a
-	ld b, 3                     ; ink
-	ld c, 0                     ; paper
+	ld b, COLOR_INK
+	ld c, COLOR_WHITE           ; paper
 	call TextDraw               ; a: the tiles it touched
 	pop bc
 	ld e, a                     ; e: tiles
@@ -190,6 +255,7 @@ Compose:
 
 	PUSHC text
 TitleText:   db "Teddy & Toys", MAIN_FONT_END
+TimeUpText:  db "Time's up!", MAIN_FONT_END
 MadeText:    db "Toys made: ", MAIN_FONT_END
 BestText:    db "Best: ", MAIN_FONT_END
 NewBestText: db "New best!", MAIN_FONT_END

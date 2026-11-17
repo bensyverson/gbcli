@@ -30,8 +30,10 @@ EXPORT FACING_PARTS, FACING_FINISHED
 
 DEF ELLE_FRAME_BACK  EQU 0          ; frames of assets/sprites/elle.16x48
 DEF ELLE_FRAME_FRONT EQU 1
+DEF ELLE_FRAME_SIDE  EQU 2          ; mid-turn
 DEF HELD_OBJECTS EQU 4              ; OAM 0-3: what Elle holds, over her
 DEF ELLE_OAM EQU HELD_OBJECTS * 4
+DEF PIECE_ATTR EQU OBJ_PAL_PIECES   ; a held piece's GBC palette; a DMG ignores bits 0-2
 
 SECTION "Play", ROM0
 
@@ -58,17 +60,45 @@ PlayUpdate::
 	dec a
 	ld [wBuzzTimer], a
 .facing
-	ldh a, [hJoyPressed]
-	bit B_PAD_DOWN, a
-	jr z, .notDown
-	ld a, FACING_PARTS
+	; A turn: the pad, A and B do nothing until its last frame has passed;
+	; then the new facing holds and that frame's presses act.
+	ld a, [wTurnTimer]
+	and a
+	jr z, .pad
+	dec a
+	ld [wTurnTimer], a
+	jp nz, ElleDraw
+	ld a, [wTurnTo]
 	ld [wFacing], a
-.notDown
+.pad
 	ldh a, [hJoyPressed]
+	ld b, FACING_PARTS
+	bit B_PAD_DOWN, a
+	jr nz, .turn
+	ld b, FACING_FINISHED
 	bit B_PAD_UP, a
 	jr z, .buttons
-	ld a, FACING_FINISHED
+.turn
+	ld a, [wFacing]
+	cp b
+	jr z, .buttons              ; already facing that belt
+	ld a, b
+IF TURN_FRAMES == 0
 	ld [wFacing], a
+ELSE
+	ld [wTurnTo], a
+	ld a, TURN_FRAMES
+	ld [wTurnTimer], a
+	ld a, SFX_TURN
+	call SfxPlay
+	; This frame's A or B is ignored with the turn, and so is a press
+	; waiting for its chord partner. (To buffer presses through a turn
+	; instead, keep these and act on them when wTurnTimer reaches 0.)
+	xor a
+	ld [wChordA], a
+	ld [wChordB], a
+	jp ElleDraw
+ENDC
 .buttons
 	ld a, [wHeldCount]
 	cp 2
@@ -160,6 +190,8 @@ ActionA:
 	ld [hl], b
 	inc a
 	ld [wHeldCount], a
+	ld a, SFX_GRAB
+	call SfxPlay
 	ld hl, wGrabs
 	inc [hl]
 	jp SetWanted
@@ -187,6 +219,8 @@ ActionB:
 	call QueueSlot
 	xor a
 	ld [wToy], a
+	ld a, SFX_SCORE
+	call SfxPlay
 	ld hl, wDrops
 	inc [hl]
 	; Score +1, in BCD.
@@ -244,6 +278,8 @@ Assemble:
 	ld [wHands], a
 	ld [wHands + 1], a
 	ld [wHeldCount], a
+	ld a, SFX_ASSEMBLE
+	call SfxPlay
 	ld hl, wAssembles
 	inc [hl]
 	jp SetWanted
@@ -259,7 +295,7 @@ Buzz::
 	ld [wBuzzTimer], a
 	jp SoundBuzz
 
-; wWantedPiece: the other half of Elle's one half, else 0. A new want
+; wWantedPiece: the piece that completes Elle's one half, else 0. A new want
 ; restarts the supply's count toward a forced match.
 SetWanted:
 	ld a, [wHeldCount]
@@ -267,9 +303,12 @@ SetWanted:
 	ld a, 0
 	jr nz, .set
 	ld a, [wHands]
-	dec a
-	xor 1                       ; the toy's other half
-	inc a
+	add LOW(PiecePartner - 1)   ; the piece that completes it (gen/toys.asm)
+	ld l, a
+	adc HIGH(PiecePartner - 1)
+	sub l
+	ld h, a
+	ld a, [hl]
 .set
 	ld hl, wWantedPiece
 	cp [hl]
@@ -291,6 +330,24 @@ PartsSlotUnder:
 
 ; Writes Elle (facing the right way) and what she holds into shadow OAM.
 ElleDraw::
+	; Her frame and height: mid-turn her side, between the two belts.
+	ld a, [wTurnTimer]
+	and a
+	ld b, ELLE_FRAME_SIDE
+	ld c, ELLE_Y_SIDE
+	jr nz, .pose
+	ld a, [wFacing]
+	cp FACING_PARTS
+	ld b, ELLE_FRAME_FRONT
+	ld c, ELLE_Y_PARTS
+	jr z, .pose
+	ld b, ELLE_FRAME_BACK
+	ld c, ELLE_Y_FINISHED
+.pose
+	ld a, b
+	ld [wElleFrame], a
+	ld a, c
+	ld [wElleY], a
 	; Held things first, so they draw over her.
 	ld hl, wShadowOAM
 	ld a, [wToy]
@@ -299,7 +356,11 @@ ElleDraw::
 	dec a
 	call ToyTile
 	add 8                       ; the finished frame
-	ld b, TOY_HELD_Y + OAM_Y_OFS
+	ld d, a
+	ld a, [wElleY]
+	add TOY_HELD_DY + OAM_Y_OFS
+	ld b, a
+	ld a, d
 	ld c, TOY_HELD_X + OAM_X_OFS
 	call Put16
 	call Hide2
@@ -313,12 +374,10 @@ ElleDraw::
 	call PutHeldHalf
 .elle
 	SWITCH_BANK ElleFrames
-	ld a, [wFacing]
-	cp FACING_PARTS
-	ld a, ELLE_FRAME_FRONT
-	jr z, .frame
-	ld a, ELLE_FRAME_BACK
-.frame
+	ld a, [wElleY]
+	add OAM_Y_OFS
+	ld c, a
+	ld a, [wElleFrame]
 	add a
 	ld e, a
 	ld d, 0
@@ -332,10 +391,12 @@ ElleDraw::
 	ld de, wShadowOAM + ELLE_OAM
 .object
 	ld a, [hli]
-	add ELLE_Y + OAM_Y_OFS
+	ld [wElleObjY], a
+	add c
 	ld [de], a
 	inc e
 	ld a, [hli]
+	ld [wElleObjX], a
 	add ELLE_X + OAM_X_OFS
 	ld [de], a
 	inc e
@@ -343,14 +404,52 @@ ElleDraw::
 	add T_ELLE
 	ld [de], a
 	inc e
+IF DEF(GBCLI_GBC)
+	; Her GBC palette for this object (src/colors.asm); a DMG ignores
+	; these bits.
+	push hl
+	push bc
+	ld a, [wElleObjY]
+	swap a
+	and $0F                     ; the row: 0-2
+	add a
+	ld b, a
+	ld a, [wElleObjX]
+	rrca
+	rrca
+	rrca
+	and 1                       ; the column
+	add b
+	ld b, a
+	ld a, [wElleFrame]
+	ld c, a
+	add a
+	add c
+	add a                       ; frame * 6
+	add b
+	add LOW(ElleObjPalettes)
+	ld l, a
+	adc HIGH(ElleObjPalettes)
+	sub l
+	ld h, a
+	ld a, [hl]
+	ld [wElleObjPal], a
+	pop bc
+	pop hl
+	ld a, [wElleObjPal]
+	or [hl]
+	inc hl
+ELSE
 	ld a, [hli]
+ENDC
 	ld [de], a
 	inc e
 	dec b
 	jr nz, .object
 	ret
 
-; A held half (piece a, 0 for none) at x c (OAM), HAND_Y; hl advances 8.
+; A held half (piece a, 0 for none) at x c (OAM), in Elle's hands; hl
+; advances 8.
 PutHeldHalf:
 	and a
 	jr z, Hide2
@@ -362,7 +461,11 @@ PutHeldHalf:
 	jr z, .halfA
 	add 4
 .halfA
-	ld b, HAND_Y + OAM_Y_OFS
+	ld d, a
+	ld a, [wElleY]
+	add HAND_DY + OAM_Y_OFS
+	ld b, a
+	ld a, d
 	; fall through
 
 ; Two 8x16 objects at OAM y b, x c, tiles a (left column) and a + 2.
@@ -372,7 +475,7 @@ Put16:
 	ld [hl], c
 	inc l
 	ld [hli], a
-	ld [hl], 0
+	ld [hl], PIECE_ATTR
 	inc l
 	ld [hl], b
 	inc l
@@ -383,7 +486,7 @@ Put16:
 	ld a, d
 	add 2
 	ld [hli], a
-	ld [hl], 0
+	ld [hl], PIECE_ATTR
 	inc l
 	ret
 
@@ -412,4 +515,11 @@ wReturns:: db
 wAssembles:: db
 wDrops:: db
 wBuzzes:: db
+wTurnTimer:: db                    ; frames left in a turn (TURN_FRAMES), or 0
+wTurnTo: db                        ; the facing a turn ends in
+wElleFrame:: db                    ; ELLE_FRAME_*: how ElleDraw last drew her
+wElleY:: db                        ; her top's screen y, as ElleDraw last drew her
+wElleObjY: db                      ; ElleDraw: the object's place in her frame
+wElleObjX: db
+wElleObjPal: db                    ; ElleDraw: its GBC palette
 wPlayVarsEnd:

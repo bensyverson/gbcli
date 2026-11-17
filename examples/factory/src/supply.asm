@@ -2,16 +2,15 @@
 ; under the key column. Every number here is in tuning.inc (The supply).
 ;
 ; A slot brings a piece with SUPPLY_CHANCE in 256, and after each piece
-; SUPPLY_MIN_GAP slots stay empty. A piece is any of the 12 halves at
-; random, except while Elle holds one half (wWantedPiece is its other
-; half): then it is that half with SUPPLY_MATCH_CHANCE in 256, and always
+; SUPPLY_MIN_GAP slots stay empty. A piece is any of SupplyPieces (gen/toys.asm) at
+; random, except while Elle holds one half (wWantedPiece completes it):
+; then it is wWantedPiece with SUPPLY_MATCH_CHANCE in 256, and always
 ; once SUPPLY_MATCH_MAX_GAP pieces in a row haven't been it.
 
 include "hardware.inc"
 include "tuning.inc"
 include "gen/toys.inc"
 
-DEF PIECES EQU TOY_COUNT * 2
 	ASSERT SUPPLY_CHANCE <= 255 && SUPPLY_MATCH_CHANCE <= 255, "a chance is out of 256: 0-255"
 
 SECTION "Supply", ROM0
@@ -53,11 +52,11 @@ SupplyNext::
 	jr c, .match
 .any
 	call Random
-	; a * PIECES / 256: a piece 0..PIECES-1, evenly.
+	; a * SUPPLY_PIECES / 256: one of SupplyPieces, evenly.
 	ld e, a
 	ld d, 0
 	ld hl, 0
-	ld a, PIECES
+	ld a, SUPPLY_PIECES
 .mul
 	srl a
 	jr nc, .noAdd
@@ -68,8 +67,12 @@ SupplyNext::
 	and a
 	jr nz, .mul
 	ld a, h
-	inc a                       ; pieces count from 1
-	ld e, a
+	add LOW(SupplyPieces)
+	ld l, a
+	adc HIGH(SupplyPieces)
+	sub l
+	ld h, a
+	ld e, [hl]
 	ld a, [wWantedPiece]
 	cp e
 	jr z, .counted

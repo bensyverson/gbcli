@@ -15,15 +15,32 @@ import sys
 import time
 
 import gbcli as g
+import gen_toys
 import tuning
 
 SESSION = "rules"
 T = tuning.load()
 W = T["CHORD_FRAMES"]
+TURN = T["TURN_FRAMES"]
+TOYS = gen_toys.load()
 
-# Pieces are toy * 2 + half + 1.
-HEAD, BODY, STACK, ENGINE = 1, 2, 3, 4
+
+def piece(toy_id, half):
+    """A piece's number: toy * 2 + half + 1 (half 0 is half A)."""
+    toy = next(i for i, t in enumerate(TOYS) if t["id"] == toy_id)
+    return toy * 2 + half + 1
+
+
+def partner(p):
+    """The piece that completes piece p (itself, for a one-piece toy)."""
+    toy = TOYS[(p - 1) // 2]
+    return p if toy["same"] else ((p - 1) ^ 1) + 1
+
+
+HEAD, BODY, STACK, ENGINE = piece("teddy", 0), piece("teddy", 1), piece("train", 0), piece("train", 1)
+COIL = piece("slinky", 0)
 TEDDY = 1                          # wToy holds toy + 1
+SLINKY = COIL // 2 + 1
 
 # The belts are poked so Elle stands at the middle of a known slot.
 SLOT = 8
@@ -32,14 +49,19 @@ PARTS_AT_SLOT = [f"wPartsX=0,{(SLOT * 16 + 8 - ELLE_CENTER_X) % 256}"]
 FIN_SLOT = 4
 FINISHED_AT_SLOT = [f"wFinishedX=0,{(FIN_SLOT * 16 + 8 - ELLE_CENTER_X) % 256}"]
 SLOT_EXPR = f"[wPartsSlots+{SLOT}]"
+# The slot that reaches Elle next, and how many frames until its middle is hers.
+NEXT_SLOT = SLOT + (1 if T["BELT_PARTS_DIR"] == T["BELT_LEFT"] else -1)
+NEXT_FRAMES = -(-16 * 256 // T["BELT_PARTS_SPEED"])
 FIN_EXPR = f"[wFinishedSlots+{FIN_SLOT}]"
 FACING_PARTS, FACING_FINISHED = 0, 1
+ELLE_Y_PARTS, ELLE_Y_FINISHED = 58, 50          # include/layout.inc: she steps 8 px toward the belt she faces
+FRAME_BACK, FRAME_FRONT, FRAME_SIDE = 0, 1, 2   # src/play.asm: frames of assets/sprites/elle
 
 
 def holding(*pieces):
     """Pokes for Elle holding these halves (first grabbed first)."""
     hands = list(pieces) + [0] * (2 - len(pieces))
-    wanted = ((pieces[0] - 1) ^ 1) + 1 if len(pieces) == 1 else 0
+    wanted = partner(pieces[0]) if len(pieces) == 1 else 0
     return [f"wHands={hands[0]},{hands[1]}", f"wHeldCount={len(pieces)}", f"wWantedPiece={wanted}"]
 
 
@@ -112,10 +134,39 @@ SCENARIOS = [
     ("B with empty hands buzzes",
      [], press("B"), 4,
      {"[wBuzzes]": 1, "[wReturns]": 0}),
-    ("Up turns Elle to the Finished belt",
-     [], press("UP"), 4, {"[wFacing]": FACING_FINISHED}),
-    ("Down turns her back to the parts belt",
-     [f"wFacing={FACING_FINISHED}"], press("DOWN"), 4, {"[wFacing]": FACING_PARTS}),
+    ("Up turns Elle to the Finished belt; she steps up toward it",
+     [], press("UP"), TURN + 3,
+     {"[wFacing]": FACING_FINISHED, "[wElleY]": ELLE_Y_FINISHED, "[wElleFrame]": FRAME_BACK}),
+    ("Down turns her back to the parts belt; she steps down toward it",
+     [f"wFacing={FACING_FINISHED}"], press("DOWN"), TURN + 3,
+     {"[wFacing]": FACING_PARTS, "[wElleY]": ELLE_Y_PARTS, "[wElleFrame]": FRAME_FRONT}),
+    (f"Mid-turn she shows her side, between the two, still facing the old belt",
+     [], press("UP"), max(1, TURN // 2),
+     {"[wFacing]": FACING_PARTS, "[wElleFrame]": FRAME_SIDE,
+      f"[wElleY] < {ELLE_Y_PARTS}": 1, f"[wElleY] > {ELLE_Y_FINISHED}": 1}),
+    (f"A and B pressed during the {TURN}-frame turn do nothing, with no buzz",
+     PARTS_AT_SLOT + FINISHED_AT_SLOT + [f"wToy={TEDDY}", f"wFinishedSlots+{FIN_SLOT}=0"],
+     press("UP") + " " + press("B", at=2) + " " + press("A", at=TURN), TURN + 4,
+     {"[wToy]": TEDDY, "[wBuzzes]": 0, "[wDrops]": 0, "[wFacing]": FACING_FINISHED}),
+    (f"... A pressed during the turn doesn't grab the piece still in front, nor start a chord",
+     PARTS_AT_SLOT + [f"wPartsSlots+{SLOT}={HEAD}"], press("UP") + " " + press("A", at=TURN), TURN + 4,
+     {"[wHeldCount]": 0, SLOT_EXPR: HEAD, "[wBuzzes]": 0, "[wChordA]": 0}),
+    (f"B pressed {TURN} frames after Up, the first frame after the turn, acts on the new facing: drop, score +1",
+     FINISHED_AT_SLOT + [f"wToy={TEDDY}", f"wFinishedSlots+{FIN_SLOT}=0"],
+     press("UP") + " " + press("B", at=1 + TURN), TURN + 4,
+     {"[wToy]": 0, FIN_EXPR: TEDDY, "u16[wScore]": 1, "[wBuzzes]": 0}),
+    ("Holding one slinky coil, the wanted piece is another coil (the supply follows it)",
+     PARTS_AT_SLOT + [f"wPartsSlots+{SLOT}={COIL}"], press("A"), 6,
+     {"[wHeldCount]": 1, "[wWantedPiece]": COIL, "[wBuzzes]": 0}),
+    ("A grabs two coils off the belt, one after the other, and B+A makes the slinky",
+     PARTS_AT_SLOT + [f"wPartsSlots+{SLOT}={COIL}", f"wPartsSlots+{NEXT_SLOT}={COIL}"],
+     press("A") + " " + press("A", at=1 + NEXT_FRAMES) + " " + press("B", "A", at=4 + NEXT_FRAMES),
+     8 + NEXT_FRAMES,
+     {"[wToy]": SLINKY, "[wGrabs]": 2, "[wAssembles]": 1, "[wBuzzes]": 0}),
+    ("A coil refuses a different toy's half, with a buzz",
+     PARTS_AT_SLOT + [f"wPartsSlots+{SLOT}={COIL}", f"wPartsSlots+{NEXT_SLOT}={ENGINE}"],
+     press("A") + " " + press("A", at=1 + NEXT_FRAMES), 4 + NEXT_FRAMES,
+     {"[wHeldCount]": 1, f"[wPartsSlots+{NEXT_SLOT}]": ENGINE, "[wBuzzes]": 1}),
     ("The round ends when the clock runs out, on the results screen",
      ["wRoundLeft=3,0"], "", 8, {"[wGameState]": 1, "[wResultsAfterRound]": 1}),
 ]
@@ -129,8 +180,11 @@ def check(cli, pokes, keys, frames, expects, at="play"):
         args += ["--keys", keys]
     for expr in expects:
         args += ["--read", expr]
-    reply = cli.run(*args)
-    got = {r["expr"]: r.get("value") for r in reply["result"]["reads"]}
+    reply = cli.run(*args, check=False)
+    if not reply.get("ok"):
+        err = reply.get("error", {})
+        return [f"gbcli {err.get('code')}: {err.get('message')}"]
+    got ={r["expr"]: r.get("value") for r in reply["result"]["reads"]}
     wrong = [f"{e} = {got.get(e)} (want {v})" for e, v in expects.items() if got.get(e) != v]
     return wrong
 

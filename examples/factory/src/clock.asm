@@ -27,7 +27,7 @@ DEF COPY_FLIP         EQU CLOCK_TILES ; wClockCopy: copied, flip next VBlank
 DEF PAL_NONE   EQU 0
 DEF PAL_NORMAL EQU 1
 DEF PAL_RED    EQU 2
-DEF CLOCK_BG_PALETTE EQU 1          ; the clock's BG palette number
+
 
 SECTION "Clock", ROM0
 
@@ -60,6 +60,7 @@ ClockRestart::
 	xor a
 	ld [wClockStep], a
 	ld [wClockCopy], a          ; copy face 0 in
+	ld [wTickLeft], a
 	ld a, PAL_NORMAL
 	ld [wClockPalette], a
 	ret
@@ -89,7 +90,24 @@ ClockTick::
 	jr nz, .notRed
 	ld a, PAL_RED
 	ld [wClockPalette], a
+	ld a, SFX_WARN              ; time is running out
+	call SfxPlay
+	ld a, 60
+	ld [wTickLeft], a
+	jr .hand
 .notRed
+	; In the red zone, a tick each second.
+	ld a, [wTickLeft]
+	and a
+	jr z, .hand
+	dec a
+	ld [wTickLeft], a
+	jr nz, .hand
+	ld a, 60
+	ld [wTickLeft], a
+	ld a, SFX_TICK
+	call SfxPlay
+.hand
 	; The hand.
 	ld hl, wStepLeft
 	ld a, [hl]
@@ -198,7 +216,7 @@ IF DEF(GBCLI_GBC)
 	ldh a, [hGbc]
 	and a
 	ret z
-	ld a, BGPI_AUTOINC | (CLOCK_BG_PALETTE * 8)
+	ld a, BGPI_AUTOINC | (PAL_CLOCK * 8)     ; src/colors.asm
 	ldh [rBCPS], a
 	ld hl, ClockNormalColors
 	ld a, b
@@ -215,25 +233,6 @@ IF DEF(GBCLI_GBC)
 ENDC
 	ret
 
-IF DEF(GBCLI_GBC)
-MACRO rgb
-	dw (\1) | (\2) << 5 | (\3) << 10
-ENDM
-
-; The clock's BG palette, shades 0-3: the wall around the face, the face
-; (light gray on a DMG, white here), the ticks, the ink.
-ClockNormalColors::
-	rgb 31, 31, 31
-	rgb 31, 31, 31
-	rgb 10, 10, 10
-	rgb 0, 0, 0
-ClockRedColors:
-	rgb 31, 31, 31
-	rgb 31, 14, 12
-	rgb 24, 2, 2
-	rgb 8, 0, 0
-ENDC
-
 SECTION "Clock variables", WRAM0
 
 wRoundLeft:: dw                    ; frames left in the round
@@ -242,3 +241,4 @@ wClockStep:: db                    ; the hand's position, 0 (12 o'clock) to CLOC
 wClockCopy: db                     ; next tile to copy, or COPY_IDLE, or COPY_FLIP
 wClockShown: db                    ; 0: buffer A on screen, 1: buffer B
 wClockPalette: db                  ; a PAL_ request for VBlank, or PAL_NONE
+wTickLeft: db                      ; in the red zone, frames to the next second's tick; else 0

@@ -43,4 +43,8 @@ DEF PICKUP_REACH  EQU 6             ; px (0-8): how far a piece's middle may be 
 DEF CHORD_FRAMES  EQU 5             ; frames (1+): with two halves, the other button on the same frame or up to CHORD_FRAMES - 1 frames later assembles (1 = same frame only)
 DEF BUZZ_COOLDOWN EQU 12            ; frames: after a buzz sounds, more refusals stay silent this long
 
+; --- Elle --------------------------------------------------------------------
+
+DEF TURN_FRAMES   EQU 8             ; frames (0+): how long Up or Down takes to turn her; A and B do nothing meanwhile (0 = instant)
+
 ENDC

@@ -1,26 +1,64 @@
 format gbcli-pixels 1
-# teddy: placeholder art from tools/placeholder_toys.py.
-# Three 16x16 frames: half A, half B, the finished toy.
+# Teddy bear: the head with ears, the body with arms and legs, the bear.
+# Three 16x16 frames. Pieces are objects too, so no dark gray: clear shows
+# the belt behind them (tools/tiles.py).
 size 48 16
-color . #ffffff
-color 1 #aaaaaa
-color 2 #555555
-color 3 #000000
+color . clear
+color w #ffffff
+color l #aaaaaa
+color k #000000
+fill .
 
-rows 0 0
-...................................33......33...
-..................................3113....3113..
-..................................311333333113..
-...................................3111111113...
-...33......33.......33111133.......3131111313...
-..3113....3113....331111111133.....3111331113...
-..311333333113...31131111113113.....31111113....
-...3111111113....33.31111113.33......333333.....
-...3131111313.......31111113........33111133....
-...3111331113......3111331113.....331111111133..
-....31111113.......311.33.113....31131111113113.
-.....333333........3333..3333....33.31111113.33.
-....................................31111113....
-...................................3111331113...
-...................................311.33.113...
-...................................3333..3333...
+rows 0 0    # half A: the head
+.kkkk......kkkk.
+kklllk....klllkk
+klwwlkkkkkklwwlk
+klwwllllllllwwlk
+kkllllllllllllkk
+.kllllllllllllk.
+kllkkllllllkkllk
+kllkkllllllkkllk
+klllllwwwwlllllk
+kllllwwkkwwllllk
+kllllwwkkwwllllk
+klllllwwwwlllllk
+.kllllllllllllk.
+..kllllllllllk..
+...kkkkkkkkkk...
+................
+
+rows 16 0   # half B: the body
+......kkkk......
+.....kllllk.....
+.kkkkllllllkkkk.
+kllllllllllllllk
+kllllllllllllllk
+.kkkllllllllkkk.
+...kllwwwwllk...
+...klwwwwwwlk...
+...klwwwwwwlk...
+...kllwwwwllk...
+...kllllllllk...
+..kllllkkllllk..
+.kllllk..kllllk.
+.klwwlk..klwwlk.
+.klwwlk..klwwlk.
+..kkkk....kkkk..
+
+rows 32 0   # the teddy bear
+.kk..........kk.
+kllk.kkkkkk.kllk
+klwkkllllllkkwlk
+.kkllllllllllkk.
+..kllkllllkllk..
+..kllllwwllllk..
+..klllwkkwlllk..
+...kllwwwwllk...
+.kkkkkllllkkkkk.
+kllllkwwwwkllllk
+.kkkklwwwwlkkkk.
+....klwwwwlk....
+...kllllllllk...
+..kllllkkllllk..
+..klwwk..kwwlk..
+..kkkkk..kkkkk..

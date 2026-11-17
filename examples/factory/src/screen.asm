@@ -14,28 +14,30 @@ DEF GLYPH_ZERO EQU '0'              ; the font's glyph number for 0
 
 SECTION "Screen", ROM0
 
+; The scene's tiles (art/scene.pixels) and the toys' (data/toys.txt),
+; which the title and results screens use too. LCD off.
+LoadSceneTiles::
+	ld hl, TILEBLOCK0
+	ld de, SceneTiles
+	ld bc, SceneTilesEnd - SceneTiles
+	call CopyMem
+	ld hl, TILEBLOCK0 + T_TOYS * 16
+	ld de, ToyTiles
+	ld bc, ToyTilesEnd - ToyTiles
+	jp CopyMem
+
 ; Loads every tile and draws both maps. LCD off, interrupts off.
 ScreenInit::
-	; Placeholder tiles 0-14.
-	ld hl, TILEBLOCK0 + T_WALL * 16
-	ld de, PlaceholderTiles
-	ld bc, PlaceholderTiles.end - PlaceholderTiles
-	call CopyMem
+	call LoadSceneTiles
 
 	; Score digits 0-9, from the font, one glyph a tile.
 	SWITCH_BANK MainFontGlyphs
 	ld de, MainFontGlyphs + 8 * GLYPH_ZERO
 	ld hl, TILEBLOCK0 + T_DIGITS * 16
 	ld a, 10
-	ld b, 3                     ; ink
-	ld c, 0                     ; paper
+	ld b, COLOR_INK
+	ld c, COLOR_WHITE
 	call TextLoadTiles
-
-	; The toys: halves and finished toys, from the toy data.
-	ld hl, TILEBLOCK0 + T_TOYS * 16
-	ld de, ToyTiles
-	ld bc, ToyTilesEnd - ToyTiles
-	call CopyMem
 
 	; Elle.
 	SWITCH_BANK ElleTiles
@@ -44,10 +46,17 @@ ScreenInit::
 	ld bc, ElleTilesEnd - ElleTiles
 	call CopyMem
 
-	; Background: the wall everywhere, then the bands over it.
+	; Background: white everywhere (the floor), then the wall and belts.
 	ld hl, TILEMAP0
 	ld bc, TILEMAP_AREA
-	call ClearMem               ; T_WALL is 0
+	call ClearMem               ; T_BLANK is 0
+	ld hl, TILEMAP0
+	ld bc, (BACK_BELT_ROW - 1) * 32
+	ld a, T_WALL
+	call FillMem
+	ld bc, 32
+	ld a, T_RAIL
+	call FillMem
 	ld hl, TILEMAP0 + BACK_BELT_ROW * 32
 	call DrawBeltRows
 	ld hl, TILEMAP0 + FLOOR_ROW * 32
@@ -72,7 +81,7 @@ ScreenInit::
 	ld hl, TILEMAP1
 	ld b, SCREEN_HEIGHT
 .keyRow
-	ld a, T_KEY_DIVIDER
+	ld a, T_KEY_EDGE
 	ld [hli], a
 	ld a, T_KEY_BG
 	ld [hli], a
@@ -122,16 +131,16 @@ Draw2x2::
 	pop hl
 	ret
 
-; Four rows from hl: stripe, belt, belt, stripe.
-DrawBeltRows:
+; Four rows from hl: top edge, belt, belt, bottom edge.
+DrawBeltRows::
 	ld bc, 32
-	ld a, T_STRIPE
+	ld a, T_BELT_TOP
 	call FillMem
 	ld bc, 2 * 32
 	ld a, T_BELT
 	call FillMem
 	ld bc, 32
-	ld a, T_STRIPE
+	ld a, T_BELT_BOTTOM
 	jp FillMem
 
 ; One row of the score box at hl: a, then a+1 three times, then a+2.
@@ -145,81 +154,3 @@ DrawBoxRow:
 	ld [hl], a
 	ret
 
-PlaceholderTiles:
-	; T_WALL
-	REPT 8
-	dw `00000000
-	ENDR
-	; T_STRIPE
-	dw `33111111
-	dw `13311111
-	dw `11331111
-	dw `11133111
-	dw `11113311
-	dw `11111331
-	dw `11111133
-	dw `31111113
-	; T_BELT
-	REPT 8
-	dw `00000000
-	ENDR
-	; T_FLOOR
-	dw `11111111
-	dw `11121111
-	dw `11111111
-	dw `11111111
-	dw `11111112
-	dw `11111111
-	dw `12111111
-	dw `11111111
-	; T_KEY_BG
-	REPT 8
-	dw `00000000
-	ENDR
-	; T_KEY_DIVIDER
-	REPT 8
-	dw `33000000
-	ENDR
-	; T_BOX: top left, top, top right
-	dw `00000000
-	dw `03333333
-	REPT 6
-	dw `03000000
-	ENDR
-	dw `00000000
-	dw `33333333
-	REPT 6
-	dw `00000000
-	ENDR
-	dw `00000000
-	dw `33333330
-	REPT 6
-	dw `00000030
-	ENDR
-	; left, inside, right
-	REPT 8
-	dw `03000000
-	ENDR
-	REPT 8
-	dw `00000000
-	ENDR
-	REPT 8
-	dw `00000030
-	ENDR
-	; bottom left, bottom, bottom right
-	REPT 6
-	dw `03000000
-	ENDR
-	dw `03333333
-	dw `00000000
-	REPT 6
-	dw `00000000
-	ENDR
-	dw `33333333
-	dw `00000000
-	REPT 6
-	dw `00000030
-	ENDR
-	dw `33333330
-	dw `00000000
-.end

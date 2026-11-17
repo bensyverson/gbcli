@@ -30,6 +30,7 @@ KEY_X = 136
 SPEED = T["BELT_PARTS_SPEED"]
 SIGN = 1 if T["BELT_PARTS_DIR"] == T["BELT_LEFT"] else -1
 REACH = T["PICKUP_REACH"]
+TURN = T["TURN_FRAMES"]               # a turn ignores A and B this long
 SLOTS = 16
 
 STATE_READS = ["[wGameState]", "[wHeldCount]", "[wHands]", "[wHands+1]", "[wToy]",
@@ -96,8 +97,8 @@ class Bot:
     def step(self):
         s = self.state
         if s["[wToy]"]:
-            # Turn to the Finished belt, drop it, turn back.
-            return self.run(6, [("UP", 1), ("B", 2), ("DOWN", 4)])
+            # Turn to the Finished belt, drop it as the turn ends, turn back.
+            return self.run(2 * TURN + 4, [("UP", 1), ("B", 1 + TURN), ("DOWN", 2 + TURN)])
         if s["[wHeldCount]"] == 2:
             return self.run(3, [("B", 1), ("A", 1)])
         if s["[wFacing]"] != 0:
@@ -118,6 +119,7 @@ def main():
     bot = Bot(cli)
     bot.run(60, extra=[g.ROM, "--from", "boot"])
     bot.run(4, [("START", 1)])
+    bot.run(60, extra=["--until", "[wGameState] == 0"])   # the round's screen is drawn with the LCD off
     steps = 0
     while bot.state["[wGameState]"] == 0:
         bot.step()

@@ -1,0 +1,180 @@
+format gbcli-pixels 1
+# The scene's background tiles, 8x8 each, left to right in tile order
+# (include/layout.inc names them). tools/gen_scene.py turns this file into
+# src/gen/scene.asm. Shades as the DMG shows them; on a GBC the wall band
+# is pink (its light gray) and the rest gray (src/colors.asm).
+size 136 8
+color w #ffffff
+color l #aaaaaa
+color d #555555
+color k #000000
+
+rows 0 0    # 0 blank: white, the floor and the title and results screens
+wwwwwwww
+wwwwwwww
+wwwwwwww
+wwwwwwww
+wwwwwwww
+wwwwwwww
+wwwwwwww
+wwwwwwww
+
+rows 8 0    # 1 wall: light gray
+llllllll
+llllllll
+llllllll
+llllllll
+llllllll
+llllllll
+llllllll
+llllllll
+
+rows 16 0   # 2 rail: the wall's bottom row, a dado rail above the Finished belt
+llllllll
+llllllll
+wwwwwwww
+llllllll
+dddddddd
+dddddddd
+llllllll
+llllllll
+
+rows 24 0   # 3 belt top: a black rim, a light lip, then the belt
+kkkkkkkk
+llllllll
+kddddddd
+kddddddd
+kddddddd
+kddddddd
+kddddddd
+kddddddd
+
+rows 32 0   # 4 belt: dark gray, a black line across it every 8 px
+kddddddd
+kddddddd
+kddddddd
+kddddddd
+kddddddd
+kddddddd
+kddddddd
+kddddddd
+
+rows 40 0   # 5 belt bottom
+kddddddd
+kddddddd
+kddddddd
+kddddddd
+kddddddd
+dddddddd
+llllllll
+kkkkkkkk
+
+rows 48 0   # 6 key bg: the key column's dark panel
+dddddddd
+dddddddd
+dddddddd
+dddddddd
+dddddddd
+dddddddd
+dddddddd
+dddddddd
+
+rows 56 0   # 7 key edge: the key column's left edge
+kldddddd
+kldddddd
+kldddddd
+kldddddd
+kldddddd
+kldddddd
+kldddddd
+kldddddd
+
+rows 64 0   # 8 box top left
+llllllll
+llkkkkkk
+lkkkkkkk
+lkkwwwww
+lkkwwwww
+lkkwwwww
+lkkwwwww
+lkkwwwww
+
+rows 72 0   # 9 box top
+llllllll
+kkkkkkkk
+kkkkkkkk
+wwwwwwww
+wwwwwwww
+wwwwwwww
+wwwwwwww
+wwwwwwww
+
+rows 80 0   # 10 box top right
+llllllll
+kkkkkkll
+kkkkkkkl
+wwwwwkkl
+wwwwwkkl
+wwwwwkkl
+wwwwwkkl
+wwwwwkkl
+
+rows 88 0   # 11 box left
+lkkwwwww
+lkkwwwww
+lkkwwwww
+lkkwwwww
+lkkwwwww
+lkkwwwww
+lkkwwwww
+lkkwwwww
+
+rows 96 0   # 12 box inside
+wwwwwwww
+wwwwwwww
+wwwwwwww
+wwwwwwww
+wwwwwwww
+wwwwwwww
+wwwwwwww
+wwwwwwww
+
+rows 104 0  # 13 box right
+wwwwwkkl
+wwwwwkkl
+wwwwwkkl
+wwwwwkkl
+wwwwwkkl
+wwwwwkkl
+wwwwwkkl
+wwwwwkkl
+
+rows 112 0  # 14 box bottom left
+lkkwwwww
+lkkwwwww
+lkkwwwww
+lkkwwwww
+lkkwwwww
+lkkkkkkk
+llkkkkkk
+llllllll
+
+rows 120 0  # 15 box bottom
+wwwwwwww
+wwwwwwww
+wwwwwwww
+wwwwwwww
+wwwwwwww
+kkkkkkkk
+kkkkkkkk
+llllllll
+
+rows 128 0  # 16 box bottom right
+wwwwwkkl
+wwwwwkkl
+wwwwwkkl
+wwwwwkkl
+wwwwwkkl
+kkkkkkkl
+kkkkkkll
+llllllll

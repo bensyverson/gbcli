@@ -8,9 +8,9 @@ fill and rows blocks. A color takes the DMG shade nearest its lightness
 from pathlib import Path
 
 
-def _shade(value):
+def _shade(value, clear=0):
     if value == "clear":
-        return 0
+        return clear
     if not value.startswith("#"):
         raise ValueError(f"unsupported color {value!r} (use #rrggbb or clear)")
     h = value[1:]
@@ -29,8 +29,8 @@ def _strip_comment(line):
     return line
 
 
-def read(path):
-    """The image as rows of shades."""
+def read(path, clear=0):
+    """The image as rows of shades; clear pixels read as `clear`."""
     width = height = None
     legend = {}
     img = None
@@ -57,7 +57,7 @@ def read(path):
             width, height = int(words[1]), int(words[2])
             img = [[None] * width for _ in range(height)]
         elif kind == "color":
-            legend[words[1]] = _shade(words[2])
+            legend[words[1]] = _shade(words[2], clear)
         elif kind == "fill":
             img = [[legend[words[1]]] * width for _ in range(height)]
         elif kind == "rows":

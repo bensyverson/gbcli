@@ -2,7 +2,7 @@
 
 use gbcli_protocol::{AudioMade, ImageMade};
 
-use super::row::{Row, addr, capped};
+use super::row::{Row, addr, capped_see};
 use super::stop::since;
 
 /// The channels a log was filtered to, `noise,square2`; none when unfiltered.
@@ -10,6 +10,9 @@ fn channels(audio: &AudioMade) -> Option<String> {
     let names: Vec<&str> = audio.channels.iter().map(|c| c.name()).collect();
     (!names.is_empty()).then(|| names.join(","))
 }
+
+/// How the audio log's `more` row says to see the rows it hides.
+const APU_SEE: &str = "--json for every write, --piano for the notes";
 
 pub fn rows(audio: &AudioMade) -> String {
     let mut out = String::new();
@@ -21,8 +24,8 @@ pub fn rows(audio: &AudioMade) -> String {
             .line();
         // Capped: a song writes every frame, so a long run's log is
         // thousands of rows; `--audio-summary` sums them and `--json` has
-        // every one.
-        out += &capped("apu", log, |line| {
+        // every one, and `--piano` draws the notes.
+        out += &capped_see("apu", log, APU_SEE, |line| {
             Row::new("apu")
                 .field("elapsed", line.elapsed)
                 .field("frame", line.frame)

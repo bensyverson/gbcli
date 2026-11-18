@@ -69,6 +69,8 @@ Play the game from a script (a closed-loop bot), then replay what it did
   your script (not gbcli) logs each key change at its frame counted from the
   first run (RIGHT@8 -RIGHT@12), then gbcli run --at start --frames 3000
   --keys-file bot.keys replays the whole game in one run, frame for frame
+  (K@N is seen by every joypad read after frame N's VBlank, and a stop shows
+  the frame just drawn: gbcli help time)
 What does my music do?
   gbcli run --frames 120 --audio-log (the sound writes decoded into notes, at most
   20 rows; --audio-summary counts them all, --json lists them all), then

@@ -23,7 +23,7 @@ pub const POWER_CYCLE_VERB: VerbSpec = VerbSpec {
     verb: Verb::PowerCycle,
     name: "power-cycle",
     class: Class::Act,
-    summary: "turn the machine off and on, keeping the cart's battery RAM and clock",
+    summary: "turn the machine off and on, keeping the cart's battery RAM and clock; the boot ROM runs first",
     usage: "[--sav PATH] [--rtc-advance DURATION] [flags]",
     arity: Arity {
         min: 0,
@@ -40,7 +40,9 @@ pub const POWER_CYCLE_VERB: VerbSpec = VerbSpec {
             time added), footer_missing (a RAM-only .sav: the clock is flagged for the game \
             to set) or not_clocked. A head saved over an earlier build of the ROM is not \
             refused: only its battery crosses into the ROM on disk (rom_rebuilt), so this \
-            is how a save survives a rebuild. Nothing reads a .sav unless --sav names one.",
+            is how a save survives a rebuild. Nothing reads a .sav unless --sav names one. \
+            The machine is at power-on and the boot ROM runs first, so run to the program's \
+            main loop (`run --to <label>`) before reading its state.",
     example: (
         "gbcli power-cycle --session dx --rtc-advance 8h",
         "restarts the game with its save, the clock eight hours on; `gbcli run --frames \

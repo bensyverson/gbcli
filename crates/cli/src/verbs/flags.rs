@@ -244,7 +244,8 @@ pub const RUN: &[FlagSpec] = &[
          settings, at elapsed 2^23 Hz ticks since --since, with the frame (counted as the \
          stop's frame=) and the line (ly) it fell on: the cheap sibling of --wav. Only \
          this run's: writes made before the run (a sound engine's setup) aren't listed. \
-         The rows stop at 20 with a more row; --json has every write",
+         The rows stop at 20 with a more row that counts the rest; --json has every write, --piano \
+         draws the notes",
     ),
     switch(
         "audio-summary",
@@ -268,7 +269,10 @@ pub const RUN: &[FlagSpec] = &[
         "channels",
         "mixed|each",
         "with --wav: each also saves every channel alone beside it (PATH's stem with \
-         -square1, -square2, -wave, -noise) by replaying the run muted",
+         -square1, -square2, -wave, -noise) by replaying the run muted. Peak levels \
+         mislead: every DAC switch pops near full scale whatever the volume, and each \
+         per-channel file opens with a step when its channel was already sounding as the \
+         run began, so judge loudness by a windowed RMS past the opening",
     ),
     value(
         "piano",
@@ -329,12 +333,15 @@ pub const RUN: &[FlagSpec] = &[
         "TOKENS",
         "press and release buttons: 'A@0 -A@2 START@10' (frame offsets); a key still \
          held when the run ends stays held into the next run; K@N lands as frame N's \
-         VBlank begins (gbcli help time)",
+         VBlank begins, so every joypad read after frame N's VBlank sees it, and a stop \
+         shows the frame just drawn (gbcli help time)",
     ),
     value(
         "keys-file",
         "FILE",
-        "key tokens from a file, after --keys; # starts a comment",
+        "key tokens from a file, after --keys; # starts a comment. K@N is seen by every \
+         joypad read after frame N's VBlank, and a stop shows the frame just drawn (gbcli \
+         help time)",
     ),
     value(
         "keys-since",

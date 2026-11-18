@@ -16,7 +16,8 @@ gbcli run build/{{name}}.gb --session {{name}} --frames 120 --shot first.png
 There is no build file: the layout is the build.
 
 - Every `.asm` under `src/` is assembled by rgbasm, with `include/` on the
-  include path, into `build/obj/`.
+  include path, into `build/obj/`. Put your own `.inc` files in `include/`,
+  the only folder `INCLUDE` searches by bare name (`src/` is not on the path).
 - rgblink links the objects into `build/{{name}}.gb`, with symbols in
   `build/{{name}}.sym` and the memory map in `build/{{name}}.map`. Every
   byte no section holds is `$FF`, as erased flash is.

@@ -562,3 +562,72 @@ fn hardware_traps_and_expressions_give_modes_caveat() {
         }
     }
 }
+
+/// The help text, its line breaks and indents folded to single spaces.
+fn flat(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Stage 15, leaf rKKR0I: each of these cost an agent time because the text
+/// it read didn't say it, even where another topic did.
+#[test]
+fn run_help_says_what_a_key_token_and_a_wav_peak_mean() {
+    let run = render_verb(crate::verbs::by_name("run").unwrap());
+    for flag in ["--keys TOKENS", "--keys-file FILE"] {
+        let at = run
+            .lines()
+            .position(|l| l.trim_start().starts_with(flag))
+            .unwrap();
+        let entry = flat(&run.lines().skip(at).take(5).collect::<Vec<_>>().join(" "));
+        for needed in [
+            "every joypad read after frame N's VBlank",
+            "a stop shows the frame just drawn",
+            "gbcli help time",
+        ] {
+            assert!(entry.contains(needed), "{flag}: {needed:?} in {entry}");
+        }
+    }
+    let run = flat(&run);
+    for needed in [
+        "every DAC switch pops near full scale whatever the volume",
+        "opens with a step when its channel was already sounding",
+        "windowed RMS",
+    ] {
+        assert!(run.contains(needed), "{needed:?} in {run}");
+    }
+}
+
+#[test]
+fn the_topics_say_where_images_includes_and_the_cart_type_live() {
+    let images = flat(Topic::Images.text());
+    assert!(
+        images.contains("ROMX") && images.contains("BANK(TownTiles)"),
+        "{images}"
+    );
+    let rgbds = flat(Topic::Rgbds.text());
+    for needed in [
+        "rgbfix keeps a cartridge type written at $0147",
+        "$1B (MBC5+RAM+BATTERY)",
+        "own .inc files go in include/",
+    ] {
+        assert!(rgbds.contains(needed), "{needed:?} in {rgbds}");
+    }
+    let recipes = flat(super::recipes::RECIPES);
+    assert!(
+        recipes.contains("every joypad read after frame N's VBlank"),
+        "{recipes}"
+    );
+}
+
+#[test]
+fn power_cycle_help_says_the_boot_rom_runs_first() {
+    let help = flat(&render_verb(crate::verbs::by_name("power-cycle").unwrap()));
+    for needed in [
+        "turn the machine off and on",
+        "the boot ROM runs first",
+        "run --to <label>",
+        "before reading its state",
+    ] {
+        assert!(help.contains(needed), "{needed:?} in {help}");
+    }
+}

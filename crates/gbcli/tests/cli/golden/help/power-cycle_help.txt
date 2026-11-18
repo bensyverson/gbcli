@@ -1,0 +1,47 @@
+$ gbcli power-cycle --help
+exit 0
+gbcli power-cycle — turn the machine off and on, keeping the cart's battery RAM and clock; the boot ROM runs first
+
+USAGE
+  gbcli power-cycle [--sav PATH] [--rtc-advance DURATION] [flags]
+
+Saves a new head at power-on (in the boot ROM, time 0) built afresh from the
+session's ROM, patches and seed, carrying in the cart's battery-backed RAM and
+clock; everything else starts over, and a cart without a battery comes back
+with blank RAM, as on hardware. Prints where the battery came from (head, sav
+or none), its size, and the clock: restored (the save's clock, with no host
+time added), footer_missing (a RAM-only .sav: the clock is flagged for the
+game to set) or not_clocked. A head saved over an earlier build of the ROM is
+not refused: only its battery crosses into the ROM on disk (rom_rebuilt), so
+this is how a save survives a rebuild. Nothing reads a .sav unless --sav names
+one. The machine is at power-on and the boot ROM runs first, so run to the
+program's main loop (`run --to <label>`) before reading its state.
+
+CLASS
+  act: advances or changes the machine and saves the new head; needs a session (name one with a ROM to create it).
+
+FLAGS
+  --sav PATH              carry this .sav in instead of the cart's own battery (SameBoy's format: cart RAM, then the clock footer on a clocked cart)
+  --rtc-advance DURATION  move the cart's clock on while the power is off: 45s, 30m, 12h or 7d, up to the point where the clock's readings repeat: 1024d on MBC3, 3584d on TPP1, 65536d on HuC3
+
+SESSION FLAGS (every session verb)
+  -s, --session NAME      the session to use (default: GBCLI_SESSION); naming a new one with a ROM creates it
+  --rom FILE              the ROM a new session is created from; an existing session refuses another ROM
+  --sym FILE              the .sym for a new session (default: the ROM's name with .sym, if it exists); an existing session refuses another
+  --model MODEL           the model for a new session: dmg-b (default, also dmg), gbc (cgb-e, a GBC in CGB mode for a $80 or $C0 ROM), cgb0, …; an existing session refuses another
+  --seed N                the RAM seed for a new session (default 0); an existing session refuses another
+  --flash BOARD           a new session's cart is a flash-save board (`gbcli help flash` lists them; default: mask ROM); an existing session refuses another
+  --allow-rom-change      load a stored state even though the ROM was rebuilt and the check refuses it
+
+CHANGE FLAGS (every verb that changes the session)
+  --rev sN                refuse the change if the session is no longer at this revision
+
+OUTPUT FLAGS (every verb that sends a request)
+  --json                  print the protocol's result object instead of rows
+  --dir PATH              run as if from PATH: find .gbcli/ from it and read relative paths (the ROM, files read and written) against it (beats GBCLI_DIR)
+  --as NAME               who is asking, for the event log (default: GBCLI_AS)
+
+EXAMPLE
+  gbcli power-cycle --session dx --rtc-advance 8h
+    restarts the game with its save, the clock eight hours on; `gbcli run
+    --frames 300` then shows whether the save loads

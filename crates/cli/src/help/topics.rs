@@ -325,7 +325,13 @@ section may then sit anywhere in $0000-$7FFF. (A single ROMX section over
 fails; when the first link wrote no ROM, the first link's error leads, an
 undefined symbol still leads as an error, and the one-bank link's other
 rows follow as warnings that may hold only if the header names no MBC.
-Name an MBC at $0147 (e.g. $01 for MBC1) and switch banks to grow.
+Name an MBC at $0147 (e.g. $01 for MBC1) and switch banks to grow. rgbfix
+keeps a cartridge type written at $0147, and a battery save needs a type with
+a battery, such as $1B (MBC5+RAM+BATTERY), and a RAM size at $0149 (such as $02,
+8 KB).
+
+A project's own .inc files go in include/, the only folder INCLUDE searches
+by bare name (src/ is not on the path).
 
 Constants other files assemble against (in ds, IF, REPT) belong in include/:
 an EXPORTed symbol is resolved only at link time, so it isn't constant there.

@@ -11,6 +11,7 @@ fn help_works_with_no_preconditions_and_leaves_no_trace() {
     for args in [
         &[][..],
         &["run", "--help"],
+        &["power-cycle", "--help"],
         &["sessions", "rm", "-h"],
         &["help", "watch"],
         &["help", "time"],

@@ -64,12 +64,17 @@ pub const CAP: usize = 20;
 /// Each item's rows, for the first [`CAP`] items, then one
 /// `more kind=KIND count=N see=--json` row for the rest.
 pub fn capped<T>(kind: &str, items: &[T], rows: impl Fn(&T) -> String) -> String {
+    capped_see(kind, items, "--json", rows)
+}
+
+/// [`capped`] with its own words for how to see the hidden rows.
+pub fn capped_see<T>(kind: &str, items: &[T], see: &str, rows: impl Fn(&T) -> String) -> String {
     let mut out: String = items.iter().take(CAP).map(rows).collect();
     if items.len() > CAP {
         out += &Row::new("more")
             .field("kind", kind)
             .field("count", items.len() - CAP)
-            .field("see", "--json")
+            .field("see", see)
             .line();
     }
     out

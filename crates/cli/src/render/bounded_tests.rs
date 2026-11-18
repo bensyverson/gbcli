@@ -415,3 +415,37 @@ fn the_cap_is_the_one_the_help_states() {
         "update the run flags' help and the recipes"
     );
 }
+
+/// Every capped list's `more` row says how many rows are hidden and how to
+/// see them (F-13).
+#[test]
+fn every_more_row_names_its_hidden_count_and_the_way_to_see_them() {
+    // `keys_unapplied` is one summary row, not a cut list.
+    for c in bounded()
+        .into_iter()
+        .filter(|c| !c.name.contains("keys_unapplied"))
+    {
+        let text = super::rows(&c.result);
+        let more = text
+            .lines()
+            .find(|l| l.starts_with("more "))
+            .unwrap_or_else(|| panic!("{}: no more row", c.name));
+        assert!(more.contains(" count="), "{}: {more}", c.name);
+        assert!(more.contains("--json"), "{}: {more}", c.name);
+    }
+}
+
+/// The audio log's `more` row also points at `--piano`, the notes the
+/// writes play.
+#[test]
+fn the_audio_logs_more_row_names_json_and_piano() {
+    let text = super::rows(&audio_log().result);
+    let more = text.lines().find(|l| l.starts_with("more ")).unwrap();
+    assert_eq!(
+        more,
+        format!(
+            "more kind=apu count={} see=\"--json for every write, --piano for the notes\"",
+            N - super::row::CAP
+        )
+    );
+}

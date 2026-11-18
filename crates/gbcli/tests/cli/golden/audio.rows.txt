@@ -27,7 +27,7 @@ apu elapsed=1440 frame=0 ly=145 pc=$0175 text="WAVED $54: wave RAM samples 5, 4"
 apu elapsed=1520 frame=0 ly=146 pc=$0175 text="WAVEE $32: wave RAM samples 3, 2"
 apu elapsed=1600 frame=0 ly=146 pc=$0175 text="WAVEF $10: wave RAM samples 1, 0"
 apu elapsed=1680 frame=0 ly=146 pc=$017C text="NR10 $00: sweep off"
-more kind=apu count=23 see=--json
+more kind=apu count=23 see="--json for every write, --piano for the notes"
 rev s1
 $ gbcli run --at start --frames 40 --wav tune.wav --channels each --piano piano.png --spectrogram spectrogram.png --session tune
 exit 0

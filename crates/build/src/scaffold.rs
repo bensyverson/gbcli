@@ -169,3 +169,20 @@ fn session_name_like(name: &str) -> String {
         out.into()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    /// An agent put its `.inc` in `src/` and `INCLUDE` could not find it
+    /// (F-11): the starter's README says where they go.
+    #[test]
+    fn the_starter_readme_says_where_a_projects_inc_files_go() {
+        let readme = include_str!("../templates/README.md");
+        let flat = readme.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(
+            flat.contains(
+                "Put your own `.inc` files in `include/`, the only folder `INCLUDE` searches"
+            ),
+            "{flat}"
+        );
+    }
+}

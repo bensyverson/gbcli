@@ -15,7 +15,10 @@ fn tiles(tiles: &[TileAt]) -> String {
         .map(|t| format!("{},{}", t.x, t.y))
         .collect();
     if tiles.len() > TILES_SHOWN {
-        words.push(format!("(+{} more)", tiles.len() - TILES_SHOWN));
+        words.push(format!(
+            "(+{} more; --json lists every tile)",
+            tiles.len() - TILES_SHOWN
+        ));
     }
     words.join(" ")
 }

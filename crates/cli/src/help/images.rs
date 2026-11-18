@@ -129,6 +129,8 @@ What the program gets (build/images/, rewritten by every build):
                          PALETTE_FOREST (its place in assets/palettes.txt)
   town.preview.png       the converted data as the DMG shows it, then its
                          unique tiles by use, most used first
+Each image's data sits in a ROMX section: on an MBC cart, switch to
+BANK(TownTiles) before reading it (a ROM with no MBC maps banks 0 and 1 as is).
 Tile numbers count from the image's own first tile: TownTilemap's bytes,
 HeroFrames' tile bytes and --json's tile_map all start at 0. Copy
 TownTiles to tile N and add N to each map byte (and object tile) you

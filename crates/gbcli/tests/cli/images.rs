@@ -285,7 +285,7 @@ fn an_over_budget_background_comes_back_as_its_limit_in_rows_and_json() {
     assert_eq!(built.code, 4, "{}{}", built.stdout, built.stderr);
     for row in [
         "problem limit=bg_tiles_map severity=error image=game/assets/bg/town.png count=272 \
-         max=256 tiles=\"0,0 1,0 2,0 3,0 4,0 5,0 6,0 7,0 (+264 more)\"",
+         max=256 tiles=\"0,0 1,0 2,0 3,0 4,0 5,0 6,0 7,0 (+264 more; --json lists every tile)\"",
         "images converted=0 fonts=1 errors=1 warnings=0 shades=known palette=dmg_grays\n",
     ] {
         assert!(built.stdout.contains(row), "{row:?} in\n{}", built.stdout);

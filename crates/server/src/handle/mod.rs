@@ -466,6 +466,9 @@ mod rom_change_tests;
 mod shot_tests;
 
 #[cfg(test)]
+mod shot_screen_tests;
+
+#[cfg(test)]
 mod audio_tests;
 
 #[cfg(test)]

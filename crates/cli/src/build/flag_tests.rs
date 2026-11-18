@@ -1,5 +1,5 @@
 //! Flags one verb shares with another: `measure`'s key timeline (as `run`
-//! reads it) and `run --scale` on every PNG the run writes.
+//! reads it), and `run --scale` and `--crop` on every PNG the run writes.
 
 use gbcli_protocol::Op;
 
@@ -65,6 +65,71 @@ fn run_scale_scales_the_audio_images_and_the_filmstrip_too() {
         None,
         "the server owns the default"
     );
+}
+
+#[test]
+fn run_crop_crops_the_filmstrip_and_the_shot_and_is_refused_with_neither() {
+    let crop = gbcli_protocol::Crop {
+        x: 0,
+        y: 8,
+        width: 16,
+        height: 24,
+    };
+    let Op::Run(args) = request(&["run", "--filmstrip", "f.png", "--crop", "0,8,16,24"]).1 else {
+        panic!()
+    };
+    assert_eq!(args.filmstrip.unwrap().crop, Some(crop));
+    assert!(args.shot.is_none(), "--crop alone takes no shot");
+    let Op::Run(args) = request(&[
+        "run",
+        "--filmstrip",
+        "f.png",
+        "--shot",
+        "a.png",
+        "--crop",
+        "0,8,16,24",
+    ])
+    .1
+    else {
+        panic!()
+    };
+    assert_eq!(args.filmstrip.unwrap().crop, Some(crop));
+    assert_eq!(args.shot.unwrap().crop, Some(crop));
+    let Op::Run(args) = request(&["run", "--filmstrip", "f.png"]).1 else {
+        panic!()
+    };
+    assert_eq!(args.filmstrip.unwrap().crop, None);
+    let u = command(&["run", "--crop", "0,8,16,24"]).unwrap_err();
+    assert_eq!(u.message, "--crop only applies with --shot or --filmstrip");
+    let u = command(&["run", "--live"]).unwrap_err();
+    assert_eq!(u.message, "--live only applies with --shot");
+}
+
+#[test]
+fn screen_rows_asks_for_the_rows_on_shot_and_run_shot_and_is_refused_without_a_shot() {
+    let Op::Shot(args) = request(&["shot", "a.png", "--screen-rows"]).1 else {
+        panic!()
+    };
+    assert!(args.shot.screen);
+    let Op::Shot(args) = request(&["shot", "a.png"]).1 else {
+        panic!()
+    };
+    assert!(!args.shot.screen, "no rows unless asked");
+    let Op::Run(args) = request(&[
+        "run",
+        "--shot",
+        "a.png",
+        "--screen-rows",
+        "--crop",
+        "0,0,8,8",
+    ])
+    .1
+    else {
+        panic!()
+    };
+    assert!(args.shot.unwrap().screen);
+    let u = command(&["run", "--filmstrip", "f.png", "--screen-rows"]).unwrap_err();
+    assert_eq!(u.message, "--screen-rows only applies with --shot");
 }
 
 /// `--wall-guard SECONDS` (leaf xdES5r) rides on the request, not the args,

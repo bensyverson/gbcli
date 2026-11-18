@@ -14,6 +14,7 @@ pub fn rows(r: &ResultBody) -> String {
             .field("width", shot.width)
             .field("height", shot.height)
             .field("scale", shot.scale)
+            .field("pixels", &shot.pixels)
             .field("frame", shot.frame_label())
             .line();
     }

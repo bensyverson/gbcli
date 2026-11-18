@@ -23,7 +23,7 @@ run     at? from?: "boot"|"power-on"  since?: "boot"|"power-on"|CHECKPOINT
         writes?: [{kind: "bus"|"poke"|"patch", target: ADDR, bytes: HEX}]
         read?: [EXPR]  expect?: [EXPR]  checkpoint?: NAME  allow_uninit?: bool
         keys?: ["A@0", "-A@2", …]  keys_since?: "boot"|"power-on"|CHECKPOINT
-        shot?: SHOT
+        shot?: SHOT  filmstrip?: {path: PATH, every: N, scale?: N, crop?: CROP}
         measure?: {from: ADDR, to: ADDR}  profile?: {top?: N}
         frame_budget?: bool  raster?: bool  oam_log?: bool
         audio?: {log?: bool, summary?: bool, channels?: ["square1"|"square2"|
@@ -44,8 +44,16 @@ equiv   frames: N  b?: {rom?: PATH, sym?: PATH, writes?: [WRITE]}  at?  from?
         screen?: "on"|"off"  (result.equiv.divergence.frame_offset?:
         {earlier: "a"|"b", ticks, t} when that frame ended sooner on one side)
 shot    shot: SHOT  since?
-        SHOT = {path: PATH, scale?: 1-8, crop?: {x, y, width, height},
-                live?: bool, any_frame?: bool}
+        SHOT = {path: PATH, scale?: 1-16, crop?: CROP, live?: bool,
+                any_frame?: bool, screen?: bool}  CROP = {x, y, width, height}
+        (result.shot: {path, width, height, scale, since, frame, pixels: HASH,
+        screen?: {kind: "shades"|"colors", width, height, rows: [TEXT]}}:
+        screen only when SHOT.screen is true; rows top to bottom in native
+        pixels, after the crop, before the scale; a digit 0-3 per pixel for
+        shades (DMG), six hex digits rrggbb per pixel for colors (GBC: the
+        24-bit color the PNG holds); pixels, always there, is the first 16 hex
+        digits of the SHA-256 of rows joined by "\n", equal for equal pixels
+        whatever the frame)
 view    what: "tiles"|"map"|"oam"|"palettes"|"memory"
         map?: "background"|"window"|"9800"|"9c00"  png?: {path: PATH, scale?: N}
         memory only: addr?: ADDR  len?: N  out?: PATH  allow_uninit?: bool
@@ -240,7 +248,7 @@ Examples:
   {"id":"17","op":"prune","args":{"unused_for":"7d"}}
   {"id":"18","op":"rm","args":{"name":"dx","with_checkpoints":true}}
   {"id":"19","op":"run","args":{"frames":120,"keys":["START@10","-START@12"],"shot":{"path":"a.png"}}}
-  {"id":"20","op":"shot","args":{"shot":{"path":"now.png","scale":2,"any_frame":true}}}
+  {"id":"20","op":"shot","args":{"shot":{"path":"now.png","scale":2,"crop":{"x":0,"y":0,"width":80,"height":72},"any_frame":true,"screen":true}}}
   {"id":"21","op":"view","args":{"what":"map","map":"window","png":{"path":"m.png"}}}
   {"id":"22","op":"sym","args":{"pattern":"w*"}}
   {"id":"23","op":"checkpoints"}

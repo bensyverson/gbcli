@@ -16,3 +16,11 @@ exit 2
 --- stderr
 gbcli: bad_request: --every only applies with --filmstrip
 remedy: add --filmstrip PATH, or drop it
+$ gbcli run --frames 4 --filmstrip c.png --every 2 --crop 0,0,16,8 --session demo
+exit 0
+stop budget_exhausted kind=frames pc=$015E bank=0 symbol=Main.loop frame=28 t=1966104 since=boot ticks=15694424 ly=144 shown=28 vblank=normal
+budget frames=4/4 instructions=22581 ticks=561808
+filmstrip path=c.png width=33 height=8 scale=1 frames=2
+frame index=0 label="complete frame 26 since boot (vblank normal)"
+frame index=1 label="complete frame 28 since boot (vblank normal)"
+rev s3

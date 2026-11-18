@@ -7,7 +7,7 @@ use gbcli_core::{Core, FrameTag, PixelBuf, Pixels, PpuMode, PpuStatus, Ticks, Vb
 
 use crate::ViewError;
 use crate::colors::DMG_GRAYS;
-use crate::image::{Image, LabelKey};
+use crate::image::{Image, LabelKey, Rect, crop_rows};
 
 /// Which frame to take.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -127,6 +127,21 @@ impl Frame {
         }
     }
 
+    /// The part of the frame inside `rect`, which must be non-empty and lie
+    /// wholly inside it, with the frame's own values (shades stay shades).
+    pub fn cropped(&self, rect: Rect) -> Result<Frame, ViewError> {
+        let pixels = match &self.pixels {
+            PixelBuf::Shades(s) => PixelBuf::Shades(crop_rows(s, self.width, self.height, rect)?),
+            PixelBuf::Rgb(rgb) => PixelBuf::Rgb(crop_rows(rgb, self.width, self.height, rect)?),
+        };
+        Ok(Frame {
+            source: self.source,
+            width: rect.width,
+            height: rect.height,
+            pixels,
+        })
+    }
+
     /// The frame at native size, labeled with what it is.
     pub fn image(&self) -> Image {
         Image {
@@ -157,6 +172,43 @@ mod tests {
             after: Some(3),
         }
         .to_string()
+    }
+
+    #[test]
+    fn a_cropped_frame_keeps_the_rectangle_and_its_kind_of_pixels() {
+        let frame = Frame {
+            source: FrameSource::Complete(FrameTag {
+                number: 2,
+                kind: VblankKind::Normal,
+                at: Ticks(0),
+            }),
+            width: 4,
+            height: 3,
+            pixels: PixelBuf::Shades((0..12).map(|i| i % 4).collect()),
+        };
+        let rect = Rect {
+            x: 1,
+            y: 1,
+            width: 2,
+            height: 2,
+        };
+        let cropped = frame.cropped(rect).unwrap();
+        assert_eq!((cropped.width, cropped.height), (2, 2));
+        assert_eq!(cropped.pixels, PixelBuf::Shades(vec![1, 2, 1, 2]));
+        assert_eq!(cropped.source, frame.source);
+        let rgb = Frame {
+            pixels: PixelBuf::Rgb((0..12).collect()),
+            ..frame.clone()
+        };
+        assert_eq!(
+            rgb.cropped(rect).unwrap().pixels,
+            PixelBuf::Rgb(vec![5, 6, 9, 10])
+        );
+        let past = Rect { x: 3, ..rect };
+        assert!(matches!(
+            frame.cropped(past),
+            Err(ViewError::CropOutside { .. })
+        ));
     }
 
     #[test]

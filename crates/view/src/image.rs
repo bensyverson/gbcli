@@ -18,6 +18,43 @@ pub struct Rect {
     pub height: u32,
 }
 
+impl Rect {
+    /// The `gbcli:detail` label of an image cropped to this rectangle.
+    pub fn crop_label(&self) -> String {
+        format!(
+            "crop x={} y={} w={} h={}",
+            self.x, self.y, self.width, self.height
+        )
+    }
+}
+
+/// The pixels of a `width`×`height` row-major raster inside `rect`, which
+/// must be non-empty and lie wholly inside it.
+pub(crate) fn crop_rows<T: Copy>(
+    pixels: &[T],
+    width: u32,
+    height: u32,
+    rect: Rect,
+) -> Result<Vec<T>, ViewError> {
+    let inside = rect.width > 0
+        && rect.height > 0
+        && rect.x.checked_add(rect.width).is_some_and(|r| r <= width)
+        && rect.y.checked_add(rect.height).is_some_and(|b| b <= height);
+    if !inside {
+        return Err(ViewError::CropOutside {
+            rect,
+            width,
+            height,
+        });
+    }
+    let mut out = Vec::with_capacity((rect.width * rect.height) as usize);
+    for y in rect.y..rect.y + rect.height {
+        let start = (y * width + rect.x) as usize;
+        out.extend_from_slice(&pixels[start..start + rect.width as usize]);
+    }
+    Ok(out)
+}
+
 /// What a PNG's text chunk says about the image; written as `gbcli:<key>`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LabelKey {
@@ -75,7 +112,8 @@ impl Image {
         }
     }
 
-    pub(crate) fn label(mut self, key: LabelKey, text: impl Into<String>) -> Image {
+    /// The image with one more label, which its PNG carries as a text chunk.
+    pub fn label(mut self, key: LabelKey, text: impl Into<String>) -> Image {
         self.labels.push((key, text.into()));
         self
     }
@@ -115,39 +153,14 @@ impl Image {
     /// The part of the image inside `rect`, which must be non-empty and lie
     /// wholly inside it.
     pub fn cropped(&self, rect: Rect) -> Result<Image, ViewError> {
-        let inside = rect.width > 0
-            && rect.height > 0
-            && rect
-                .x
-                .checked_add(rect.width)
-                .is_some_and(|r| r <= self.width)
-            && rect
-                .y
-                .checked_add(rect.height)
-                .is_some_and(|b| b <= self.height);
-        if !inside {
-            return Err(ViewError::CropOutside {
-                rect,
-                width: self.width,
-                height: self.height,
-            });
-        }
-        let mut pixels = Vec::with_capacity((rect.width * rect.height) as usize);
-        for y in rect.y..rect.y + rect.height {
-            let start = (y * self.width + rect.x) as usize;
-            pixels.extend_from_slice(&self.pixels[start..start + rect.width as usize]);
-        }
-        let crop = format!(
-            "crop x={} y={} w={} h={}",
-            rect.x, rect.y, rect.width, rect.height
-        );
+        let pixels = crop_rows(&self.pixels, self.width, self.height, rect)?;
         Ok(Image {
             width: rect.width,
             height: rect.height,
             pixels,
             labels: self.labels.clone(),
         }
-        .label(LabelKey::Detail, crop))
+        .label(LabelKey::Detail, rect.crop_label()))
     }
 
     /// Copies `src` with its top-left corner at (`x`, `y`), clipping at the edges.

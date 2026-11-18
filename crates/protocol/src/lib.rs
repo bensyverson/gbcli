@@ -99,7 +99,10 @@ pub use session::{
     CgbFlag, EventLogLine, GapCount, GapLine, MachineView, SESSION_NAME_RULE, SessionCreated,
     SessionFile, SessionNote, SessionRow, StopSummary, UndoWalk, is_session_name,
 };
-pub use shot::{Crop, FilmstripArgs, FilmstripMade, ShotArgs, ShotFrame, ShotMade, ShotReadArgs};
+pub use shot::{
+    Crop, FilmstripArgs, FilmstripMade, ScreenKind, ShotArgs, ShotFrame, ShotMade, ShotReadArgs,
+    ShotScreen,
+};
 pub use song::{SongFileFormat, SongMade, SongOutput, SongOutputKind, SongProblem};
 pub use stop::{
     BudgetLimits, BudgetUse, Cadence, FrameShown, StepKind, StopReason, StopRecord, StopTime,

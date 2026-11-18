@@ -14,6 +14,7 @@ mod encode;
 mod error;
 mod frame;
 mod image;
+mod screen;
 mod sheet;
 mod tiles;
 
@@ -21,5 +22,6 @@ pub use colors::{DMG_GRAYS, TilePalette};
 pub use error::ViewError;
 pub use frame::{Frame, FrameChoice, FrameSource, capture};
 pub use image::{DEFAULT_SCALE, Image, LabelKey, MAX_SCALE, Rect};
+pub use screen::{fingerprint, screen};
 pub use sheet::{DiffSummary, diff, filmstrip, sheet};
 pub use tiles::{MapChoice, MapLayout, map_layout, oam_sheet, object_height, tilemap, tileset};

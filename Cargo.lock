@@ -234,6 +234,7 @@ version = "0.1.0"
 dependencies = [
  "gbcli-core",
  "gbcli-engine",
+ "gbcli-protocol",
  "gbcli-sameboy",
  "png",
  "sameboy-sys",

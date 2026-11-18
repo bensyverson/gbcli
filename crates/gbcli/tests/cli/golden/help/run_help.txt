@@ -35,8 +35,8 @@ FLAGS
   --expect EXPR           a condition that must hold at the stop, evaluated beside --read (same grammar, same never-written rule); prints an expect row (expr, value, ok) for each, and if any is false the run fails with exit 1 (predicate_false), still saved as the head, without --checkpoint; one that can't be evaluated fails with its own error; a run that fails on its own first (--until not reached, the wall guard) reports that error, without expect rows; repeat for more
   --checkpoint NAME       save the stop state under this name
   --allow-uninit          read never-written bytes as their power-on values, with a warning
-  --shot PATH             save a PNG of the screen at the stop (see the shot flags)
-  --filmstrip PATH        save a PNG of the frames the run passed, in a row, each labeled (LCD-off frames kept); at most 16, more are counted and warned about
+  --shot PATH             save a PNG of the screen at the stop, with its pixels= fingerprint, and with --screen-rows its pixels as rows in --json (gbcli shot --help; see the shot flags)
+  --filmstrip PATH        save a PNG of the frames the run passed, in a row, each labeled (LCD-off frames kept), each cropped by --crop when given; at most 16, more are counted and warned about
   --every N               with --filmstrip: keep a frame every N frames of the run (default 1)
   --audio-log             print every write the run made to the sound registers, decoded into notes and settings, at elapsed 2^23 Hz ticks since --since, with the frame (counted as the stop's frame=) and the line (ly) it fell on: the cheap sibling of --wav. Only this run's: writes made before the run (a sound engine's setup) aren't listed. The rows stop at 20 with a more row that counts the rest; --json has every write, --piano draws the notes
   --audio-summary         print the run's sound-register writes counted by register (wave RAM as WAVE) and by writer PC (and its symbol, Label+$n), most first, with the registers each wrote: the log in a few rows. Also how loud the mix and each channel were (audio_loudness, loudest first; replays the run muted, as --channels each does): rms_dbfs is the median RMS, in dBFS (0 = 16-bit full scale), of the 1/64 s windows it sounded in, each window's DC offset removed, leaving out the first window and any in which a DAC switched on or off, since each switch pops near full scale whatever the volume; sounding_s is how long those windows last
@@ -57,7 +57,8 @@ FLAGS
 
 SHOT FLAGS (how the PNG is taken)
   --scale N               pixels per Game Boy pixel in the PNG, 1 to 16 (default 4); on run, also pixels per image pixel in --filmstrip, --piano and --spectrogram (default 2 for --piano, 1 for the others: try --scale 4 for a short clip's spectrogram)
-  --crop X,Y,W,H          only this rectangle of the 160x144 screen, in Game Boy pixels
+  --crop X,Y,W,H          only this rectangle of the 160x144 screen, in Game Boy pixels: the PNG, pixels= and --screen-rows alike; on run, every frame of --filmstrip too
+  --screen-rows           also return the pixels as data in --json: screen.rows, a text per row (a digit 0-3 per pixel on a DMG, rrggbb on a GBC); a full screen is 24 KB on a DMG, 140 KB on a GBC, so --crop it
   --live                  the pixels drawn so far this frame, not the last complete frame
   --any-frame             take the last frame even if it isn't a normal one (LCD off, blank)
 

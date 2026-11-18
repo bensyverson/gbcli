@@ -9,6 +9,7 @@ publish.workspace = true
 [dependencies]
 gbcli-core.workspace = true
 gbcli-engine.workspace = true
+gbcli-protocol.workspace = true
 png.workspace = true
 
 [dev-dependencies]

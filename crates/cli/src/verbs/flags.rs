@@ -147,7 +147,14 @@ pub const SHOT_OPTIONS: &[FlagSpec] = &[
     value(
         "crop",
         "X,Y,W,H",
-        "only this rectangle of the 160x144 screen, in Game Boy pixels",
+        "only this rectangle of the 160x144 screen, in Game Boy pixels: the PNG, pixels= \
+         and --screen-rows alike; on run, every frame of --filmstrip too",
+    ),
+    switch(
+        "screen-rows",
+        "also return the pixels as data in --json: screen.rows, a text per row (a digit \
+         0-3 per pixel on a DMG, rrggbb on a GBC); a full screen is 24 KB on a DMG, \
+         140 KB on a GBC, so --crop it",
     ),
     switch(
         "live",
@@ -225,13 +232,15 @@ pub const RUN: &[FlagSpec] = &[
     value(
         "shot",
         "PATH",
-        "save a PNG of the screen at the stop (see the shot flags)",
+        "save a PNG of the screen at the stop, with its pixels= fingerprint, and with \
+         --screen-rows its pixels as rows in --json (gbcli shot --help; see the shot flags)",
     ),
     value(
         "filmstrip",
         "PATH",
         "save a PNG of the frames the run passed, in a row, each labeled (LCD-off frames \
-         kept); at most 16, more are counted and warned about",
+         kept), each cropped by --crop when given; at most 16, more are counted and \
+         warned about",
     ),
     value(
         "every",

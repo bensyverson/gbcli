@@ -8,7 +8,7 @@ pub const SHOT_VERB: VerbSpec = VerbSpec {
     name: "shot",
     class: Class::Read,
     summary: "save a PNG of the screen at the head",
-    usage: "PATH [--scale N] [--crop X,Y,W,H] [--live | --any-frame] [flags]",
+    usage: "PATH [--scale N] [--crop X,Y,W,H] [--live | --any-frame] [--screen-rows] [flags]",
     arity: Arity {
         min: 1,
         max: Some(1),
@@ -16,16 +16,30 @@ pub const SHOT_VERB: VerbSpec = VerbSpec {
     },
     flags: SHOT,
     groups: &[SHOT_OPTIONS, SESSION, OUTPUT],
-    about: "Writes the last complete frame the LCD showed, as the real screen's four \
-            grays, and prints which frame it is. A frame that isn't normal (LCD off, the \
-            blank frame after the LCD turns on) is refused with exit 1 unless --any-frame; \
-            --live takes the pixels drawn so far instead. The PNG is palette-indexed at \
-            the smallest bit depth that holds its colors (2 bits for a four-gray screen), \
-            with indices in order of first appearance, not shade order: a decoder reads \
-            the PLTE chunk, not the raw index.",
+    about: "Writes the last complete frame the LCD showed (a DMG's four grays, a GBC's \
+            colors) and prints which frame it is and pixels=, a fingerprint of the \
+            pixels alone: equal pixels give equal pixels= whatever the frame, so compare \
+            two shots by it, not by their PNG files, whose text names the frame. A frame \
+            that isn't normal (LCD off, the blank frame after the LCD turns on) is \
+            refused with exit 1 unless --any-frame; --live takes the pixels drawn so far \
+            instead. With --screen-rows, --json also carries the pixels as data, so you \
+            needn't decode the PNG (left out by default: a full screen is 24 KB on a DMG, \
+            140 KB on a GBC): screen: {kind, width, height, rows}, one text per row, top \
+            to bottom, in native pixels after --crop (--scale changes only the PNG). On \
+            a DMG, kind is \
+            shades: a digit per pixel, the shade after BGP/OBP0/OBP1, 0 lightest to 3. On \
+            a GBC, kind is colors: six hex digits rrggbb per pixel, the 24-bit color the \
+            PNG holds (the core's conversion of palette RAM's RGB555, which gbcli view \
+            palettes shows). pixels= is the first 16 hex digits of the SHA-256 of those \
+            rows joined by newlines, with or without --screen-rows; the rows' count and length carry the size, so a crop \
+            of another shape fingerprints differently. The PNG is palette-indexed at the \
+            smallest bit depth that holds its colors (2 bits for a four-gray screen), with \
+            indices in order of first appearance, not shade order: a decoder reads the \
+            PLTE chunk, not the raw index.",
     example: (
         "gbcli shot title.png --session dx",
-        "saves the head's last frame at 4x as title.png and prints its frame number",
+        "saves the head's last frame at 4x as title.png and prints its frame number \
+         and pixels=",
     ),
 };
 

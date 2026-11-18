@@ -5,7 +5,7 @@ use std::path::Path;
 
 use gbcli_core::VblankKind;
 use gbcli_protocol::{
-    ErrorCode, FilmstripArgs, Op, Response, RunArgs, ShotArgs, ShotFrame, WriteArg, WriteKind,
+    Crop, ErrorCode, FilmstripArgs, Op, Response, RunArgs, ShotArgs, ShotFrame, WriteArg, WriteKind,
 };
 
 use super::Handler;
@@ -21,6 +21,7 @@ fn strip(f: &Fixture, every: u64) -> Option<Box<FilmstripArgs>> {
         path: f.dir.join("strip.png").to_string_lossy().into_owned(),
         every,
         scale: None,
+        crop: None,
     }))
 }
 
@@ -97,6 +98,75 @@ fn a_filmstrips_frames_and_labels_match_frames_captured_one_run_at_a_time() {
                 pixels[y * 160 * 3..(y + 1) * 160 * 3],
                 "frame {i}, row {y}"
             );
+        }
+    }
+}
+
+#[test]
+fn a_crop_applies_to_every_frame_of_the_strip() {
+    let whole = Fixture::new("filmstrip-uncropped");
+    let full = run(
+        &mut handler(&whole),
+        RunArgs {
+            frames: Some(4),
+            filmstrip: strip(&whole, 2),
+            ..RunArgs::default()
+        },
+    )
+    .outcome
+    .expect("ran")
+    .filmstrip
+    .expect("a filmstrip");
+    let (full_pixels, full_width) = decode(Path::new(&full.path));
+
+    let f = Fixture::new("filmstrip-crop");
+    let crop = Crop {
+        x: 8,
+        y: 16,
+        width: 32,
+        height: 24,
+    };
+    let made = run(
+        &mut handler(&f),
+        RunArgs {
+            frames: Some(4),
+            filmstrip: strip(&f, 2).map(|s| {
+                Box::new(FilmstripArgs {
+                    crop: Some(crop),
+                    scale: Some(2),
+                    ..*s
+                })
+            }),
+            ..RunArgs::default()
+        },
+    )
+    .outcome
+    .expect("ran")
+    .filmstrip
+    .expect("a filmstrip");
+    assert_eq!(made.frames, full.frames);
+    // Two 32x24 frames and the one-pixel gap, then the scale.
+    assert_eq!((made.width, made.height), ((2 * 32 + 1) * 2, 24 * 2));
+    let (pixels, width) = decode(Path::new(&made.path));
+    assert_eq!(width, 130);
+    let bytes = fs::read(&made.path).unwrap();
+    let label = b"crop x=8 y=16 w=32 h=24";
+    assert!(
+        bytes.windows(label.len()).any(|w| w == label),
+        "the PNG says it is cropped"
+    );
+    for i in 0..2 {
+        for y in 0..24 {
+            for x in 0..32 {
+                let at = |px: usize, py: usize, w: usize| (py * w + px) * 3;
+                let src = at(i * 161 + 8 + x, 16 + y, full_width);
+                let dst = at((i * 33 + x) * 2, y * 2, width);
+                assert_eq!(
+                    pixels[dst..dst + 3],
+                    full_pixels[src..src + 3],
+                    "frame {i} ({x}, {y})"
+                );
+            }
         }
     }
 }

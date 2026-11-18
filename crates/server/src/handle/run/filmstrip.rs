@@ -13,7 +13,7 @@ use gbcli_view::{Frame, FrameChoice, FrameSource, LabelKey, ViewError};
 
 use super::super::Failure;
 use super::super::files::Files;
-use super::super::shot::{check_image, view_failure};
+use super::super::shot::{check_crop, check_image, rect, view_failure};
 
 /// A filmstrip's scale when the request gives none: 16 frames already make
 /// a strip 2,575 pixels wide.
@@ -32,7 +32,8 @@ pub(super) fn check(args: &FilmstripArgs, files: &Files) -> Result<(), Failure> 
         &args.path,
         Some(args.scale.unwrap_or(FILMSTRIP_SCALE)),
         files,
-    )
+    )?;
+    check_crop(args.crop)
 }
 
 /// Collects frames as the run passes vblanks.
@@ -109,9 +110,21 @@ impl<'a> Collector<'a> {
             .collect();
         let fail = |e: ViewError| view_failure(&e, &rebase, &base);
         let scale = self.args.scale.unwrap_or(FILMSTRIP_SCALE);
+        let crop = self.args.crop.map(rect);
+        let frames = match crop {
+            Some(r) => frames
+                .iter()
+                .map(|f| f.cropped(r))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(fail)?,
+            None => frames,
+        };
         let mut image = gbcli_view::filmstrip(&frames)
             .and_then(|i| i.scaled(scale))
             .map_err(fail)?;
+        if let Some(r) = crop {
+            image = image.label(LabelKey::Detail, r.crop_label());
+        }
         // The view labels frames from power-on; the PNG says what the result says.
         let label = shown
             .iter()

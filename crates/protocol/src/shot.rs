@@ -27,6 +27,10 @@ pub struct ShotArgs {
     /// (LCD off, artificial), which is otherwise refused (design §9).
     #[serde(default, skip_serializing_if = "is_false")]
     pub any_frame: bool,
+    /// Also return the pixels as data ([`ShotMade::screen`]); the
+    /// fingerprint is always returned.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub screen: bool,
 }
 
 /// A rectangle in the frame's native pixels.
@@ -81,6 +85,39 @@ pub struct ShotMade {
     /// What `frame` counts from.
     pub since: TimeBase,
     pub frame: ShotFrame,
+    /// A fingerprint of `screen`: the first 16 lowercase hex digits of the
+    /// SHA-256 of its rows joined by `\n`. Equal pixels give equal
+    /// fingerprints, whatever the frame; the rows' count and length carry
+    /// the size, so a crop of another shape gives another fingerprint.
+    pub pixels: String,
+    /// The pixels as data, after the crop and before the scale, when the
+    /// request asked for them ([`ShotArgs::screen`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub screen: Option<ShotScreen>,
+}
+
+/// What a screen's pixels are: the frame's own values, not the PNG's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScreenKind {
+    /// DMG and MGB: shade 0 (lightest) to 3 (darkest), after BGP/OBP0/OBP1.
+    Shades,
+    /// CGB, AGB and SGB: each pixel's color as the core output it, after its
+    /// color correction: the 24-bit color the PNG holds, not palette RAM's
+    /// RGB555.
+    Colors,
+}
+
+/// A screen's pixels, row by row, top to bottom.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShotScreen {
+    pub kind: ScreenKind,
+    /// In native pixels.
+    pub width: u32,
+    pub height: u32,
+    /// One text per row, left to right: a digit 0-3 per pixel for shades,
+    /// six lowercase hex digits (`rrggbb`) per pixel for colors.
+    pub rows: Vec<String>,
 }
 
 impl ShotMade {
@@ -132,6 +169,9 @@ pub struct FilmstripArgs {
     /// The integer scale; 1 when absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scale: Option<u32>,
+    /// A crop in native pixels, applied to every frame before the scale.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crop: Option<Crop>,
 }
 
 impl FilmstripArgs {
@@ -169,7 +209,7 @@ mod tests {
 
     #[test]
     fn a_run_carries_a_shot_and_refuses_strangers_inside_it() {
-        let line = r#"{"id":"1","op":"run","args":{"frames":3,"shot":{"path":"a.png","scale":2,"crop":{"x":0,"y":0,"width":8,"height":8},"any_frame":true}}}"#;
+        let line = r#"{"id":"1","op":"run","args":{"frames":3,"shot":{"path":"a.png","scale":2,"crop":{"x":0,"y":0,"width":8,"height":8},"any_frame":true,"screen":true}}}"#;
         let request = parse_request(line).expect("parses");
         let Op::Run(RunArgs {
             shot: Some(shot), ..
@@ -180,7 +220,7 @@ mod tests {
         assert_eq!(shot.path, "a.png");
         assert_eq!(shot.scale, Some(2));
         assert_eq!(shot.crop.map(|c| c.width), Some(8));
-        assert!(shot.any_frame && !shot.live);
+        assert!(shot.any_frame && !shot.live && shot.screen);
         assert_eq!(serde_json::to_string(&request).unwrap(), line);
 
         let typo = r#"{"id":"1","op":"run","args":{"shot":{"path":"a.png","scael":2}}}"#;
@@ -190,8 +230,7 @@ mod tests {
 
     #[test]
     fn a_run_carries_a_filmstrip_and_refuses_strangers_inside_it() {
-        let line =
-            r#"{"id":"1","op":"run","args":{"frames":6,"filmstrip":{"path":"f.png","every":2}}}"#;
+        let line = r#"{"id":"1","op":"run","args":{"frames":6,"filmstrip":{"path":"f.png","every":2,"crop":{"x":0,"y":0,"width":8,"height":8}}}}"#;
         let request = parse_request(line).expect("parses");
         let Op::Run(RunArgs {
             filmstrip: Some(strip),
@@ -204,6 +243,7 @@ mod tests {
             (strip.path.as_str(), strip.every, strip.scale),
             ("f.png", 2, None)
         );
+        assert_eq!(strip.crop.map(|c| c.width), Some(8));
         assert_eq!(serde_json::to_string(&request).unwrap(), line);
         let typo = r#"{"id":"1","op":"run","args":{"filmstrip":{"path":"f.png","evry":2}}}"#;
         assert!(parse_request(typo).unwrap_err().remedy.contains("`every`"));
@@ -233,12 +273,32 @@ mod tests {
                 n: 3,
                 vblank: VblankKind::Normal,
             }),
+            pixels: "5feceb66ffc86f38".into(),
+            screen: Some(ShotScreen {
+                kind: ScreenKind::Shades,
+                width: 1,
+                height: 1,
+                rows: vec!["0".into()],
+            }),
         };
         let json = serde_json::to_string(&made).unwrap();
         assert!(
             json.contains(r#""frame":{"kind":"complete","n":3,"vblank":"normal"}"#),
             "{json}"
         );
+        assert!(
+            json.contains(
+                r#""pixels":"5feceb66ffc86f38","screen":{"kind":"shades","width":1,"height":1,"rows":["0"]}"#
+            ),
+            "{json}"
+        );
+        let bare = ShotMade {
+            screen: None,
+            ..made.clone()
+        };
+        let json = serde_json::to_string(&bare).unwrap();
+        assert!(json.contains(r#""pixels":"5feceb66ffc86f38""#), "{json}");
+        assert!(!json.contains("screen"), "rows only when asked: {json}");
         assert_eq!(
             made.frame_label(),
             "complete frame 3 since boot (vblank normal)"

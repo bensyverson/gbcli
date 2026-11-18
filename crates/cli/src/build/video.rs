@@ -10,8 +10,9 @@ use crate::argv::Invocation;
 use crate::usage::Usage;
 use crate::values;
 
-/// The shot options, refused rather than ignored when nothing takes a shot.
-const SHOT_OPTIONS: [&str; 3] = ["crop", "live", "any-frame"];
+/// The shot-only options, refused rather than ignored when nothing takes a
+/// shot. `--crop` also crops a filmstrip, so it is checked on its own.
+const SHOT_OPTIONS: [&str; 3] = ["live", "any-frame", "screen-rows"];
 
 /// The run's images that `--scale` scales besides the shot.
 const SCALED_IMAGES: [&str; 3] = ["filmstrip", "piano", "spectrogram"];
@@ -27,6 +28,12 @@ pub fn run_shot(inv: &Invocation) -> Result<Option<ShotArgs>, Usage> {
                     "add --shot PATH, or drop it",
                 ));
             }
+            if inv.has("crop") && !inv.has("filmstrip") {
+                return Err(Usage::new(
+                    "--crop only applies with --shot or --filmstrip",
+                    "add --shot PATH or --filmstrip PATH, or drop it",
+                ));
+            }
             if inv.has("scale") && !SCALED_IMAGES.into_iter().any(|f| inv.has(f)) {
                 return Err(Usage::new(
                     "--scale only applies with --shot, --filmstrip, --piano or --spectrogram",
@@ -38,8 +45,8 @@ pub fn run_shot(inv: &Invocation) -> Result<Option<ShotArgs>, Usage> {
     }
 }
 
-/// `run --filmstrip PATH [--every N]` (a frame every N frames, default 1),
-/// or `None` when there is no `--filmstrip`.
+/// `run --filmstrip PATH [--every N] [--crop X,Y,W,H]` (a frame every N
+/// frames, default 1, each cropped), or `None` when there is no `--filmstrip`.
 pub fn run_filmstrip(inv: &Invocation) -> Result<Option<FilmstripArgs>, Usage> {
     let every = inv
         .one("every")
@@ -50,6 +57,7 @@ pub fn run_filmstrip(inv: &Invocation) -> Result<Option<FilmstripArgs>, Usage> {
             path: path.to_string(),
             every: every.unwrap_or(1),
             scale: scale(inv)?,
+            crop: inv.one("crop").map(crop).transpose()?,
         })),
         (None, Some(_)) => Err(Usage::new(
             "--every only applies with --filmstrip",
@@ -67,6 +75,7 @@ pub fn shot(inv: &Invocation, path: &str) -> Result<ShotArgs, Usage> {
         crop: inv.one("crop").map(crop).transpose()?,
         live: inv.has("live"),
         any_frame: inv.has("any-frame"),
+        screen: inv.has("screen-rows"),
     })
 }
 

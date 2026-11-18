@@ -8,7 +8,7 @@ use std::path::Path;
 use gbcli_bundle::SessionStore;
 use gbcli_engine::{Machine, Since};
 use gbcli_protocol::{
-    ErrorBody, ErrorCode, FrameShown, PpuView, ResultBody, SessionFile, ShotArgs, ShotFrame,
+    Crop, ErrorBody, ErrorCode, FrameShown, PpuView, ResultBody, SessionFile, ShotArgs, ShotFrame,
     ShotMade, ShotReadArgs,
 };
 use gbcli_view::{DEFAULT_SCALE, FrameChoice, FrameSource, LabelKey, MAX_SCALE, Rect, ViewError};
@@ -52,7 +52,13 @@ pub(super) fn check(args: &ShotArgs, files: &Files) -> Result<(), Failure> {
                 .into(),
         ));
     }
-    if args.crop.is_some_and(|c| c.width == 0 || c.height == 0) {
+    check_crop(args.crop)
+}
+
+/// An empty crop, refused before anything is drawn; one outside the frame
+/// is found only once there is a frame.
+pub(super) fn check_crop(crop: Option<Crop>) -> Result<(), Failure> {
+    if crop.is_some_and(|c| c.width == 0 || c.height == 0) {
         return Err(bad(
             "a crop needs a width and a height".into(),
             "give the crop as x, y, width, height in native pixels".into(),
@@ -122,17 +128,13 @@ pub(super) fn take(
         },
     };
     let mut image = frame.image();
-    if let Some(c) = args.crop {
-        let rect = Rect {
-            x: c.x,
-            y: c.y,
-            width: c.width,
-            height: c.height,
-        };
-        image = image
-            .cropped(rect)
-            .map_err(|e| view_failure(&e, &rebase, &base))?;
+    let mut region = frame;
+    if let Some(r) = args.crop.map(rect) {
+        let fail = |e| view_failure(&e, &rebase, &base);
+        image = image.cropped(r).map_err(fail)?;
+        region = region.cropped(r).map_err(fail)?;
     }
+    let screen = gbcli_view::screen(&region);
     let scale = args.scale.unwrap_or(DEFAULT_SCALE);
     let mut image = image
         .scaled(scale)
@@ -144,6 +146,8 @@ pub(super) fn take(
         scale,
         since: base.clone(),
         frame: shown,
+        pixels: gbcli_view::fingerprint(&screen),
+        screen: args.screen.then_some(screen),
     };
     // The view labels the frame from power-on; the PNG says what the result says.
     for (key, text) in &mut image.labels {
@@ -154,6 +158,16 @@ pub(super) fn take(
     let bytes = image.png().map_err(|e| view_failure(&e, &rebase, &base))?;
     files.write(&args.path, &bytes)?;
     Ok(made)
+}
+
+/// The wire's crop as the view's rectangle.
+pub(super) fn rect(c: Crop) -> Rect {
+    Rect {
+        x: c.x,
+        y: c.y,
+        width: c.width,
+        height: c.height,
+    }
 }
 
 fn bad(message: String, remedy: String) -> Failure {

@@ -1,5 +1,6 @@
 $ gbcli run raster.gb --frames 2 --raster --session ras
 exit 0
+session_created name=ras model=dmg-b cgb=dmg bundle=<project>/.gbcli
 stop budget_exhausted kind=frames pc=$0199 bank=0 symbol=BgpHBlank.ly_u8 frame=2 t=140272 since=boot ticks=12042760 ly=144 shown=2 vblank=normal
 budget frames=2/2 instructions=15997 ticks=280544
 raster frames=3 lines=307 written=8
@@ -38,6 +39,7 @@ exit 0
 {"id":"cli","ok":true,"rev":"s2","result":{"stop":{"reason":"budget_exhausted","kind":"frames","pc":409,"bank":0,"symbol":"BgpHBlank.ly_u8","time":{"ticks":12183208,"t":210496,"since":{"kind":"boot"},"frame":3,"ly":144,"dot":null},"frame_shown":{"n":3,"vblank":"normal"},"budget":{"ticks":140448,"instructions":9423,"frames":1,"limits":{"frames":1},"defaulted":false}},"reads":[],"raster":{"frames":2,"lines":154,"rows":[{"frame":0,"line":144,"start":null,"writes":[{"reg":"rSCX","value":0,"pc":416,"ticks_into_line":null,"mode":"vblank"},{"reg":"rLYC","value":30,"pc":420,"ticks_into_line":null,"mode":"vblank"},{"reg":"rSTAT","value":64,"pc":424,"ticks_into_line":null,"mode":"vblank"},{"reg":"rIF","value":0,"pc":431,"ticks_into_line":null,"mode":"vblank"}]},{"frame":1,"line":40,"start":12088344,"writes":[{"reg":"rSCX","value":16,"pc":363,"ticks_into_line":332,"mode":"drawing"}]},{"frame":1,"line":80,"start":12124824,"writes":[{"reg":"rBGP","value":27,"pc":381,"ticks_into_line":260,"mode":"drawing"}]},{"frame":1,"line":120,"start":12161304,"writes":[{"reg":"rBGP","value":228,"pc":407,"ticks_into_line":644,"mode":"hblank"}]}],"drawn":[{"frame":1,"first_line":0,"scx":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16],"scy":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}],"unsupported":["ppu_dot","ppu_mode_events"]}},"warnings":[]}
 $ gbcli run illegal.gb --frames 5 --raster --session ill
 exit 0
+session_created name=ill model=dmg-b cgb=dmg bundle=<project>/.gbcli
 stop illegal_opcode opcode=$D3 pc=$0156 bank=0 frame=0 t=48 since=boot ticks=11762312 ly=144 shown=0 vblank=normal
 budget frames=0/5 instructions=6 ticks=96
 raster frames=0 lines=0 written=0
@@ -46,6 +48,7 @@ raster_unsupported feature=ppu_mode_events
 rev s1
 $ gbcli run stop.gb --frames 2 --session stop
 exit 0
+session_created name=stop model=dmg-b cgb=dmg bundle=<project>/.gbcli
 stop budget_exhausted kind=frames pc=$015D bank=0 frame=2 t=140272 since=boot ticks=12042760 ly=144 shown=2 vblank=artificial
 budget frames=2/2 instructions=35056 ticks=280544
 rev s1

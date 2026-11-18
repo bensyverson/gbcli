@@ -1,5 +1,6 @@
 $ gbcli run demo.gb --frames 6 --filmstrip f.png --every 2 --session demo
 exit 0
+session_created name=demo model=dmg-b cgb=dmg bundle=<project>/.gbcli
 stop budget_exhausted kind=frames pc=$016C bank=0 symbol=Work+$9 frame=6 t=421168 since=boot ticks=12604552 ly=144 shown=6 vblank=normal
 budget frames=6/6 instructions=33855 ticks=842336
 filmstrip path=f.png width=482 height=144 scale=1 frames=3

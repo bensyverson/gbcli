@@ -96,8 +96,8 @@ pub use response::{
 };
 pub use rev::Rev;
 pub use session::{
-    CgbFlag, EventLogLine, GapCount, GapLine, MachineView, SESSION_NAME_RULE, SessionFile,
-    SessionRow, StopSummary, UndoWalk, is_session_name,
+    CgbFlag, EventLogLine, GapCount, GapLine, MachineView, SESSION_NAME_RULE, SessionCreated,
+    SessionFile, SessionNote, SessionRow, StopSummary, UndoWalk, is_session_name,
 };
 pub use shot::{Crop, FilmstripArgs, FilmstripMade, ShotArgs, ShotFrame, ShotMade, ShotReadArgs};
 pub use song::{SongFileFormat, SongMade, SongOutput, SongOutputKind, SongProblem};

@@ -1,5 +1,6 @@
 $ gbcli run clock.gb --frames 2 --session bat
 exit 0
+session_created name=bat model=dmg-b cgb=dmg bundle=<project>/.gbcli
 stop budget_exhausted kind=frames pc=$0163 bank=0 frame=2 t=140288 since=boot ticks=12042792 ly=144 shown=2 vblank=normal
 budget frames=2/2 instructions=11276 ticks=280576
 rev s1
@@ -27,6 +28,7 @@ read expr=[sram:$10] value=171 hex=$AB
 rev s4
 $ gbcli power-cycle --session other --rom clock.gb --sav game.sav
 exit 0
+session_created name=other model=dmg-b cgb=dmg bundle=<project>/.gbcli
 power_cycle battery=sav bytes=8240 clock=restored rtc_advanced_s=0 rom_rebuilt=0
 rev s1
 $ gbcli read [sram:$10] --session other --json
@@ -34,6 +36,7 @@ exit 0
 {"id":"cli","ok":true,"rev":"s1","result":{"reads":[{"expr":"[sram:$10]","value":171}]},"warnings":[]}
 $ gbcli power-cycle --session plain --rom plain.gb
 exit 0
+session_created name=plain model=dmg-b cgb=dmg bundle=<project>/.gbcli
 power_cycle battery=none clock=not_clocked rtc_advanced_s=0 rom_rebuilt=0
 rev s1
 $ gbcli sav plain.sav --session plain
@@ -48,6 +51,7 @@ gbcli: bad_request: "soon" is not a duration
 remedy: use a number and a unit (s, m, h or d): 30m, 12h or 7d
 $ gbcli show --session bad --rom bad.gb
 exit 0
+session_created name=bad model=dmg-b cgb=dmg bundle=<project>/.gbcli
 machine model=dmg-b cgb=dmg
 registers a=$00 f=$00 b=$00 c=$00 d=$00 e=$00 h=$00 l=$00 sp=$0000 pc=$0000 flags=---- ime=0 halted=0 double_speed=0
 ppu ly=0 mode=hblank lcd_on=0

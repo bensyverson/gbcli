@@ -4,6 +4,8 @@ gbcli — a headless, deterministic Game Boy emulator for agents.
 
 Each command opens a named session (.gbcli/sessions/NAME/), does one thing to
 its machine, saves it and prints rows; --json prints the response line.
+It uses the nearest .gbcli/ at or above the working directory (or --dir), or
+makes one there; the session_created row names the folder a new session used.
 
   act        run, step, checkpoint, restore, undo, power-cycle, write, poke,
              patch

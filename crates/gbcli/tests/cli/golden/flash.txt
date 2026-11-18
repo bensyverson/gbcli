@@ -1,5 +1,6 @@
 $ gbcli run save.gb --frames 20 --read [$C000] --session fl --flash generic-wr-aaa-a9
 exit 0
+session_created name=fl model=dmg-b cgb=dmg bundle=<project>/.gbcli
 stop budget_exhausted kind=frames pc=$016D bank=0 frame=20 t=1404308 since=boot ticks=14570832 ly=144 shown=20 vblank=normal
 budget frames=20/20 instructions=117090 ticks=2808616
 read expr=[$C000] value=1 hex=$01
@@ -10,13 +11,15 @@ sav path=game.sav bytes=8192 ram_bytes=8192 flash_path=game.flash.gb flash_bytes
 rev s1
 $ gbcli power-cycle --session copy --rom save.gb --flash generic-wr-aaa-a9 --sav game.sav
 exit 0
+session_created name=copy model=dmg-b cgb=dmg bundle=<project>/.gbcli
 power_cycle battery=sav bytes=8192 clock=not_clocked rtc_advanced_s=0 rom_rebuilt=0 flash=image flash_bytes=2097152
 rev s1
 $ gbcli run save.gb --frames 20 --session straight --flash generic-wr-aaa-aa --json
 exit 0
-{"id":"cli","ok":true,"rev":"s1","result":{"stop":{"reason":"budget_exhausted","kind":"frames","pc":49178,"bank":0,"symbol":null,"time":{"ticks":14570832,"t":1404308,"since":{"kind":"boot"},"frame":20,"ly":144,"dot":null},"frame_shown":{"n":20,"vblank":"normal"},"budget":{"ticks":2808616,"instructions":117090,"frames":20,"limits":{"frames":20},"defaulted":false}},"reads":[],"flash_notes":[{"ticks":11765560,"addr":2730,"value":169,"kind":"data_lines","text":"$0AAA<-$A9 is not an unlock cycle on this board: the chip reads $A9 and expects $AA. $A9 is what a board with D0 and D1 swapped needs, so the program was written for that wiring; its flash commands do nothing here"}]},"warnings":["$0AAA<-$A9 is not an unlock cycle on this board: the chip reads $A9 and expects $AA. $A9 is what a board with D0 and D1 swapped needs, so the program was written for that wiring; its flash commands do nothing here"]}
+{"id":"cli","ok":true,"rev":"s1","result":{"stop":{"reason":"budget_exhausted","kind":"frames","pc":49178,"bank":0,"symbol":null,"time":{"ticks":14570832,"t":1404308,"since":{"kind":"boot"},"frame":20,"ly":144,"dot":null},"frame_shown":{"n":20,"vblank":"normal"},"budget":{"ticks":2808616,"instructions":117090,"frames":20,"limits":{"frames":20},"defaulted":false}},"reads":[],"flash_notes":[{"ticks":11765560,"addr":2730,"value":169,"kind":"data_lines","text":"$0AAA<-$A9 is not an unlock cycle on this board: the chip reads $A9 and expects $AA. $A9 is what a board with D0 and D1 swapped needs, so the program was written for that wiring; its flash commands do nothing here"}]},"warnings":["$0AAA<-$A9 is not an unlock cycle on this board: the chip reads $A9 and expects $AA. $A9 is what a board with D0 and D1 swapped needs, so the program was written for that wiring; its flash commands do nothing here"],"session_created":{"name":"straight","bundle":"<project>/.gbcli","model":"dmg-b","cgb":"dmg"}}
 $ gbcli run save.gb --frames 20 --session mask
 exit 0
+session_created name=mask model=dmg-b cgb=dmg bundle=<project>/.gbcli
 stop budget_exhausted kind=frames pc=$C01A bank=0 frame=20 t=1404308 since=boot ticks=14570832 ly=144 shown=20 vblank=normal
 budget frames=20/20 instructions=117090 ticks=2808616
 rev s1

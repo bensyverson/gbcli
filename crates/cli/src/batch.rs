@@ -34,6 +34,8 @@ pub fn batch(target: &Target, file: &str, env: &Env, io: Io) -> u8 {
         if target.json {
             let text = serde_json::to_string(&response).expect("a response always serializes");
             emit(io.out, &format!("{text}\n"));
+        } else {
+            emit(io.out, &render::session_created(&response));
         }
         let op = parse_request(line).ok().map(|r| r.op.name());
         let row = Row::new("line")

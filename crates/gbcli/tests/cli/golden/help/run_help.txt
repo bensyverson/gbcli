@@ -13,7 +13,8 @@ breakpoint or watch fires, or the budget ends (--profile, --frame-budget,
 stop; evaluate --read and --expect; save --shot; save the audio (--audio-log,
 --audio-summary, --wav, --piano, --spectrogram); save --checkpoint (not when
 an --expect is false). The stop becomes the session's new head, whatever
---expect says. A ROM argument is the same as --rom.
+--expect says. A ROM argument is the same as --rom. A new session is a DMG
+(dmg-b) unless --model says otherwise, even for a color ROM.
 
 CLASS
   act: advances or changes the machine and saves the new head; needs a session (name one with a ROM to create it).

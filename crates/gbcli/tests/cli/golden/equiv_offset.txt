@@ -1,5 +1,6 @@
 $ gbcli equiv slow.gb --frames 60 --ram wX --ram wY --rom a.gb --keys RIGHT@10 DOWN@20 --session offset
 exit 1
+session_created name=offset model=dmg-b cgb=dmg bundle=<project>/.gbcli
 equiv frames=2 diverged_at=3 ticks=356080 screen=1 ram="wX wY" audio=writes
 difference kind=pixels x=0 y=0 a=3 b=0 count=64
 frame_offset frame=3 earlier=b t=30896 ticks=61792

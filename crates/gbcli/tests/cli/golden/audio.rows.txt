@@ -1,5 +1,6 @@
 $ gbcli checkpoint start --rom tune.gb --session tune
 exit 0
+session_created name=tune model=dmg-b cgb=dmg bundle=<project>/.gbcli
 checkpoint name=start path=.gbcli/sessions/tune/checkpoints/start.gbck frame=0 rev=s0
 rev s0
 $ gbcli run --at start --frames 40 --audio-log --session tune

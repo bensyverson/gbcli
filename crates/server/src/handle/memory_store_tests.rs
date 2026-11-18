@@ -87,6 +87,37 @@ fn a_host_outside_the_stores_project_names_keys_outside_it_and_writes_nothing() 
     assert!(ran.is_ok(), "{:?}", ran.error());
 }
 
+/// The report of a session created before the handler started rides on the
+/// first response, and only that one: a caller is told once where its state
+/// went. Without a report no response carries one.
+#[test]
+fn a_created_sessions_report_rides_on_the_first_response_only() {
+    let clock = Arc::new(Noon);
+    let store = Arc::new(MemoryStore::new(PROJECT, clock.clone()).unwrap());
+    store.put(&Key::new("demo.gb"), V1).unwrap();
+    store.make_dir(&Key::new(".gbcli")).unwrap();
+    let bundle = Bundle::new(store, Key::new(".gbcli"), clock);
+    let source = RomSource {
+        rom: "demo.gb".into(),
+        sym: None,
+        model: None,
+        seed: None,
+        flash: None,
+    };
+    let opened = bundle.start_session("demo", Some(&source)).unwrap();
+    let created = opened.created.clone().expect("created");
+    let host = Host::new(PROJECT, HostFiles::Denied).unwrap();
+    let mut h = Handler::new(host, bundle, Box::new(InterruptFlag::new()))
+        .with_defaults(Some("demo".into()), None)
+        .with_session_created(opened.created);
+    let first = h.handle(&request(Op::Show));
+    assert_eq!(first.session_created, Some(created));
+    let second = h.handle(&request(Op::Show));
+    assert_eq!(second.session_created, None);
+    let (mut plain, _) = memory_handler(PROJECT);
+    assert_eq!(plain.handle(&request(Op::Show)).session_created, None);
+}
+
 /// Every session op that writes a request's own file, and the bundle ops,
 /// through a memory store whose project is a real, existing, empty
 /// directory: each answers, its files land in the store as keys, and the

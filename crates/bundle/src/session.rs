@@ -7,10 +7,12 @@ use std::path::{Path, PathBuf};
 
 use gbcli_core::flash::FlashProfile;
 use gbcli_core::{BootRom, CoreConfig, Model};
+use gbcli_engine::cart::cgb_flag;
 use gbcli_engine::{Backend, Machine, SetupError};
-use gbcli_protocol::{RenderConfig, Rev, SessionFile, model_name};
+use gbcli_protocol::{RenderConfig, Rev, SessionCreated, SessionFile, model_name};
 
 use crate::bundle::Bundle;
+use crate::created::Opened;
 use crate::error::{Setting, StoreError};
 use crate::lock::LOCK_WAIT;
 use crate::store::SessionStore;
@@ -44,17 +46,24 @@ impl Bundle {
         name: &str,
         rom: Option<&RomSource>,
     ) -> Result<SessionStore, StoreError> {
+        self.start_session(name, rom).map(|opened| opened.store)
+    }
+
+    /// [`Bundle::open_session`], with what creating the session made when
+    /// this call created it: the report a client shows its caller.
+    pub fn start_session(&self, name: &str, rom: Option<&RomSource>) -> Result<Opened, StoreError> {
+        let opened = |store, created| Opened { store, created };
         let store = self.session(name)?;
         let Some(source) = rom else {
             return if store.exists() {
-                Ok(store)
+                Ok(opened(store, None))
             } else {
                 Err(store.no_session())
             };
         };
         if !store.exists() {
-            match store.create(source) {
-                Ok(_) => return Ok(store),
+            match store.create_reporting(source) {
+                Ok((_, created)) => return Ok(opened(store, Some(created))),
                 // Another process created it first: check its ROM as below.
                 Err(StoreError::SessionExists { .. }) => {}
                 Err(e) => return Err(e),
@@ -69,7 +78,7 @@ impl Bundle {
             });
         }
         check_settings(&store, &meta, source)?;
-        Ok(store)
+        Ok(opened(store, None))
     }
 
     /// Whether two project paths name one file: the store gives them one key.
@@ -146,6 +155,14 @@ impl SessionStore {
     /// Creates the session from a ROM. Refuses an existing name. The ROM and
     /// symbols are read and the machine built before anything is written.
     pub fn create(&self, source: &RomSource) -> Result<Machine, StoreError> {
+        self.create_reporting(source).map(|(machine, _)| machine)
+    }
+
+    /// [`SessionStore::create`], with the report of what it made.
+    pub(crate) fn create_reporting(
+        &self,
+        source: &RomSource,
+    ) -> Result<(Machine, SessionCreated), StoreError> {
         if self.exists() {
             return Err(StoreError::SessionExists {
                 name: self.name().to_string(),
@@ -168,6 +185,7 @@ impl SessionStore {
             .map(|p| self.read_symbols(p))
             .transpose()?;
         let config = default_config();
+        let cgb = cgb_flag(&rom);
         let meta = SessionFile {
             name: self.name().to_string(),
             rom: self.stored(&rom_path),
@@ -215,7 +233,8 @@ impl SessionStore {
         // session.json last: until it is written, this is not a session.
         self.write_meta(&meta)?;
         self.record_use(&lock)?;
-        Ok(machine)
+        let created = crate::created::report(self, source.model, meta.model, cgb);
+        Ok((machine, created))
     }
 
     /// Builds a machine from the session's metadata at power-on.

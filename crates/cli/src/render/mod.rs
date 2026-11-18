@@ -5,6 +5,7 @@ mod audio;
 mod battery;
 #[cfg(test)]
 mod bounded_tests;
+mod created;
 mod debugger;
 mod equiv;
 mod font;
@@ -43,6 +44,7 @@ pub fn response(response: &Response, json: bool, out: &mut dyn Write, err: &mut 
     for warning in &response.warnings {
         emit(err, &format!("warning: {warning}\n"));
     }
+    emit(out, &session_created(response));
     let rev = || match response.rev {
         Some(rev) => Row::new("rev").word(&rev.to_string()).line(),
         None => String::new(),
@@ -90,6 +92,16 @@ pub fn error(err: &mut dyn Write, body: &ErrorBody) -> u8 {
 
 /// The rows for a result, in a fixed order; a field the op didn't fill is
 /// absent and prints nothing.
+/// The rows for the session the invocation created, if it created one:
+/// first, as the creation came before the request.
+pub fn session_created(response: &Response) -> String {
+    response
+        .session_created
+        .as_ref()
+        .map(created::rows)
+        .unwrap_or_default()
+}
+
 pub fn rows(r: &ResultBody) -> String {
     let mut out = String::new();
     if let Some(m) = &r.machine {

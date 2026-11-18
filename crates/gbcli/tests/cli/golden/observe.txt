@@ -1,5 +1,6 @@
 $ gbcli run v1.gb --frames 2 --session oam
 exit 0
+session_created name=oam model=dmg-b cgb=dmg bundle=<project>/.gbcli
 stop budget_exhausted kind=frames pc=$0163 bank=0 frame=2 t=140288 since=boot ticks=12042792 ly=144 shown=2 vblank=normal
 budget frames=2/2 instructions=11276 ticks=280576
 rev s1
@@ -18,6 +19,7 @@ exit 0
 {"id":"cli","ok":true,"rev":"s3","result":{"stop":{"reason":"budget_exhausted","kind":"frames","pc":364,"bank":0,"symbol":null,"time":{"ticks":12604552,"t":421168,"since":{"kind":"boot"},"frame":6,"ly":144,"dot":null},"frame_shown":{"n":6,"vblank":"normal"},"budget":{"ticks":140432,"instructions":5644,"frames":1,"limits":{"frames":1},"defaulted":false}},"reads":[],"oam_log":{"since":{"kind":"boot"},"frames":[{"frame":6,"height":8,"objects":[{"index":0,"y":80,"x":8,"tile":0,"flags":0,"screen_x":0,"screen_y":64,"on_screen":true,"dropped_by_line_limit":false},{"index":1,"y":80,"x":16,"tile":1,"flags":0,"screen_x":8,"screen_y":64,"on_screen":true,"dropped_by_line_limit":false},{"index":2,"y":80,"x":24,"tile":2,"flags":0,"screen_x":16,"screen_y":64,"on_screen":true,"dropped_by_line_limit":false},{"index":3,"y":80,"x":32,"tile":3,"flags":0,"screen_x":24,"screen_y":64,"on_screen":true,"dropped_by_line_limit":false},{"index":4,"y":80,"x":40,"tile":4,"flags":0,"screen_x":32,"screen_y":64,"on_screen":true,"dropped_by_line_limit":false},{"index":5,"y":80,"x":48,"tile":5,"flags":0,"screen_x":40,"screen_y":64,"on_screen":true,"dropped_by_line_limit":false},{"index":6,"y":80,"x":56,"tile":6,"flags":0,"screen_x":48,"screen_y":64,"on_screen":true,"dropped_by_line_limit":false},{"index":7,"y":80,"x":64,"tile":7,"flags":0,"screen_x":56,"screen_y":64,"on_screen":true,"dropped_by_line_limit":false},{"index":8,"y":80,"x":72,"tile":8,"flags":0,"screen_x":64,"screen_y":64,"on_screen":true,"dropped_by_line_limit":false},{"index":9,"y":80,"x":80,"tile":9,"flags":0,"screen_x":72,"screen_y":64,"on_screen":true,"dropped_by_line_limit":false},{"index":10,"y":80,"x":88,"tile":10,"flags":0,"screen_x":80,"screen_y":64,"on_screen":true,"dropped_by_line_limit":true},{"index":11,"y":80,"x":96,"tile":11,"flags":0,"screen_x":88,"screen_y":64,"on_screen":true,"dropped_by_line_limit":true}]}]}},"warnings":[]}
 $ gbcli run tune.gb --frames 40 --audio-log --audio-summary --audio-channel 4 --session tune
 exit 0
+session_created name=tune model=dmg-b cgb=dmg bundle=<project>/.gbcli
 stop budget_exhausted kind=frames pc=$0040 bank=0 symbol=VBlank_vector frame=40 t=2808804 since=boot ticks=17379824 ly=144 shown=40 vblank=normal
 budget frames=40/40 instructions=701614 ticks=5617608
 audio since=boot writes=3 channels=noise
@@ -64,6 +66,7 @@ rev s3
 warning: uninitialized read of 17 never-written bytes, the first $C003: their power-on values are random
 $ gbcli run palette.gb --model gbc --frames 30 --session gbc
 exit 0
+session_created name=gbc model=cgb-e cgb=dual bundle=<project>/.gbcli
 stop budget_exhausted kind=frames pc=$0180 bank=0 frame=30 t=2055624 since=boot ticks=30282696 ly=144 shown=30 vblank=normal
 budget frames=30/30 instructions=214996 ticks=4111248
 rev s1

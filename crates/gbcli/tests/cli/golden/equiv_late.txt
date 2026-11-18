@@ -1,5 +1,6 @@
 $ gbcli equiv late_b.gb --frames 20 --ram wX --rom late_a.gb --session late
 exit 1
+session_created name=late model=dmg-b cgb=dmg bundle=<project>/.gbcli
 equiv frames=0 diverged_at=1 ticks=140096 screen=1 ram=wX audio=writes
 difference kind=ram range=wX offset=0 a=$BF b=$9E a_addr=$C010 b_addr=$C020 count=1 never_written=a,b
 side a checkpoint=equiv-a path=.gbcli/sessions/late/checkpoints/equiv-a.gbck frame=1

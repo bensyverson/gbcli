@@ -1,6 +1,6 @@
 $ gbcli run demo.gb --frames 2 --read u16[wFrame] --session demo --json
 exit 0
-{"id":"cli","ok":true,"rev":"s1","result":{"stop":{"reason":"budget_exhausted","kind":"frames","pc":355,"bank":0,"symbol":"Work","time":{"ticks":12042792,"t":140288,"since":{"kind":"boot"},"frame":2,"ly":144,"dot":null},"frame_shown":{"n":2,"vblank":"normal"},"budget":{"ticks":280576,"instructions":11276,"frames":2,"limits":{"frames":2},"defaulted":false}},"reads":[{"expr":"u16[wFrame]","value":1251}]},"warnings":[]}
+{"id":"cli","ok":true,"rev":"s1","result":{"stop":{"reason":"budget_exhausted","kind":"frames","pc":355,"bank":0,"symbol":"Work","time":{"ticks":12042792,"t":140288,"since":{"kind":"boot"},"frame":2,"ly":144,"dot":null},"frame_shown":{"n":2,"vblank":"normal"},"budget":{"ticks":280576,"instructions":11276,"frames":2,"limits":{"frames":2},"defaulted":false}},"reads":[{"expr":"u16[wFrame]","value":1251}]},"warnings":[],"session_created":{"name":"demo","bundle":"<project>/.gbcli","model":"dmg-b","cgb":"dmg"}}
 $ gbcli step --session demo --json
 exit 0
 {"id":"cli","ok":true,"rev":"s2","result":{"stop":{"reason":"step_done","unit":"instruction","pc":358,"bank":0,"symbol":"Work+$3","time":{"ticks":12042824,"t":140304,"since":{"kind":"boot"},"frame":2,"ly":144,"dot":null},"frame_shown":{"n":2,"vblank":"normal"},"budget":{"ticks":32,"instructions":1,"frames":0,"limits":{},"defaulted":false}}},"warnings":[]}

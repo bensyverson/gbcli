@@ -1,5 +1,6 @@
 $ gbcli run demo.gb --frames 2 --read u16[wFrame] --session demo
 exit 0
+session_created name=demo model=dmg-b cgb=dmg bundle=<project>/.gbcli
 stop budget_exhausted kind=frames pc=$0163 bank=0 symbol=Work frame=2 t=140288 since=boot ticks=12042792 ly=144 shown=2 vblank=normal
 budget frames=2/2 instructions=11276 ticks=280576
 read expr=u16[wFrame] value=1251 hex=$04E3

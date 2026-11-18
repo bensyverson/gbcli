@@ -8,6 +8,7 @@
 mod boot;
 mod bundle;
 mod checkpoints;
+mod created;
 mod error;
 mod events;
 mod file_store;
@@ -30,6 +31,7 @@ mod test_fixture;
 pub use boot::Start;
 pub use bundle::{Bundle, next, validate_name};
 pub use checkpoints::validate_checkpoint_name;
+pub use created::{Opened, color_note};
 pub use error::StoreError;
 pub use events::EVENTS_ROTATE_AT;
 pub use file_store::{FileStore, SystemClock};

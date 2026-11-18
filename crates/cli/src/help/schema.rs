@@ -138,10 +138,15 @@ sav     path: PATH   (writes the head's battery save, and on a flash session
         the chip image beside it, game.sav → game.flash.gb; changes nothing)
 
 Response, one line per request:
-  {"id", "ok": true, "rev"?: "sN", "result": {…}, "warnings": [TEXT]}
+  {"id", "ok": true, "rev"?: "sN", "result": {…}, "warnings": [TEXT],
+   "session_created"?}
   {"id", "ok": false, "rev"?, "error": {"code", "exit", "message", "remedy",
    "stop"?, "keys_unapplied"?, "flash_notes"?, "ignored_writes"?, "result"?,
-   "moved"?}, "warnings"}
+   "moved"?}, "warnings", "session_created"?}
+  session_created (on the first response after a ROM made the session:
+  serve --session NAME --rom ROM, or a verb with --json): {name, bundle (the
+  .gbcli/ it went into, absolute), model, cgb?, note?: "color_rom_on_dmg"
+  (a dual or CGB-only ROM, no model named, so a DMG)}
   moved (rom_changed): every symbol the saved state depends on that the
   rebuild moved, {name, role: "pc"|"ram"|"stack", old: {bank, addr},
   new: {bank, addr}|null}; the message names the first five.

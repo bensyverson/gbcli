@@ -186,13 +186,16 @@ fn start_handler(target: &Target, env: &Env, opens: bool) -> Result<Handler, Ope
             Opening::Refused(body)
         }
     })?;
+    let mut created = None;
     if let Some(name) = target.session.as_ref().filter(|_| opens) {
-        bundle
-            .open_session(name, source.as_ref())
-            .map_err(|e| Opening::Refused(Box::new(store(e))))?;
+        created = bundle
+            .start_session(name, source.as_ref())
+            .map_err(|e| Opening::Refused(Box::new(store(e))))?
+            .created;
     }
     Ok(Handler::new(host, bundle, interrupt)
-        .with_defaults(target.session.clone(), target.actor.clone()))
+        .with_defaults(target.session.clone(), target.actor.clone())
+        .with_session_created(created))
 }
 
 pub fn store(e: StoreError) -> ErrorBody {

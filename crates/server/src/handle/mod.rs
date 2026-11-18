@@ -31,7 +31,9 @@ use std::time::Duration;
 
 use gbcli_bundle::{Bundle, FilesStamp, LOCK_WAIT, SessionStore, Start};
 use gbcli_engine::{LoadOptions, Machine};
-use gbcli_protocol::{ErrorBody, ErrorCode, Op, Request, Response, ResultBody, Rev, SessionFile};
+use gbcli_protocol::{
+    ErrorBody, ErrorCode, Op, Request, Response, ResultBody, Rev, SessionCreated, SessionFile,
+};
 
 use crate::convert;
 use crate::interrupt::Interrupt;
@@ -68,6 +70,8 @@ pub struct Handler {
     /// Where a request's own paths start, and where `build` and `doctor`
     /// find RGBDS.
     host: Host,
+    /// A session created before the handler started, not yet reported.
+    session_created: Option<SessionCreated>,
 }
 
 /// The machine left by the last request, and which head it is: a session
@@ -136,6 +140,7 @@ impl Handler {
             interrupt: Arc::new(AtomicBool::new(false)),
             gaps_found: Vec::new(),
             host,
+            session_created: None,
         }
     }
 
@@ -149,6 +154,14 @@ impl Handler {
 
     /// Sets the wall-clock guard (design §3) for the requests that follow
     /// and don't name their own (`wall_guard_s`).
+    /// Hands the handler the report of a session its caller created before
+    /// starting it ([`gbcli_bundle::Bundle::start_session`]), to carry on
+    /// the next response it gives, whatever that request.
+    pub fn with_session_created(mut self, created: Option<SessionCreated>) -> Handler {
+        self.session_created = created;
+        self
+    }
+
     pub fn set_wall_guard(&mut self, after: Duration) {
         self.default_wall_guard = after;
     }
@@ -170,8 +183,9 @@ impl Handler {
             .wall_guard_s
             .map_or(self.default_wall_guard, |s| Duration::from_secs(s.get()));
         self.interrupt = self.interrupter.arm(self.wall_guard);
-        let response = self.answer_armed(request);
+        let mut response = self.answer_armed(request);
         self.disarm();
+        response.session_created = self.session_created.take();
         response
     }
 

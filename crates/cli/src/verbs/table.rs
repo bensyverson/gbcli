@@ -69,7 +69,8 @@ pub const VERBS: &[VerbSpec] = &[
                 during the run); --measure on a copy of the stop; evaluate --read and --expect; save --shot; save the audio \
                 (--audio-log, --audio-summary, --wav, --piano, --spectrogram); save \
                 --checkpoint (not when an --expect is false). The stop \
-                becomes the session's new head, whatever --expect says. A ROM argument is the same as --rom.",
+                becomes the session's new head, whatever --expect says. A ROM argument is the same as --rom. \
+                A new session is a DMG (dmg-b) unless --model says otherwise, even for a color ROM.",
         example: (
             "gbcli run game.gb --session dx --until 'u16[wFrame] >= 60' --read '[wSpriteX]'",
             "creates session dx from game.gb, runs to the frame where wFrame reaches 60, \

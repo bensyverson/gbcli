@@ -1,5 +1,6 @@
 $ gbcli batch -F ops.jsonl --session b --rom demo.gb
 exit 2
+session_created name=b model=dmg-b cgb=dmg bundle=<project>/.gbcli
 line n=1 id=a op=run ok=1 rev=s1
 line n=3 id=b op=read ok=1 rev=s1
 line n=4 id=c op=read ok=0 code=unknown_symbol exit=2 rev=s1 message="unknown symbol \"wNope\"" remedy="check the name against `gbcli sym <pattern>`, or load the ROM's .sym"

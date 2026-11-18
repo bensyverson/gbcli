@@ -43,6 +43,8 @@ pub fn primer() -> String {
          \n\
          Each command opens a named session (.gbcli/sessions/NAME/), does one thing to\n\
          its machine, saves it and prints rows; --json prints the response line.\n\
+         It uses the nearest .gbcli/ at or above the working directory (or --dir), or\n\
+         makes one there; the session_created row names the folder a new session used.\n\
          \n",
     );
     for class in Class::ALL {

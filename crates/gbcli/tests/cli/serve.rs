@@ -116,14 +116,19 @@ fn a_scripted_session_produces_exact_bytes() {
     );
 
     let expected = concat!(
-        r#"{"id":"1","ok":true,"rev":"s0","result":{"machine":{"model":"dmg-b","cgb":"dmg"},"registers":{"a":0,"f":0,"b":0,"c":0,"d":0,"e":0,"h":0,"l":0,"sp":0,"pc":0,"af":0,"bc":0,"de":0,"hl":0,"flags":{"z":false,"n":false,"h":false,"c":false},"ime":false,"halted":false,"double_speed":false},"ppu":{"ly":0,"mode":"hblank","lcd_on":false},"debugger":{"breakpoints":[],"watches":[],"next_id":0}},"warnings":[]}"#,
+        r#"{"id":"1","ok":true,"rev":"s0","result":{"machine":{"model":"dmg-b","cgb":"dmg"},"registers":{"a":0,"f":0,"b":0,"c":0,"d":0,"e":0,"h":0,"l":0,"sp":0,"pc":0,"af":0,"bc":0,"de":0,"hl":0,"flags":{"z":false,"n":false,"h":false,"c":false},"ime":false,"halted":false,"double_speed":false},"ppu":{"ly":0,"mode":"hblank","lcd_on":false},"debugger":{"breakpoints":[],"watches":[],"next_id":0}},"warnings":[],"session_created":{"name":"demo","bundle":"<dir>/.gbcli","model":"dmg-b","cgb":"dmg"}}"#,
         "\n",
         r#"{"id":"2","ok":true,"rev":"s1","result":{"stop":{"reason":"budget_exhausted","kind":"frames","pc":355,"bank":0,"symbol":null,"time":{"ticks":12042792,"t":140288,"since":{"kind":"boot"},"frame":2,"ly":144,"dot":null},"frame_shown":{"n":2,"vblank":"normal"},"budget":{"ticks":280576,"instructions":11276,"frames":2,"limits":{"frames":2},"defaulted":false}},"reads":[]},"warnings":[]}"#,
         "\n",
         r#"{"id":"3","ok":true,"rev":"s1","result":{"reads":[{"expr":"u16[$C000]","value":1251},{"expr":"[$FF44]","value":144}]},"warnings":[]}"#,
         "\n",
     );
-    assert_eq!(String::from_utf8_lossy(&output.stdout), expected);
+    // The session serve made at start is reported once, on the first line.
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        stdout.replace(&dir.display().to_string(), "<dir>"),
+        expected
+    );
     let _ = fs::remove_dir_all(&dir);
 }
 

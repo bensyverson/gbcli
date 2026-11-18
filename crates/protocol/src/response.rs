@@ -19,7 +19,7 @@ use crate::profile::{FrameBudgetMade, MeasureMade, ProfileMade};
 use crate::raster::RasterMade;
 use crate::request::WriteKind;
 use crate::rev::Rev;
-use crate::session::{EventLogLine, GapCount, SessionRow};
+use crate::session::{EventLogLine, GapCount, SessionCreated, SessionRow};
 use crate::shot::{FilmstripMade, ShotMade};
 use crate::song::{SongMade, SongProblem};
 use crate::stop::StopRecord;
@@ -30,7 +30,7 @@ use crate::views::{PpuView, RegistersView};
 
 /// The answer to one request, echoed with its id: a result or an error,
 /// never both and never neither. On the wire it is
-/// `{"id","ok","rev"?,"result"|"error","warnings"}`, and `ok` is derived from
+/// `{"id","ok","rev"?,"result"|"error","warnings","session_created"?}`, and `ok` is derived from
 /// which one is there, so it can't disagree.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(into = "WireResponse", try_from = "WireResponse")]
@@ -41,6 +41,9 @@ pub struct Response {
     /// Human-facing notes (never-written reads, a changed ROM that still
     /// loaded). The CLI prints them to stderr; they never fail a request.
     pub warnings: Vec<String>,
+    /// The session this invocation created before the request, when it
+    /// created one: where it went and what it runs.
+    pub session_created: Option<SessionCreated>,
 }
 
 /// The wire shape of a [`Response`].
@@ -55,6 +58,8 @@ struct WireResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     error: Option<ErrorBody>,
     warnings: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    session_created: Option<SessionCreated>,
 }
 
 impl From<Response> for WireResponse {
@@ -70,6 +75,7 @@ impl From<Response> for WireResponse {
             result,
             error,
             warnings: r.warnings,
+            session_created: r.session_created,
         }
     }
 }
@@ -102,6 +108,7 @@ impl TryFrom<WireResponse> for Response {
             rev: w.rev,
             outcome,
             warnings: w.warnings,
+            session_created: w.session_created,
         })
     }
 }
@@ -113,6 +120,7 @@ impl Response {
             rev,
             outcome: Ok(result),
             warnings: Vec::new(),
+            session_created: None,
         }
     }
 
@@ -122,6 +130,7 @@ impl Response {
             rev,
             outcome: Err(error),
             warnings: Vec::new(),
+            session_created: None,
         }
     }
 
@@ -494,6 +503,32 @@ mod tests {
         let json = serde_json::to_value(&failed).unwrap();
         assert_eq!(json["ok"], false);
         assert!(json.get("result").is_none());
+    }
+
+    /// A session the invocation created rides on the response, on success
+    /// or failure, and round-trips; a response with none leaves it off.
+    #[test]
+    fn a_created_session_rides_on_the_response_and_round_trips() {
+        use crate::session::{CgbFlag, SessionCreated, SessionNote};
+        let plain = serde_json::to_value(Response::ok("1", None, ResultBody::default())).unwrap();
+        assert!(plain.get("session_created").is_none(), "{plain}");
+        let created = SessionCreated {
+            name: "demo".into(),
+            bundle: "/work/game/.gbcli".into(),
+            model: gbcli_core::Model::DmgB,
+            cgb: Some(CgbFlag::Dual),
+            note: Some(SessionNote::ColorRomOnDmg),
+        };
+        let mut failed = Response::failed("2", None, ErrorBody::plain(ErrorCode::BadRequest, "m"));
+        failed.session_created = Some(created.clone());
+        let json = serde_json::to_value(&failed).unwrap();
+        assert_eq!(
+            json["session_created"],
+            serde_json::json!({"name": "demo", "bundle": "/work/game/.gbcli",
+                "model": "dmg-b", "cgb": "dual", "note": "color_rom_on_dmg"})
+        );
+        let back: Response = serde_json::from_value(json).unwrap();
+        assert_eq!(back.session_created, Some(created));
     }
 
     #[test]

@@ -151,6 +151,12 @@ impl Run {
             out += "--- stderr\n";
             out += &self.stderr;
         }
+        // The process's working directory is the canonical path (on macOS,
+        // /private/var/… for the temp dir's /var/…), and paths built from it,
+        // such as session_created's bundle, name that one.
+        if let Ok(canonical) = dir.canonicalize() {
+            out = out.replace(&canonical.display().to_string(), "<project>");
+        }
         mask(&out.replace(&dir.display().to_string(), "<project>"))
     }
 

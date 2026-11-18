@@ -7,6 +7,7 @@ mod assets;
 mod audio;
 mod battery;
 mod common;
+mod creation;
 mod equiv;
 mod errors;
 mod filmstrip;

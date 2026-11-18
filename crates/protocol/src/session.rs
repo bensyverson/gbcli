@@ -106,6 +106,43 @@ pub struct MachineView {
     pub cgb: Option<CgbFlag>,
 }
 
+/// A session the invocation created before its request (a ROM and a new
+/// name): which bundle it went into and what it runs. It rides on the
+/// response that follows, so a caller sees where its state is kept.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionCreated {
+    pub name: String,
+    /// The bundle directory (`.gbcli/`) the session was made in, absolute,
+    /// as the store names it in every message: a host path on disk; under a
+    /// memory-backed store, its virtual project path joined with the bundle.
+    pub bundle: String,
+    #[serde(with = "ModelDef")]
+    pub model: Model,
+    /// The ROM header's CGB flag; absent for a file too short to hold it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cgb: Option<CgbFlag>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<SessionNote>,
+}
+
+/// Something about a new session its creator may not have meant.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionNote {
+    /// The ROM supports color (`$0143` dual or CGB-only), and the session is
+    /// a DMG only because no model was named: a GBC model runs it in color.
+    ColorRomOnDmg,
+}
+
+impl SessionNote {
+    /// The wire spelling.
+    pub fn name(self) -> &'static str {
+        match self {
+            SessionNote::ColorRomOnDmg => "color_rom_on_dmg",
+        }
+    }
+}
+
 /// One row of `gbcli sessions`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionRow {

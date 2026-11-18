@@ -68,6 +68,8 @@ pub fn summarize(log: &[&DecodedWrite]) -> AudioSummary {
             .map(|((addr, reg), writes)| RegisterWrites { reg, addr, writes })
             .collect(),
         writers,
+        // Measured from samples, by the caller that rendered them.
+        loudness: Vec::new(),
     }
 }
 

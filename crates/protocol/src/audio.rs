@@ -6,6 +6,7 @@
 use gbcli_core::{ApuChannel, ApuWriteEffect};
 use serde::{Deserialize, Serialize};
 
+use crate::profile::Real;
 use crate::stop::TimeBase;
 use crate::video::{ImageMade, ImageOut};
 
@@ -150,6 +151,27 @@ pub struct AudioSummary {
     pub registers: Vec<RegisterWrites>,
     /// Most writes first, then by PC.
     pub writers: Vec<WriterWrites>,
+    /// How loud the mix was, then each channel (those filtered to, else all
+    /// four), loudest first and silent last. Empty on a model that can't
+    /// capture samples (the SGB).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub loudness: Vec<Loudness>,
+}
+
+/// How loud a take sounded: the median RMS of the 1/64 s windows (512
+/// samples) it sounded in, each window's DC offset removed, leaving out the
+/// run's first window (whose samples start from silence) and every window a
+/// DAC switched on or off in (each switch pops at nearly full scale,
+/// whatever the volume). For the mix, any channel's switch counts.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Loudness {
+    pub take: WavTake,
+    /// In dBFS, where 0 is a 16-bit sample's full scale (one channel at full
+    /// volume peaks near -18), to 0.1 dB; null when it never sounded outside
+    /// the windows left out.
+    pub rms_dbfs: Option<Real>,
+    /// How long it sounded, in seconds: the windows the median is taken over.
+    pub sounding_s: Real,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

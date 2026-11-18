@@ -10,6 +10,7 @@
 mod decode;
 mod error;
 mod fft;
+mod loudness;
 mod notes;
 mod piano;
 mod pitch;
@@ -21,6 +22,7 @@ mod wav;
 
 pub use decode::{ApuSnapshot, Change, DecodedWrite, decode};
 pub use error::AudioError;
+pub use loudness::{FLOOR_DBFS, WINDOW, dac_switches, loudness, loudness_of};
 pub use notes::{NoteSpan, note_spans};
 pub use piano::{MAX_WIDTH, PianoRoll, SpanSource, piano_roll};
 pub use pitch::{Note, NoteName, Pitch, midi_of, nearest_note, noise_hz};

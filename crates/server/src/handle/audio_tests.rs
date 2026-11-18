@@ -12,7 +12,7 @@ use gbcli_protocol::{
 
 use super::Handler;
 use super::test_support::{handler, request};
-use crate::fixture::{Fixture, TUNE, TUNE_SYM};
+use crate::fixture::{Fixture, LOUDNESS, TUNE, TUNE_SYM};
 
 /// Past the tune's last write.
 const TUNE_FRAMES: u64 = 40;
@@ -394,13 +394,118 @@ fn the_sgb_refuses_capture_before_the_run_and_records_the_gap() {
         "{gaps:?}"
     );
 
-    // The write log needs no capture, so it still works on the SGB.
+    // The write log needs no capture, so it still works on the SGB, and so
+    // does its summary, without the loudness that needs samples.
     let log = AudioArgs {
         log: true,
+        summary: true,
         ..AudioArgs::default()
     };
     let audio = audio_of(run(&mut h, tune_run(log)));
     assert_eq!(audio.log.expect("a log").len(), 43);
+    let summary = audio.summary.expect("a summary");
+    assert_eq!(summary.writes, 43);
+    assert_eq!(summary.loudness, vec![]);
+}
+
+/// The plain RMS of a 16-bit WAV, DC offset and all: what a peak meter or a
+/// quick script measures.
+fn plain_rms(path: &Path) -> f64 {
+    let pcm = pcm(path);
+    let sum: f64 = pcm.iter().map(|&v| f64::from(v).powi(2)).sum();
+    (sum / pcm.len() as f64).sqrt()
+}
+
+/// Criterion yzB: square 1 is loud and square 2 quiet, but square 2's DAC
+/// switches every few frames, and each switch pops at nearly full scale.
+#[test]
+fn the_summary_ranks_a_loud_channel_over_a_quiet_one_whose_dac_pops() {
+    let f = Fixture::with_rom("audio-loudness", LOUDNESS);
+    let path = path_in(&f, "l.wav");
+    let audio = audio_of(run(
+        &mut handler(&f),
+        RunArgs {
+            frames: Some(64),
+            audio: Some(Box::new(AudioArgs {
+                summary: true,
+                ..wav_at(path, WavChannels::Each)
+            })),
+            ..RunArgs::default()
+        },
+    ));
+    // The trap is real: by its WAV, the quiet channel is the louder.
+    let wav = |take: WavTake| plain_rms(&f.dir.join(format!("l-{}.wav", take.name())));
+    assert!(
+        wav(WavTake::Square2) > wav(WavTake::Square1),
+        "{} {}",
+        wav(WavTake::Square2),
+        wav(WavTake::Square1)
+    );
+    let loudness = audio.summary.expect("a summary").loudness;
+    let rows: Vec<(WavTake, Option<f64>)> = loudness
+        .iter()
+        .map(|l| (l.take, l.rms_dbfs.map(|r| r.0)))
+        .collect();
+    let takes: Vec<WavTake> = rows.iter().map(|r| r.0).collect();
+    assert_eq!(
+        takes,
+        [
+            WavTake::Mixed,
+            WavTake::Square1,
+            WavTake::Square2,
+            WavTake::Wave,
+            WavTake::Noise
+        ],
+        "{rows:?}"
+    );
+    // Volume 6 at master volume 7 swings 6 x 8 x 34 = 1632 either side of
+    // its DC level (-26.1 dBFS); volume 1, 272 (-41.6 dBFS).
+    let near = |got: Option<f64>, want: f64| got.is_some_and(|g| (g - want).abs() < 0.5);
+    assert!(near(rows[1].1, -26.1), "{rows:?}");
+    assert!(near(rows[2].1, -41.6), "{rows:?}");
+    assert_eq!((rows[3].1, rows[4].1), (None, None), "never sounded");
+    // The mix holds both; square 1's tone dominates it.
+    assert!(rows[0].1 >= rows[1].1, "{rows:?}");
+    assert!(loudness[2].sounding_s.0 > 0.4, "{:?}", loudness[2]);
+}
+
+/// A summary measures loudness by replaying the run with channels muted,
+/// as per-channel WAVs do; without them it writes no file.
+#[test]
+fn a_summary_alone_measures_loudness_and_writes_nothing() {
+    let f = Fixture::with_rom("audio-loudness-alone", LOUDNESS);
+    let audio = audio_of(run(
+        &mut handler(&f),
+        RunArgs {
+            frames: Some(64),
+            audio: Some(Box::new(AudioArgs {
+                summary: true,
+                channels: vec![gbcli_protocol::AudioChannel::Square2],
+                ..AudioArgs::default()
+            })),
+            ..RunArgs::default()
+        },
+    ));
+    assert!(audio.wavs.is_empty());
+    let takes: Vec<WavTake> = audio
+        .summary
+        .expect("a summary")
+        .loudness
+        .iter()
+        .map(|l| l.take)
+        .collect();
+    assert_eq!(takes, [WavTake::Mixed, WavTake::Square2]);
+    let wavs = fs::read_dir(&f.dir)
+        .unwrap()
+        .filter(|e| {
+            e.as_ref()
+                .unwrap()
+                .path()
+                .extension()
+                .is_some_and(|x| x == "wav")
+        })
+        .count();
+    assert_eq!(wavs, 0);
 }
 
 fn log_only() -> AudioArgs {

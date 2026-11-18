@@ -1,4 +1,5 @@
-//! Rows for a run's audio: the decoded write log, the WAVs and the images.
+//! Rows for a run's audio: the decoded write log, its summary and loudness,
+//! the WAVs and the images.
 
 use gbcli_protocol::{AudioMade, ImageMade};
 
@@ -44,6 +45,18 @@ pub fn rows(audio: &AudioMade) -> String {
             .field("writes", summary.writes)
             .opt("channels", channels(audio))
             .line();
+        // The mix first, then the channels loudest first: as the server ranks them.
+        for l in &summary.loudness {
+            out += &Row::new("audio_loudness")
+                .field("take", l.take.name())
+                .field(
+                    "rms_dbfs",
+                    l.rms_dbfs
+                        .map_or_else(|| "silent".into(), |r| format!("{:.1}", r.0)),
+                )
+                .field("sounding_s", format!("{:.3}", l.sounding_s.0))
+                .line();
+        }
         for r in &summary.registers {
             out += &Row::new("audio_register")
                 .field("reg", &r.reg)

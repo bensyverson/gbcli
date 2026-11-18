@@ -34,7 +34,9 @@ run     at? from?: "boot"|"power-on"  since?: "boot"|"power-on"|CHECKPOINT
         evaluated, with the whole result in error.result. keys_since counts
         the key offsets from that base, dropping events before the run's start.
         result.frame_budget.frames[] and audio.log[] carry frame, counted as
-        stop.time.frame is; audio.log[] also carries ly, null with the LCD off)
+        stop.time.frame is; audio.log[] also carries ly, null with the LCD off.
+        audio.summary.loudness[]: {take, rms_dbfs, sounding_s}, the mix first,
+        rms_dbfs null when silent; run --help's --audio-summary says how)
 measure from: ADDR  to: ADDR  at?  start?: "boot"|"power-on"  iterations?: N  max_t?: N
         frames? instructions? ticks?: N  keys?
 equiv   frames: N  b?: {rom?: PATH, sym?: PATH, writes?: [WRITE]}  at?  from?

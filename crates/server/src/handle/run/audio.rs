@@ -1,14 +1,15 @@
 //! A run's audio (design §9): the sound-register write log and the samples
-//! are collected on the run itself; per-channel WAVs replay it from its
-//! starting state with the other channels muted (`record_takes_with`). Every
-//! file is written after the reads and the shot, and only when they
-//! succeeded, so a refused or failed run writes none.
+//! are collected on the run itself; per-channel WAVs and the summary's
+//! loudness replay it from its starting state with the other channels muted
+//! (`record_takes_with`), once for both. Every file is written after the
+//! reads and the shot, and only when they succeeded, so a refused or failed
+//! run writes none.
 
 use std::path::{Path, PathBuf};
 
 use gbcli_audio::{
-    ApuSnapshot, AudioError, PianoRoll, Takes, decode, name_writers, note_spans, on_channels,
-    piano_roll, record_takes_with, spectrogram, summarize, wav,
+    ApuSnapshot, AudioError, PianoRoll, Takes, decode, loudness, name_writers, note_spans,
+    on_channels, piano_roll, record_takes_with, spectrogram, summarize, wav,
 };
 use gbcli_core::{
     ApuChannel, AudioCapture, AudioSamples, Core, CoreError, Feature, Support, Ticks,
@@ -103,15 +104,32 @@ pub(super) fn check_machine(machine: &Machine, args: &AudioArgs) -> Result<(), F
     Err(failure)
 }
 
+/// Whether the run measures loudness for its summary: a model that can't
+/// capture samples (the SGB) still counts the writes, without it.
+fn measures_loudness(machine: &Machine, args: &AudioArgs) -> bool {
+    args.summary && machine.core().supports(Feature::AudioSamples) == Support::Yes
+}
+
+/// Whether the run needs each channel alone, replayed from its starting
+/// state: for per-channel WAVs or the summary's loudness.
+pub(super) fn wants_takes(machine: &Machine, args: &AudioArgs) -> bool {
+    let each = args
+        .wav
+        .as_ref()
+        .is_some_and(|w| w.channels == WavChannels::Each);
+    each || measures_loudness(machine, args)
+}
+
 /// Turns on what `args` needs, just before the run.
 pub(super) fn start(machine: &mut Machine, args: &AudioArgs) -> Result<ApuSnapshot, Failure> {
+    let samples = args.wants_samples() || measures_loudness(machine, args);
     let core = machine.core_mut();
     let snapshot = ApuSnapshot::from_core(core).map_err(|e| Failure::from_core(&e))?;
     if args.wants_log() {
         core.set_apu_write_log(true)
             .map_err(|e| Failure::from_core(&e))?;
     }
-    if args.wants_samples() {
+    if samples {
         core.set_audio_capture(Some(AudioCapture::MIXED))
             .map_err(|e| Failure::from_core(&e))?;
     }
@@ -126,6 +144,7 @@ pub(super) fn finish(
     snapshot: ApuSnapshot,
     from: Ticks,
 ) -> Result<Collected, Failure> {
+    let captured = args.wants_samples() || measures_loudness(machine, args);
     let core = machine.core_mut();
     let to = core.now();
     let fail = |e: CoreError| Failure::from_core(&e);
@@ -136,7 +155,7 @@ pub(super) fn finish(
     } else {
         Vec::new()
     };
-    let samples = if args.wants_samples() {
+    let samples = if captured {
         let samples = core.take_audio().map_err(fail)?;
         core.set_audio_capture(None).map_err(fail)?;
         Some(samples)
@@ -160,19 +179,43 @@ pub(super) fn deliver(
     machine: &Machine,
     since: &Since,
     files: &Files,
-    replay: impl FnMut() -> Result<Takes, Failure>,
+    mut replay: impl FnMut() -> Result<Takes, Failure>,
 ) -> Result<AudioMade, Failure> {
     let (base, mark) = machine.named_base(since);
     let log = decode(&collected.snapshot, &collected.writes);
     let channels: Vec<ApuChannel> = args.channels.iter().map(|c| c.apu()).collect();
     let shown = on_channels(&log, &channels);
-    let summary = args.summary.then(|| {
+    // Replayed once, for the per-channel WAVs and the loudness alike.
+    let mut takes: Option<Takes> = None;
+    let mut replayed = |mixed: &AudioSamples| -> Result<Takes, Failure> {
+        if let Some(t) = &takes {
+            return Ok(t.clone());
+        }
+        let t = replay()?;
+        // The replays start from a copy of the run's starting state; if their
+        // mix isn't the run's, the copies weren't the run.
+        if t.mixed != *mixed {
+            return Err(Failure::new(ErrorBody::plain(
+                ErrorCode::Internal,
+                "the replays for the per-channel audio didn't render the run's own mix",
+            )));
+        }
+        takes = Some(t.clone());
+        Ok(t)
+    };
+    let mut summary = args.summary.then(|| {
         let mut summary = summarize(&shown);
         if let Some(symbols) = machine.symbols() {
             name_writers(&mut summary, &shown, |pc| symbols.label_any_bank(pc));
         }
         summary
     });
+    if let (Some(summary), Some(mixed)) = (&mut summary, &collected.samples)
+        && measures_loudness(machine, args)
+    {
+        let t = replayed(mixed)?;
+        summary.loudness = loudness(&t, &collected.snapshot, &log, &channels);
+    }
     let lines = args.log.then(|| {
         shown
             .iter()
@@ -191,7 +234,7 @@ pub(super) fn deliver(
     });
     let mut wavs = Vec::new();
     if let (Some(w), Some(mixed)) = (&args.wav, &collected.samples) {
-        wavs = write_wavs(w, mixed, files, replay)?;
+        wavs = write_wavs(w, mixed, files, || replayed(mixed))?;
     }
     let piano = match &args.piano {
         Some(out) => {
@@ -228,19 +271,11 @@ fn write_wavs(
     args: &WavArgs,
     mixed: &AudioSamples,
     files: &Files,
-    mut replay: impl FnMut() -> Result<Takes, Failure>,
+    replayed: impl FnOnce() -> Result<Takes, Failure>,
 ) -> Result<Vec<WavMade>, Failure> {
     let mut takes = vec![(WavTake::Mixed, PathBuf::from(&args.path), mixed.clone())];
     if args.channels == WavChannels::Each {
-        let replayed = replay()?;
-        // The replays start from a copy of the run's starting state; if their
-        // mix isn't the run's, the copies weren't the run.
-        if replayed.mixed != *mixed {
-            return Err(Failure::new(ErrorBody::plain(
-                ErrorCode::Internal,
-                "the replays for the per-channel WAVs didn't render the run's own mix",
-            )));
-        }
+        let replayed = replayed()?;
         for channel in ApuChannel::ALL {
             let take = WavTake::solo(channel);
             let path = channel_path(Path::new(&args.path), take);

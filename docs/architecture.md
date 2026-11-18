@@ -53,7 +53,7 @@ Write one sentence per line (continuation lines indented under their bullet), so
 ## Views
 
 - **`crates/view` (`gbcli-view`)**: image views as deterministic PNG pinned by goldens: labeled frames, scales and crops, filmstrips, frame diffs, tileset, tilemap and OAM.
-- **`crates/audio` (`gbcli-audio`)**: the sound-register write log decoded into notes and settings, WAV export (mixed and per channel), piano roll and spectrograms, pinned by goldens; wired into `run` as `--audio-log` (each write with the frame and line it fell on, from the core's `ApuWrite`), `--audio-summary` (writes by register and writer PC), `--audio-channel N` (the log and summary narrowed to channels), `--wav PATH [--channels each]`, `--piano PATH` and `--spectrogram PATH`.
+- **`crates/audio` (`gbcli-audio`)**: the sound-register write log decoded into notes and settings, WAV export (mixed and per channel), piano roll and spectrograms, pinned by goldens; wired into `run` as `--audio-log` (each write with the frame and line it fell on, from the core's `ApuWrite`), `--audio-summary` (writes by register and writer PC, and each take's loudness: `gbcli_audio::loudness`, the median DC-removed RMS of its 1/64 s windows, leaving out the first window and those around a DAC switch the write log names, over the same muted replays as per-channel WAVs; none on the SGB, which can't capture samples), `--audio-channel N` (the log and summary narrowed to channels), `--wav PATH [--channels each]`, `--piano PATH` and `--spectrogram PATH`.
 
 ## The build loop and assets
 

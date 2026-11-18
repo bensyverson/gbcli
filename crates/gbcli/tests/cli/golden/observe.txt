@@ -25,6 +25,8 @@ apu elapsed=2106648 frame=15 ly=144 pc=$01C5 text="NR42 $A1: noise envelope 10 d
 apu elapsed=2106688 frame=15 ly=144 pc=$01C9 text="NR43 $52: noise shift 5, 15-bit, divisor 2 = 4096 Hz"
 apu elapsed=2106728 frame=15 ly=144 pc=$01CD text="NR44 $80: noise trigger, length off"
 audio_summary since=boot writes=3 channels=noise
+audio_loudness take=mixed rms_dbfs=-17.7 sounding_s=0.438
+audio_loudness take=noise rms_dbfs=-28.0 sounding_s=0.141
 audio_register reg=NR42 addr=$FF21 writes=1
 audio_register reg=NR43 addr=$FF22 writes=1
 audio_register reg=NR44 addr=$FF23 writes=1

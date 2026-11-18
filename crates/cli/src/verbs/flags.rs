@@ -251,7 +251,12 @@ pub const RUN: &[FlagSpec] = &[
         "audio-summary",
         "print the run's sound-register writes counted by register (wave RAM as WAVE) and \
          by writer PC (and its symbol, Label+$n), most first, with the registers each \
-         wrote: the log in a few rows",
+         wrote: the log in a few rows. Also how loud the mix and each channel were \
+         (audio_loudness, loudest first; replays the run muted, as --channels each does): \
+         rms_dbfs is the median RMS, in dBFS (0 = 16-bit full scale), of the 1/64 s \
+         windows it sounded in, each window's DC offset removed, leaving out the first \
+         window and any in which a DAC switched on or off, since each switch pops near full \
+         scale whatever the volume; sounding_s is how long those windows last",
     ),
     repeated(
         "audio-channel",

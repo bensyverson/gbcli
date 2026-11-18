@@ -42,6 +42,17 @@ impl ApuSnapshot {
         Ok(ApuSnapshot { regs, powered })
     }
 
+    /// Whether `channel`'s DAC is on: NRx2's bits 3-7, or NR30's bit 7.
+    pub fn dac_on(&self, channel: ApuChannel) -> bool {
+        self.powered
+            && match channel {
+                ApuChannel::Square1 => Envelope::dac_on(self.reg(0xFF12)),
+                ApuChannel::Square2 => Envelope::dac_on(self.reg(0xFF17)),
+                ApuChannel::Wave => self.reg(0xFF1A) & 0x80 != 0,
+                ApuChannel::Noise => Envelope::dac_on(self.reg(0xFF21)),
+            }
+    }
+
     fn reg(&self, addr: u16) -> u8 {
         self.regs[usize::from(addr - 0xFF10)]
     }

@@ -18,7 +18,7 @@ use gbcli_engine::cond::EvalWarning;
 use gbcli_engine::{DebugError, EventTap, FrameSink, KeyTimeline, Machine, Outcome, RunOptions};
 use gbcli_protocol::{
     ErrorBody, ErrorCode, FlashNoteRow, IgnoredWritesRow, KeyEvent, Location, ResultBody, RunArgs,
-    SessionFile, StepArgs, StepKind, StopReason, StopRecord, WavChannels,
+    SessionFile, StepArgs, StepKind, StopReason, StopRecord,
 };
 
 use super::history::write_checkpoint;
@@ -152,8 +152,8 @@ impl Handler {
         let writes = apply_writes(&mut machine, &args.writes)?;
         let sound = args.audio.as_deref();
         // The per-channel replays start where the run starts: after the writes.
-        let mut replay_from = match sound.and_then(|a| a.wav.as_ref()) {
-            Some(w) if w.channels == WavChannels::Each => {
+        let mut replay_from = match sound {
+            Some(a) if audio::wants_takes(&machine, a) => {
                 Some(machine.try_clone().map_err(|e| Failure::from_core(&e))?)
             }
             _ => None,

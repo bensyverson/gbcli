@@ -107,7 +107,7 @@ fn run_crop_crops_the_filmstrip_and_the_shot_and_is_refused_with_neither() {
 
 #[test]
 fn screen_rows_asks_for_the_rows_on_shot_and_run_shot_and_is_refused_without_a_shot() {
-    let Op::Shot(args) = request(&["shot", "a.png", "--screen-rows"]).1 else {
+    let Op::Shot(args) = request(&["shot", "a.png", "--screen-rows", "--json"]).1 else {
         panic!()
     };
     assert!(args.shot.screen);
@@ -122,6 +122,7 @@ fn screen_rows_asks_for_the_rows_on_shot_and_run_shot_and_is_refused_without_a_s
         "--screen-rows",
         "--crop",
         "0,0,8,8",
+        "--json",
     ])
     .1
     else {
@@ -130,6 +131,28 @@ fn screen_rows_asks_for_the_rows_on_shot_and_run_shot_and_is_refused_without_a_s
     assert!(args.shot.unwrap().screen);
     let u = command(&["run", "--filmstrip", "f.png", "--screen-rows"]).unwrap_err();
     assert_eq!(u.message, "--screen-rows only applies with --shot");
+}
+
+/// The rows print only in --json, so without it --screen-rows would be
+/// ignored, and the server would still build them: refused instead.
+#[test]
+fn screen_rows_without_json_is_refused_on_shot_and_run_shot() {
+    for argv in [
+        &["shot", "a.png", "--screen-rows"][..],
+        &["run", "--shot", "a.png", "--screen-rows"],
+    ] {
+        let u = command(argv).unwrap_err();
+        assert_eq!(
+            u.message, "--screen-rows only applies with --json",
+            "{argv:?}"
+        );
+        assert_eq!(u.remedy, "add --json to get screen.rows, or drop it");
+    }
+    // The fingerprint alone still needs neither.
+    let Op::Shot(args) = request(&["shot", "a.png"]).1 else {
+        panic!()
+    };
+    assert!(!args.shot.screen);
 }
 
 /// `--wall-guard SECONDS` (leaf xdES5r) rides on the request, not the args,

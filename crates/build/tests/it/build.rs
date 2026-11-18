@@ -408,6 +408,26 @@ fn code_in_an_included_files_ram_section_names_the_included_line() {
     );
 }
 
+/// Where a bare INCLUDE looks, as help rgbds and the starter README say:
+/// the project folder and include/, not beside the including file in src/.
+#[test]
+fn a_bare_include_finds_the_project_folder_and_include_but_not_src() {
+    for (name, dir, builds) in [
+        ("inc-root", "demo", true),
+        ("inc-include", "demo/include", true),
+        ("inc-src", "demo/src", false),
+    ] {
+        let (temp, options) = starter(name);
+        fs::write(temp.path(&format!("{dir}/mine.inc")), "DEF MINE EQU 1\n").unwrap();
+        let main = temp.path("demo/src/main.asm");
+        let mut text = fs::read_to_string(&main).unwrap();
+        text += "INCLUDE \"mine.inc\"\n";
+        fs::write(&main, &text).unwrap();
+        let made = build(&rgbds(), &options);
+        assert_eq!(made.is_ok(), builds, "{dir}: {made:?}");
+    }
+}
+
 #[test]
 fn a_link_error_comes_from_rgblink_with_the_line_that_used_the_symbol() {
     let (temp, options) = starter("link");

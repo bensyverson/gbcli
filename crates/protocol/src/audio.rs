@@ -166,12 +166,69 @@ pub struct AudioSummary {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Loudness {
     pub take: WavTake,
-    /// In dBFS, where 0 is a 16-bit sample's full scale (one channel at full
-    /// volume peaks near -18), to 0.1 dB; null when it never sounded outside
-    /// the windows left out.
-    pub rms_dbfs: Option<Real>,
+    pub rms_dbfs: Level,
     /// How long it sounded, in seconds: the windows the median is taken over.
     pub sounding_s: Real,
+}
+
+/// A take's loudness figure, or why it has none. On the wire, a number in
+/// dBFS, or `"silent"` or `"unmeasured"`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "LevelWire", into = "LevelWire")]
+pub enum Level {
+    /// In dBFS, where 0 is a 16-bit sample's full scale (one channel at full
+    /// volume peaks near -18), to 0.1 dB.
+    Dbfs(Real),
+    /// Windows were measured and it sounded in none of them.
+    Silent,
+    /// No window was left to measure: the run was too short (the first
+    /// window is always left out, so it takes two, 1/32 s), or a DAC switch
+    /// fell in every one.
+    Unmeasured,
+}
+
+impl Level {
+    /// The figure in dBFS, if there is one.
+    pub fn dbfs(self) -> Option<Real> {
+        match self {
+            Level::Dbfs(r) => Some(r),
+            Level::Silent | Level::Unmeasured => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(untagged)]
+enum LevelWire {
+    Dbfs(Real),
+    Word(LevelWord),
+}
+
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum LevelWord {
+    Silent,
+    Unmeasured,
+}
+
+impl From<LevelWire> for Level {
+    fn from(w: LevelWire) -> Level {
+        match w {
+            LevelWire::Dbfs(r) => Level::Dbfs(r),
+            LevelWire::Word(LevelWord::Silent) => Level::Silent,
+            LevelWire::Word(LevelWord::Unmeasured) => Level::Unmeasured,
+        }
+    }
+}
+
+impl From<Level> for LevelWire {
+    fn from(l: Level) -> LevelWire {
+        match l {
+            Level::Dbfs(r) => LevelWire::Dbfs(r),
+            Level::Silent => LevelWire::Word(LevelWord::Silent),
+            Level::Unmeasured => LevelWire::Word(LevelWord::Unmeasured),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -264,6 +321,19 @@ mod tests {
     use super::*;
     use crate::parse::parse_request;
     use crate::request::{Op, RunArgs};
+
+    #[test]
+    fn a_level_is_a_number_or_says_why_it_has_none() {
+        for (level, wire) in [
+            (Level::Dbfs(Real(-26.1)), "-26.1"),
+            (Level::Silent, r#""silent""#),
+            (Level::Unmeasured, r#""unmeasured""#),
+        ] {
+            assert_eq!(serde_json::to_string(&level).unwrap(), wire);
+            assert_eq!(serde_json::from_str::<Level>(wire).unwrap(), level);
+        }
+        assert!(serde_json::from_str::<Level>(r#""loud""#).is_err());
+    }
 
     #[test]
     fn a_run_carries_its_audio_and_refuses_strangers_inside_it() {

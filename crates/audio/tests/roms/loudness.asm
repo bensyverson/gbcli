@@ -4,15 +4,16 @@
 ;
 ; A DMG DAC outputs its full positive level for a digital 0, so switching a
 ; DAC on or off steps the output by nearly full scale whatever the volume: a
-; pop. Square 2 here is quiet (volume 1) but switches its DAC every few
-; frames, so its WAV's peaks and its DC-inclusive RMS outdo square 1's, which
-; is loud (volume 6, steady) and never switches. A loudness figure that ranks
-; them right has ignored the pops.
+; pop. Square 2 here is quiet (volume 1) but its DAC is on 2 frames in 3,
+; so its WAV's peaks and its DC-inclusive RMS outdo square 1's, which is loud
+; (volume 6, steady) and never switches. Most of the windows square 2 sounds
+; in hold a pop, so a loudness figure that ranks them right has left the pops
+; out, not outvoted them.
 ;
 ;   frame 0   square 1 A4 (period 1750, 50% duty, volume 6, no envelope),
 ;             to the end
-;   every 8   square 2 E5 (period 1849, 50% duty, volume 1, no envelope):
-;   frames    DAC on and trigger, then 6 frames later DAC off (NR22 = 0)
+;   every 3   square 2 E5 (period 1849, 50% duty, volume 1, no envelope):
+;   frames    DAC on and trigger, then 2 frames later DAC off (NR22 = 0)
 ;
 ; Every register is written with LDH from A, so each write is one instruction.
 
@@ -65,11 +66,11 @@ Main:
     ldh [$FF17], a    ; NR22: volume 1, no envelope: DAC on
     ld a, $87
     ldh [$FF19], a    ; NR24: trigger, period high
-    ld b, 6
+    ld b, 2
     call WaitFrames
     xor a
     ldh [$FF17], a    ; NR22: DAC off
-    ld b, 2
+    ld b, 1
     call WaitFrames
     jr .cycle
 

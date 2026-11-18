@@ -22,17 +22,21 @@ pub const SHOT_VERB: VerbSpec = VerbSpec {
             two shots by it, not by their PNG files, whose text names the frame. A frame \
             that isn't normal (LCD off, the blank frame after the LCD turns on) is \
             refused with exit 1 unless --any-frame; --live takes the pixels drawn so far \
-            instead. With --screen-rows, --json also carries the pixels as data, so you \
+            instead. With --screen-rows (refused without --json), --json carries the pixels as data, so you \
             needn't decode the PNG (left out by default: a full screen is 24 KB on a DMG, \
-            140 KB on a GBC): screen: {kind, width, height, rows}, one text per row, top \
+            140 KB on a GBC, 344 KB on an SGB): screen: {kind, width, height, rows}, one text per row, top \
             to bottom, in native pixels after --crop (--scale changes only the PNG). On \
             a DMG, kind is \
             shades: a digit per pixel, the shade after BGP/OBP0/OBP1, 0 lightest to 3. On \
             a GBC, kind is colors: six hex digits rrggbb per pixel, the 24-bit color the \
             PNG holds (the core's conversion of palette RAM's RGB555, which gbcli view \
             palettes shows). pixels= is the first 16 hex digits of the SHA-256 of those \
-            rows joined by newlines, with or without --screen-rows; the rows' count and length carry the size, so a crop \
-            of another shape fingerprints differently. The PNG is palette-indexed at the \
+            rows joined by newlines, with or without --screen-rows. Among screens of one \
+            kind, the rows' count and length carry the size, so a crop of another shape \
+            fingerprints differently; the kind isn't hashed, so a shades crop and a \
+            colors crop can share pixels= (six shade-0 pixels and one black pixel are \
+            both 000000). An SGB screen is colors at 256x224, its border \
+            included. The PNG is palette-indexed at the \
             smallest bit depth that holds its colors (2 bits for a four-gray screen), with \
             indices in order of first appearance, not shade order: a decoder reads the \
             PLTE chunk, not the raw index.",

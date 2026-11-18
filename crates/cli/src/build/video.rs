@@ -67,8 +67,15 @@ pub fn run_filmstrip(inv: &Invocation) -> Result<Option<FilmstripArgs>, Usage> {
     }
 }
 
-/// A shot to `path` with the invocation's shot options.
+/// A shot to `path` with the invocation's shot options. `--screen-rows`
+/// without `--json` is refused: only `--json` prints the rows.
 pub fn shot(inv: &Invocation, path: &str) -> Result<ShotArgs, Usage> {
+    if inv.has("screen-rows") && !inv.has("json") {
+        return Err(Usage::new(
+            "--screen-rows only applies with --json",
+            "add --json to get screen.rows, or drop it",
+        ));
+    }
     Ok(ShotArgs {
         path: path.to_string(),
         scale: scale(inv)?,

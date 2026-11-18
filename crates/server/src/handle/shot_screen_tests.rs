@@ -4,8 +4,8 @@
 
 use gbcli_core::Model;
 use gbcli_protocol::{
-    Crop, Op, Response, RunArgs, ScreenKind, ShotArgs, ShotMade, ShotReadArgs, ShotScreen,
-    WriteArg, WriteKind,
+    Crop, ErrorCode, FilmstripArgs, Op, Response, RunArgs, ScreenKind, ShotArgs, ShotMade,
+    ShotReadArgs, ShotScreen, WriteArg, WriteKind,
 };
 
 use super::Handler;
@@ -165,4 +165,79 @@ fn a_gbc_screen_is_the_colors_the_core_output() {
     let part = shot_now(&mut h, shot_args(&f, "gbc-part.png", Some(crop)));
     assert_eq!(rows(&part).rows, [first.repeat(2)]);
     assert_ne!(part.pixels, whole.pixels);
+}
+
+/// A PNG's pixels as 0xRRGGBB, and its width.
+fn decode_png(path: &str) -> (Vec<u32>, u32) {
+    let file = std::fs::File::open(path).expect("written");
+    let mut decoder = png::Decoder::new(file);
+    decoder.set_transformations(png::Transformations::EXPAND);
+    let mut reader = decoder.read_info().unwrap();
+    let mut buf = vec![0; reader.output_buffer_size()];
+    let info = reader.next_frame(&mut buf).unwrap();
+    buf.truncate(info.buffer_size());
+    let px = buf
+        .chunks(3)
+        .map(|c| u32::from(c[0]) << 16 | u32::from(c[1]) << 8 | u32::from(c[2]))
+        .collect();
+    (px, info.width)
+}
+
+/// On the color models the rows are the PNG's pixels, the SGB's border
+/// included (256x224).
+#[test]
+fn on_color_models_the_rows_are_the_pngs_pixels() {
+    for (name, rom, model, size) in [
+        ("shot-png-gbc", GBC_PALETTE, Model::CgbE, (160, 144)),
+        ("shot-png-sgb", crate::fixture::V1, Model::Sgb, (256, 224)),
+    ] {
+        let f = Fixture::with_model(name, rom, model);
+        let made = run_shot(&mut handler(&f), 30, vec![], shot_args(&f, "a.png", None));
+        let screen = rows(&made);
+        assert_eq!(screen.kind, ScreenKind::Colors, "{name}");
+        assert_eq!((screen.width, screen.height), size, "{name}");
+        let (png, width) = decode_png(&made.path);
+        assert_eq!(width, screen.width, "{name}");
+        let from_rows: Vec<u32> = screen
+            .rows
+            .iter()
+            .flat_map(|r| {
+                (0..r.len() / 6).map(|i| u32::from_str_radix(&r[i * 6..i * 6 + 6], 16).unwrap())
+            })
+            .collect();
+        assert_eq!(from_rows, png, "{name}: the rows and the PNG disagree");
+    }
+}
+
+/// A crop reaching the screen's right and bottom edges is taken; one pixel
+/// further is refused, on a shot and on a filmstrip.
+#[test]
+fn a_crop_may_reach_the_screens_edge_but_not_pass_it() {
+    let f = Fixture::new("shot-crop-edge");
+    let mut h = handler(&f);
+    let edge = Crop {
+        x: 152,
+        y: 136,
+        width: 8,
+        height: 8,
+    };
+    let made = run_shot(&mut h, 3, vec![], shot_args(&f, "e.png", Some(edge)));
+    assert_eq!(rows(&made).rows.len(), 8);
+    let past = Crop { x: 153, ..edge };
+    let refused = h.handle(&request(Op::Shot(ShotReadArgs {
+        shot: shot_args(&f, "p.png", Some(past)),
+        since: None,
+    })));
+    assert_eq!(refused.error().map(|e| e.code), Some(ErrorCode::BadRequest));
+    let strip = h.handle(&request(Op::Run(RunArgs {
+        frames: Some(2),
+        filmstrip: Some(Box::new(FilmstripArgs {
+            path: f.dir.join("s.png").to_string_lossy().into_owned(),
+            every: 1,
+            scale: None,
+            crop: Some(past),
+        })),
+        ..RunArgs::default()
+    })));
+    assert_eq!(strip.error().map(|e| e.code), Some(ErrorCode::BadRequest));
 }

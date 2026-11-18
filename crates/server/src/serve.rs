@@ -4,7 +4,7 @@
 use std::io::{BufRead, Write};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
-use gbcli_protocol::{ErrorBody, ErrorCode, Request, Response, parse_request};
+use gbcli_protocol::{ErrorBody, ErrorCode, Request, Response, SessionCreated, parse_request};
 
 use crate::handle::Handler;
 
@@ -14,6 +14,11 @@ pub trait Answer {
     /// Called after `answer` panicked: drop any state the panic may have
     /// left half-changed.
     fn after_panic(&mut self);
+    /// The report of a session created before serving began, taken once:
+    /// `serve` puts it on the first response it writes, whatever answered.
+    fn take_session_created(&mut self) -> Option<SessionCreated> {
+        None
+    }
 }
 
 impl Answer for Handler {
@@ -25,11 +30,18 @@ impl Answer for Handler {
         self.forget_all_warm();
         self.disarm();
     }
+
+    fn take_session_created(&mut self) -> Option<SessionCreated> {
+        self.take_session_created()
+    }
 }
 
 /// Serves requests from `reader` to `writer` until end of input. A line that
 /// isn't a request (bad JSON, not UTF-8) is answered with `bad_request`, a
-/// request that panics with `internal`, and the server keeps running.
+/// request that panics with `internal`, and the server keeps running. The
+/// first response written carries the report of a session created before
+/// serving began, whichever line it answers; with no request lines there is
+/// no response, so nothing is written.
 pub fn serve<R: BufRead, W: Write, A: Answer>(
     reader: R,
     writer: &mut W,
@@ -37,7 +49,7 @@ pub fn serve<R: BufRead, W: Write, A: Answer>(
 ) -> std::io::Result<()> {
     for line in reader.split(b'\n') {
         let line = line?;
-        let response = match std::str::from_utf8(&line) {
+        let mut response = match std::str::from_utf8(&line) {
             Ok(text) if text.trim().is_empty() => continue,
             Ok(text) => answer_line(handler, text.trim_end_matches('\r')),
             Err(e) => {
@@ -49,6 +61,9 @@ pub fn serve<R: BufRead, W: Write, A: Answer>(
                 Response::failed(String::new(), None, body)
             }
         };
+        if response.session_created.is_none() {
+            response.session_created = handler.take_session_created();
+        }
         let text = serde_json::to_string(&response).expect("a response always serializes");
         writeln!(writer, "{text}")?;
         writer.flush()?;
@@ -247,6 +262,122 @@ mod tests {
         assert_eq!(fragile.resets, 1);
         let fine = gbcli_protocol::parse_request(r#"{"id":"2","op":"show"}"#).unwrap();
         assert!(answer(&mut fragile, &fine).is_ok());
+    }
+
+    fn created() -> gbcli_protocol::SessionCreated {
+        gbcli_protocol::SessionCreated {
+            name: "demo".into(),
+            bundle: "/x/.gbcli".into(),
+            model: gbcli_core::Model::DmgB,
+            cgb: None,
+            note: None,
+        }
+    }
+
+    /// Serves `input` with a handler holding a creation report.
+    fn serve_created(fixture: &Fixture, input: Vec<u8>) -> Vec<Response> {
+        let mut out = Vec::new();
+        let mut handler = handler(fixture, Some("demo")).with_session_created(Some(created()));
+        serve(Cursor::new(input), &mut out, &mut handler).unwrap();
+        String::from_utf8(out)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn the_creation_report_rides_on_the_first_response_even_a_line_that_does_not_parse() {
+        let fixture = Fixture::new("serve-created-bad");
+        let input = b"{not json\n{\"id\":\"2\",\"op\":\"show\"}\n".to_vec();
+        let responses = serve_created(&fixture, input);
+        assert_eq!(responses.len(), 2);
+        assert_eq!(
+            responses[0].session_created,
+            Some(created()),
+            "{responses:?}"
+        );
+        assert_eq!(responses[1].session_created, None, "reported once");
+        assert!(responses[1].is_ok(), "{:?}", responses[1]);
+    }
+
+    #[test]
+    fn the_creation_report_rides_on_the_first_response_even_a_line_that_is_not_utf8() {
+        let fixture = Fixture::new("serve-created-utf8");
+        let mut input = b"{\"id\":\"1\",\"op\":\"sh\xFFow\"}\n".to_vec();
+        input.extend_from_slice(b"{\"id\":\"2\",\"op\":\"show\"}\n");
+        let responses = serve_created(&fixture, input);
+        assert_eq!(responses.len(), 2);
+        assert_eq!(
+            responses[0].session_created,
+            Some(created()),
+            "{responses:?}"
+        );
+        assert_eq!(responses[1].session_created, None, "reported once");
+    }
+
+    #[test]
+    fn the_creation_report_rides_on_a_request_that_succeeds_once() {
+        let fixture = Fixture::new("serve-created-ok");
+        let input = b"{\"id\":\"1\",\"op\":\"show\"}\n{\"id\":\"2\",\"op\":\"show\"}\n".to_vec();
+        let responses = serve_created(&fixture, input);
+        assert_eq!(responses[0].session_created, Some(created()));
+        assert_eq!(responses[1].session_created, None);
+    }
+
+    /// With no request lines there is no response to carry the report, so
+    /// nothing is written (`gbcli schema` says so).
+    #[test]
+    fn no_request_lines_write_nothing_not_even_the_creation_report() {
+        let fixture = Fixture::new("serve-created-empty");
+        assert!(serve_created(&fixture, b"\n  \n".to_vec()).is_empty());
+    }
+
+    /// Holds a creation report and panics on every request.
+    struct Boom {
+        created: Option<gbcli_protocol::SessionCreated>,
+    }
+
+    impl Answer for Boom {
+        fn answer(&mut self, _: &Request) -> Response {
+            panic!("injected panic");
+        }
+
+        fn after_panic(&mut self) {}
+
+        fn take_session_created(&mut self) -> Option<gbcli_protocol::SessionCreated> {
+            self.created.take()
+        }
+    }
+
+    #[test]
+    fn the_creation_report_rides_on_a_response_to_a_panic() {
+        let input = concat!(
+            r#"{"id":"1","op":"show"}"#,
+            "\n",
+            r#"{"id":"2","op":"show"}"#,
+            "\n"
+        );
+        let mut out = Vec::new();
+        let mut boom = Boom {
+            created: Some(created()),
+        };
+        serve(Cursor::new(input), &mut out, &mut boom).unwrap();
+        let responses: Vec<Response> = String::from_utf8(out)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        assert_eq!(
+            responses[0].error().map(|e| e.code),
+            Some(ErrorCode::Internal)
+        );
+        assert_eq!(
+            responses[0].session_created,
+            Some(created()),
+            "{responses:?}"
+        );
+        assert_eq!(responses[1].session_created, None);
     }
 
     #[test]

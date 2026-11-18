@@ -1,7 +1,7 @@
 //! The rows for a session the invocation created: the `.gbcli/` it went
 //! into, and its note when it has one.
 
-use gbcli_protocol::{CgbFlag, SessionCreated, SessionNote, model_name};
+use gbcli_protocol::{CgbFlag, SessionCreated, model_name};
 
 use super::Row;
 
@@ -20,18 +20,8 @@ pub fn rows(c: &SessionCreated) -> String {
             .field("session", &c.name)
             .opt("cgb", c.cgb.map(CgbFlag::name))
             .field("model", model)
-            .field("remedy", remedy(note, &c.name))
+            .field("remedy", note.remedy(&c.name))
             .line();
     }
     out
-}
-
-fn remedy(note: SessionNote, name: &str) -> String {
-    match note {
-        SessionNote::ColorRomOnDmg => format!(
-            "this ROM supports color, but a new session is a DMG unless --model says \
-             otherwise; to run it in color, create the session with --model gbc \
-             (gbcli sessions rm {name} first, or name another session)"
-        ),
-    }
 }

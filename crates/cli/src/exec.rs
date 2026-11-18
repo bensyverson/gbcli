@@ -95,6 +95,13 @@ impl Answer for Responder {
             Responder::Bare(tooling) => tooling.after_panic(),
         }
     }
+
+    fn take_session_created(&mut self) -> Option<gbcli_protocol::SessionCreated> {
+        match self {
+            Responder::Bundled(handler) => Answer::take_session_created(handler.as_mut()),
+            Responder::Bare(tooling) => tooling.take_session_created(),
+        }
+    }
 }
 
 /// The project's bundle and a handler over it, with the target's session

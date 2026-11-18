@@ -39,8 +39,8 @@ mod wall_guard;
 
 pub use assets::{AssetManifest, AssetsArgs, AssetsMade, ManifestFont, ManifestImage};
 pub use audio::{
-    ApuWriteLine, AudioArgs, AudioChannel, AudioMade, AudioSummary, Loudness, RegisterWrites,
-    WavArgs, WavChannels, WavMade, WavTake, WriterWrites,
+    ApuWriteLine, AudioArgs, AudioChannel, AudioMade, AudioSummary, Level, Loudness,
+    RegisterWrites, WavArgs, WavChannels, WavMade, WavTake, WriterWrites,
 };
 pub use battery::{
     BatteryFrom, FlashFileMade, FlashFrom, FlashNoteKind, FlashNoteRow, PowerCycleArgs,

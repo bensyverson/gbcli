@@ -407,3 +407,97 @@ fn frame_budget_rows_are_numbered_as_the_stop_counts_frames() {
     let at = stop.time.frame;
     assert_eq!(rows, vec![(at, true), (at + 1, false)]);
 }
+
+fn budget_and_stop(h: &mut Handler, args: RunArgs) -> (FrameBudgetMade, i64) {
+    let r = run(
+        h,
+        RunArgs {
+            frame_budget: true,
+            ..args
+        },
+    )
+    .outcome
+    .expect("ran");
+    (
+        r.frame_budget.expect("budget"),
+        r.stop.expect("stop").time.frame,
+    )
+}
+
+/// A run stopped by `--to` right after the next frame turned the LCD off:
+/// the busy frame is settled by the partial frame and reads lcd_off; rows
+/// are frames 0..=4 whole plus frame 5 partial.
+#[test]
+fn a_run_stopped_by_to_after_the_lcd_off_settles_the_busy_frame_by_the_partial_one() {
+    let f = Fixture::with_rom_sym("budget-to-busy", BUSY_WAIT_OFF, BUSY_WAIT_OFF_SYM);
+    let mut h = handler(&f);
+    let (made, stop) = budget_and_stop(
+        &mut h,
+        RunArgs {
+            to: Some("HaltLoop.busy".into()),
+            ..RunArgs::default()
+        },
+    );
+    let frames: Vec<i64> = made.frames.iter().map(|r| r.frame).collect();
+    assert_eq!(frames, (0..=stop).collect::<Vec<_>>(), "{made:?}");
+    let last = made.frames.last().unwrap();
+    assert!(last.partial && last.lcd_off, "{made:?}");
+    let busy = &made.frames[made.frames.len() - 2];
+    assert_eq!(busy.idle_t, 0, "{made:?}");
+    assert_eq!((busy.lag, busy.lcd_off), (Some(false), true), "{made:?}");
+    assert_eq!(made.lag, 0, "{made:?}");
+}
+
+/// Runs of 1 frame each, in sequence: one row each, numbered on, and the
+/// busy frame (the last of its run) reads lag, as documented.
+#[test]
+fn one_frame_runs_number_on_and_judge_their_frame_without_lookahead() {
+    let f = Fixture::with_rom_sym("budget-one-frame", BUSY_WAIT_OFF, BUSY_WAIT_OFF_SYM);
+    let mut h = handler(&f);
+    let mut seen = Vec::new();
+    for _ in 0..8 {
+        let (made, _) = budget_and_stop(
+            &mut h,
+            RunArgs {
+                frames: Some(1),
+                ..RunArgs::default()
+            },
+        );
+        assert_eq!(made.frames.len(), 1, "{made:?}");
+        seen.push(made.frames[0]);
+    }
+    for (i, r) in seen.iter().enumerate() {
+        assert_eq!(r.frame, i as i64, "{seen:?}");
+    }
+    let busy = seen.iter().position(|r| r.idle_t == 0).unwrap();
+    assert_eq!(seen[busy].lag, Some(true), "documented: no lookahead");
+}
+
+/// A run that starts mid-frame inside the busy frame and goes on: the busy
+/// frame's tail is the partial first row, settled by the next (lcd_off),
+/// and not counted.
+#[test]
+fn a_run_starting_inside_the_busy_frame_leaves_its_tail_out_of_the_count() {
+    let f = Fixture::with_rom_sym("budget-mid-busy", BUSY_WAIT_OFF, BUSY_WAIT_OFF_SYM);
+    let mut h = handler(&f);
+    run(
+        &mut h,
+        RunArgs {
+            to: Some("HaltLoop.wait".into()),
+            ..RunArgs::default()
+        },
+    )
+    .outcome
+    .expect("to wait");
+    let (made, stop) = budget_and_stop(
+        &mut h,
+        RunArgs {
+            frames: Some(3),
+            ..RunArgs::default()
+        },
+    );
+    assert_eq!(made.frames.len(), 3, "{made:?}");
+    assert!(made.frames[0].partial && made.frames[0].lag.is_none());
+    assert_eq!(made.frames[2].frame + 1, stop, "{made:?}");
+    assert_eq!(made.lag, 0, "{made:?}");
+}

@@ -2,15 +2,17 @@
 //! expected cost is summed from the opcode table, never read off the
 //! emulator.
 
+use std::cell::RefCell;
+
 use crate::common;
 
 use common::{cgb_machine, machine, step_to, steps};
 use gbcli_core::{Budget, Registers, StopReason};
 use gbcli_engine::disasm::{NoSymbols, decode};
 use gbcli_engine::profile::{
-    CpuSpeed, FrameBudget, Leg, MeasureError, MeasureSpec, Profile, RoutineCost,
+    CpuSpeed, FrameBudget, FrameSplit, Leg, MeasureError, MeasureSpec, Profile, RoutineCost,
 };
-use gbcli_engine::{Machine, Symbols};
+use gbcli_engine::{EventTap, FrameSink, Machine, RunOptions, Symbols};
 use gbcli_protocol::Location;
 
 const ROM: &[u8] = include_bytes!("../roms/profile.gb");
@@ -376,6 +378,69 @@ fn a_busy_frame_whose_next_frame_halts_with_the_lcd_on_is_lag() {
     assert!(frames[busy].lag && !frames[busy].lcd_off, "{frames:?}");
     assert_eq!(frames.iter().filter(|f| f.lag).count(), 1, "{frames:?}");
     assert!(!frames[busy + 1].lcd_off && frames[busy + 1].idle_t > 0);
+}
+
+/// The same busy frame, followed by one that halts first and only then
+/// turns the LCD off, stays lag: the halt came before the screen change.
+#[test]
+fn a_busy_frame_whose_next_frame_halts_before_turning_the_lcd_off_is_lag() {
+    let mut m = common::machine(include_bytes!("../roms/busy_wait_halt_off.gb"), None);
+    let frames = m.frame_budget(12).unwrap();
+    let busy = busy_frame(&frames);
+    assert!(
+        frames[busy + 1].lcd_off,
+        "next turned the LCD off: {frames:?}"
+    );
+    assert!(frames[busy + 1].idle_t > 0, "next halted: {frames:?}");
+    assert!(frames[busy].lag && !frames[busy].lcd_off, "{frames:?}");
+}
+
+/// `frame_budget(n)` gives n rows, numbered on, however n falls against
+/// the busy frame the lookahead settles.
+#[test]
+fn frame_budget_gives_n_consecutive_rows_around_the_lookahead() {
+    for n in [0u32, 1, 2, 5, 6, 7] {
+        let mut m = common::machine(include_bytes!("../roms/busy_wait_off.gb"), None);
+        let frames = m.frame_budget(n).unwrap();
+        assert_eq!(frames.len(), n as usize, "n={n}: {frames:?}");
+        for (i, f) in frames.iter().enumerate() {
+            assert_eq!(f.frame, frames[0].frame + i as u64, "n={n}: {frames:?}");
+        }
+    }
+}
+
+/// A frame split fed by several drives, some stopping mid-frame, gives the
+/// same whole-frame rows as one drive.
+#[test]
+fn split_rows_do_not_depend_on_where_drives_stop() {
+    let collect = |chunks: &[Budget]| {
+        let mut m = common::machine(include_bytes!("../roms/busy_wait_off.gb"), None);
+        let split = RefCell::new(FrameSplit::starting(&m));
+        let frames = RefCell::new(Vec::new());
+        let cut = |m: &Machine, _: u64| frames.borrow_mut().extend(split.borrow_mut().cut(m));
+        for b in chunks {
+            let mut opts = RunOptions::new(*b);
+            opts.on_event = Some(EventTap(&split));
+            opts.on_frame = Some(FrameSink(&cut));
+            m.run(&opts).unwrap();
+        }
+        let (last, _) = split.into_inner().finish(&m);
+        let mut frames = frames.into_inner();
+        frames.extend(last);
+        frames
+    };
+    let one = collect(&[Budget::frames(8)]);
+    let many = collect(&[
+        Budget::frames(3),
+        Budget::instructions(777),
+        Budget::frames(2),
+        Budget::instructions(5),
+        Budget::frames(3),
+    ]);
+    // `many` ends mid-frame; compare the whole frames both saw.
+    let n = one.len().min(many.len());
+    assert!(n >= 7, "{one:?} {many:?}");
+    assert_eq!(one[..n - 1], many[..n - 1]);
 }
 
 #[test]

@@ -90,8 +90,6 @@ pub fn error(err: &mut dyn Write, body: &ErrorBody) -> u8 {
     body.exit
 }
 
-/// The rows for a result, in a fixed order; a field the op didn't fill is
-/// absent and prints nothing.
 /// The rows for the session the invocation created, if it created one:
 /// first, as the creation came before the request.
 pub fn session_created(response: &Response) -> String {
@@ -102,6 +100,8 @@ pub fn session_created(response: &Response) -> String {
         .unwrap_or_default()
 }
 
+/// The rows for a result, in a fixed order; a field the op didn't fill is
+/// absent and prints nothing.
 pub fn rows(r: &ResultBody) -> String {
     let mut out = String::new();
     if let Some(m) = &r.machine {

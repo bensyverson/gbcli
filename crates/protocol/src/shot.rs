@@ -87,8 +87,10 @@ pub struct ShotMade {
     pub frame: ShotFrame,
     /// A fingerprint of `screen`: the first 16 lowercase hex digits of the
     /// SHA-256 of its rows joined by `\n`. Equal pixels give equal
-    /// fingerprints, whatever the frame; the rows' count and length carry
-    /// the size, so a crop of another shape gives another fingerprint.
+    /// fingerprints, whatever the frame. Among screens of one kind, the rows'
+    /// count and length carry the size, so a crop of another shape gives
+    /// another fingerprint; the kind isn't hashed, so across kinds it may
+    /// not (six shade-0 pixels and one black color pixel are both `000000`).
     pub pixels: String,
     /// The pixels as data, after the crop and before the scale, when the
     /// request asked for them ([`ShotArgs::screen`]).

@@ -38,8 +38,10 @@ pub fn screen(frame: &Frame) -> ShotScreen {
 }
 
 /// The first 16 lowercase hex digits of the SHA-256 of the screen's rows
-/// joined by `\n` (no trailing newline). The rows' count and length carry
-/// the size, so a screen of another shape can't share its bytes.
+/// joined by `\n` (no trailing newline). Among screens of one kind, the
+/// rows' count and length carry the size, so a screen of another shape
+/// can't share its bytes. The kind isn't hashed, so across kinds it can: six
+/// shade-0 pixels in a row and one black color pixel are both `000000`.
 pub fn fingerprint(screen: &ShotScreen) -> String {
     let mut digest = gbcli_engine::sha256(screen.rows.join("\n").as_bytes()).to_string();
     digest.truncate(16);
@@ -117,5 +119,18 @@ mod tests {
         assert_ne!(base, tall, "same values, another shape");
         let color = |c| fingerprint(&screen(&frame(1, 1, 1, PixelBuf::Rgb(vec![c]))));
         assert_ne!(color(0xFF_84_00), color(0xFF_84_01));
+    }
+
+    /// The fingerprint names the rows' bytes, not their kind: a 6x1 crop of
+    /// shade 0 and a 1x1 crop of black are both `000000`, so they share
+    /// it. Only screens of one kind are told apart by shape (Ben's hash
+    /// ruling; shot --help says so).
+    #[test]
+    fn across_kinds_rows_of_the_same_bytes_share_a_fingerprint() {
+        let dmg = screen(&shades(1, 6, 1, &[0; 6]));
+        let gbc = screen(&frame(1, 1, 1, PixelBuf::Rgb(vec![0])));
+        assert_ne!(dmg, gbc, "different screens");
+        assert_eq!(dmg.rows, gbc.rows);
+        assert_eq!(fingerprint(&dmg), fingerprint(&gbc));
     }
 }

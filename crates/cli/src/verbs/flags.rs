@@ -147,14 +147,15 @@ pub const SHOT_OPTIONS: &[FlagSpec] = &[
     value(
         "crop",
         "X,Y,W,H",
-        "only this rectangle of the 160x144 screen, in Game Boy pixels: the PNG, pixels= \
-         and --screen-rows alike; on run, every frame of --filmstrip too",
+        "only this rectangle of the screen (160x144; 256x224 on an SGB, its border \
+         included), in Game Boy pixels: the PNG, pixels= and --screen-rows alike; on run, \
+         every frame of --filmstrip too",
     ),
     switch(
         "screen-rows",
-        "also return the pixels as data in --json: screen.rows, a text per row (a digit \
-         0-3 per pixel on a DMG, rrggbb on a GBC); a full screen is 24 KB on a DMG, \
-         140 KB on a GBC, so --crop it",
+        "also return the pixels as data in --json (refused without it): screen.rows, a \
+         text per row (a digit 0-3 per pixel on a DMG, rrggbb on a GBC or SGB); a full \
+         screen is 24 KB on a DMG, 140 KB on a GBC, 344 KB on an SGB, so --crop it",
     ),
     switch(
         "live",
@@ -261,11 +262,14 @@ pub const RUN: &[FlagSpec] = &[
         "print the run's sound-register writes counted by register (wave RAM as WAVE) and \
          by writer PC (and its symbol, Label+$n), most first, with the registers each \
          wrote: the log in a few rows. Also how loud the mix and each channel were \
-         (audio_loudness, loudest first; replays the run muted, as --channels each does): \
-         rms_dbfs is the median RMS, in dBFS (0 = 16-bit full scale), of the 1/64 s \
-         windows it sounded in, each window's DC offset removed, leaving out the first \
-         window and any in which a DAC switched on or off, since each switch pops near full \
-         scale whatever the volume; sounding_s is how long those windows last",
+         (audio_loudness: the mix first, then the channels loudest first; replays the run \
+         muted, as --channels each does): rms_dbfs is the median RMS, in dBFS (0 = 16-bit \
+         full scale), of the 1/64 s windows it sounded in, each window's DC offset removed, \
+         leaving out the first window and any within 128 samples (1/256 s) of a DAC \
+         switching on or off, since each switch pops near full scale whatever the volume; \
+         silent when it sounded in none, unmeasured when no window was left (a run under \
+         1/32 s, two windows, as a 1-frame run is, or one whose every window was left out); \
+         sounding_s is how long those windows last",
     ),
     repeated(
         "audio-channel",
@@ -319,8 +323,9 @@ pub const RUN: &[FlagSpec] = &[
         "each frame's active and idle (HALT) T-cycles over the run, and the lag frames: \
          frames in which the CPU never halted with the LCD on (LCD-off frames, as at \
          startup or a screen change, count as lcd_off instead, as does a frame spent \
-         waiting for VBlank to turn the LCD off; a run's last frame is judged without \
-         the next, so run one more to settle it); the first row sums up the \
+         waiting for VBlank to turn the LCD off; a run that stops at a vblank, as \
+         --frames N does, judges its last frame without the next, so run one more to \
+         settle it); the first row sums up the \
          whole LCD-on frames' active T-cycles (min, max, mean) and the busiest one (a row \
          index), then a frame_lag row per run of consecutive lag frames: from= and to= \
          (counted as the stop's frame=), count=, active_max= and index= (its first row in \

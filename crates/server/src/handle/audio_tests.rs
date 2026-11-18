@@ -6,8 +6,8 @@ use std::path::Path;
 
 use gbcli_core::{ApuWriteEffect, Model};
 use gbcli_protocol::{
-    AudioArgs, AudioMade, ErrorCode, ImageOut, Op, Response, Rev, RunArgs, TimeBase, WavArgs,
-    WavChannels, WavTake,
+    AudioArgs, AudioMade, ErrorCode, ImageOut, Level, Op, Response, Rev, RunArgs, TimeBase,
+    WavArgs, WavChannels, WavTake,
 };
 
 use super::Handler;
@@ -417,7 +417,7 @@ fn plain_rms(path: &Path) -> f64 {
 }
 
 /// Criterion yzB: square 1 is loud and square 2 quiet, but square 2's DAC
-/// switches every few frames, and each switch pops at nearly full scale.
+/// is on 2 frames in 3, and each switch pops at nearly full scale.
 #[test]
 fn the_summary_ranks_a_loud_channel_over_a_quiet_one_whose_dac_pops() {
     let f = Fixture::with_rom("audio-loudness", LOUDNESS);
@@ -444,7 +444,7 @@ fn the_summary_ranks_a_loud_channel_over_a_quiet_one_whose_dac_pops() {
     let loudness = audio.summary.expect("a summary").loudness;
     let rows: Vec<(WavTake, Option<f64>)> = loudness
         .iter()
-        .map(|l| (l.take, l.rms_dbfs.map(|r| r.0)))
+        .map(|l| (l.take, l.rms_dbfs.dbfs().map(|r| r.0)))
         .collect();
     let takes: Vec<WavTake> = rows.iter().map(|r| r.0).collect();
     assert_eq!(
@@ -462,11 +462,16 @@ fn the_summary_ranks_a_loud_channel_over_a_quiet_one_whose_dac_pops() {
     // its DC level (-26.1 dBFS); volume 1, 272 (-41.6 dBFS).
     let near = |got: Option<f64>, want: f64| got.is_some_and(|g| (g - want).abs() < 0.5);
     assert!(near(rows[1].1, -26.1), "{rows:?}");
+    // Most of square 2's sounding windows pop (its DAC switches twice every
+    // 3 frames), so left in they would outvote the tone: this figure holds
+    // only because the switches' windows are left out.
     assert!(near(rows[2].1, -41.6), "{rows:?}");
-    assert_eq!((rows[3].1, rows[4].1), (None, None), "never sounded");
+    let never = (loudness[3].rms_dbfs, loudness[4].rms_dbfs);
+    assert_eq!(never, (Level::Silent, Level::Silent), "never sounded");
     // The mix holds both; square 1's tone dominates it.
     assert!(rows[0].1 >= rows[1].1, "{rows:?}");
-    assert!(loudness[2].sounding_s.0 > 0.4, "{:?}", loudness[2]);
+    // About one clean window a cycle: 21 cycles of 1/64 s.
+    assert!(loudness[2].sounding_s.0 > 0.15, "{:?}", loudness[2]);
 }
 
 /// A summary measures loudness by replaying the run with channels muted,
@@ -506,6 +511,109 @@ fn a_summary_alone_measures_loudness_and_writes_nothing() {
         })
         .count();
     assert_eq!(wavs, 0);
+}
+
+fn summary_run(frames: u64) -> RunArgs {
+    RunArgs {
+        frames: Some(frames),
+        audio: Some(Box::new(AudioArgs {
+            summary: true,
+            ..AudioArgs::default()
+        })),
+        ..RunArgs::default()
+    }
+}
+
+/// Square 1 sounds through every short run, but the first 1/64 s window is
+/// always left out: two frames leave a window to measure, one leaves none,
+/// and that reads unmeasured, not silent.
+#[test]
+fn a_run_too_short_to_measure_reads_unmeasured_not_silent() {
+    for (frames, sounding) in [(3, true), (2, true), (1, false)] {
+        let f = Fixture::with_rom(&format!("audio-short-{frames}"), LOUDNESS);
+        let mut h = handler(&f);
+        // Past the boot and the ROM's setup, so square 1 is already playing.
+        let setup = RunArgs {
+            frames: Some(10),
+            ..RunArgs::default()
+        };
+        run(&mut h, setup).outcome.expect("ran");
+        let loudness = audio_of(run(&mut h, summary_run(frames)))
+            .summary
+            .expect("a summary")
+            .loudness;
+        let sq1 = loudness
+            .iter()
+            .find(|l| l.take == WavTake::Square1)
+            .unwrap();
+        if sounding {
+            let db = sq1.rms_dbfs.dbfs().expect("measured").0;
+            assert!((db + 26.1).abs() < 0.5, "{frames} frames: {loudness:?}");
+        } else {
+            assert_eq!(sq1.rms_dbfs, Level::Unmeasured, "{loudness:?}");
+        }
+    }
+}
+
+/// --audio-summary answers beside the run's other probes.
+#[test]
+fn a_summary_answers_beside_the_other_run_probes() {
+    let cases: Vec<(&str, RunArgs)> = vec![
+        (
+            "profile",
+            RunArgs {
+                profile: Some(gbcli_protocol::ProfileArgs::default()),
+                ..summary_run(20)
+            },
+        ),
+        (
+            "frame_budget",
+            RunArgs {
+                frame_budget: true,
+                ..summary_run(20)
+            },
+        ),
+        (
+            "raster",
+            RunArgs {
+                raster: true,
+                ..summary_run(20)
+            },
+        ),
+        (
+            "oam_log",
+            RunArgs {
+                oam_log: true,
+                ..summary_run(20)
+            },
+        ),
+    ];
+    for (name, args) in cases {
+        let f = Fixture::with_rom(&format!("audio-beside-{name}"), LOUDNESS);
+        let args = if name == "oam_log" {
+            RunArgs {
+                filmstrip: Some(Box::new(gbcli_protocol::FilmstripArgs {
+                    path: path_in(&f, "s.png"),
+                    every: 4,
+                    scale: None,
+                    crop: Some(gbcli_protocol::Crop {
+                        x: 0,
+                        y: 0,
+                        width: 8,
+                        height: 8,
+                    }),
+                })),
+                ..args
+            }
+        } else {
+            args
+        };
+        let loudness = audio_of(run(&mut handler(&f), args))
+            .summary
+            .expect("a summary")
+            .loudness;
+        assert_eq!(loudness.len(), 5, "{name}");
+    }
 }
 
 fn log_only() -> AudioArgs {

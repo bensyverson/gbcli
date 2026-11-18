@@ -94,9 +94,10 @@ shot path=run.png width=160 height=144 scale=1 pixels=51c2218ad3e7e7c2 frame="co
 keys_unapplied count=2 first=START@5
 rev s12
 $ gbcli shot shot.png --scale 1 --crop 0,0,16,8 --screen-rows --session demo
-exit 0
-shot path=shot.png width=16 height=8 scale=1 pixels=6d6cf804ef0c86d7 frame="complete frame 4 since boot (vblank normal)"
-rev s12
+exit 2
+--- stderr
+gbcli: bad_request: --screen-rows only applies with --json
+remedy: add --json to get screen.rows, or drop it
 $ gbcli shot live.png --live --scale 1 --session demo
 exit 0
 shot path=live.png width=160 height=144 scale=1 pixels=51c2218ad3e7e7c2 frame="live partial frame: LY 144 (vblank), after complete frame 4 since boot"

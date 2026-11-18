@@ -136,6 +136,55 @@ fn a_dual_mode_rom_without_model_is_noted_and_with_model_gbc_is_not() {
     assert!(note_rows(&again.stdout).is_empty(), "{}", again.stdout);
 }
 
+/// A batch whose first line doesn't parse still reports the creation first,
+/// before that line's row, since the creation came before every line.
+#[test]
+fn batch_reports_the_creation_before_a_first_line_that_does_not_parse() {
+    let p = Project::new("created-batch");
+    let args = ["batch", "-F", "-", "--session", "b", "--rom", "demo.gb"];
+    let input = "not json\n{\"id\":\"2\",\"op\":\"show\"}\n";
+    let made = p.gbcli_with(&args, &[], Some(input));
+    let lines: Vec<&str> = made.stdout.lines().collect();
+    assert!(
+        lines[0].starts_with("session_created name=b "),
+        "{}",
+        made.stdout
+    );
+    assert!(lines[1].starts_with("line n=1 ok=0 "), "{}", made.stdout);
+    assert_eq!(created_rows(&made.stdout).len(), 1, "{}", made.stdout);
+
+    let p = Project::new("created-batch-json");
+    let args = [
+        "batch",
+        "-F",
+        "-",
+        "--session",
+        "b",
+        "--rom",
+        "demo.gb",
+        "--json",
+    ];
+    let made = p.gbcli_with(&args, &[], Some(input));
+    let first: serde_json::Value =
+        serde_json::from_str(made.stdout.lines().next().unwrap()).unwrap();
+    assert_eq!(first["session_created"]["name"], "b", "{}", made.stdout);
+
+    let schema = p.gbcli(&["schema"]);
+    let flat = schema
+        .stdout
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(
+        flat.contains(
+            "whatever that first line was, a refused one included; with no request lines \
+             there is no response, so it isn't reported on stdout"
+        ),
+        "{}",
+        schema.stdout
+    );
+}
+
 /// Where a session's state goes, and the default model, are said where an
 /// agent looks first: the primer and `run --help`.
 #[test]

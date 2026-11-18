@@ -12,7 +12,7 @@
 //! panning step that remains.
 
 use gbcli_core::{ApuChannel, ApuWriteEffect, AudioCapture, AudioSamples, StereoSample, Ticks};
-use gbcli_protocol::{Loudness, Real, WavTake};
+use gbcli_protocol::{Level, Loudness, Real, WavTake};
 
 use crate::decode::{ApuSnapshot, Change, DecodedWrite};
 use crate::replay::Takes;
@@ -24,6 +24,10 @@ pub const WINDOW: usize = 512;
 /// Below this a window is silence, in dBFS: a quieter tone than any channel
 /// can play (volume 1, master volume 0, 12.5% duty is near -63).
 pub const FLOOR_DBFS: f64 = -72.0;
+
+/// [`FLOOR_DBFS`] as an RMS in 16-bit sample units, 32,768 x 10^(-72/20),
+/// so the comparison needs no platform math.
+const FLOOR_RMS: f64 = 8.23094945877059;
 
 /// Samples either side of a DAC switch that its step may reach: SameBoy's
 /// band-limited step spans 64 samples and a DMG delays the DAC by 32 more.
@@ -79,7 +83,7 @@ pub fn loudness_of(take: WavTake, audio: &AudioSamples, switches: &[Ticks]) -> L
             }
         }
     }
-    let floor = 32768.0 * 10f64.powf(FLOOR_DBFS / 20.0);
+    let measured = skip.iter().filter(|s| !**s).count();
     let mut sounding: Vec<f64> = audio
         .samples
         .as_chunks::<WINDOW>()
@@ -88,13 +92,17 @@ pub fn loudness_of(take: WavTake, audio: &AudioSamples, switches: &[Ticks]) -> L
         .zip(&skip)
         .filter(|(_, skip)| !**skip)
         .map(|(window, _)| ac_rms(window))
-        .filter(|&rms| rms >= floor)
+        .filter(|&rms| rms >= FLOOR_RMS)
         .collect();
     sounding.sort_by(f64::total_cmp);
-    let rms_dbfs = sounding.get(sounding.len() / 2).map(|&rms| {
-        let db = 20.0 * (rms / 32768.0).log10();
-        Real((db * 10.0).round() / 10.0)
-    });
+    let rms_dbfs = match sounding.get(sounding.len() / 2) {
+        Some(&rms) => {
+            let db = 20.0 * (rms / 32768.0).log10();
+            Level::Dbfs(Real((db * 10.0).round() / 10.0))
+        }
+        None if measured == 0 => Level::Unmeasured,
+        None => Level::Silent,
+    };
     Loudness {
         take,
         rms_dbfs,
@@ -136,7 +144,7 @@ pub fn loudness(
         .collect();
     // Stable, so equal figures stay in channel order; `None` sorts last.
     rows.sort_by(|a, b| {
-        let key = |l: &Loudness| l.rms_dbfs.map(|r| r.0);
+        let key = |l: &Loudness| l.rms_dbfs.dbfs().map(|r| r.0);
         match (key(a), key(b)) {
             (Some(x), Some(y)) => y.total_cmp(&x),
             (Some(_), None) => std::cmp::Ordering::Less,
@@ -191,7 +199,7 @@ mod tests {
             &[],
         );
         assert_eq!(l.take, WavTake::Square1);
-        assert_eq!(l.rms_dbfs, Some(Real(dbfs(1000.0))));
+        assert_eq!(l.rms_dbfs, Level::Dbfs(Real(dbfs(1000.0))));
         // The first of the twenty windows is left out.
         assert_eq!(l.sounding_s, Real(19.0 / 64.0));
     }
@@ -200,15 +208,53 @@ mod tests {
     fn silence_a_dac_held_on_and_a_tone_under_the_floor_read_as_silent() {
         for level in [0, 3500] {
             let l = loudness_of(WavTake::Noise, &capture(vec![level; WINDOW * 8]), &[]);
-            assert_eq!((l.rms_dbfs, l.sounding_s), (None, Real(0.0)), "{level}");
+            assert_eq!(
+                (l.rms_dbfs, l.sounding_s),
+                (Level::Silent, Real(0.0)),
+                "{level}"
+            );
         }
-        let empty = loudness_of(WavTake::Mixed, &AudioSamples::default(), &[]);
-        assert_eq!(empty.rms_dbfs, None);
         // -72 dBFS is an amplitude of 8.2.
         let under = loudness_of(WavTake::Noise, &capture(square(3500, 8, WINDOW * 8)), &[]);
-        assert_eq!(under.rms_dbfs, None);
+        assert_eq!(under.rms_dbfs, Level::Silent);
         let over = loudness_of(WavTake::Noise, &capture(square(3500, 9, WINDOW * 8)), &[]);
-        assert_eq!(over.rms_dbfs, Some(Real(dbfs(9.0))));
+        assert_eq!(over.rms_dbfs, Level::Dbfs(Real(dbfs(9.0))));
+    }
+
+    #[test]
+    fn the_linear_floor_is_floor_dbfs() {
+        let floor = 32768.0 * 10f64.powf(FLOOR_DBFS / 20.0);
+        assert!((FLOOR_RMS - floor).abs() < 1e-9, "{FLOOR_RMS} {floor}");
+    }
+
+    /// The first window is always left out, so a capture of under two
+    /// windows (a one-frame run) has nothing to measure: unmeasured, not
+    /// silent, though it sounded.
+    #[test]
+    fn a_capture_with_no_window_left_is_unmeasured_not_silent() {
+        let empty = loudness_of(WavTake::Mixed, &AudioSamples::default(), &[]);
+        assert_eq!(
+            (empty.rms_dbfs, empty.sounding_s),
+            (Level::Unmeasured, Real(0.0))
+        );
+        for n in [WINDOW, WINDOW * 2 - 1] {
+            let short = loudness_of(WavTake::Square1, &capture(square(3000, 1000, n)), &[]);
+            assert_eq!(short.rms_dbfs, Level::Unmeasured, "{n} samples");
+        }
+        let two = loudness_of(
+            WavTake::Square1,
+            &capture(square(3000, 1000, WINDOW * 2)),
+            &[],
+        );
+        assert_eq!(two.rms_dbfs, Level::Dbfs(Real(dbfs(1000.0))));
+        // A switch beside every window but the first leaves none either.
+        let n = WINDOW * 3;
+        let switches = [tick_at(WINDOW + 10), tick_at(WINDOW * 2 + 10)];
+        let gated = loudness_of(WavTake::Square2, &capture(square(3000, 1000, n)), &switches);
+        assert_eq!(gated.rms_dbfs, Level::Unmeasured);
+        // Measured windows, none sounding: silent.
+        let quiet = loudness_of(WavTake::Square2, &capture(vec![3500; n]), &switches[..1]);
+        assert_eq!(quiet.rms_dbfs, Level::Silent);
     }
 
     #[test]
@@ -221,7 +267,7 @@ mod tests {
         samples.extend(square(3500, 100, WINDOW));
         samples.extend(vec![3500; WINDOW * 6]);
         let l = loudness_of(WavTake::Wave, &capture(samples), &[]);
-        assert_eq!(l.rms_dbfs, Some(Real(dbfs(100.0))));
+        assert_eq!(l.rms_dbfs, Level::Dbfs(Real(dbfs(100.0))));
         assert_eq!(l.sounding_s, Real(1.0 / 64.0));
     }
 
@@ -245,13 +291,16 @@ mod tests {
     fn a_dac_switching_pops_but_its_windows_are_left_out() {
         let (samples, switches) = popping(8);
         let quiet = loudness_of(WavTake::Square2, &capture(samples.clone()), &switches);
-        assert_eq!(quiet.rms_dbfs, Some(Real(dbfs(250.0))));
+        assert_eq!(quiet.rms_dbfs, Level::Dbfs(Real(dbfs(250.0))));
         let loud = loudness_of(
             WavTake::Square1,
             &capture(square(1500, 1000, samples.len())),
             &[],
         );
-        assert!(loud.rms_dbfs > quiet.rms_dbfs, "{loud:?} {quiet:?}");
+        assert!(
+            loud.rms_dbfs.dbfs() > quiet.rms_dbfs.dbfs(),
+            "{loud:?} {quiet:?}"
+        );
         // Without the switches, the pops' windows outvote the tone's.
         let ungated = loudness_of(WavTake::Square2, &capture(samples), &[]);
         assert_ne!(ungated.rms_dbfs, quiet.rms_dbfs);

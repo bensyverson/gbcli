@@ -1,7 +1,7 @@
 //! Rows for a run's audio: the decoded write log, its summary and loudness,
 //! the WAVs and the images.
 
-use gbcli_protocol::{AudioMade, ImageMade};
+use gbcli_protocol::{AudioMade, ImageMade, Level};
 
 use super::row::{Row, addr, capped_see};
 use super::stop::since;
@@ -51,8 +51,11 @@ pub fn rows(audio: &AudioMade) -> String {
                 .field("take", l.take.name())
                 .field(
                     "rms_dbfs",
-                    l.rms_dbfs
-                        .map_or_else(|| "silent".into(), |r| format!("{:.1}", r.0)),
+                    match l.rms_dbfs {
+                        Level::Dbfs(r) => format!("{:.1}", r.0),
+                        Level::Silent => "silent".into(),
+                        Level::Unmeasured => "unmeasured".into(),
+                    },
                 )
                 .field("sounding_s", format!("{:.3}", l.sounding_s.0))
                 .line();

@@ -152,16 +152,23 @@ impl Handler {
         self
     }
 
-    /// Sets the wall-clock guard (design §3) for the requests that follow
-    /// and don't name their own (`wall_guard_s`).
     /// Hands the handler the report of a session its caller created before
     /// starting it ([`gbcli_bundle::Bundle::start_session`]), to carry on
-    /// the next response it gives, whatever that request.
+    /// the next response given, whatever that request: [`Handler::handle`]'s,
+    /// or under [`crate::serve`] one it writes without the handler (a line
+    /// that doesn't parse, a panic).
     pub fn with_session_created(mut self, created: Option<SessionCreated>) -> Handler {
         self.session_created = created;
         self
     }
 
+    /// Takes the creation report not yet given, leaving none.
+    pub fn take_session_created(&mut self) -> Option<SessionCreated> {
+        self.session_created.take()
+    }
+
+    /// Sets the wall-clock guard (design §3) for the requests that follow
+    /// and don't name their own (`wall_guard_s`).
     pub fn set_wall_guard(&mut self, after: Duration) {
         self.default_wall_guard = after;
     }

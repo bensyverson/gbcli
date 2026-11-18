@@ -141,6 +141,18 @@ impl SessionNote {
             SessionNote::ColorRomOnDmg => "color_rom_on_dmg",
         }
     }
+
+    /// What to do about the note on the session named `session`, in the
+    /// words every client shows.
+    pub fn remedy(self, session: &str) -> String {
+        match self {
+            SessionNote::ColorRomOnDmg => format!(
+                "this ROM supports color, but a new session is a DMG unless --model says \
+                 otherwise; to run it in color, create the session with --model gbc \
+                 (gbcli sessions rm {session} first, or name another session)"
+            ),
+        }
+    }
 }
 
 /// One row of `gbcli sessions`.
@@ -247,6 +259,13 @@ pub struct GapCount {
 mod tests {
     use super::*;
     use crate::request::RunArgs;
+
+    #[test]
+    fn the_color_note_remedy_names_the_model_and_the_session_to_remove() {
+        let remedy = SessionNote::ColorRomOnDmg.remedy("mono");
+        assert!(remedy.contains("--model gbc"), "{remedy}");
+        assert!(remedy.contains("gbcli sessions rm mono"), "{remedy}");
+    }
 
     #[test]
     fn a_session_file_round_trips_with_a_readable_model() {

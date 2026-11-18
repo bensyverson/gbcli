@@ -180,7 +180,9 @@ mod tests {
         let flat = readme.split_whitespace().collect::<Vec<_>>().join(" ");
         assert!(
             flat.contains(
-                "Put your own `.inc` files in `include/`, the only folder `INCLUDE` searches"
+                "Put your own `.inc` files in `include/`. `INCLUDE` looks in the project folder \
+                 and `include/` (or `--include`), not beside the including file: `src/` isn't \
+                 searched."
             ),
             "{flat}"
         );

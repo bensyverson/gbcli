@@ -36,7 +36,8 @@ run     at? from?: "boot"|"power-on"  since?: "boot"|"power-on"|CHECKPOINT
         result.frame_budget.frames[] and audio.log[] carry frame, counted as
         stop.time.frame is; audio.log[] also carries ly, null with the LCD off.
         audio.summary.loudness[]: {take, rms_dbfs, sounding_s}, the mix first,
-        rms_dbfs null when silent; run --help's --audio-summary says how)
+        rms_dbfs a number, or "silent" or "unmeasured" (no window left to
+        measure); run --help's --audio-summary says how)
 measure from: ADDR  to: ADDR  at?  start?: "boot"|"power-on"  iterations?: N  max_t?: N
         frames? instructions? ticks?: N  keys?
 equiv   frames: N  b?: {rom?: PATH, sym?: PATH, writes?: [WRITE]}  at?  from?
@@ -152,7 +153,9 @@ Response, one line per request:
    "stop"?, "keys_unapplied"?, "flash_notes"?, "ignored_writes"?, "result"?,
    "moved"?}, "warnings", "session_created"?}
   session_created (on the first response after a ROM made the session:
-  serve --session NAME --rom ROM, or a verb with --json): {name, bundle (the
+  serve --session NAME --rom ROM, or a verb with --json; whatever that first
+  line was, a refused one included; with no request lines there is no
+  response, so it isn't reported on stdout): {name, bundle (the
   .gbcli/ it went into, absolute), model, cgb?, note?: "color_rom_on_dmg"
   (a dual or CGB-only ROM, no model named, so a DMG)}
   moved (rom_changed): every symbol the saved state depends on that the

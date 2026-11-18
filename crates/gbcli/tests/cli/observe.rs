@@ -70,6 +70,17 @@ fn observations_print_rows_and_json() {
             "--session",
             "tune",
         ],
+        // One frame is under two 1/64 s windows: nothing to measure.
+        &[
+            "run",
+            "--frames",
+            "1",
+            "--audio-summary",
+            "--audio-channel",
+            "4",
+            "--session",
+            "tune",
+        ],
         &["view", "palettes", "--session", "oam"],
         // V1 writes $C000-$C002 and never $C003.
         &["view", "memory", "$C000", "3", "--session", "oam"],
@@ -104,6 +115,28 @@ fn observations_print_rows_and_json() {
     }
     golden("observe.txt", &out);
     assert_eq!(fs::read(project.path("c000.bin")).unwrap().len(), 20);
+}
+
+/// Help says when loudness has no figure, and why, and what is left out.
+#[test]
+fn help_says_when_loudness_is_unmeasured_and_what_it_leaves_out() {
+    let project = Project::new("observe-loudness-help");
+    let flat = |args: &[&str]| {
+        let out = project.gbcli(args).stdout;
+        out.split_whitespace().collect::<Vec<_>>().join(" ")
+    };
+    let run = flat(&["run", "--help"]);
+    for want in [
+        "the mix first, then the channels loudest first",
+        "any within 128 samples (1/256 s) of a DAC switching on or off",
+        "unmeasured when no window was left (a run under 1/32 s, two windows, as a 1-frame \
+         run is",
+    ] {
+        assert!(run.contains(want), "{want}: {run}");
+    }
+    let schema = flat(&["schema"]);
+    let want = r#"rms_dbfs a number, or "silent" or "unmeasured" (no window left to measure)"#;
+    assert!(schema.contains(want), "{schema}");
 }
 
 #[test]

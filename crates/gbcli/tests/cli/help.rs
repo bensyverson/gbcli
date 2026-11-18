@@ -97,6 +97,39 @@ fn version_json_is_the_ops_answer_and_the_text_is_drawn_from_it() {
 
 /// `help/<the args, dashes dropped, joined by _>.txt`; the bare primer is
 /// `help/primer.txt`.
+/// shot --help claims shape-telling only within one kind, says the SGB's
+/// size, and that --screen-rows needs --json.
+#[test]
+fn shot_help_narrows_the_fingerprint_claim_and_names_the_sgb_size() {
+    let p = Project::new("help-shot");
+    let help = p.gbcli(&["shot", "--help"]).stdout;
+    let flat = help.split_whitespace().collect::<Vec<_>>().join(" ");
+    for want in [
+        "Among screens of one kind, the rows' count and length carry the size",
+        "the kind isn't hashed, so a shades crop and a colors crop can share pixels=",
+        "An SGB screen is colors at 256x224, its border included",
+        "256x224 on an SGB, its border included",
+        "344 KB on an SGB",
+        "also return the pixels as data in --json (refused without it)",
+    ] {
+        assert!(flat.contains(want), "{want}: {help}");
+    }
+}
+
+/// help rgbds and the starter README say the same thing about where a bare
+/// INCLUDE looks (the README with its code marks).
+#[test]
+fn help_rgbds_and_the_starter_readme_agree_on_where_include_looks() {
+    let want = "INCLUDE looks in the project folder and include/ (or --include), not beside \
+                the including file: src/ isn't searched.";
+    let flat = |text: &str| text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let p = Project::new("help-include");
+    let help = flat(&p.gbcli(&["help", "rgbds"]).stdout);
+    assert!(help.contains(want), "{help}");
+    let readme = include_str!("../../../build/templates/README.md").replace('`', "");
+    assert!(flat(&readme).contains(want), "{readme}");
+}
+
 fn help_golden(args: &[&str]) -> String {
     let name = args
         .iter()

@@ -36,6 +36,14 @@ audio_writer pc=$01C5 symbol=Main.wave+$51 writes=1 registers=NR42
 audio_writer pc=$01C9 symbol=Main.wave+$55 writes=1 registers=NR43
 audio_writer pc=$01CD symbol=Main.wave+$59 writes=1 registers=NR44
 rev s1
+$ gbcli run --frames 1 --audio-summary --audio-channel 4 --session tune
+exit 0
+stop budget_exhausted kind=frames pc=$0040 bank=0 symbol=VBlank_vector frame=41 t=2879028 since=boot ticks=17520272 ly=144 shown=41 vblank=normal
+budget frames=1/1 instructions=17546 ticks=140448
+audio_summary since=boot writes=0 channels=noise
+audio_loudness take=mixed rms_dbfs=unmeasured sounding_s=0.000
+audio_loudness take=noise rms_dbfs=unmeasured sounding_s=0.000
+rev s2
 $ gbcli view palettes --session oam
 exit 0
 dmg_palette reg=BGP value=$FC shades=0,3,3,3

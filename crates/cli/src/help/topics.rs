@@ -337,8 +337,9 @@ keeps a cartridge type written at $0147, and a battery save needs a type with
 a battery, such as $1B (MBC5+RAM+BATTERY), and a RAM size at $0149 (such as $02,
 8 KB).
 
-A project's own .inc files go in include/, the only folder INCLUDE searches
-by bare name (src/ is not on the path).
+A project's own .inc files go in include/. INCLUDE looks in the project folder
+and include/ (or --include), not beside the including file: src/ isn't
+searched.
 
 Constants other files assemble against (in ds, IF, REPT) belong in include/:
 an EXPORTed symbol is resolved only at link time, so it isn't constant there.

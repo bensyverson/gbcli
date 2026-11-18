@@ -89,3 +89,7 @@ Even in a harness-made worktree, three agents this session found their Bash call
 ## 2026-11-17 — in a worktree, the guard refuses gbcli arguments containing `$`
 
 A game agent in an isolated worktree had `--poke 'wScore=$07,0'` and `--read '[$FF25]'` refused, even single-quoted, as were heredocs to Python (leaf Q8KLVV). Use decimal values or an escaped `\$` there; the README commands keep the `$` form for users.
+
+## 2026-11-17 — each worktree's `target/` is about 3 GB, and five filled the disk
+
+Five parallel agents' worktrees each built their own `target/` (2-3.4 GB apiece), and the Mac fell to 200 MB free: one agent's suite failed with "No space left on device" until it deleted its own `target/debug/incremental`. Check `df -h /System/Volumes/Data` before a fan-out and allow about 3.5 GB per agent; delete a finished worktree's `target/` (or the worktree) as soon as it is integrated. Homebrew's and Xcode's caches are the next easy space (Stage 15 session).

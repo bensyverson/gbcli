@@ -399,6 +399,19 @@ fn the_budgets_topic_explains_lcd_off_frames() {
     let text = Topic::Budgets.text();
     assert!(text.contains("lcd_off"), "{text}");
     assert!(text.contains("busiest"), "{text}");
+    // The lookahead (leaf Dm8G8G): the wait for VBlank before the LCD goes
+    // off is lcd_off; the same busy frame before a halt is lag; and a run's
+    // last frame is judged by what the run saw of the next.
+    let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    for phrase in [
+        "including the frame that turns it off",
+        "the next frame turns the LCD off before it halts",
+        "polling LY",
+        "followed by one that halts with the LCD on is lag",
+        "run one frame more",
+    ] {
+        assert!(flat.contains(phrase), "{phrase}: {text}");
+    }
 }
 
 #[test]

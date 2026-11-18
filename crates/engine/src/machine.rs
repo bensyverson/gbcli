@@ -109,6 +109,8 @@ pub struct Machine {
     /// How many times the LCD was turned off during this machine's drives,
     /// as the core logged it; only differences mean anything.
     lcd_offs: u64,
+    /// The first LCD-off of the latest frame that had one.
+    first_lcd_off: Option<gbcli_core::LcdOff>,
 }
 
 impl Machine {
@@ -158,6 +160,7 @@ impl Machine {
             boot: None,
             debugger: DebuggerConfig::default(),
             lcd_offs: 0,
+            first_lcd_off: None,
         })
     }
 
@@ -210,8 +213,27 @@ impl Machine {
         self.lcd_offs
     }
 
-    pub(crate) fn count_lcd_offs(&mut self, n: usize) {
-        self.lcd_offs += n as u64;
+    /// When the LCD was first turned off in `frame` (numbered as
+    /// [`LcdOff::frame`](gbcli_core::LcdOff) numbers it), if it was and no
+    /// later frame has turned it off since. Kept as [`Machine::lcd_offs`] is.
+    pub fn first_lcd_off_in(&self, frame: u64) -> Option<gbcli_core::Ticks> {
+        self.first_lcd_off
+            .filter(|off| off.frame == frame)
+            .map(|off| off.at)
+    }
+
+    /// Counts the LCD-offs the core logged, in order, and keeps the first
+    /// of the latest frame among them.
+    pub(crate) fn record_lcd_offs(&mut self, offs: &[gbcli_core::LcdOff]) {
+        self.lcd_offs += offs.len() as u64;
+        for off in offs {
+            if self
+                .first_lcd_off
+                .is_none_or(|first| first.frame != off.frame)
+            {
+                self.first_lcd_off = Some(*off);
+            }
+        }
     }
 
     /// The ROM patches applied since power-on or the last restore, in order.
@@ -441,6 +463,8 @@ impl Machine {
         self.patches = h.patches.clone();
         self.keys = Keys(h.keys);
         self.boot = h.boot;
+        // Its frame numbers belong to the timeline left behind.
+        self.first_lcd_off = None;
         Ok(warnings)
     }
 
@@ -465,6 +489,7 @@ impl Machine {
             boot: self.boot,
             debugger: self.debugger.clone(),
             lcd_offs: self.lcd_offs,
+            first_lcd_off: self.first_lcd_off,
         })
     }
 

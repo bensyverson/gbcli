@@ -66,7 +66,7 @@ impl Sinks {
     /// Ends the frame in progress at a vblank, where `m` is.
     pub(super) fn cut(&mut self, m: &Machine) {
         if let Some(split) = &mut self.split {
-            self.frames.push(split.cut(m));
+            self.frames.extend(split.cut(m));
         }
     }
 }
@@ -142,11 +142,13 @@ impl Probes {
         let profile = sinks
             .routines
             .map(|r| profile_made(r.finish(machine.symbols()), self.top));
-        let frames = &sinks.frames;
+        let mut frames = sinks.frames;
         let base = machine.time_base(since).frame;
-        let frame_budget = sinks.split.map(|mut split| {
-            let rest = split.cut(machine);
-            frame_budget_made(frames, rest, sinks.started_mid_frame, base)
+        // The last frame's verdict waited on the frame the run stopped in.
+        let frame_budget = sinks.split.map(|split| {
+            let (last, rest) = split.finish(machine);
+            frames.extend(last);
+            frame_budget_made(&frames, rest, sinks.started_mid_frame, base)
         });
         let timeline = sinks.raster.map(Raster::finish);
         let gaps = timeline.as_ref().map_or(Vec::new(), |t| t.gaps.clone());

@@ -318,7 +318,9 @@ pub const RUN: &[FlagSpec] = &[
         "frame-budget",
         "each frame's active and idle (HALT) T-cycles over the run, and the lag frames: \
          frames in which the CPU never halted with the LCD on (LCD-off frames, as at \
-         startup or a screen change, count as lcd_off instead); the first row sums up the \
+         startup or a screen change, count as lcd_off instead, as does a frame spent \
+         waiting for VBlank to turn the LCD off; a run's last frame is judged without \
+         the next, so run one more to settle it); the first row sums up the \
          whole LCD-on frames' active T-cycles (min, max, mean) and the busiest one (a row \
          index), then a frame_lag row per run of consecutive lag frames: from= and to= \
          (counted as the stop's frame=), count=, active_max= and index= (its first row in \

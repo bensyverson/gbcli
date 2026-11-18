@@ -81,7 +81,7 @@ fn a_failed_builds_remedy_names_the_directory_it_built() {
 
     // Built from inside the project, the command takes no directory.
     let mut here = options.clone();
-    here.display_base = temp.path("demo");
+    here.cwd = temp.path("demo");
     let body = build(&rgbds(), &here).unwrap_err().body();
     assert!(body.remedy.contains("`gbcli build`"), "{}", body.remedy);
 }
@@ -147,7 +147,7 @@ fn staging_never_removes_a_directory_gbcli_didnt_make() {
     let (temp, mut options) = starter("staging-own");
     // With the ROM in the project's root, the old staging directory was
     // `<project>/.staging`: perhaps the user's.
-    options.out = Some(PathBuf::from("game.gb"));
+    options.out = Some(PathBuf::from("demo/game.gb"));
     fs::create_dir(temp.path("demo/.staging")).unwrap();
     fs::write(temp.path("demo/.staging/mine.txt"), "mine").unwrap();
     build(&rgbds(), &options).unwrap();

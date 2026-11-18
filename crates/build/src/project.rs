@@ -32,8 +32,9 @@ use layout::Layout;
 pub use layout::{default_rom, default_target_of};
 use staging::Staging;
 
-/// What to build, and how paths are printed. Relative paths are relative to
-/// `project`.
+/// What to build, and how paths are printed. Relative `src` and `include`
+/// directories are relative to `project`; a relative `out` is relative to
+/// `cwd`.
 #[derive(Clone, Debug)]
 pub struct BuildOptions {
     pub project: PathBuf,
@@ -41,11 +42,12 @@ pub struct BuildOptions {
     pub src: Vec<PathBuf>,
     /// Include directories; default `include`, when it exists.
     pub include: Vec<PathBuf>,
-    /// The ROM; default `build/<project directory name>.gb`. The `.sym` and
-    /// `.map` sit beside it.
+    /// The ROM; default `build/<project directory name>.gb` under the
+    /// project. The `.sym` and `.map` sit beside it.
     pub out: Option<PathBuf>,
-    /// Paths in the result are relative to this when inside it.
-    pub display_base: PathBuf,
+    /// The caller's working directory: a relative `out` is read against
+    /// it, and paths in the result are shown relative to it when inside it.
+    pub cwd: PathBuf,
     /// How long one tool run may take before it is stopped and the build
     /// fails; default [`TOOL_TIMEOUT`].
     pub tool_timeout: Duration,
@@ -60,13 +62,13 @@ pub const TOOL_TIMEOUT: Duration = Duration::from_secs(120);
 
 impl BuildOptions {
     /// The conventional layout of the project at `project`.
-    pub fn new(project: PathBuf, display_base: PathBuf) -> BuildOptions {
+    pub fn new(project: PathBuf, cwd: PathBuf) -> BuildOptions {
         BuildOptions {
             project,
             src: Vec::new(),
             include: Vec::new(),
             out: None,
-            display_base,
+            cwd,
             tool_timeout: TOOL_TIMEOUT,
             target: BuildTarget::Dmg,
         }
@@ -196,13 +198,13 @@ impl BuildError {
 
 /// Builds the project. Warnings ride in the result's diagnostics.
 pub fn build(tools: &Toolchain, options: &BuildOptions) -> Result<BuildMade, BuildError> {
-    let base = fs::canonicalize(&options.display_base).unwrap_or(options.display_base.clone());
+    let base = fs::canonicalize(&options.cwd).unwrap_or(options.cwd.clone());
     let shown = |p: &Path| display(p, &base);
     let project = fs::canonicalize(&options.project).map_err(|_| BuildError::Layout {
         message: format!("no project directory at {}", shown(&options.project)),
         remedy: "pass the project directory, or make one with `gbcli new DIR`".into(),
     })?;
-    let mut layout = Layout::of(&project, options, &shown)?;
+    let mut layout = Layout::of(&project, &base, options, &shown)?;
     // Images first: the program includes what they become.
     let images = crate::images::convert(&project, &shown, options.target)?;
     if let Some(generated) = images.as_ref().and_then(|i| i.generated.as_ref()) {

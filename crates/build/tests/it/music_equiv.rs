@@ -35,7 +35,7 @@ fn rom_with_asm(temp: &Temp, name: &str, asm: &[u8]) -> Vec<u8> {
     let project = options.project.clone();
     fs::remove_dir_all(project.join("assets/music")).unwrap();
     fs::write(project.join("src/song.asm"), asm).unwrap();
-    options.display_base = temp.0.clone();
+    options.cwd = temp.0.clone();
     build(&rgbds(), &options).unwrap();
     fs::read(project.join(format!("build/{}.gb", dir_name(&project)))).unwrap()
 }

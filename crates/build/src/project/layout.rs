@@ -20,8 +20,11 @@ pub(super) struct Layout {
 }
 
 impl Layout {
+    /// The layout of `project` under `options`, a relative `out` read
+    /// against `cwd`.
     pub(super) fn of(
         project: &Path,
+        cwd: &Path,
         options: &BuildOptions,
         shown: &dyn Fn(&Path) -> String,
     ) -> Result<Layout, BuildError> {
@@ -78,7 +81,7 @@ impl Layout {
             options.include.clone()
         };
         let out = match &options.out {
-            Some(out) => project.join(out),
+            Some(out) => cwd.join(out),
             None => default_rom(project, options.target),
         };
         // rgblink would be given one path for two outputs.
@@ -92,7 +95,11 @@ impl Layout {
                     ),
                     remedy: format!(
                         "pass an --out that ends .gb, e.g. --out {}",
-                        quote(&format!("build/{}.gb", project_name(project)))
+                        quote(&shown(
+                            &project
+                                .join("build")
+                                .join(format!("{}.gb", project_name(project)))
+                        ))
                     ),
                 });
             }

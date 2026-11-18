@@ -116,6 +116,8 @@ impl Machine {
         core.set_keys(self.keys);
         self.core = core;
         self.boot = None;
+        // Frame numbers start over at power-on.
+        self.first_lcd_off = None;
         Ok(PowerCycled {
             battery_bytes: bytes,
             clock,

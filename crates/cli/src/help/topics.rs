@@ -243,11 +243,18 @@ the run: --checkpoint NAME, then --at NAME (with --keys-since boot to keep
 one key file).
 
 The frame budget (run --frame-budget) is the other kind: how much of each
-frame the CPU worked. A lag frame never halted with the LCD on. A frame the
-LCD was off for (startup, a screen change) counts as lcd_off, not lag, and
-stays out of active_min/max/mean and busiest; --json marks each frame's
-lcd_off. A game that busy-waits instead of halting lags every frame: measure
-its loop with gbcli measure.
+frame the CPU worked. A lag frame never halted, with the LCD on throughout.
+A frame the LCD was off for any of (startup, a screen change), including the
+frame that turns it off, counts as lcd_off, not lag. So does a frame that
+never halted when the next frame turns the LCD off before it halts: the wait
+for VBlank before a screen change (di, polling LY until 144, then LCDC = 0).
+A frame that never halted followed by one that halts with the LCD on is lag.
+Each verdict waits on the next frame, so a run that stops at a vblank (run
+--frames N does) judges its last frame without one, and a busy last frame
+reads lag: run one frame more to settle it. lcd_off frames stay out of
+active_min/max/mean and busiest; --json marks each frame's lcd_off. A game
+that busy-waits instead of halting lags every frame: measure its loop with
+gbcli measure.
 ";
 
 const EXIT_CODES: &str = "\

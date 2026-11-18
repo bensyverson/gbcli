@@ -225,7 +225,7 @@ fn a_plain_and_a_gbc_build_leave_both_roms_with_their_own_sym_and_map() {
 fn out_wins_over_the_gbc_default() {
     let (temp, mut options) = starter("gbc-out");
     options.target = BuildTarget::Gbc;
-    options.out = Some(PathBuf::from("build/color.gb"));
+    options.out = Some(PathBuf::from("demo/build/color.gb"));
     let made = build(&rgbds(), &options).unwrap();
     assert_eq!(made.outputs[0].path, "demo/build/color.gb");
     assert_eq!(made.outputs[1].path, "demo/build/color.sym");
@@ -474,6 +474,19 @@ fn the_layout_can_be_overridden_and_sources_are_found_in_subdirectories() {
     assert_eq!(paths, ["out/game.gb", "out/game.sym", "out/game.map"]);
 }
 
+/// The project names where sources and includes are; a relative `out` is
+/// the caller's, read against the working directory (leaf UltxXY).
+#[test]
+fn a_relative_out_is_read_against_the_working_directory_not_the_project() {
+    let (temp, mut options) = starter("out-cwd");
+    options.out = Some(PathBuf::from("roms/game.gb"));
+    let made = build(&rgbds(), &options).unwrap();
+    assert!(temp.path("roms/game.gb").is_file());
+    assert!(!temp.path("demo/roms").exists());
+    let paths: Vec<_> = made.outputs.iter().map(|o| o.path.as_str()).collect();
+    assert_eq!(paths, ["roms/game.gb", "roms/game.sym", "roms/game.map"]);
+}
+
 #[test]
 fn a_source_directory_outside_the_project_keeps_its_objects_in_the_project() {
     let (temp, mut options) = starter("outside");
@@ -546,7 +559,7 @@ fn nothing_to_assemble_or_a_missing_directory_is_a_layout_error() {
 /// refused before any tool runs.
 #[test]
 fn an_out_that_is_its_own_sym_or_map_is_refused_before_any_tool_runs() {
-    for out in ["build/demo.sym", "build/demo.map"] {
+    for out in ["demo/build/demo.sym", "demo/build/demo.map"] {
         let (temp, mut options) = starter("out-collides");
         options.out = Some(PathBuf::from(out));
         let body = match build(&rgbds(), &options) {
@@ -555,7 +568,13 @@ fn an_out_that_is_its_own_sym_or_map_is_refused_before_any_tool_runs() {
         };
         assert_eq!(body.code, ErrorCode::BadRequest);
         assert!(body.message.contains(out), "{}", body.message);
-        assert!(body.remedy.contains("--out"), "{}", body.remedy);
+        // A relative --out is read against the working directory, so the
+        // example names the project's build directory from there.
+        assert!(
+            body.remedy.contains("--out demo/build/demo.gb"),
+            "{}",
+            body.remedy
+        );
         assert!(!temp.path("demo/build").exists(), "{out}: a tool ran");
     }
 }

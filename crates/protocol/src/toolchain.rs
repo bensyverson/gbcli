@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use crate::images::ImagesMade;
 
 /// `op: "build"`: a project built by convention (design §12). Paths are
-/// relative to the server's working directory; `src`, `include` and `out`
-/// to the project.
+/// relative to the server's working directory, `out` included; `src` and
+/// `include` to the project.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BuildArgs {
@@ -22,7 +22,8 @@ pub struct BuildArgs {
     /// Include directories; default `include`, when it exists.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub include: Vec<String>,
-    /// The ROM; default `build/<project directory name>.gb`.
+    /// The ROM, relative to the server's working directory; default
+    /// `build/<project directory name>.gb` in the project.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub out: Option<String>,
     /// After a good build, restore this checkpoint into the request's

@@ -8,19 +8,21 @@ const BUILD: &[FlagSpec] = &[
     repeated(
         "src",
         "DIR",
-        "assemble every .asm under DIR instead of src/ (relative to the project); repeat \
-         for more",
+        "assemble every .asm under DIR instead of src/; a relative DIR is read against the \
+         project; repeat for more",
     ),
     repeated(
         "include",
         "DIR",
-        "put DIR on rgbasm's include path instead of include/; repeat for more",
+        "put DIR on rgbasm's include path instead of include/; a relative DIR is read \
+         against the project; repeat for more",
     ),
     value(
         "out",
         "FILE",
-        "the ROM to write, with its .sym and .map beside it (default build/<project>.gb; \
-         with --gbc, build/gbc/<project>.gbc)",
+        "the ROM to write, with its .sym and .map beside it (default build/<project>.gb \
+         in the project; with --gbc, build/gbc/<project>.gbc); a relative FILE is read \
+         against the working directory (--dir's PATH when given), not the project",
     ),
     switch(
         "gbc",
@@ -89,7 +91,10 @@ pub const BUILD_VERB: VerbSpec = VerbSpec {
             step's outputs must exist and be non-empty. Every diagnostic is a `diagnostic` \
             row with its file and line (a message repeated on lines in a row is one row, \
             with lines= and count=); any error fails with build_failed (exit 4) and leaves \
-            the last good ROM in place. With --session and --restore, a good build is \
+            the last good ROM in place. DIR names the project only: a relative --src or \
+            --include is read against it, a relative --out against the working directory \
+            (from a parent folder, `gbcli build game --out game/fast.gb`). With --session \
+            and --restore, a good build is \
             reloaded: the checkpoint is restored into the rebuilt ROM, which loads only if \
             nothing it was running moved (rom_changed, exit 3, says what did; `gbcli run \
             --from boot` then starts the session over on the new ROM).",

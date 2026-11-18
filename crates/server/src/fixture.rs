@@ -44,6 +44,10 @@ pub const ILLEGAL: &[u8] = include_bytes!("../../sameboy/tests/roms/illegal.gb")
 /// (`lcd_off.asm`).
 pub const LCD_OFF: &[u8] = include_bytes!("../../engine/tests/roms/lcd_off.gb");
 pub const LCD_OFF_SYM: &[u8] = include_bytes!("../../engine/tests/roms/lcd_off.sym");
+/// Polls LY for VBlank through frame 4 and turns the LCD off at the start
+/// of frame 5, halting for every other vblank (`busy_wait_off.asm`).
+pub const BUSY_WAIT_OFF: &[u8] = include_bytes!("../../engine/tests/roms/busy_wait_off.gb");
+pub const BUSY_WAIT_OFF_SYM: &[u8] = include_bytes!("../../engine/tests/roms/busy_wait_off.sym");
 /// Halts with IE = 0, so nothing can wake it (`halt.asm`).
 pub const HALT: &[u8] = include_bytes!("../../engine/tests/roms/halt.gb");
 /// Executes STOP with neither joypad row selected, so no key wakes it

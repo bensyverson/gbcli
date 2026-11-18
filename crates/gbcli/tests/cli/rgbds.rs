@@ -464,6 +464,62 @@ fn build_dir_finds_the_session_in_dir() {
     );
 }
 
+/// DIR names the project only: a relative --out is the caller's path, read
+/// against the working directory, as from the repo root `gbcli build
+/// examples/factory --out examples/factory/x.gb` means (leaf UltxXY).
+#[test]
+fn build_reads_a_relative_out_against_the_working_directory_not_dir() {
+    let p = Project::game("rgbds-out-cwd");
+    let built = p.rgbds(&["build", "game", "--out", "game/custom.gb"]);
+    assert_eq!(built.code, 0, "{}{}", built.stdout, built.stderr);
+    assert!(p.path("game/custom.gb").is_file(), "{}", built.stdout);
+    assert!(p.path("game/custom.sym").is_file());
+    assert!(!p.path("game/game").exists(), "--out read against DIR");
+    assert!(
+        built.stdout.contains("path=game/custom.gb "),
+        "{}",
+        built.stdout
+    );
+
+    let elsewhere = p.rgbds(&["build", "game", "--out", "roms/elsewhere.gb"]);
+    assert_eq!(
+        elsewhere.code, 0,
+        "{}{}",
+        elsewhere.stdout, elsewhere.stderr
+    );
+    assert!(
+        p.path("roms/elsewhere.gb").is_file(),
+        "{}",
+        elsewhere.stdout
+    );
+    assert!(!p.path("game/roms").exists(), "--out read against DIR");
+}
+
+/// --dir moves the working directory, so --out, --src and --include are all
+/// read against it.
+#[test]
+fn build_dir_reads_out_src_and_include_against_dir() {
+    let p = Project::game("rgbds-out-dir");
+    fs::rename(p.path("game/src"), p.path("game/code")).unwrap();
+    let built = p.rgbds(&[
+        "build",
+        "--dir",
+        "game",
+        "--src",
+        "code",
+        "--include",
+        "include",
+        "--out",
+        "roms/x.gb",
+    ]);
+    assert_eq!(built.code, 0, "{}{}", built.stdout, built.stderr);
+    assert!(p.path("game/roms/x.gb").is_file(), "{}", built.stdout);
+    assert!(
+        !p.path("roms").exists(),
+        "--out read against the shell's cwd"
+    );
+}
+
 #[test]
 fn build_restore_needs_a_session_over_the_rom_it_built() {
     let p = game_in_outer_bundle("rgbds-restore-errors");

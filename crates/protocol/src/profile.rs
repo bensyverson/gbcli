@@ -158,8 +158,10 @@ pub struct FrameBudgetRow {
     /// to lag; null for a partial frame, which the run saw only part of.
     pub lag: Option<bool>,
     /// The LCD was off for some of this frame: off at its start or its end,
-    /// or turned off during it. A game does that on purpose, at startup and
-    /// to change screens, so these frames are neither lag nor play.
+    /// or turned off during it; or the CPU never halted in it and the next
+    /// frame turned the LCD off before halting (the wait for VBlank to turn
+    /// it off). A game does that on purpose, at startup and to change
+    /// screens, so these frames are neither lag nor play.
     pub lcd_off: bool,
     /// A frame the run saw only part of: the one it started in, when it
     /// started mid-frame (from the start to the vblank), or the one it

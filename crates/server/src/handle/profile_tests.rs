@@ -7,7 +7,7 @@ use gbcli_protocol::{
 
 use super::Handler;
 use super::test_support::{handler, request};
-use crate::fixture::{Fixture, LCD_OFF, LCD_OFF_SYM};
+use crate::fixture::{BUSY_WAIT_OFF, BUSY_WAIT_OFF_SYM, Fixture, LCD_OFF, LCD_OFF_SYM};
 
 fn run(h: &mut Handler, args: RunArgs) -> Response {
     h.handle(&request(Op::Run(args)))
@@ -321,6 +321,33 @@ fn startup_and_a_screen_change_are_lcd_off_frames_not_lag() {
     assert!(stats.max < 20_000, "{stats:?} {:?}", made.frames);
     let busiest = made.busiest.expect("a busiest frame") as usize;
     assert!(!made.frames[busiest].lcd_off, "{busiest}");
+}
+
+/// Verdicts arrive a frame late in a run, as in `frame_budget`: every frame
+/// still gets its row, and the frame that polls LY for VBlank before the
+/// LCD goes off is LCD-off, not lag (leaf Dm8G8G).
+#[test]
+fn run_frame_budget_counts_the_wait_to_turn_the_lcd_off_as_lcd_off() {
+    let f = Fixture::with_rom_sym("frame-budget-busy-off", BUSY_WAIT_OFF, BUSY_WAIT_OFF_SYM);
+    let made = run(
+        &mut handler(&f),
+        RunArgs {
+            frames: Some(12),
+            frame_budget: true,
+            ..RunArgs::default()
+        },
+    )
+    .outcome
+    .expect("ran")
+    .frame_budget
+    .expect("a frame budget");
+    assert_eq!(made.frames.len(), 12, "{:?}", made.frames);
+    assert_eq!(made.lag, 0, "{:?}", made.frames);
+    let busy = (1..12)
+        .find(|&i| made.frames[i].idle_t == 0)
+        .expect("a busy frame");
+    assert!(made.frames[busy].lcd_off, "{:?}", made.frames);
+    assert_eq!(made.frames[busy].lag, Some(false));
 }
 
 /// A frame budget's rows, each as (frame, partial), and the run's stop

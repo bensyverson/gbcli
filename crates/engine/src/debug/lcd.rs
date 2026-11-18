@@ -63,7 +63,7 @@ pub(super) fn collect(m: &mut Machine, since: &Since, found: &mut Option<LcdOffO
     let Ok(offs) = m.core_mut().take_lcd_offs() else {
         return;
     };
-    m.count_lcd_offs(offs.len());
+    m.record_lcd_offs(&offs);
     for off in offs.iter().filter(|o| o.line < VBLANK_FIRST_LINE) {
         match found {
             Some(first) => first.more += 1,

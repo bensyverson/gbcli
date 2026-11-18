@@ -7,7 +7,9 @@ use crate::common;
 use common::{cgb_machine, machine, step_to, steps};
 use gbcli_core::{Budget, Registers, StopReason};
 use gbcli_engine::disasm::{NoSymbols, decode};
-use gbcli_engine::profile::{CpuSpeed, Leg, MeasureError, MeasureSpec, Profile, RoutineCost};
+use gbcli_engine::profile::{
+    CpuSpeed, FrameBudget, Leg, MeasureError, MeasureSpec, Profile, RoutineCost,
+};
 use gbcli_engine::{Machine, Symbols};
 use gbcli_protocol::Location;
 
@@ -342,6 +344,38 @@ fn frames_with_the_lcd_off_are_marked_and_not_lag() {
         frames.iter().any(|f| !f.lcd_off && f.idle_t > 0),
         "{frames:?}"
     );
+}
+
+/// The first frame after the start that never halted: the frame
+/// `roms/busy_wait.inc` spends polling LY for VBlank.
+fn busy_frame(frames: &[FrameBudget]) -> usize {
+    (1..frames.len())
+        .find(|&i| frames[i].idle_t == 0)
+        .unwrap_or_else(|| panic!("no busy frame: {frames:?}"))
+}
+
+/// A frame spent polling LY for VBlank, so as to turn the LCD off there,
+/// is the screen change's, not lag (Ben, 2026-11-17, leaf Dm8G8G).
+#[test]
+fn a_busy_frame_whose_next_frame_turns_the_lcd_off_first_is_lcd_off() {
+    let mut m = common::machine(include_bytes!("../roms/busy_wait_off.gb"), None);
+    let frames = m.frame_budget(12).unwrap();
+    let busy = busy_frame(&frames);
+    assert!(frames[busy].lcd_off && !frames[busy].lag, "{frames:?}");
+    assert!(frames[busy + 1].lcd_off, "{frames:?}");
+    assert!(frames.iter().all(|f| !f.lag), "{frames:?}");
+    assert!(frames[busy - 1].idle_t > 0 && !frames[busy - 1].lcd_off);
+}
+
+/// The same busy frame, followed by a halt with the LCD on, is lag.
+#[test]
+fn a_busy_frame_whose_next_frame_halts_with_the_lcd_on_is_lag() {
+    let mut m = common::machine(include_bytes!("../roms/busy_wait_halt.gb"), None);
+    let frames = m.frame_budget(12).unwrap();
+    let busy = busy_frame(&frames);
+    assert!(frames[busy].lag && !frames[busy].lcd_off, "{frames:?}");
+    assert_eq!(frames.iter().filter(|f| f.lag).count(), 1, "{frames:?}");
+    assert!(!frames[busy + 1].lcd_off && frames[busy + 1].idle_t > 0);
 }
 
 #[test]

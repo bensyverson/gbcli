@@ -38,6 +38,10 @@ pub(crate) struct Source {
     pub frame: Option<(u32, u32)>,
     /// `<name>.dmg.png` beside it, when there is one: its DMG version.
     pub dmg: Option<PathBuf>,
+    /// Whether it loads whole into VRAM: false only for a manifest's
+    /// stored sheet (`ManifestImage::resident`), which no VRAM count
+    /// includes.
+    pub resident: bool,
 }
 
 /// The kinds, in the order their images are converted.
@@ -334,6 +338,7 @@ pub(crate) fn source(
         constant,
         frame,
         dmg: None,
+        resident: true,
     })
 }
 

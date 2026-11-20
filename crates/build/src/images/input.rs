@@ -178,6 +178,7 @@ pub(crate) fn manifest(
         let mut s = find::source(kind, PathBuf::from(&i.image), shown)?;
         s.path = base.join(&i.file);
         s.dmg = i.dmg.as_ref().map(|d| base.join(d));
+        s.resident = i.resident;
         sources.push(s);
     }
     find::collisions(&sources, shown)?;

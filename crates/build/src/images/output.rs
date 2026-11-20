@@ -299,6 +299,10 @@ fn asset(
             Plan::Sheet(p) => Some(p.object),
             Plan::Bg(_) => None,
         },
+        obp: match &c.plan {
+            Plan::Sheet(p) => Some(p.obp),
+            Plan::Bg(_) => None,
+        },
         preview: String::new(),
         tile_map: Vec::new(),
         gbc: None,

@@ -22,6 +22,7 @@ fn manifest_of(file: &str, image: &str, dmg: Option<&str>) -> AssetManifest {
             image: image.into(),
             file: file.into(),
             dmg: dmg.map(str::to_string),
+            resident: true,
         }],
         palettes: NamedPalettes::default(),
         objects: None,

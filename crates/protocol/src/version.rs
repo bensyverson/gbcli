@@ -25,8 +25,11 @@ use serde::{Deserialize, Serialize};
 /// `wall_guard`. The CLI and `serve` never set that flag, so their answers
 /// are as under 6. 8 since leaves o0BR30 and EnbBKc: `ImagesMade` gains
 /// `dmg_palettes`, each named palette's DMG byte, and `RasterMade` gains
-/// `drawn`, the scroll each visible line began with.
-pub const PROTOCOL_VERSION: u32 = 8;
+/// `drawn`, the scroll each visible line began with. 9 since LoadHigh's
+/// questions 782 and 784: `ImageAsset` gains `obp`, a sheet's shade order,
+/// and `ManifestImage` gains `resident`, false for a stored sheet left out
+/// of the object-tile and VRAM counts.
+pub const PROTOCOL_VERSION: u32 = 9;
 
 /// What `version` answers.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -69,7 +72,7 @@ mod tests {
         };
         assert_eq!(
             serde_json::to_string(&result).unwrap(),
-            r#"{"version":{"gbcli":"0.1.0","protocol":8,"sameboy":"abc","patch_set":"def"}}"#
+            r#"{"version":{"gbcli":"0.1.0","protocol":9,"sameboy":"abc","patch_set":"def"}}"#
         );
     }
 }

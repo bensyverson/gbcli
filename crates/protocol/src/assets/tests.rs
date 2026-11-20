@@ -156,3 +156,41 @@ fn a_manifest_names_fonts_as_a_project_holds_them() {
     let m = manifest(r#"{"images":[]}"#).unwrap();
     assert_eq!(serde_json::to_string(&m).unwrap(), r#"{"images":[]}"#);
 }
+
+/// A manifest image is resident unless it says `"resident":false` (a
+/// stored sheet, out of the tiles objects address at once): sent and read
+/// back without the field when resident. Only a sheet may be stored.
+#[test]
+fn a_manifest_sheet_may_be_stored() {
+    let stored = manifest(
+        r#"{"images":[{"image":"sprites/hat.16x16.png","file":"a.png","resident":false}]}"#,
+    )
+    .unwrap();
+    assert!(!stored.images[0].resident);
+    let back = serde_json::to_string(&stored).unwrap();
+    assert!(back.contains(r#""resident":false"#), "{back}");
+    let resident = manifest(r#"{"images":[{"image":"sprites/hat.png","file":"a.png"}]}"#).unwrap();
+    assert!(resident.images[0].resident);
+    assert!(
+        !serde_json::to_string(&resident)
+            .unwrap()
+            .contains("resident")
+    );
+    let bg = manifest(r#"{"images":[{"image":"bg/town.png","file":"a.png","resident":false}]}"#);
+    assert!(bg.unwrap_err().contains("resident"));
+}
+
+/// A sheet's result carries its OBP, the shade of each index; read back as
+/// sent, and refused on an image that isn't a sheet.
+#[test]
+fn a_sheets_result_carries_its_obp() {
+    let json = r#"{"target":"dmg","images":{"images":[{"kind":"sprites","source":"hat.png","label":"Hat","width":1,"height":2,"tiles":2,"frames":1,"objects":1,"object_size":"8x16","obp":56,"tile_map":[{"index":0}]}]},"diagnostics":[]}"#;
+    let made: AssetsMade = serde_json::from_str(json).unwrap();
+    assert_eq!(made.images.images[0].obp, Some(0x38));
+    assert_eq!(serde_json::to_string(&made).unwrap(), json);
+    let bg = r#"{"target":"dmg","images":{"images":[{"kind":"tiles","source":"f.png","label":"F","width":1,"height":1,"tiles":1,"obp":228,"tile_map":[{"index":0}]}]},"diagnostics":[]}"#;
+    let e = serde_json::from_str::<AssetsMade>(bg)
+        .unwrap_err()
+        .to_string();
+    assert!(e.contains("obp"), "{e}");
+}

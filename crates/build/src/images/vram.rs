@@ -10,11 +10,12 @@ const VRAM_TILES: u32 = 384;
 
 /// The limits the images break together: each background with every sheet
 /// must fit VRAM's 384 tiles (one background on screen at a time, all
-/// sheets loaded), and the sheets the 256 tiles objects address.
+/// sheets loaded), and the sheets the 256 tiles objects address. A stored
+/// sheet is never loaded whole, so neither count includes it.
 pub(super) fn vram(plans: &[Checked]) -> Vec<ImageProblem> {
     let sheets: Vec<(&str, u32)> = plans
         .iter()
-        .filter(|c| matches!(c.plan, Plan::Sheet(_)))
+        .filter(|c| matches!(c.plan, Plan::Sheet(_)) && c.s.resident)
         .map(|c| (c.image.as_str(), c.plan.tiles()))
         .collect();
     let sprite_tiles: u32 = sheets.iter().map(|(_, n)| n).sum();

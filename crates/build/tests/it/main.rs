@@ -4,6 +4,7 @@
 
 mod assets;
 mod assets_manifest;
+mod assets_stored;
 mod build;
 mod build_env;
 mod build_safety;

@@ -100,6 +100,9 @@ pub(crate) struct Frames<'a> {
     /// The project's object size, and the setting that sets it as a
     /// problem names it ("the objects line of assets/palettes.txt").
     pub objects: Option<(ObjectSize, &'a str)>,
+    /// Whether the sheet loads whole, so its tiles must fit the 256
+    /// objects address; a stored sheet (`Source::resident`) need not.
+    pub resident: bool,
 }
 
 impl Frames<'_> {
@@ -141,6 +144,7 @@ pub(crate) fn check(
     color: Option<Color>,
 ) -> Result<SheetPlan, Vec<ImageProblem>> {
     let object = frames.object();
+    let resident = frames.resident;
     let oh = object.height();
     if let Some(mut p) = census::size(image, pixels, oh) {
         if p.limit == ImageLimit::ObjPair8x16 && pixels.height.is_multiple_of(8) {
@@ -354,7 +358,7 @@ pub(crate) fn check(
         });
     }
     let per = object.tiles() as usize;
-    if kept.len() * per > OBJ_TILES {
+    if resident && kept.len() * per > OBJ_TILES {
         // Joint units are the color image's: its DMG version may need one.
         let (named, joint, alike) = match color {
             Some(c) => (

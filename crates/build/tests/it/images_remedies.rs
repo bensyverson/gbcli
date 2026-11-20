@@ -89,6 +89,7 @@ impl Case {
                 image: a.image.into(),
                 file,
                 dmg,
+                resident: true,
             });
         }
         let palettes = NamedPalettes {
@@ -306,6 +307,7 @@ fn a_manifests_derived_remedy_names_its_dmg_field_not_a_file_beside_it() {
                 image: image.into(),
                 file: file.into(),
                 dmg: None,
+                resident: true,
             }],
             palettes: NamedPalettes::default(),
             objects: None,

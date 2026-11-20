@@ -26,6 +26,8 @@ pub(super) struct Unchecked {
     #[serde(default)]
     object_size: Option<ObjectSize>,
     #[serde(default)]
+    obp: Option<u8>,
+    #[serde(default)]
     preview: String,
     #[serde(default)]
     tile_map: Vec<Option<TileEntry>>,
@@ -47,6 +49,7 @@ impl TryFrom<Unchecked> for ImageAsset {
             frames: u.frames,
             objects: u.objects,
             object_size: u.object_size,
+            obp: u.obp,
             preview: u.preview,
             tile_map: u.tile_map,
             gbc: u.gbc,
@@ -62,6 +65,9 @@ fn check(asset: &ImageAsset) -> Result<(), String> {
     let gbc = asset.gbc.is_some();
     if !sheet && asset.object_size.is_some() {
         return Err("object_size is set, but only a sheet has objects".into());
+    }
+    if !sheet && asset.obp.is_some() {
+        return Err("obp is set, but only a sheet has an OBP".into());
     }
     // A unit is a cell of the map: a tile, or a sheet's object.
     let size = asset.object_size.unwrap_or(ObjectSize::Tall);

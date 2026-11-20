@@ -85,6 +85,21 @@ pub struct ManifestImage {
     /// from here, never from a file beside `file`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dmg: Option<String>,
+    /// Whether a sheet loads whole into VRAM, as every image does unless
+    /// sent `false`: a stored sheet is converted and checked as a sheet
+    /// (its frames' objects included) but left out of the tiles objects
+    /// address at once and of VRAM's, for a client that copies only parts
+    /// of it to VRAM at a time. Only a sheet may be stored.
+    #[serde(default = "resident", skip_serializing_if = "is_resident")]
+    pub resident: bool,
+}
+
+fn resident() -> bool {
+    true
+}
+
+fn is_resident(r: &bool) -> bool {
+    *r
 }
 
 /// What `assets` converted: the images as a build of the same target
@@ -134,7 +149,8 @@ impl AssetManifest {
     /// The first image or assignment that a project couldn't hold, as a
     /// message: an image not spelled `bg/`, `sprites/` or `tiles/`
     /// `NAME.png`, a DMG version given as an image, an image listed twice,
-    /// or an assignment to an image the manifest doesn't list.
+    /// an image not a sheet marked `resident: false`, or an assignment to
+    /// an image the manifest doesn't list.
     pub fn check(&self) -> Result<(), String> {
         let mut seen = BTreeSet::new();
         for i in &self.images {
@@ -161,6 +177,12 @@ impl AssetManifest {
             }
             if !seen.insert(i.image.as_str()) {
                 return Err(format!("image `{}` is listed twice", i.image));
+            }
+            if !i.resident && !i.image.starts_with("sprites/") {
+                return Err(format!(
+                    "image `{}` is resident: false, but only a sprite sheet can be stored",
+                    i.image
+                ));
             }
         }
         let mut fonts = BTreeSet::new();

@@ -13,7 +13,7 @@ and --as. A mutation that passes rev is refused (rev_mismatch) if the session
 moved on. wall_guard_s replaces the server's 60 s host-time guard for this
 request; a request it ends fails wall_guard (exit 3), not budget_exhausted. Unknown and repeated fields are refused, naming the nearest field.
 Fields marked ? may be left out; an op with no required field may omit args.
-This schema's protocol version is 8, which the version op reports. It goes up
+This schema's protocol version is 9, which the version op reports. It goes up
 on a breaking change to these shapes (a new value of a response's enum among
 them), not for a new op or a new optional request field.
 
@@ -93,12 +93,16 @@ assets  dir?: PATH | manifest?: MANIFEST  target?: "dmg"|"gbc"  keep?: PATH
         glyphs wanted from each font, FONT its path under assets/
         (fonts/NAME.yaff), KEY a character or a glyph's name, no cap; a font
         not named returns every glyph)
-        MANIFEST = {images: [{image: IMAGE, file: PATH, dmg?: PATH}],
-                    palettes?: NAMED, objects?: "8x8"|"8x16",
-                    fonts?: [{font: FONT, file: PATH}]}  (IMAGE as
-                    in assets/, each once; NAMED as below, assigning only
+        MANIFEST = {images: [{image: IMAGE, file: PATH, dmg?: PATH,
+                    resident?: false}], palettes?: NAMED,
+                    objects?: "8x8"|"8x16",
+                    fonts?: [{font: FONT, file: PATH}]}  (IMAGE as in
+                    assets/, each once; NAMED as below, assigning only
                     listed images; objects: every sheet's object size, as
-                    palettes.txt's objects line)
+                    palettes.txt's objects line; resident false: a stored
+                    sheet, checked as a sheet but out of the obj_tiles and
+                    vram_tiles counts, for a program that copies only
+                    parts of it to VRAM)
 doctor  —
 new     dir: PATH
 opcode  query: TEXT  ("$20", "$CB37", "jr nz, .loop", "ld a, [hl+]")
@@ -193,6 +197,8 @@ tile_map (no slot without --gbc); a --gbc build fills gbc for every image.
             gbc?: {art: "color"|"indexed", palette?: NAME,
             palettes?: [PALETTE], preview?: PATH (the .gbc.preview.png)}
             kind: "bg"|"sprites"|"tiles" (tiles: a tileset, no map)
+            obp?: N  (a sheet's: the DMG shade of each index, as
+            <SHEET>_OBP)
   gbc?: {obj_palettes: [PALETTE]}  (the OBJ palettes every sheet shares,
             slot order: assigned first, one per palette and OBP of indexed
             sheets, palettes in file order, OBPs lowest first; each is the

@@ -376,6 +376,12 @@ pub struct ImageAsset {
     /// none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub object_size: Option<ObjectSize>,
+    /// A sheet's OBP on the DMG: the shade each color index of its data
+    /// shows, two bits an index, index 0 in bits 0-1 (transparent, so 0).
+    /// Indices 1 up are the shades the sheet uses, lightest first; an
+    /// index past them is 0. An image that isn't a sheet has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub obp: Option<u8>,
     /// The converted data drawn as the hardware shows it, then its unique
     /// tiles by use, most used first. Every build writes one; empty, and
     /// left off the wire, when an `assets` request kept no previews.

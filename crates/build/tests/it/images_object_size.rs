@@ -241,6 +241,7 @@ fn mixed_object_sizes_from_a_manifest_offer_its_objects_field() {
         image: "sprites/shot.8x8.png".into(),
         file: "art/shot.png".into(),
         dmg: None,
+        resident: true,
     });
     let options = AssetsOptions::new(AssetsInput::Manifest(m), temp.0.clone());
     let made = assets(&options).unwrap().images;
@@ -348,6 +349,7 @@ fn manifest(objects: Option<ObjectSize>, image: &str) -> AssetManifest {
             image: image.into(),
             file: "art/quad.png".into(),
             dmg: None,
+            resident: true,
         }],
         palettes: NamedPalettes {
             dmg: Some(GbcPalette(grays)),

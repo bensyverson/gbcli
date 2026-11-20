@@ -239,6 +239,7 @@ pub(crate) fn convert(
         let frames = sheet::Frames {
             named: s.frame,
             objects,
+            resident: s.resident,
         };
         // The DMG version the checks read, under the name they give it,
         // and color art's color image, whose tiles pair with it under

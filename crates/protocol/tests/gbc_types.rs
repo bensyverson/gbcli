@@ -177,6 +177,7 @@ fn sheet(map: Vec<Option<TileEntry>>, gbc: Option<GbcImage>) -> ImageAsset {
         tile_map: map,
         gbc,
         object_size: Some(ObjectSize::Tall),
+        obp: None,
     }
 }
 

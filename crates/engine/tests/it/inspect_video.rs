@@ -27,10 +27,10 @@ fn a_tile_decodes_to_color_indices() {
     let mut core = quick_dmg(BUSY);
     core.poke(Region::Vram, 5 * 16, &striped_tile()).unwrap();
     let t = tile(&core, 0, 5).unwrap();
-    for y in 0..8 {
-        assert_eq!(t.pixels[y][0], 3, "row {y} pixel 0");
+    for (y, row) in t.pixels.iter().enumerate() {
+        assert_eq!(row[0], 3, "row {y} pixel 0");
         assert!(
-            t.pixels[y][1..].iter().all(|&c| c as usize == y % 4),
+            row[1..].iter().all(|&c| c as usize == y % 4),
             "row {y}"
         );
     }

@@ -363,8 +363,8 @@ fn a_shade_pin_shades_its_color_and_json_lists_every_colors_shade() {
     assert_eq!(
         shades,
         &serde_json::json!([
-            {"color": 0x56B5, "shade": 3, "rule": "pinned"},
-            {"color": 0x7FFF, "shade": 0, "rule": "known"},
+            {"color": 0x56B5, "shade": 3, "art": true, "rule": "pinned"},
+            {"color": 0x7FFF, "shade": 0, "art": true, "rule": "known"},
         ]),
         "{}",
         json.stdout

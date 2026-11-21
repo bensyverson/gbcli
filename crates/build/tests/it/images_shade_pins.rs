@@ -45,8 +45,8 @@ fn tiles(temp: &Temp, path: &str) {
 
 /// What a light gray pinned to 3 makes of the art, the palette and the
 /// list: the pinned color's tile is drawn in index 3, the palette's byte
-/// carries the pin, the rule is still known, and the colors nothing
-/// pinned are listed under it.
+/// carries the pin, the rule is still known, the colors nothing pinned are
+/// listed under it, and only the colors the art uses say so.
 fn assert_pinned_light_gray(made: &gbcli_protocol::ImagesMade, kept: &std::path::Path) {
     assert!(made.first_error().is_none(), "{:#?}", made.problems);
     assert_eq!(made.shades.map(|s| s.rule), Some(ShadeRule::Known));
@@ -57,14 +57,19 @@ fn assert_pinned_light_gray(made: &gbcli_protocol::ImagesMade, kept: &std::path:
             byte: 0b11_10_11_00,
         }]
     );
-    let shade = |color, shade, rule| ColorShade { color, shade, rule };
+    let shade = |color, shade, art, rule| ColorShade {
+        color,
+        shade,
+        art,
+        rule,
+    };
     assert_eq!(
         made.color_shades,
         [
-            shade(c(BLACK), 3, ShadeSource::Known),
-            shade(c(DARK), 2, ShadeSource::Known),
-            shade(c(LIGHT), 3, ShadeSource::Pinned),
-            shade(c(WHITE), 0, ShadeSource::Known),
+            shade(c(BLACK), 3, false, ShadeSource::Known),
+            shade(c(DARK), 2, false, ShadeSource::Known),
+            shade(c(LIGHT), 3, true, ShadeSource::Pinned),
+            shade(c(WHITE), 0, true, ShadeSource::Known),
         ]
     );
     let data = fs::read(kept.join("tiles/art.2bpp")).unwrap();

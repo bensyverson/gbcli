@@ -47,8 +47,9 @@ then gives its own color shade N, in every image and palette, and moves no
 other color: the rule still runs over every color. With --json,
 images.dmg_palettes gives each named palette as the byte for BGP or an
 OBP, used by art or not, and images.color_shades every art and palette
-color's shade with its rule (pinned, or the rule's name); pin any of them
-to keep it.
+color's shade with its rule (pinned, or the rule's name) and whether the
+art uses it (art=false: only a palette names it); pin any of them to keep
+it.
 Colors in one shade draw alike, with a shared_shade warning. Color art's,
 in a plain build, warns once a shade
 for colors that share it anywhere in the image; under --gbc, whose color

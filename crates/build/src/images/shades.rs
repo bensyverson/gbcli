@@ -156,7 +156,8 @@ impl Shading {
     }
 
     /// Every art color's shade and every color of `palettes`', each color
-    /// once, sorted by its RGB555 word, with what decided it.
+    /// once, sorted by its RGB555 word, with whether art uses it and what
+    /// decided it.
     pub fn color_shades(&self, palettes: &[NamedPalette]) -> Vec<ColorShade> {
         let art = self
             .by_key
@@ -169,6 +170,7 @@ impl Shading {
             .map(|color| ColorShade {
                 color,
                 shade: self.any(color),
+                art: self.by_key.contains_key(&color.channels()),
                 rule: match self.pins.contains_key(&color.channels()) {
                     true => ShadeSource::Pinned,
                     false => self.choice.rule.into(),
@@ -536,8 +538,8 @@ mod tests {
     }
 
     /// Every art color and every named palette's color, once each, sorted
-    /// by color (the RGB555 word), with the rule that decided it; a pinned
-    /// color nothing uses isn't listed.
+    /// by color (the RGB555 word), with whether art uses it and the rule
+    /// that decided it; a pinned color nothing uses isn't listed.
     #[test]
     fn color_shades_list_every_art_and_palette_color_with_its_source() {
         let s = choose(&file(), None, &[LIGHT, DARK, MID]).pinned(&[pin(MID, 1), pin(W, 0)]);
@@ -559,34 +561,70 @@ mod tests {
                 ColorShade {
                     color: c(B),
                     shade: 3,
+                    art: false,
                     rule: ShadeSource::Stretched
                 },
                 ColorShade {
                     color: c(DARK),
                     shade: 3,
+                    art: true,
                     rule: ShadeSource::Stretched
                 },
                 ColorShade {
                     color: c(MID),
                     shade: 1,
+                    art: true,
                     rule: ShadeSource::Pinned
                 },
                 ColorShade {
                     color: c(LIGHT),
                     shade: 0,
+                    art: true,
                     rule: ShadeSource::Stretched
                 },
             ]
         );
         let words: Vec<u16> = listed.iter().map(|l| l.color.word()).collect();
         assert!(words.is_sorted(), "{words:?}");
-        // Under the known rule, a palette color the art lacks is known's.
+        // Under the known rule, a palette color the art lacks is known's,
+        // and only the art's color says art uses it.
         let s = choose(&file(), None, &[W]);
         let named = [NamedPalette {
             name: "a".into(),
             colors: palette([W, W, W, D]),
         }];
-        let rules: Vec<ShadeSource> = s.color_shades(&named).iter().map(|l| l.rule).collect();
+        let shades = s.color_shades(&named);
+        let rules: Vec<ShadeSource> = shades.iter().map(|l| l.rule).collect();
+        let art: Vec<bool> = shades.iter().map(|l| l.art).collect();
         assert_eq!(rules, [ShadeSource::Known, ShadeSource::Known]);
+        // D sorts first; it is the palette's alone, W is the art's too.
+        assert_eq!(art, [false, true]);
+    }
+
+    /// The art flag is membership in the art's colors, not the color's
+    /// source: a palette-only color under a pinned rule is still no art's,
+    /// and a color both the art and a palette name is the art's.
+    #[test]
+    fn art_is_membership_in_the_arts_colors_not_the_colors_rule() {
+        let s = choose(&file(), None, &[W, LIGHT]).pinned(&[pin(MID, 2)]);
+        let named = [NamedPalette {
+            name: "a".into(),
+            colors: palette([MID, LIGHT, W, B]),
+        }];
+        let listed = s.color_shades(&named);
+        let art: Vec<(u16, bool, ShadeSource)> = listed
+            .iter()
+            .map(|l| (l.color.word(), l.art, l.rule))
+            .collect();
+        let c = |c: Rgba| Rgb555::from_rgb888(c[0], c[1], c[2]).word();
+        assert_eq!(
+            art,
+            [
+                (c(B), false, ShadeSource::Stretched),
+                (c(MID), false, ShadeSource::Pinned),
+                (c(LIGHT), true, ShadeSource::Stretched),
+                (c(W), true, ShadeSource::Stretched),
+            ]
+        );
     }
 }

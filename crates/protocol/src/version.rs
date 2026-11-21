@@ -31,8 +31,12 @@ use serde::{Deserialize, Serialize};
 /// of the object-tile and VRAM counts. 10 since LoadHigh's question 993
 /// (gbcli leaf 323urF): `NamedPalettes` gains `pins`, colors pinned to a
 /// DMG shade, and `ImagesMade` gains `color_shades`, every color's shade
-/// and the new enum `ShadeSource` that says what decided it.
-pub const PROTOCOL_VERSION: u32 = 10;
+/// and the new enum `ShadeSource` that says what decided it. 11 since
+/// LoadHigh's review rv227 (gbcli leaf VRYyen): `ColorShade` gains `art`,
+/// whether any converted image's art uses the color, so a client can tell
+/// an art color from one a named palette alone names; a document from
+/// before it reads as `false`.
+pub const PROTOCOL_VERSION: u32 = 11;
 
 /// What `version` answers.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -75,7 +79,7 @@ mod tests {
         };
         assert_eq!(
             serde_json::to_string(&result).unwrap(),
-            r#"{"version":{"gbcli":"0.1.0","protocol":10,"sameboy":"abc","patch_set":"def"}}"#
+            r#"{"version":{"gbcli":"0.1.0","protocol":11,"sameboy":"abc","patch_set":"def"}}"#
         );
     }
 }

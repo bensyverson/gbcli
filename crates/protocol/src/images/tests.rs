@@ -93,19 +93,22 @@ fn a_pixel_text_problem_carries_its_line_and_column() {
 }
 
 /// LoadHigh's question 993: every color's shade and the rule that gave it,
-/// on the wire as the color's word, the shade and the rule's name.
+/// on the wire as the color's word, the shade, whether art uses it, and the
+/// rule's name.
 #[test]
-fn color_shades_round_trip_with_their_source() {
+fn color_shades_round_trip_with_their_source_and_art_use() {
     let made = ImagesMade {
         color_shades: vec![
             ColorShade {
                 color: crate::Rgb555::BLACK,
                 shade: 3,
+                art: true,
                 rule: ShadeSource::Stretched,
             },
             ColorShade {
                 color: crate::Rgb555::WHITE,
                 shade: 1,
+                art: false,
                 rule: ShadeSource::Pinned,
             },
         ],
@@ -114,7 +117,7 @@ fn color_shades_round_trip_with_their_source() {
     let json = serde_json::to_string(&made).unwrap();
     assert_eq!(
         json,
-        r#"{"images":[],"color_shades":[{"color":0,"shade":3,"rule":"stretched"},{"color":32767,"shade":1,"rule":"pinned"}]}"#
+        r#"{"images":[],"color_shades":[{"color":0,"shade":3,"art":true,"rule":"stretched"},{"color":32767,"shade":1,"art":false,"rule":"pinned"}]}"#
     );
     assert_eq!(serde_json::from_str::<ImagesMade>(&json).unwrap(), made);
     assert_eq!(
@@ -145,6 +148,23 @@ fn color_shades_round_trip_with_their_source() {
     ] {
         assert_eq!(ShadeSource::from(rule).name(), rule.name());
     }
+}
+
+/// A color shade recorded before the `art` flag existed (protocol 10) reads
+/// as one no image's art uses, the reading that keeps a listing silent.
+#[test]
+fn a_color_shade_without_art_reads_as_art_unused() {
+    let json = r#"{"images":[],"color_shades":[{"color":0,"shade":3,"rule":"known"}]}"#;
+    let made: ImagesMade = serde_json::from_str(json).unwrap();
+    assert_eq!(
+        made.color_shades,
+        [ColorShade {
+            color: crate::Rgb555::BLACK,
+            shade: 3,
+            art: false,
+            rule: ShadeSource::Known,
+        }]
+    );
 }
 
 #[test]

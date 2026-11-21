@@ -13,7 +13,7 @@ and --as. A mutation that passes rev is refused (rev_mismatch) if the session
 moved on. wall_guard_s replaces the server's 60 s host-time guard for this
 request; a request it ends fails wall_guard (exit 3), not budget_exhausted. Unknown and repeated fields are refused, naming the nearest field.
 Fields marked ? may be left out; an op with no required field may omit args.
-This schema's protocol version is 10, which the version op reports. It goes up
+This schema's protocol version is 11, which the version op reports. It goes up
 on a breaking change to these shapes (a new value of a response's enum among
 them), not for a new op or a new optional request field.
 
@@ -211,10 +211,11 @@ tile_map (no slot without --gbc); a --gbc build fills gbc for every image.
             pixels_text only); on a hardware limit of a .pixels image, the
             line (block, map row or fill) that drew the most legend
             characters of the first tile in tiles, the later on a tie
-  color_shades?: [{color: RGB555, shade: 0-3, rule:
+  color_shades?: [{color: RGB555, shade: 0-3, art: bool, rule:
             "pinned"|"declared"|"known"|"stretched"|"nearest"}]
             (every art and named palette color once, by RGB555: its DMG
-            shade, and its pin or the rule that decided it)
+            shade, whether art uses it, and its pin or the rule that
+            decided it)
 Fonts, in result.build.images.fonts and result.assets.images.fonts (gbcli
 help fonts): [{source, label, fixed, glyphs: [{key, width, rows: [N ×8],
 origin: "drawn"|"composed"}]}], glyphs in glyph-number order (a build's
@@ -393,7 +394,7 @@ mod tests {
         assert_eq!(pins, [(moss, 2)]);
         for word in [
             "pins?: [{color: RGB555, shade: 0-3}]",
-            "color_shades?: [{color: RGB555, shade: 0-3, rule:",
+            "color_shades?: [{color: RGB555, shade: 0-3, art: bool, rule:",
             "\"pinned\"|\"declared\"|\"known\"|\"stretched\"|\"nearest\"",
         ] {
             assert!(SCHEMA.contains(word), "{word}");

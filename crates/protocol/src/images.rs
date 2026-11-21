@@ -337,6 +337,11 @@ pub struct ColorShade {
     pub color: crate::Rgb555,
     /// 0 (lightest) to 3.
     pub shade: u8,
+    /// The color appears in the art of some converted image; a named palette
+    /// may also name it. False for a color only a named palette names, whose
+    /// shade the build still writes into the palette's byte.
+    #[serde(default)]
+    pub art: bool,
     pub rule: ShadeSource,
 }
 
@@ -474,9 +479,9 @@ pub struct ImagesMade {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dmg_palettes: Vec<DmgPalette>,
     /// Every art color's shade and every named palette's colors', each
-    /// color once, sorted by color (its RGB555 word), with what decided
-    /// it (LoadHigh's question 993); empty when the build stopped before
-    /// choosing `shades`.
+    /// color once, sorted by color (its RGB555 word), with whether art uses
+    /// it and what decided it (LoadHigh's question 993); empty when the
+    /// build stopped before choosing `shades`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub color_shades: Vec<ColorShade>,
     /// What the images share on the GBC, when the target is the GBC.

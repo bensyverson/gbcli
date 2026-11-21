@@ -13,7 +13,7 @@ pub fn to_text(picture: &Picture, layout: Layout) -> Result<String, LayoutError>
     if picture.width > MAX_SIDE || picture.height > MAX_SIDE {
         return Err(LayoutError {
             message: format!(
-                "the image is {}x{}, and pixel text holds 1 to {MAX_SIDE} pixels a side",
+                "the image is {}x{}, and gbcli writes pixel text for 1 to {MAX_SIDE} pixels a side",
                 picture.width, picture.height
             ),
             remedy: format!(

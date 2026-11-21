@@ -118,14 +118,14 @@ fn every_parse_error_is_located_and_says_what_to_do() {
             "size zero",
             "format gbcli-pixels 1\nsize 0 8\n",
             (2, 6),
-            "an image is 1 to 1024 pixels a side",
+            "an image is 1 to 2048 pixels a side",
             SIZE,
         ),
         case(
             "size too large",
-            "format gbcli-pixels 1\nsize 8 1025\n",
+            "format gbcli-pixels 1\nsize 8 2049\n",
             (2, 8),
-            "an image is 1 to 1024 pixels a side",
+            "an image is 1 to 2048 pixels a side",
             SIZE,
         ),
         case(

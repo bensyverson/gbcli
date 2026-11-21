@@ -21,7 +21,7 @@ pub use model::{CLEAR, DMG, Palettes, Picture, Raster, Rgb, Rgba, Symbol, TILE, 
 pub use name::{DMG_SUFFIX, extension_of, frame_size, is_text_name, size_word};
 pub use png::{MADE_SYMBOLS, decode_png, encode_png, from_raster, is_png};
 pub use preview::{PREVIEW_SCALE, preview_png};
-pub use text::{EXTENSION, FORMAT_LINE, Layout, MAX_SIDE, parse_text, to_text};
+pub use text::{EXTENSION, FORMAT_LINE, Layout, MAX_SIDE, MAX_TEXT_SIDE, parse_text, to_text};
 
 /// Which form an image file is in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

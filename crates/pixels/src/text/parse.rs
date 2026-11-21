@@ -11,9 +11,14 @@ use crate::model::{Picture, Symbol, Value};
 mod blocks;
 mod legend;
 
-/// The largest side an image may have, in pixels: four times a
-/// background map's, so no Game Boy image comes near it.
+/// The largest side of an image written as pixel text, in pixels: four
+/// times a background map's.
 pub const MAX_SIDE: u32 = 1024;
+
+/// The largest side pixel text may have when read: twice [`MAX_SIDE`],
+/// since padding a sheet's 8-pixel frames to 8x16 objects doubles its
+/// height, so the padded text of a PNG of any size gbcli writes reads.
+pub const MAX_TEXT_SIDE: u32 = 2 * MAX_SIDE;
 
 /// The words that start a line.
 const DIRECTIVES: &[&str] = &["format", "size", "color", "fill", "rows", "tile", "map"];
@@ -254,10 +259,10 @@ impl Parser {
                 format!("`{}` is not a number of pixels", word.text),
                 SIZE_REMEDY,
             )),
-            Some(n) if n == 0 || n > MAX_SIDE => Err(err(
+            Some(n) if n == 0 || n > MAX_TEXT_SIDE => Err(err(
                 line,
                 word.column,
-                format!("an image is 1 to {MAX_SIDE} pixels a side"),
+                format!("an image is 1 to {MAX_TEXT_SIDE} pixels a side"),
                 SIZE_REMEDY,
             )),
             Some(n) => Ok(n),

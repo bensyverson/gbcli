@@ -120,7 +120,9 @@ fn a_png_past_the_texts_largest_side_reads_but_is_refused_as_text() {
         let e = to_text(&loaded.picture, Layout::Rows { frame: None }).expect_err("past MAX_SIDE");
         assert_eq!(
             e.message,
-            format!("the image is {width}x{height}, and pixel text holds 1 to 1024 pixels a side")
+            format!(
+                "the image is {width}x{height}, and gbcli writes pixel text for 1 to 1024 pixels a side"
+            )
         );
         assert_eq!(
             e.remedy,

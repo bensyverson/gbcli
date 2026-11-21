@@ -4,7 +4,7 @@ mod lex;
 mod parse;
 mod write;
 
-pub use parse::{MAX_SIDE, parse_text};
+pub use parse::{MAX_SIDE, MAX_TEXT_SIDE, parse_text};
 pub use write::to_text;
 
 /// A pixel text file's first line.

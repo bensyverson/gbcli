@@ -1,7 +1,10 @@
 //! What pixel text paints: blocks in file order, fill, keep, tiles and
 //! maps, comments, and the counts an image reports.
 
-use gbcli_pixels::{EXAMPLE, Palettes, Value, extension_of, frame_size, is_text_name, size_word};
+use gbcli_pixels::{
+    EXAMPLE, MAX_SIDE, MAX_TEXT_SIDE, Palettes, Value, extension_of, frame_size, is_text_name,
+    size_word,
+};
 
 use super::{draw, parse, raster};
 
@@ -251,4 +254,13 @@ rows 0 2
     assert_eq!(p.line_at(0, 2), Some(5));
     let png = gbcli_pixels::from_raster(&p.raster(&Palettes::default()).unwrap()).unwrap();
     assert_eq!(png.line_at(0, 0), None, "a PNG has no lines");
+}
+
+#[test]
+fn text_reads_twice_the_side_a_png_writes_so_a_padded_sheet_reads() {
+    // A sheet of 8-pixel frames padded to 8x16 objects doubles in height,
+    // so a PNG's largest side, padded, must still read.
+    assert_eq!(MAX_TEXT_SIDE, 2 * MAX_SIDE);
+    let p = parse("format gbcli-pixels 1\nsize 8 2048\ncolor k #000\nfill k\n");
+    assert_eq!((p.width, p.height), (8, 2048));
 }

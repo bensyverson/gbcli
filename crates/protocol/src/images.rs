@@ -294,6 +294,52 @@ impl ShadeRule {
     }
 }
 
+/// What decided one color's DMG shade: its pin, else the project's rule
+/// ([`ShadeRule`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ShadeSource {
+    /// A pin ([`crate::ShadePin`]), ahead of every rule.
+    Pinned,
+    Declared,
+    Known,
+    Stretched,
+    Nearest,
+}
+
+impl ShadeSource {
+    /// The name on the wire.
+    pub fn name(self) -> &'static str {
+        match self {
+            ShadeSource::Pinned => "pinned",
+            ShadeSource::Declared => "declared",
+            ShadeSource::Known => "known",
+            ShadeSource::Stretched => "stretched",
+            ShadeSource::Nearest => "nearest",
+        }
+    }
+}
+
+impl From<ShadeRule> for ShadeSource {
+    fn from(rule: ShadeRule) -> ShadeSource {
+        match rule {
+            ShadeRule::Declared => ShadeSource::Declared,
+            ShadeRule::Known => ShadeSource::Known,
+            ShadeRule::Stretched => ShadeSource::Stretched,
+            ShadeRule::Nearest => ShadeSource::Nearest,
+        }
+    }
+}
+
+/// One color the project's shading decided, and how.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ColorShade {
+    pub color: crate::Rgb555,
+    /// 0 (lightest) to 3.
+    pub shade: u8,
+    pub rule: ShadeSource,
+}
+
 /// A palette gbcli knows, shade 0 first, matched in RGB555.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -427,6 +473,12 @@ pub struct ImagesMade {
     /// stopped before choosing `shades`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dmg_palettes: Vec<DmgPalette>,
+    /// Every art color's shade and every named palette's colors', each
+    /// color once, sorted by color (its RGB555 word), with what decided
+    /// it (LoadHigh's question 993); empty when the build stopped before
+    /// choosing `shades`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub color_shades: Vec<ColorShade>,
     /// What the images share on the GBC, when the target is the GBC.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gbc: Option<GbcImagesMade>,

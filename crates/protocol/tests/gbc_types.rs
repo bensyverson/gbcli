@@ -40,6 +40,7 @@ fn named(palettes: &[&str], assignments: &[(&str, &str)]) -> NamedPalettes {
             .iter()
             .map(|(i, n)| (i.to_string(), n.to_string()))
             .collect::<BTreeMap<_, _>>(),
+        pins: Vec::new(),
     }
 }
 

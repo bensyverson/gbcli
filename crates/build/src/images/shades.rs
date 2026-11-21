@@ -12,11 +12,17 @@
 //!
 //! Two colors may take one shade: BGP and OBP map indices to shades, so the
 //! hardware shows them alike, and the build warns (`shared`).
+//!
+//! A pin (`#rrggbb = N`, `NamedPalettes::pins`; LoadHigh's question 993)
+//! then overrides its own color's shade, art color or palette color. The
+//! rule is chosen and run over every color, pinned ones included, before
+//! the pins apply, so a pin never moves another color's shade.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use gbcli_protocol::{
-    DmgPalette, GbcPalette, KnownPalette, NamedPalette, Rgb555, ShadeChoice, ShadeRule,
+    ColorShade, DmgPalette, GbcPalette, KnownPalette, NamedPalette, Rgb555, ShadeChoice, ShadePin,
+    ShadeRule, ShadeSource,
 };
 
 use super::census::{Key, key};
@@ -53,6 +59,8 @@ pub(crate) struct Shading {
     /// Where the palettes came from, whose `dmg` setting a remedy names.
     pub source: PaletteSource,
     by_key: HashMap<Key, u8>,
+    /// The pinned colors' shades, which `by_key` already holds for the art.
+    pins: HashMap<Key, u8>,
     mapping: Mapping,
 }
 
@@ -118,22 +126,63 @@ impl Shading {
             .collect()
     }
 
-    /// The shade of any color: an art color's own, so a palette and the art
-    /// can't disagree, else what the project's rule makes of it.
+    /// The shade of any color: its pin's, else an art color's own, so a
+    /// palette and the art can't disagree, else what the project's rule
+    /// makes of it.
     fn any(&self, c: Rgb555) -> u8 {
         let [r, g, b] = c.to_rgb888();
         let c = [r, g, b, 0xFF];
-        self.by_key
-            .get(&key(c))
+        let k = key(c);
+        self.pins
+            .get(&k)
+            .or_else(|| self.by_key.get(&k))
             .copied()
             .unwrap_or_else(|| self.mapping.shade(c))
     }
 
+    /// This shading with `pins` applied: each pinned color takes its pin's
+    /// shade, in the art and in any palette, and every other color keeps
+    /// the shade the rule gave it. The pins are checked
+    /// (`NamedPalettes::check`): shades 0-3, each color once.
+    pub fn pinned(mut self, pins: &[ShadePin]) -> Shading {
+        for pin in pins {
+            let k = pin.color.channels();
+            self.pins.insert(k, pin.shade);
+            if let Some(shade) = self.by_key.get_mut(&k) {
+                *shade = pin.shade;
+            }
+        }
+        self
+    }
+
+    /// Every art color's shade and every color of `palettes`', each color
+    /// once, sorted by its RGB555 word, with what decided it.
+    pub fn color_shades(&self, palettes: &[NamedPalette]) -> Vec<ColorShade> {
+        let art = self
+            .by_key
+            .keys()
+            .map(|&[r, g, b]| Rgb555::new(r, g, b).expect("a key is five-bit channels"));
+        let named = palettes.iter().flat_map(|p| p.colors.0);
+        let colors: BTreeMap<u16, Rgb555> = art.chain(named).map(|c| (c.word(), c)).collect();
+        colors
+            .into_values()
+            .map(|color| ColorShade {
+                color,
+                shade: self.any(color),
+                rule: match self.pins.contains_key(&color.channels()) {
+                    true => ShadeSource::Pinned,
+                    false => self.choice.rule.into(),
+                },
+            })
+            .collect()
+    }
+
     /// Whether the stretch moved `c` far from its nearest shade (Ben's
     /// ruling, 2026-11-07: the build warns, `shade_stretched`). Only the
-    /// stretched rule moves colors.
+    /// stretched rule moves colors, and never a pinned one, which was
+    /// pinned on purpose.
     pub fn moved(&self, c: Rgba) -> Option<Moved> {
-        if self.choice.rule != ShadeRule::Stretched {
+        if self.choice.rule != ShadeRule::Stretched || self.pins.contains_key(&key(c)) {
             return None;
         }
         let (nearest, given) = (nearest(c), self.by_key[&key(c)]);
@@ -158,6 +207,7 @@ pub(crate) fn choose(
         choice: ShadeChoice { rule, palette },
         source: source.clone(),
         by_key: colors.iter().map(|&c| (key(c), mapping.shade(c))).collect(),
+        pins: HashMap::new(),
         mapping,
     };
     if let Some(entries) = declared {
@@ -433,5 +483,110 @@ mod tests {
     #[test]
     fn no_colors_keep_the_plain_nearest_rule() {
         assert_eq!(chosen(None, &[]), (rule(ShadeRule::Nearest), vec![]));
+    }
+
+    fn pin(c: Rgba, shade: u8) -> ShadePin {
+        ShadePin {
+            color: Rgb555::from_rgb888(c[0], c[1], c[2]),
+            shade,
+        }
+    }
+
+    const LIGHT: Rgba = [0xC0, 0xC0, 0xC0, 0xFF];
+    const MID: Rgba = [0x80, 0x80, 0x80, 0xFF];
+    const DARK: Rgba = [0x40, 0x40, 0x40, 0xFF];
+
+    /// LoadHigh's question 993: the cascade runs over every color, pinned
+    /// ones included, and a pin then moves its own color only, so the
+    /// stretch's range, the rule and every other color's shade stay.
+    #[test]
+    fn a_pin_overrides_its_own_color_and_moves_no_other() {
+        let colors = [LIGHT, DARK, MID];
+        let plain = choose(&file(), None, &colors);
+        assert_eq!(plain.shades(&colors), [0, 3, 2]);
+        let pinned = choose(&file(), None, &colors).pinned(&[pin(DARK, 0)]);
+        assert_eq!(pinned.choice, plain.choice);
+        assert_eq!(pinned.shades(&colors), [0, 0, 2]);
+        // A color one with the pin in RGB555 is the pinned color.
+        assert_eq!(pinned.shade([0x44, 0x44, 0x44, 0xFF]), 0);
+        // Under a declared rule too: the pin wins over the dmg line.
+        let declared = palette([W, L, D, B]);
+        let s = choose(&file(), Some(&declared), &[W, B]).pinned(&[pin(W, 2)]);
+        assert_eq!(s.shades(&[W, B]), [2, 3]);
+        assert_eq!(s.choice.rule, ShadeRule::Declared);
+    }
+
+    /// A pin reaches a palette's color whether or not the art uses it, and
+    /// a pinned color nothing uses moves nothing.
+    #[test]
+    fn a_pin_reaches_a_palette_color_the_art_does_not_use() {
+        let s = choose(&file(), None, &[W, L]).pinned(&[pin(B, 1), pin(L, 3), pin(MID, 2)]);
+        assert_eq!(s.choice.rule, ShadeRule::Known);
+        // W 0, L pinned 3, D known 2, B pinned 1.
+        assert_eq!(s.palette_byte(&palette([W, L, D, B])), 0b01_10_11_00);
+        assert_eq!(s.shades(&[W, L]), [0, 3]);
+    }
+
+    /// A pinned color was pinned on purpose: the stretch names no move.
+    #[test]
+    fn a_pinned_color_is_never_named_as_moved() {
+        let s = choose(&file(), None, &[B, NEAR_B]).pinned(&[pin(NEAR_B, 0)]);
+        assert_eq!(s.shades(&[B, NEAR_B]), [3, 0]);
+        assert_eq!((s.moved(B), s.moved(NEAR_B)), (None, None));
+    }
+
+    /// Every art color and every named palette's color, once each, sorted
+    /// by color (the RGB555 word), with the rule that decided it; a pinned
+    /// color nothing uses isn't listed.
+    #[test]
+    fn color_shades_list_every_art_and_palette_color_with_its_source() {
+        let s = choose(&file(), None, &[LIGHT, DARK, MID]).pinned(&[pin(MID, 1), pin(W, 0)]);
+        let named = [
+            NamedPalette {
+                name: "a".into(),
+                colors: palette([B, DARK, DARK, MID]),
+            },
+            NamedPalette {
+                name: "b".into(),
+                colors: palette([LIGHT, LIGHT, LIGHT, LIGHT]),
+            },
+        ];
+        let c = |c: Rgba| Rgb555::from_rgb888(c[0], c[1], c[2]);
+        let listed = s.color_shades(&named);
+        assert_eq!(
+            listed,
+            [
+                ColorShade {
+                    color: c(B),
+                    shade: 3,
+                    rule: ShadeSource::Stretched
+                },
+                ColorShade {
+                    color: c(DARK),
+                    shade: 3,
+                    rule: ShadeSource::Stretched
+                },
+                ColorShade {
+                    color: c(MID),
+                    shade: 1,
+                    rule: ShadeSource::Pinned
+                },
+                ColorShade {
+                    color: c(LIGHT),
+                    shade: 0,
+                    rule: ShadeSource::Stretched
+                },
+            ]
+        );
+        let words: Vec<u16> = listed.iter().map(|l| l.color.word()).collect();
+        assert!(words.is_sorted(), "{words:?}");
+        // Under the known rule, a palette color the art lacks is known's.
+        let s = choose(&file(), None, &[W]);
+        let named = [NamedPalette {
+            name: "a".into(),
+            colors: palette([W, W, W, D]),
+        }];
+        let rules: Vec<ShadeSource> = s.color_shades(&named).iter().map(|l| l.rule).collect();
+        assert_eq!(rules, [ShadeSource::Known, ShadeSource::Known]);
     }
 }

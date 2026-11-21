@@ -327,3 +327,46 @@ fn a_malformed_palette_file_is_a_problem_row_naming_its_line() {
     assert!(built.stdout.contains(row), "{row:?} in\n{}", built.stdout);
     assert!(built.stdout.contains(" line=3 "), "{}", built.stdout);
 }
+
+/// LoadHigh's question 993: `#rrggbb = N` in assets/palettes.txt pins a
+/// color's shade. A color pinned twice is a palette_file row at its line;
+/// `--json` lists every color's shade and what decided it, and plain rows
+/// list none (the CLI has no verbose mode to show them under).
+#[test]
+fn a_shade_pin_shades_its_color_and_json_lists_every_colors_shade() {
+    let p = Project::new("images-shade-pins");
+    assert_eq!(p.rgbds(&["new", "game"]).code, 0);
+    write_png(&p.path("game/assets/bg/sky.png"), 16, 8, |x, _| {
+        GRAYS[usize::from(x >= 8)]
+    });
+    let palettes = p.path("game/assets/palettes.txt");
+    fs::write(&palettes, "#aaaaaa = 3\n# again\n#aaa = 1\n").unwrap();
+    let built = p.rgbds(&["build", "game"]);
+    assert_eq!(built.code, 4, "{}{}", built.stdout, built.stderr);
+    let row = "problem limit=palette_file severity=error image=game/assets/palettes.txt count=";
+    assert!(built.stdout.contains(row), "{row:?} in\n{}", built.stdout);
+    assert!(built.stdout.contains(" line=3 "), "{}", built.stdout);
+    assert!(built.stdout.contains("first on line 1"), "{}", built.stdout);
+
+    fs::write(&palettes, "#aaaaaa = 3\n").unwrap();
+    let built = p.rgbds(&["build", "game"]);
+    assert_eq!(built.code, 0, "{}{}", built.stdout, built.stderr);
+    assert!(
+        !built.stdout.lines().any(|l| l.starts_with("shade ")),
+        "{}",
+        built.stdout
+    );
+    let json = p.rgbds(&["build", "game", "--json"]);
+    assert_eq!(json.code, 0, "{}{}", json.stdout, json.stderr);
+    let line: serde_json::Value = serde_json::from_str(json.stdout.trim()).unwrap();
+    let shades = &line["result"]["build"]["images"]["color_shades"];
+    assert_eq!(
+        shades,
+        &serde_json::json!([
+            {"color": 0x56B5, "shade": 3, "rule": "pinned"},
+            {"color": 0x7FFF, "shade": 0, "rule": "known"},
+        ]),
+        "{}",
+        json.stdout
+    );
+}

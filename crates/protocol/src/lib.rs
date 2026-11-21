@@ -66,16 +66,16 @@ pub use font_author::{
 };
 pub use ignored::IgnoredWritesRow;
 pub use images::{
-    DmgPalette, Flip, GbcImage, GbcImagesMade, ImageArt, ImageAsset, ImageKind, ImageLimit,
-    ImageProblem, ImagesMade, KnownPalette, NotPaletteSlot, ObjectSize, PaletteSlot, ShadeChoice,
-    ShadeRule, TileAt, TileEntry,
+    ColorShade, DmgPalette, Flip, GbcImage, GbcImagesMade, ImageArt, ImageAsset, ImageKind,
+    ImageLimit, ImageProblem, ImagesMade, KnownPalette, NotPaletteSlot, ObjectSize, PaletteSlot,
+    ShadeChoice, ShadeRule, ShadeSource, TileAt, TileEntry,
 };
 pub use keys::{Button, KEY_GRAMMAR, KeyAction, KeyError, KeyEvent, parse_keys};
 pub use listing::{CheckpointRow, SymArgs, SymbolArea, SymbolRow};
 pub use moved::{MovedSymbol, SymbolAt};
 pub use opcode::{OpcodeArgs, OpcodeRow};
 pub use palettes::{
-    FaultAt, GbcPalette, NamedPalette, NamedPalettes, NotRgb555, PaletteFault, Rgb555,
+    FaultAt, GbcPalette, NamedPalette, NamedPalettes, NotRgb555, PaletteFault, Rgb555, ShadePin,
 };
 pub use parse::{RequestError, parse_request};
 pub use pixels::{

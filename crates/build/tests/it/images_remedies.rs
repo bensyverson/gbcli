@@ -100,6 +100,7 @@ impl Case {
                 .iter()
                 .map(|a| (a.to_string(), "ember".to_string()))
                 .collect(),
+            pins: Vec::new(),
         };
         let manifest = AssetManifest {
             images,

@@ -13,7 +13,7 @@ and --as. A mutation that passes rev is refused (rev_mismatch) if the session
 moved on. wall_guard_s replaces the server's 60 s host-time guard for this
 request; a request it ends fails wall_guard (exit 3), not budget_exhausted. Unknown and repeated fields are refused, naming the nearest field.
 Fields marked ? may be left out; an op with no required field may omit args.
-This schema's protocol version is 9, which the version op reports. It goes up
+This schema's protocol version is 10, which the version op reports. It goes up
 on a breaking change to these shapes (a new value of a response's enum among
 them), not for a new op or a new optional request field.
 
@@ -211,6 +211,10 @@ tile_map (no slot without --gbc); a --gbc build fills gbc for every image.
             pixels_text only); on a hardware limit of a .pixels image, the
             line (block, map row or fill) that drew the most legend
             characters of the first tile in tiles, the later on a tie
+  color_shades?: [{color: RGB555, shade: 0-3, rule:
+            "pinned"|"declared"|"known"|"stretched"|"nearest"}]
+            (every art and named palette color once, by RGB555: its DMG
+            shade, and its pin or the rule that decided it)
 Fonts, in result.build.images.fonts and result.assets.images.fonts (gbcli
 help fonts): [{source, label, fixed, glyphs: [{key, width, rows: [N ×8],
 origin: "drawn"|"composed"}]}], glyphs in glyph-number order (a build's
@@ -228,14 +232,17 @@ flipped, and its GBC palette slot (on a GBC image, every entry has one).
 Named palettes (assets/palettes.txt reads into this; refused like the file:
 a name that can't be a label, a repeated name, "dmg" as a name or assigned,
 a dmg color repeated in RGB555, an unknown palette, an IMAGE assigned twice
-or not spelled bg/, sprites/ or tiles/ NAME.png or NAME.pixels):
+or not spelled bg/, sprites/ or tiles/ NAME.png or NAME.pixels, a shade
+past 3, a color pinned twice):
   {dmg?: PALETTE, palettes: [{name: NAME, colors: PALETTE}],
-   assignments?: {IMAGE: NAME}}   (IMAGE: its path under assets/)
+   assignments?: {IMAGE: NAME}, pins?: [{color: RGB555, shade: 0-3}]}
+  (IMAGE: its path under assets/; pins: colors pinned to a DMG shade
+  ahead of every rule, the file's #rrggbb = N lines)
 PALETTE = [RGB555 ×4], index 0 first. RGB555 = 0-32767, the word BCPD and
 OCPD take: red in bits 0-4, green 5-9, blue 10-14.
   gbc   {"art":"indexed","palette":"forest"}
   entry {"index":2,"flip":"x","palette":1}
-  named {"dmg":[32767,22197,10570,0],"palettes":[{"name":"forest","colors":[32767,9009,6534,2176]}],"assignments":{"bg/town.png":"forest"}}
+  named {"dmg":[32767,22197,10570,0],"palettes":[{"name":"forest","colors":[32767,9009,6534,2176]}],"assignments":{"bg/town.png":"forest"},"pins":[{"color":10662,"shade":2}]}
 
 Examples:
   {"id":"1","session":"dx","op":"run","args":{"frames":120}}
@@ -380,6 +387,17 @@ mod tests {
         // The dmg entry is the grays #ffffff #aaaaaa #555555 #000000.
         let grays = [0xFF, 0xAA, 0x55, 0x00].map(|v| Rgb555::from_rgb888(v, v, v));
         assert_eq!(named.dmg.map(|d| d.0), Some(grays));
+        // LoadHigh's question 993: a pin, and every color's shade back.
+        let moss = Rgb555::from_rgb888(0x34, 0x68, 0x56);
+        let pins: Vec<(Rgb555, u8)> = named.pins.iter().map(|p| (p.color, p.shade)).collect();
+        assert_eq!(pins, [(moss, 2)]);
+        for word in [
+            "pins?: [{color: RGB555, shade: 0-3}]",
+            "color_shades?: [{color: RGB555, shade: 0-3, rule:",
+            "\"pinned\"|\"declared\"|\"known\"|\"stretched\"|\"nearest\"",
+        ] {
+            assert!(SCHEMA.contains(word), "{word}");
+        }
         for limit in [
             ImageLimit::GbcPalettes,
             ImageLimit::GbcTileColors,

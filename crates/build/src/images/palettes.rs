@@ -6,7 +6,9 @@
 //! under `assets/`. The reserved name `dmg` lists the colors that mean
 //! shades 0-3, the first rule of the shade cascade (`shades::choose`); the
 //! reserved `objects: 8x8` (or `8x16`) sets every sheet's object size, as
-//! LCDC bit 2 sets one for the whole screen (leaf mjBkTn).
+//! LCDC bit 2 sets one for the whole screen (leaf mjBkTn). A color
+//! assigned a number, `#346856 = 2`, pins that color to DMG shade 0-3
+//! ahead of every automatic rule (LoadHigh's question 993).
 //!
 //! `#` then whitespace (or `#` at the end of a line) starts a comment,
 //! anywhere a word could start; any other word starting `#` is a color, so
@@ -20,7 +22,7 @@ use std::path::Path;
 
 use gbcli_protocol::{
     FaultAt, GbcPalette, ImageLimit, ImageProblem, NamedPalette, NamedPalettes, ObjectSize,
-    PaletteFault, Rgb555, Severity,
+    PaletteFault, Rgb555, Severity, ShadePin,
 };
 
 use super::census::error;
@@ -38,9 +40,10 @@ pub(crate) const OBJECTS: &str = "objects";
 
 pub(crate) const REMEDY: &str = "one palette a line, `name: c0 c1 c2 c3` (#rrggbb or #rgb, index 0 \
                       lightest first; `dmg:` for the colors of DMG shades 0-3; `objects: 8x8` \
-                      or `objects: 8x16` for every sheet's object size), or one image a \
+                      or `objects: 8x16` for every sheet's object size), one image a \
                       line by its own file name, `bg/town.png = name` or, for pixel text, \
-                      `bg/town.pixels = name`; '#' and a space or tab starts a comment \
+                      `bg/town.pixels = name`, or one color pinned to DMG shade 0-3 a line, \
+                      `#rrggbb = N`; '#' and a space or tab starts a comment \
                       (gbcli help images)";
 
 /// Why a palette file was refused.
@@ -81,6 +84,10 @@ pub(crate) struct Parsed {
     /// The `dmg` line's, and its colors as written.
     pub dmg_line: Option<u32>,
     pub dmg_words: Vec<String>,
+    /// Each pin's line and its color as written, parallel to
+    /// `named.pins`.
+    pub pin_lines: Vec<u32>,
+    pub pin_words: Vec<String>,
     /// The `objects` line's size, and its line.
     pub objects: Option<ObjectSize>,
     pub objects_line: Option<u32>,
@@ -216,7 +223,15 @@ pub(crate) fn parse(text: &str) -> Result<Parsed, Bad> {
             continue;
         }
         let joined = words.join(" ");
-        if let Some((image, name)) = joined.split_once('=') {
+        if let Some((word, shade)) = joined
+            .split_once('=')
+            .filter(|(left, _)| left.trim().starts_with('#'))
+        {
+            let (word, shade) = (word.trim(), shade.trim());
+            parsed.named.pins.push(pin(word, shade, line)?);
+            parsed.pin_lines.push(line);
+            parsed.pin_words.push(word.to_string());
+        } else if let Some((image, name)) = joined.split_once('=') {
             let (image, name) = (image.trim(), name.trim());
             assignment(image, name, line)?;
             let assigned = parsed.named.assign(image.to_string(), name.to_string());
@@ -262,8 +277,8 @@ pub(crate) fn parse(text: &str) -> Result<Parsed, Bad> {
                 line,
                 format!(
                     "{:?} is neither a palette (`name: c0 c1 c2 c3`), an assignment \
-                     (`bg/town.png = name`, or `bg/town.pixels = name` for pixel text) nor a \
-                     comment ('#', a space or tab, then text)",
+                     (`bg/town.png = name`, or `bg/town.pixels = name` for pixel text), a \
+                     shade pin (`#rrggbb = N`) nor a comment ('#', a space or tab, then text)",
                     raw.trim()
                 ),
             ));
@@ -287,6 +302,7 @@ impl Parsed {
             FaultAt::Dmg => self.dmg_line.unwrap_or(1),
             FaultAt::Palette(i) => self.palette_lines[i],
             FaultAt::Assignment(image) => self.lines[image],
+            FaultAt::Pin(i) => self.pin_lines[i],
         }
     }
 
@@ -319,9 +335,45 @@ impl Parsed {
                     word(*first)
                 )
             }
+            PaletteFault::ShadePastThree { index, shade } => {
+                past_three(&self.pin_words[*index], &shade.to_string())
+            }
+            PaletteFault::PinnedTwice { index, first } => {
+                let (word, earlier) = (&self.pin_words[*index], &self.pin_words[*first]);
+                let line = self.pin_lines[*first];
+                if word == earlier {
+                    format!("{word} is pinned again (first on line {line})")
+                } else {
+                    format!(
+                        "{word} is {earlier} in RGB555, which keeps 5 bits a channel, so it is \
+                         pinned again (first on line {line})"
+                    )
+                }
+            }
             _ => fault.to_string(),
         }
     }
+}
+
+/// A pin, `#rrggbb = N`, as written: the color, and a number for the shade.
+/// A number past 3 is the shared rules' to refuse (`ShadePastThree`).
+fn pin(word: &str, shade: &str, line: u32) -> Result<ShadePin, Bad> {
+    let Some(color) = color(word) else {
+        return Err(Bad::at(
+            line,
+            format!("{word:?} is no #rrggbb or #rgb color, so it can't be pinned to a shade"),
+        ));
+    };
+    match shade.parse::<u8>() {
+        Ok(shade) => Ok(ShadePin { color, shade }),
+        Err(_) => Err(Bad::at(line, past_three(word, shade))),
+    }
+}
+
+/// Why `word = shade` pins no shade.
+fn past_three(word: &str, shade: &str) -> String {
+    let given = if shade.is_empty() { "nothing" } else { shade };
+    format!("{word} pins no DMG shade: a pin's shade is 0 to 3 (0 white, 3 black), not {given}")
 }
 
 /// The words of a line before its comment: `#` alone as a word (it was
@@ -710,5 +762,62 @@ mod tests {
         assert_eq!(bad.line, Some(2), "{}", bad.message);
         let parsed = parse(&format!("{GRAYS}a: #fff #8c4 #363 #021\nbg/z.png = a\n")).unwrap();
         assert_eq!(parsed.named.check(), Ok(()));
+    }
+
+    /// LoadHigh's question 993: `#rrggbb = N` (or `#rgb = N`) pins a color
+    /// to shade N, in file order, beside palettes and assignments, with a
+    /// comment after it.
+    #[test]
+    fn a_color_assigned_a_number_is_a_shade_pin() {
+        let text = "forest: #fff #8c4 #363 #021\n\
+                    #346856 = 2        # the moss is dark gray\n\
+                    bg/town.png = forest\n\
+                    #F80=1\n";
+        let parsed = parse(text).unwrap();
+        assert_eq!(
+            parsed.named.pins,
+            [
+                ShadePin {
+                    color: rgb(0x346856),
+                    shade: 2
+                },
+                ShadePin {
+                    color: rgb(0xFF8800),
+                    shade: 1
+                },
+            ]
+        );
+        assert_eq!(parsed.pin_lines, [2, 4]);
+        assert_eq!(parsed.named.assignments["bg/town.png"], "forest");
+        assert_eq!(parse("#000 = 0\n#fff = 3\n").unwrap().named.pins.len(), 2);
+    }
+
+    /// A color pinned twice (one color in RGB555, even to the same shade)
+    /// or a shade outside 0-3 is a `palette_file` refusal at its line.
+    #[test]
+    fn a_color_pinned_twice_or_a_shade_outside_0_to_3_is_refused_at_its_line() {
+        for (text, line, said) in [
+            ("#000 = 3\n#fff = 0\n#040404 = 3\n", 3, "first on line 1"),
+            ("#000 = 3\n#fff = 0\n#040404 = 3\n", 3, "#040404 is #000"),
+            ("#346856 = 4\n", 1, "0 to 3"),
+            ("#fff = 0\n\n#346856 = 255\n", 3, "0 to 3"),
+            ("#346856 = 300\n", 1, "0 to 3"),
+            ("#346856 = -1\n", 1, "0 to 3"),
+            ("#346856 = white\n", 1, "0 to 3"),
+            ("#346856 = 1 2\n", 1, "0 to 3"),
+            ("#3468 = 1\n", 1, "no #rrggbb or #rgb color"),
+        ] {
+            let bad = parse(text).unwrap_err();
+            assert_eq!(bad.line, Some(line), "{text:?}: {}", bad.message);
+            assert!(bad.message.contains(said), "{said:?} in {}", bad.message);
+        }
+        // What still reads beside the refusals: a pin, and an assignment.
+        assert!(parse("a: #fff #8c4 #363 #021\n#fff = 0\nbg/t.png = a\n").is_ok());
+    }
+
+    /// The remedy names the pin line, so a refused file says how to write it.
+    #[test]
+    fn the_remedy_shows_a_shade_pin() {
+        assert!(REMEDY.contains("`#rrggbb = N`"), "{REMEDY}");
     }
 }

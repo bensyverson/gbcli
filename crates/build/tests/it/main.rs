@@ -33,6 +33,7 @@ mod images_png_encodings;
 mod images_remedies;
 mod images_review_8x8;
 mod images_shade_edges;
+mod images_shade_pins;
 mod images_shades;
 mod images_shared_palettes;
 mod images_sprites;

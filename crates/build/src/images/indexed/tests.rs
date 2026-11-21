@@ -23,6 +23,7 @@ fn named(names: &[&str], assignments: &[(&str, &str)]) -> NamedPalettes {
             .iter()
             .map(|(i, n)| (i.to_string(), n.to_string()))
             .collect(),
+        pins: Vec::new(),
     }
 }
 

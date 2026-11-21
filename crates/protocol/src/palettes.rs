@@ -149,6 +149,21 @@ pub struct NamedPalettes {
     /// then the file); the name is one of `palettes`.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub assignments: BTreeMap<String, String>,
+    /// Colors pinned to a DMG shade, ahead of every automatic rule (the
+    /// file's `#rrggbb = N` lines, in file order). A pin moves its own
+    /// color only; each color (in RGB555) is pinned once.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pins: Vec<ShadePin>,
+}
+
+/// A color pinned to a DMG shade, ahead of every automatic rule
+/// (LoadHigh's question 993).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ShadePin {
+    pub color: Rgb555,
+    /// 0 (lightest) to 3; [`NamedPalettes::check`] refuses more.
+    pub shade: u8,
 }
 
 impl NamedPalettes {
@@ -223,6 +238,7 @@ mod tests {
                 colors: forest,
             }],
             assignments: BTreeMap::from([("bg/town.png".into(), "forest".into())]),
+            pins: Vec::new(),
         };
         let json = serde_json::to_string(&named).unwrap();
         assert_eq!(
@@ -236,6 +252,62 @@ mod tests {
         let empty = NamedPalettes::default();
         assert_eq!(serde_json::to_string(&empty).unwrap(), r#"{"palettes":[]}"#);
         assert_eq!(serde_json::from_str::<NamedPalettes>("{}").unwrap(), empty);
+    }
+
+    /// LoadHigh's question 993: pins ride beside the palettes, and a struct
+    /// without them reads and writes as before.
+    #[test]
+    fn pins_round_trip_and_are_left_off_when_there_are_none() {
+        let moss = Rgb555::from_rgb888(0x34, 0x68, 0x56);
+        let named = NamedPalettes {
+            pins: vec![
+                ShadePin {
+                    color: moss,
+                    shade: 2,
+                },
+                ShadePin {
+                    color: Rgb555::WHITE,
+                    shade: 0,
+                },
+            ],
+            ..NamedPalettes::default()
+        };
+        let json = serde_json::to_string(&named).unwrap();
+        assert_eq!(
+            json,
+            format!(
+                r#"{{"palettes":[],"pins":[{{"color":{},"shade":2}},{{"color":32767,"shade":0}}]}}"#,
+                moss.word()
+            )
+        );
+        assert_eq!(serde_json::from_str::<NamedPalettes>(&json).unwrap(), named);
+        assert_eq!(
+            serde_json::to_string(&NamedPalettes::default()).unwrap(),
+            r#"{"palettes":[]}"#
+        );
+    }
+
+    /// The wire refuses what the file refuses: a shade past 3, and a color
+    /// pinned twice, even to the same shade; a pin with a stranger field is
+    /// refused too.
+    #[test]
+    fn a_shade_past_3_or_a_color_pinned_twice_is_refused_on_the_wire() {
+        let past = r#"{"palettes":[],"pins":[{"color":0,"shade":3},{"color":1,"shade":4}]}"#;
+        let e = serde_json::from_str::<NamedPalettes>(past).unwrap_err();
+        let fault = PaletteFault::ShadePastThree { index: 1, shade: 4 };
+        assert!(e.to_string().contains(&fault.to_string()), "{e}");
+        assert_eq!(fault.at(), FaultAt::Pin(1));
+
+        let twice = r#"{"palettes":[],"pins":[{"color":5,"shade":1},{"color":7,"shade":2},{"color":5,"shade":1}]}"#;
+        let e = serde_json::from_str::<NamedPalettes>(twice).unwrap_err();
+        let fault = PaletteFault::PinnedTwice { index: 2, first: 0 };
+        assert!(e.to_string().contains(&fault.to_string()), "{e}");
+        assert_eq!(fault.at(), FaultAt::Pin(2));
+
+        let stranger = r#"{"palettes":[],"pins":[{"color":0,"shade":0,"why":"x"}]}"#;
+        assert!(serde_json::from_str::<NamedPalettes>(stranger).is_err());
+        let fine = r#"{"palettes":[],"pins":[{"color":0,"shade":3},{"color":1,"shade":3}]}"#;
+        assert!(serde_json::from_str::<NamedPalettes>(fine).is_ok());
     }
 
     /// A client's struct is checked as strictly as a request.

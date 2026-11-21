@@ -42,8 +42,13 @@ first rule that applies:
                 0 and its darkest shade 3, then the nearest shade (nearest:
                 one lightness only, so nothing to stretch)
 The images row says which: shades=declared|known|stretched|nearest, and
-palette= for a known one. With --json, images.dmg_palettes gives each named
-palette as the byte for BGP or an OBP, by the same rule, used by art or not.
+palette= for a known one. A pin (`#rrggbb = N` in assets/palettes.txt)
+then gives its own color shade N, in every image and palette, and moves no
+other color: the rule still runs over every color. With --json,
+images.dmg_palettes gives each named palette as the byte for BGP or an
+OBP, used by art or not, and images.color_shades every art and palette
+color's shade with its rule (pinned, or the rule's name); pin any of them
+to keep it.
 Colors in one shade draw alike, with a shared_shade warning. Color art's,
 in a plain build, warns once a shade
 for colors that share it anywhere in the image; under --gbc, whose color
@@ -65,6 +70,7 @@ DMG's lightest) first, and assigns them to images by path under assets/:
   forest: #fff #8c4 #363 #021               # #rgb is #rrggbb (#88cc44)
   ember:  #ffe #f80 #a20 #200
   objects: 8x8                              # reserved: every sheet's objects
+  #346856 = 2                               # pin: this color is shade 2
   bg/town.png = forest                      # an image by its own file name:
   bg/town.pixels = forest                   # this one if town is pixel text
 Colors are #rrggbb or #rgb, kept as RGB555. Names are a lowercase letter,
@@ -96,7 +102,8 @@ the image's 8x8 grid; --json lists them all), message and remedy.
   palette_file        assets/palettes.txt doesn't read: a bad line, a name
                       defined or an image assigned twice, two names with
                       one label (forest2, forest_2), an unknown name or
-                      image, or dmg assigned (line=N)
+                      image, dmg assigned, a color pinned twice or a
+                      shade outside 0-3 (line=N)
   shade_stretched     a warning: the stretch put a color 2+ shades from its
                       nearest (e.g. #101010 beside only black, drawn white)
   alpha               a pixel half transparent, or any in a background
@@ -241,6 +248,7 @@ project: each as its path under assets/ (it sets kind, labels and frame
 size), the file to read, and a dmg version, with the palettes
 palettes.txt would hold (`gbcli schema`): palettes.dmg is the dmg line
 (four RGB555 colors, shades 0-3), palettes.assignments the `path = name`
-lines, and a manifest's objects ("8x8" or "8x16") the objects line.
-A manifest reads a dmg version only from an image's dmg field. The CLI
-reads a relative file or dmg path from the manifest's folder.
+lines, palettes.pins the `#rrggbb = N` lines, and a manifest's objects
+("8x8" or "8x16") the objects line. A manifest reads a dmg version only
+from an image's dmg field. The CLI reads a relative file or dmg path from
+the manifest's folder.

@@ -2,7 +2,8 @@
 //! from the wire (the reviews of 81cf3d2 and da98a90): names that can
 //! become labels, each once, never `dmg`; a `dmg` palette of four colors
 //! distinct in RGB555; assignments to a defined palette, never `dmg`, of
-//! an image by its canonical path under `assets/`, each image once. What needs the
+//! an image by its canonical path under `assets/`, each image once; pins
+//! of shades 0-3, each color once. What needs the
 //! project (does the image exist?) is the build's to check.
 
 use std::collections::BTreeMap;
@@ -10,7 +11,7 @@ use std::fmt;
 
 use serde::Deserialize;
 
-use super::{GbcPalette, NamedPalette, NamedPalettes};
+use super::{GbcPalette, NamedPalette, NamedPalettes, ShadePin};
 use crate::images::ImageKind;
 
 /// The reserved name: the DMG shades, not a GBC palette.
@@ -42,6 +43,11 @@ pub enum PaletteFault {
     /// `image` is assigned a palette a second time ([`NamedPalettes::assign`]):
     /// read last-wins, the palette first given would silently not be used.
     AssignedAgain { image: String },
+    /// `pins[index]` pins a shade past 3; the DMG's are 0 to 3.
+    ShadePastThree { index: usize, shade: u8 },
+    /// `pins[index]` pins the color of `pins[first]` again (one color in
+    /// RGB555), even to the same shade.
+    PinnedTwice { index: usize, first: usize },
 }
 
 /// Where a fault is: a palette by its index, or an assignment by its image.
@@ -51,6 +57,8 @@ pub enum FaultAt<'a> {
     Dmg,
     Palette(usize),
     Assignment(&'a str),
+    /// A pin, by its index.
+    Pin(usize),
 }
 
 impl PaletteFault {
@@ -64,6 +72,8 @@ impl PaletteFault {
             | PaletteFault::BadImage { image }
             | PaletteFault::AssignedAgain { image } => FaultAt::Assignment(image),
             PaletteFault::RepeatedDmgColor { .. } => FaultAt::Dmg,
+            PaletteFault::ShadePastThree { index, .. }
+            | PaletteFault::PinnedTwice { index, .. } => FaultAt::Pin(*index),
         }
     }
 }
@@ -106,6 +116,15 @@ impl fmt::Display for PaletteFault {
             PaletteFault::AssignedAgain { image } => {
                 write!(f, "{image} is assigned a palette again")
             }
+            PaletteFault::ShadePastThree { index, shade } => write!(
+                f,
+                "pin {index} pins shade {shade}, but the DMG's shades are 0 to 3 (0 lightest)"
+            ),
+            PaletteFault::PinnedTwice { index, first } => write!(
+                f,
+                "pin {index} pins pin {first}'s color again (one color in RGB555), so a color \
+                 would have two pins"
+            ),
         }
     }
 }
@@ -119,7 +138,7 @@ impl NamedPalettes {
     }
 
     /// Every fault: `dmg`'s, then the palettes' in order, then the
-    /// assignments' by image.
+    /// assignments' by image, then the pins' in order.
     pub fn faults(&self) -> Vec<PaletteFault> {
         let mut faults = Vec::new();
         if let Some(GbcPalette(dmg)) = &self.dmg
@@ -162,6 +181,17 @@ impl NamedPalettes {
                 });
             }
         }
+        for (index, pin) in self.pins.iter().enumerate() {
+            if pin.shade > 3 {
+                faults.push(PaletteFault::ShadePastThree {
+                    index,
+                    shade: pin.shade,
+                });
+            } else if let Some(first) = self.pins[..index].iter().position(|p| p.color == pin.color)
+            {
+                faults.push(PaletteFault::PinnedTwice { index, first });
+            }
+        }
         faults
     }
 
@@ -184,6 +214,8 @@ pub(super) struct Unchecked {
     palettes: Vec<NamedPalette>,
     #[serde(default, deserialize_with = "assigned_once")]
     assignments: BTreeMap<String, String>,
+    #[serde(default)]
+    pins: Vec<ShadePin>,
 }
 
 fn assign_once(
@@ -236,6 +268,7 @@ impl TryFrom<Unchecked> for NamedPalettes {
             dmg: u.dmg,
             palettes: u.palettes,
             assignments: u.assignments,
+            pins: u.pins,
         };
         named.check()?;
         Ok(named)

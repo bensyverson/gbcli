@@ -92,6 +92,61 @@ fn a_pixel_text_problem_carries_its_line_and_column() {
     assert_eq!(ImageLimit::PixelsText.name(), "pixels_text");
 }
 
+/// LoadHigh's question 993: every color's shade and the rule that gave it,
+/// on the wire as the color's word, the shade and the rule's name.
+#[test]
+fn color_shades_round_trip_with_their_source() {
+    let made = ImagesMade {
+        color_shades: vec![
+            ColorShade {
+                color: crate::Rgb555::BLACK,
+                shade: 3,
+                rule: ShadeSource::Stretched,
+            },
+            ColorShade {
+                color: crate::Rgb555::WHITE,
+                shade: 1,
+                rule: ShadeSource::Pinned,
+            },
+        ],
+        ..ImagesMade::default()
+    };
+    let json = serde_json::to_string(&made).unwrap();
+    assert_eq!(
+        json,
+        r#"{"images":[],"color_shades":[{"color":0,"shade":3,"rule":"stretched"},{"color":32767,"shade":1,"rule":"pinned"}]}"#
+    );
+    assert_eq!(serde_json::from_str::<ImagesMade>(&json).unwrap(), made);
+    assert_eq!(
+        serde_json::to_string(&ImagesMade::default()).unwrap(),
+        r#"{"images":[]}"#
+    );
+    let sources = [
+        ShadeSource::Pinned,
+        ShadeSource::Declared,
+        ShadeSource::Known,
+        ShadeSource::Stretched,
+        ShadeSource::Nearest,
+    ];
+    let names: Vec<&str> = sources.iter().map(|s| s.name()).collect();
+    assert_eq!(
+        names,
+        ["pinned", "declared", "known", "stretched", "nearest"]
+    );
+    for s in sources {
+        assert_eq!(serde_json::to_value(s).unwrap(), s.name());
+    }
+    // Each automatic rule is the source of the colors it decided.
+    for rule in [
+        ShadeRule::Declared,
+        ShadeRule::Known,
+        ShadeRule::Stretched,
+        ShadeRule::Nearest,
+    ] {
+        assert_eq!(ShadeSource::from(rule).name(), rule.name());
+    }
+}
+
 #[test]
 fn the_shade_rule_round_trips_with_its_known_palette() {
     let made = ImagesMade {

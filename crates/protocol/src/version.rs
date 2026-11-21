@@ -28,8 +28,11 @@ use serde::{Deserialize, Serialize};
 /// `drawn`, the scroll each visible line began with. 9 since LoadHigh's
 /// questions 782 and 784: `ImageAsset` gains `obp`, a sheet's shade order,
 /// and `ManifestImage` gains `resident`, false for a stored sheet left out
-/// of the object-tile and VRAM counts.
-pub const PROTOCOL_VERSION: u32 = 9;
+/// of the object-tile and VRAM counts. 10 since LoadHigh's question 993
+/// (gbcli leaf 323urF): `NamedPalettes` gains `pins`, colors pinned to a
+/// DMG shade, and `ImagesMade` gains `color_shades`, every color's shade
+/// and the new enum `ShadeSource` that says what decided it.
+pub const PROTOCOL_VERSION: u32 = 10;
 
 /// What `version` answers.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -72,7 +75,7 @@ mod tests {
         };
         assert_eq!(
             serde_json::to_string(&result).unwrap(),
-            r#"{"version":{"gbcli":"0.1.0","protocol":9,"sameboy":"abc","patch_set":"def"}}"#
+            r#"{"version":{"gbcli":"0.1.0","protocol":10,"sameboy":"abc","patch_set":"def"}}"#
         );
     }
 }

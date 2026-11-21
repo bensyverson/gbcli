@@ -64,6 +64,8 @@ A `git merge --squash` that conflicted in two files was resolved in one (crates/
 
 ## 2026-11-07 — in a worktree, run cargo as plain `cargo`, not rustup's
 
+> **Correction, 2026-11-20:** Homebrew's `rust` is no longer installed. A trial `brew install` of the gbcli formula had to install it as a fresh build dependency, then autoremoved it. Plain `cargo` now resolves to rustup's `~/.cargo/bin/cargo` (1.100.0), which accepts `resolver = 3`. The advice still holds: run plain `cargo` with the sandbox off. The Homebrew paths below are history.
+
 Corrected 2026-11-09: this entry used to say to run `/Users/ben/.cargo/bin/cargo`, which was wrong by then. That path is unreadable in the sandbox, and its toolchain rejects `resolver = 3`. Homebrew's `cargo` (`/opt/homebrew/bin/cargo`, 1.99.1) is on `PATH` and works. In a worktree, the guard still refuses any command that puts a `/Users/ben/git/...` path next to `cargo`, so run `cargo` from the worktree, one plain command per call, with the sandbox off: inside the sandbox it can't read the registry cache and fails updating the crates.io index (leaves DkhKgi, a1393ec, 5x5Z42, 5YL53r). For a wasm check use `scripts/web/check-wasm.sh`: Homebrew's `rustc` comes first on `PATH` and silently ignores `+stable` and `rustup run`, so the script sets `RUSTC` to rustup's toolchain itself.
 
 ## 2026-11-07 — `.jobs/log/*.jsonl` is tracked, so a `git reset --hard` erases every uncommitted `job` write

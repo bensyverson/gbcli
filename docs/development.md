@@ -1,6 +1,6 @@
 # Development
 
-How to set up a checkout, run the tests, and keep the suite fast.
+How to set up a checkout, run the tests, keep the suite fast, and release.
 
 ## Set up a checkout
 
@@ -24,3 +24,11 @@ How to set up a checkout, run the tests, and keep the suite fast.
 ## Costs
 
 - Build cost (`scripts/bench/workspace-build/run.sh`) and CLI latency (`scripts/bench/cli-latency/run.py`, about 12 ms a request against a live session): figures in [scripts/bench/README.md](../scripts/bench/README.md).
+
+## Releasing
+
+gbcli ships through Ben's Homebrew tap (`brew install bensyverson/tap/gbcli`), released the same way as his other tools. With [homebrew-tap](https://github.com/bensyverson/homebrew-tap) checked out beside this repo, `scripts/release` runs the tap's release script: it runs the pre-commit hook as its check, tags `v<version>`, points `Formula/gbcli.rb` at the tag, builds and uploads an Apple-silicon bottle for macOS 15 and later, then installs, tests and audits the formula. `scripts/release.conf` says how; `scripts/release --help` lists the steps, and `--dry-run` prints the plan. It needs the Bash sandbox off.
+
+- **Bump the version by hand, then run `scripts/release` with no version.** The version is `version` under `[workspace.package]` in `Cargo.toml`, and every crate's entry in `Cargo.lock` repeats it. `scripts/release <X.Y.Z>` would commit `Cargo.toml` alone, and the formula builds with `cargo install --locked`, which refuses a stale lock. So change the version, run `cargo check` to update the lock, and commit both first.
+- **Run the pre-release suite first:** `cargo test --workspace -- --ignored`. The release check runs only the warm suite.
+- **The formula's test** runs `gbcli new`, `build` and a 60-frame `run` with a screenshot, so a release that can't build its own starter fails `brew test`.

@@ -1,4 +1,4 @@
-<!-- agents:begin harness@b7b83e -->
+<!-- agents:begin harness@15aa0e -->
 # Harness facts
 
 Facts about the tool an agent runs *inside*, not about this project — they are identical in every repo, which is why they are not in `project/gotchas.md`. One section per harness; today there is only Claude Code. Read this the first time a call fails with a permission error or a refusal you did not expect: none of these failures names the harness, which is exactly what makes them expensive.
@@ -35,7 +35,7 @@ Four more. A worktree lives under `<repo>/.claude/worktrees/<name>`, so any tool
 
 ### Models
 
-The main thread runs the top tier; subagents run Opus — judgment calls, contended seams, anything fail-closed — or Sonnet for mechanical, well-specified edits. Never give an agent the main thread's tier: the integrator's read of the merged diff is the expensive step, so that is where the top tier is spent. Which tier is which changes with the lineup; check before assuming.
+The main thread runs the top tier and reads every merged diff; no agent gets that tier. Sonnet takes leaves whose brief can state what the code must honor: a reference to port, a red probe, or a quoted invariant. It also takes review fixes and second reviews. Opus takes the unstated: runtime contracts, design choices, open-ended discovery, cross-checker rules, anything fail-closed. When a Sonnet leaf touches runtime state, quote the contract. Tiers change with the lineup; check.
 
 ### Long-running processes
 

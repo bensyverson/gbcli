@@ -29,10 +29,7 @@ fn a_tile_decodes_to_color_indices() {
     let t = tile(&core, 0, 5).unwrap();
     for (y, row) in t.pixels.iter().enumerate() {
         assert_eq!(row[0], 3, "row {y} pixel 0");
-        assert!(
-            row[1..].iter().all(|&c| c as usize == y % 4),
-            "row {y}"
-        );
+        assert!(row[1..].iter().all(|&c| c as usize == y % 4), "row {y}");
     }
     assert!(
         tile(&core, 0, 384).is_err(),

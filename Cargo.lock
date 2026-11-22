@@ -219,6 +219,7 @@ dependencies = [
  "gbcli-bundle",
  "gbcli-core",
  "gbcli-engine",
+ "gbcli-music",
  "gbcli-pixels",
  "gbcli-protocol",
  "gbcli-view",

@@ -6,8 +6,8 @@
 //! export is checked by register writes in `crates/build/tests/it/music_equiv.rs`.
 
 use gbcli_music::{
-    BLANK_ROWS, Cell, EXAMPLE, NO_NOTE, Pattern, Song, descriptor_for, global_symbols, parse_text,
-    rgbds_asm,
+    AsmRefusal, BLANK_ROWS, Cell, EXAMPLE, NO_NOTE, Pattern, Song, descriptor_for, global_symbols,
+    is_descriptor, parse_text, rgbds_asm, rgbds_text,
 };
 
 fn text(song: &Song, descriptor: &str) -> String {
@@ -436,4 +436,53 @@ fn the_example_song_emits_its_golden() {
             actual.display()
         );
     }
+}
+
+#[test]
+fn the_source_as_text_is_the_emitters_bytes() {
+    let song = parse_text(EXAMPLE).unwrap();
+    assert_eq!(
+        rgbds_text(&song, "song_example").unwrap().into_bytes(),
+        rgbds_asm(&song, "song_example")
+    );
+}
+
+#[test]
+fn a_descriptor_is_an_rgbds_symbol_with_no_scope() {
+    for good in ["song_theme", "_a", "A9", "x"] {
+        assert!(is_descriptor(good), "{good}");
+    }
+    let song = parse_text(EXAMPLE).unwrap();
+    for bad in [
+        "",
+        "9lives",
+        "song.theme",
+        "song theme",
+        "s\u{f6}ng",
+        "a-b",
+        "#x",
+    ] {
+        assert!(!is_descriptor(bad), "{bad}");
+        let refused = rgbds_text(&song, bad).unwrap_err();
+        assert_eq!(refused, AsmRefusal::Descriptor(bad.to_string()));
+        assert!(
+            refused.message().contains("descriptor"),
+            "{}",
+            refused.message()
+        );
+        assert!(refused.remedy().contains("letters"), "{}", refused.remedy());
+    }
+}
+
+#[test]
+fn a_routine_that_is_not_utf8_has_no_source_as_text() {
+    let mut song = parse_text(EXAMPLE).unwrap();
+    song.routines[3] = vec![b'n', b'o', b'p', 0xFF];
+    let refused = rgbds_text(&song, "song_t").unwrap_err();
+    assert_eq!(refused, AsmRefusal::NotText { routine: 3 });
+    assert!(
+        refused.message().contains("routine 3"),
+        "{}",
+        refused.message()
+    );
 }

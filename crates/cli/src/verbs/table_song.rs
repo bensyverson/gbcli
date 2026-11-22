@@ -19,6 +19,18 @@ const SONG: &[FlagSpec] = &[
         "PATH",
         "save a piano roll PNG of the song's notes, drawn from the file without building it",
     ),
+    value(
+        "asm",
+        "PATH",
+        "write the song as RGBDS source for hUGEDriver, as build converts assets/music, \
+         for a build of your own (the `song` op answers the same bytes)",
+    ),
+    value(
+        "descriptor",
+        "NAME",
+        "with --asm: the label to pass hUGE_init, which scopes the source's others \
+         (default song_ and FILE's stem)",
+    ),
 ];
 
 /// `--json` alone: `song` sends no request, so it has no `--dir` or `--as`.
@@ -29,7 +41,8 @@ pub const SONG_VERB: VerbSpec = VerbSpec {
     name: "song",
     class: Class::Build,
     summary: "read a hUGETracker .uge or song text; write the other, or a piano roll",
-    usage: "FILE [--text PATH] [--uge PATH] [--piano PATH] [--json]",
+    usage: "FILE [--text PATH] [--uge PATH] [--piano PATH] [--asm PATH [--descriptor NAME]] \
+            [--json]",
     arity: Arity {
         min: 1,
         max: Some(1),
@@ -40,7 +53,8 @@ pub const SONG_VERB: VerbSpec = VerbSpec {
     about: "Reads FILE, a hUGETracker .uge (versions 0-6, upgraded as hUGETracker upgrades \
             them) or song text (`gbcli help music`), and prints a `song` row: its form, name \
             and counts. --text and --uge write it in either form, and --piano draws its notes \
-            as a PNG without building or playing it. Nothing is written unless the whole file \
+            as a PNG without building or playing it; --asm writes the RGBDS source a build \
+            assembles with hUGEDriver, the `song` op's answer. Nothing is written unless the whole file \
             reads; a problem is song_unreadable (exit 4) with its line and column (or, in a \
             .uge, its byte) in a `problem` row. Needs no session and no RGBDS.",
     example: (

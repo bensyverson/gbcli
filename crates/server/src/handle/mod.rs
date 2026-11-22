@@ -21,6 +21,7 @@ mod pixels;
 mod reads;
 mod run;
 mod shot;
+mod song;
 mod version;
 mod view;
 mod writes;
@@ -319,6 +320,7 @@ impl Handler {
             | Op::Assets(_)
             | Op::Opcode(_)
             | Op::Pixels(_)
+            | Op::Song(_)
             | Op::Font(_)
             | Op::FontEdit(_)
             | Op::FontSave(_)

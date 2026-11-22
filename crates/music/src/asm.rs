@@ -178,6 +178,71 @@ pub fn rgbds_asm(song: &Song, descriptor: &str) -> Vec<u8> {
     out
 }
 
+/// Why a song has no RGBDS source as text: what [`rgbds_text`] refuses.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AsmRefusal {
+    /// The descriptor is no RGBDS symbol the source's labels can hang
+    /// from (see [`is_descriptor`]).
+    Descriptor(String),
+    /// Routine `routine` (0-15) holds bytes that aren't UTF-8, which a
+    /// `.uge` can store and text can't carry.
+    NotText { routine: usize },
+}
+
+impl AsmRefusal {
+    pub fn message(&self) -> String {
+        match self {
+            AsmRefusal::Descriptor(d) => {
+                format!("`{d}` can't be a song's descriptor: it is no RGBDS symbol of its own")
+            }
+            AsmRefusal::NotText { routine } => {
+                format!("routine {routine} holds bytes that aren't UTF-8 text")
+            }
+        }
+    }
+
+    pub fn remedy(&self) -> &'static str {
+        match self {
+            AsmRefusal::Descriptor(_) => {
+                "name it with letters, digits and _, not starting with a digit (song_theme)"
+            }
+            AsmRefusal::NotText { .. } => {
+                "retype the routine in hUGETracker, or clear it if the song never calls it (6xx)"
+            }
+        }
+    }
+}
+
+/// Whether `name` can be a descriptor: a global RGBDS symbol, letters,
+/// digits and `_`, not starting with a digit. Not a local name (`a.b`),
+/// since every other label is scoped under it.
+pub fn is_descriptor(name: &str) -> bool {
+    let mut chars = name.chars();
+    chars
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// [`rgbds_asm`] as text, for an answer that carries it as a string: the
+/// same bytes, refused when the descriptor is no symbol or a routine
+/// isn't UTF-8.
+pub fn rgbds_text(song: &Song, descriptor: &str) -> Result<String, AsmRefusal> {
+    if !is_descriptor(descriptor) {
+        return Err(AsmRefusal::Descriptor(descriptor.to_string()));
+    }
+    if let Some(routine) = song
+        .routines
+        .iter()
+        .position(|r| std::str::from_utf8(r).is_err())
+    {
+        return Err(AsmRefusal::NotText { routine });
+    }
+    // Every byte the emitter writes but the routines' is ASCII.
+    Ok(String::from_utf8(rgbds_asm(song, descriptor))
+        .expect("the routines are UTF-8 and the rest is ASCII"))
+}
+
 /// Every global symbol [`rgbds_asm`] defines for `descriptor`.
 pub fn global_symbols(descriptor: &str) -> Vec<String> {
     let d = descriptor;

@@ -20,6 +20,7 @@ use crate::pixels::PixelsArgs;
 use crate::profile::{MeasureArgs, ProfileArgs, RunMeasure};
 use crate::rev::Rev;
 use crate::shot::{FilmstripArgs, ShotArgs, ShotReadArgs};
+use crate::song::SongArgs;
 use crate::stop::{StepKind, TimeBase};
 use crate::toolchain::{BuildArgs, NewArgs};
 use crate::video::ViewArgs;
@@ -91,6 +92,9 @@ pub enum Op {
     Opcode(OpcodeArgs),
     /// An image, a PNG or pixel text, checked and converted; needs no session.
     Pixels(PixelsArgs),
+    /// A song file, a `.uge` or song text, as RGBDS source for hUGEDriver;
+    /// needs no session.
+    Song(SongArgs),
     /// A font, a `.yaff` file, read, a sample set and previewed; needs no
     /// session.
     Font(FontArgs),
@@ -143,6 +147,7 @@ impl Op {
             Op::Assets(_) => "assets",
             Op::Opcode(_) => "opcode",
             Op::Pixels(_) => "pixels",
+            Op::Song(_) => "song",
             Op::Font(_) => "font",
             Op::FontEdit(_) => "font_edit",
             Op::FontSave(_) => "font_save",
@@ -173,7 +178,7 @@ impl Op {
     }
 
     /// Whether answering it needs the project's bundle: every op but
-    /// `doctor`, `new`, `assets`, `opcode`, `pixels`, `font` and its
+    /// `doctor`, `new`, `assets`, `opcode`, `pixels`, `song`, `font` and its
     /// authoring ops, `version` and a `build` that
     /// restores nothing, which a client with no `.gbcli/` yet can still send.
     pub fn needs_bundle(&self) -> bool {
@@ -183,6 +188,7 @@ impl Op {
             | Op::Assets(_)
             | Op::Opcode(_)
             | Op::Pixels(_)
+            | Op::Song(_)
             | Op::Font(_)
             | Op::FontEdit(_)
             | Op::FontSave(_)

@@ -19,6 +19,7 @@ serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
+gbcli-music.workspace = true
 gbcli-pixels.workspace = true
 png.workspace = true
 

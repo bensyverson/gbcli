@@ -13,7 +13,7 @@ and --as. A mutation that passes rev is refused (rev_mismatch) if the session
 moved on. wall_guard_s replaces the server's 60 s host-time guard for this
 request; a request it ends fails wall_guard (exit 3), not budget_exhausted. Unknown and repeated fields are refused, naming the nearest field.
 Fields marked ? may be left out; an op with no required field may omit args.
-This schema's protocol version is 11, which the version op reports. It goes up
+This schema's protocol version is 12, which the version op reports. It goes up
 on a breaking change to these shapes (a new value of a response's enum among
 them), not for a new op or a new optional request field.
 
@@ -112,6 +112,11 @@ pixels  file: PATH  text?: PATH  tiles?: true  png?: PATH  preview?: PATH
         frames?, tiles?, wrote: [{kind: "text"|"png"|"preview", path, bytes}]};
         on pixels_unreadable, error.result.pixels_problem: {path, line?,
         column?, x?, y?, message, remedy})
+song    path: PATH  descriptor: NAME  (a .uge or song text as RGBDS source for
+        hUGEDriver, as build converts assets/music; result.song_asm: {path,
+        descriptor, asm: TEXT (the bytes `gbcli song FILE --asm OUT` writes),
+        timer?: TMA (only when the song wants the timer interrupt)}; on
+        song_unreadable, error.result.song_problem as `gbcli song` gives it)
 font    file: PATH  sample?: TEXT  preview?: PATH  fit?: PX
         (a .yaff font read; result.font: {path, glyphs, fixed, min_width?,
         max_width?, sample?: {text, width, tiles, missing?: [TEXT], data: HEX
@@ -139,8 +144,8 @@ font_diff  a: PATH  b: PATH  png?: PATH  (result.font_diff: {a, b, glyphs:
         glyph?, message, remedy}], every problem)
 version —   (result.version: {gbcli: "0.1.0", protocol: N, sameboy: COMMIT,
         patch_set: HASH}; check protocol before relying on the rest)
-        (build, assets, doctor, new, opcode, pixels, the font ops and version
-        need no session;
+        (build, assets, doctor, new, opcode, pixels, song, the font ops and
+        version need no session;
         paths are relative to the server's working directory)
 power_cycle  sav?: PATH  rtc_advance?: "45s"|"30m"|"12h"|"7d"
         (a new head at power-on, keeping the cart's battery RAM and clock;
@@ -171,7 +176,7 @@ checkpoints, keys_unapplied, writes, checkpoint, restored, breakpoint, watch,
 deleted, machine, registers, ppu, debugger (show: {breakpoints, watches,
 next_id}, each entry as the session file holds it, with "arming": "disarmed"
 only on one disarmed), sessions, events, gaps, pruned, kept, busy, removed,
-build, assets, doctor, created, song, song_problem, pixels, pixels_problem,
+build, assets, doctor, created, song, song_problem, song_asm, pixels, pixels_problem,
 font, font_problem, font_written, font_problems, font_diff, opcodes, version,
 power_cycle, sav,
 flash_notes (run, step: each flash note, also a warning; a failed run's or
@@ -291,6 +296,7 @@ Examples:
   {"id":"43","op":"font_new","args":{"name":"hud","chars":"ascii","guide_sheet":"hud-sheet.png"}}
   {"id":"44","op":"font_diff","args":{"a":"old.yaff","b":"assets/fonts/talk.yaff","png":"diff.png"}}
   {"id":"45","wall_guard_s":300,"op":"run","args":{"frames":4700,"keys_since":"boot"}}
+  {"id":"46","op":"song","args":{"path":"assets/song/theme.uge","descriptor":"song_theme"}}
 "#;
 
 #[cfg(test)]
@@ -312,7 +318,7 @@ mod tests {
         }
         ops.sort();
         ops.dedup();
-        assert_eq!(ops.len(), 37, "one example per op: {ops:?}");
+        assert_eq!(ops.len(), 38, "one example per op: {ops:?}");
     }
 
     /// run's `expect` and `keys_since`, with an example that parses into

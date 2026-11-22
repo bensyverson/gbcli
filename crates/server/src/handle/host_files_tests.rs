@@ -9,6 +9,7 @@ use gbcli_bundle::{Bundle, Clock, Key, MemoryStore, ProjectStore, RomSource};
 use gbcli_protocol::{
     AssetsArgs, BuildArgs, ErrorCode, FontArgs, FontDiffArgs, FontEditArgs, FontExportArgs,
     FontImportArgs, FontNewArgs, FontSaveArgs, NewArgs, Op, OpcodeArgs, PixelsArgs, RunArgs,
+    SongArgs,
 };
 
 use super::Handler;
@@ -74,6 +75,10 @@ fn host_ops() -> Vec<Op> {
         Op::Pixels(PixelsArgs {
             file: "hero.pixels".into(),
             ..PixelsArgs::default()
+        }),
+        Op::Song(SongArgs {
+            path: "theme.song".into(),
+            descriptor: "song_theme".into(),
         }),
         Op::Font(FontArgs {
             file: yaff(),

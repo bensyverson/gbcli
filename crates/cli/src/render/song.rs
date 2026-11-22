@@ -33,6 +33,7 @@ pub fn rows(r: &ResultBody) -> String {
                 SongOutputKind::Text => "text",
                 SongOutputKind::Uge => "uge",
                 SongOutputKind::Piano => "piano",
+                SongOutputKind::Asm => "asm",
             };
             out += &Row::new(kind)
                 .field("path", &o.path)
@@ -41,6 +42,7 @@ pub fn rows(r: &ResultBody) -> String {
                 .opt("height", o.height)
                 .opt("notes", o.notes)
                 .opt("rows", o.rows)
+                .opt("descriptor", o.descriptor.as_deref())
                 .line();
         }
     }

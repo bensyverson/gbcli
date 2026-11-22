@@ -39,7 +39,7 @@
 //! back; nothing reaches the disk.
 //!
 //! **What it can't:** the ops that go to the host's files or run a program
-//! outside the store: `build`, `doctor`, `new`, `assets`, `pixels`, `font`
+//! outside the store: `build`, `doctor`, `new`, `assets`, `pixels`, `song`, `font`
 //! and the font authoring ops (`font_edit`, `font_save`, `font_import`,
 //! `font_export`, `font_new`, `font_diff`). A host that denies host files
 //! refuses each with `unsupported` before it touches anything.

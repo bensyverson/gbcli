@@ -116,6 +116,7 @@ fn reaches_host_files(op: &Op) -> bool {
         | Op::New(_)
         | Op::Assets(_)
         | Op::Pixels(_)
+        | Op::Song(_)
         | Op::Font(_)
         | Op::FontEdit(_)
         | Op::FontSave(_)

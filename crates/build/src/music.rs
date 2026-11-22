@@ -8,8 +8,8 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use gbcli_music::{SongError, descriptor_for, global_symbols, read_song, rgbds_asm};
-use gbcli_protocol::{ErrorBody, ErrorCode, ResultBody, SongBuilt, SongProblem};
+use gbcli_music::{SongError, descriptor_for, global_symbols, read_song, rgbds_asm, rgbds_text};
+use gbcli_protocol::{ErrorBody, ErrorCode, ResultBody, SongArgs, SongAsm, SongBuilt, SongProblem};
 
 use crate::project::BuildError;
 
@@ -116,6 +116,39 @@ pub(crate) fn convert(
         songs.sources.push(asm);
     }
     Ok(songs)
+}
+
+/// The `song` op: the song at `args.path` (relative to `cwd`) as the RGBDS
+/// source `build` writes for a song under `assets/music`, its labels
+/// scoped to `args.descriptor`, and the timer it wants.
+pub fn song(cwd: &Path, args: &SongArgs) -> Result<SongAsm, Box<ErrorBody>> {
+    let shown = &args.path;
+    let bytes = fs::read(cwd.join(shown)).map_err(|e| {
+        Box::new(ErrorBody::new(
+            ErrorCode::SongUnreadable,
+            format!("{shown}: {e}"),
+            "check the path; a song file is a hUGETracker .uge or song text",
+        ))
+    })?;
+    let loaded = read_song(&bytes).map_err(|e| Box::new(song_problem(shown, &e)))?;
+    let asm = rgbds_text(&loaded.song, &args.descriptor).map_err(|refused| {
+        let code = match refused {
+            gbcli_music::AsmRefusal::Descriptor(_) => ErrorCode::BadRequest,
+            gbcli_music::AsmRefusal::NotText { .. } => ErrorCode::SongUnreadable,
+        };
+        Box::new(ErrorBody::new(
+            code,
+            format!("{shown}: {}", refused.message()),
+            refused.remedy(),
+        ))
+    })?;
+    let s = &loaded.song;
+    Ok(SongAsm {
+        path: shown.clone(),
+        descriptor: args.descriptor.clone(),
+        asm,
+        timer: (s.timer_enabled != 0).then_some((s.timer_divider & 0xFF) as u8),
+    })
 }
 
 fn descriptor(file: &Path) -> String {

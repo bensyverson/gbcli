@@ -15,7 +15,7 @@ mod playable;
 mod text;
 mod uge;
 
-pub use asm::{descriptor_for, global_symbols, rgbds_asm};
+pub use asm::{AsmRefusal, descriptor_for, global_symbols, is_descriptor, rgbds_asm, rgbds_text};
 pub use error::{ParseError, SongError, UgeError};
 pub use example::EXAMPLE;
 pub use model::{

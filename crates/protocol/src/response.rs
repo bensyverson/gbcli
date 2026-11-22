@@ -21,7 +21,7 @@ use crate::request::WriteKind;
 use crate::rev::Rev;
 use crate::session::{EventLogLine, GapCount, SessionCreated, SessionRow};
 use crate::shot::{FilmstripMade, ShotMade};
-use crate::song::{SongMade, SongProblem};
+use crate::song::{SongAsm, SongMade, SongProblem};
 use crate::stop::StopRecord;
 use crate::toolchain::{BuildMade, DoctorMade, NewMade};
 use crate::version::VersionMade;
@@ -256,6 +256,9 @@ pub struct ResultBody {
     /// `song`: why the song file didn't load (with `song_unreadable`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub song_problem: Option<SongProblem>,
+    /// The `song` op: a song file's RGBDS source.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub song_asm: Option<SongAsm>,
     /// `pixels`: the image read and the files written.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pixels: Option<PixelsMade>,

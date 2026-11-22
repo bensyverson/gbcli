@@ -35,8 +35,11 @@ use serde::{Deserialize, Serialize};
 /// LoadHigh's review rv227 (gbcli leaf VRYyen): `ColorShade` gains `art`,
 /// whether any converted image's art uses the color, so a client can tell
 /// an art color from one a named palette alone names; a document from
-/// before it reads as `false`.
-pub const PROTOCOL_VERSION: u32 = 11;
+/// before it reads as `false`. 12 since LoadHigh's song path (its leaf
+/// V8Ms61): the `song` op, a song file's RGBDS source, and `SongOutputKind`
+/// gains `asm`, which `gbcli song --asm` writes; a client that sends `song`
+/// checks for 12, since a gbcli before it refuses the op as unknown.
+pub const PROTOCOL_VERSION: u32 = 12;
 
 /// What `version` answers.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -79,7 +82,7 @@ mod tests {
         };
         assert_eq!(
             serde_json::to_string(&result).unwrap(),
-            r#"{"version":{"gbcli":"0.1.0","protocol":11,"sameboy":"abc","patch_set":"def"}}"#
+            r#"{"version":{"gbcli":"0.1.0","protocol":12,"sameboy":"abc","patch_set":"def"}}"#
         );
     }
 }

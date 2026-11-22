@@ -52,6 +52,7 @@ mod relink_layout_free;
 mod relink_unknown_header;
 mod rom_banks;
 mod scaffold;
+mod song_op;
 mod text;
 mod text_shades;
 mod verify_relink;

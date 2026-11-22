@@ -3,7 +3,10 @@
 
 use std::path::{Path, PathBuf};
 
-use gbcli_music::{Loaded, SongError, SongFormat, piano_roll, to_text, write_uge};
+use gbcli_music::{
+    AsmRefusal, Loaded, SongError, SongFormat, descriptor_for, piano_roll, rgbds_text, to_text,
+    write_uge,
+};
 use gbcli_protocol::{
     ErrorBody, ErrorCode, Response, ResultBody, SongFileFormat, SongMade, SongOutput,
     SongOutputKind, SongProblem,
@@ -28,6 +31,8 @@ struct Given {
 pub struct SongCommand {
     input: Given,
     outputs: Vec<(SongOutputKind, Given)>,
+    /// `--descriptor`, for `--asm`.
+    descriptor: Option<String>,
     json: bool,
 }
 
@@ -40,6 +45,7 @@ pub fn command(inv: &Invocation, env: &Env) -> Command {
         ("text", SongOutputKind::Text),
         ("uge", SongOutputKind::Uge),
         ("piano", SongOutputKind::Piano),
+        ("asm", SongOutputKind::Asm),
     ]
     .into_iter()
     .filter_map(|(flag, kind)| inv.one(flag).map(|p| (kind, given(p))))
@@ -47,6 +53,7 @@ pub fn command(inv: &Invocation, env: &Env) -> Command {
     Command::Song(Box::new(SongCommand {
         input: given(&inv.positionals[0]),
         outputs,
+        descriptor: inv.one("descriptor").map(str::to_string),
         json: inv.has("json"),
     }))
 }
@@ -70,6 +77,17 @@ pub fn song(command: SongCommand, io: Io) -> u8 {
 /// What the song made, and what of it hUGEDriver never plays.
 fn made(command: &SongCommand) -> Result<(SongMade, Vec<String>), Box<ErrorBody>> {
     let input = &command.input;
+    let asked_asm = command
+        .outputs
+        .iter()
+        .any(|(k, _)| *k == SongOutputKind::Asm);
+    if command.descriptor.is_some() && !asked_asm {
+        return Err(Box::new(ErrorBody::new(
+            ErrorCode::BadRequest,
+            "--descriptor names the asm's label, but nothing asks for asm",
+            "add --asm PATH, or drop --descriptor",
+        )));
+    }
     let bytes = std::fs::read(&input.path).map_err(|e| {
         Box::new(ErrorBody::new(
             ErrorCode::SongUnreadable,
@@ -86,6 +104,7 @@ fn made(command: &SongCommand) -> Result<(SongMade, Vec<String>), Box<ErrorBody>
             SongOutputKind::Text => (to_text(&loaded.song).into_bytes(), output(*kind, given)),
             SongOutputKind::Uge => (write_uge(&loaded.song), output(*kind, given)),
             SongOutputKind::Piano => piano(&loaded, given, &input.shown)?,
+            SongOutputKind::Asm => asm(&loaded, command, given)?,
         };
         output.bytes = bytes.len() as u64;
         files.push((given, bytes, output));
@@ -130,7 +149,38 @@ fn output(kind: SongOutputKind, given: &Given) -> SongOutput {
         height: None,
         notes: None,
         rows: None,
+        descriptor: None,
     }
+}
+
+/// The song as RGBDS source, as the `song` op answers it, under the
+/// descriptor `--descriptor` names, else `song_` and the input's stem.
+fn asm(
+    loaded: &Loaded,
+    command: &SongCommand,
+    given: &Given,
+) -> Result<(Vec<u8>, SongOutput), Box<ErrorBody>> {
+    let input = &command.input;
+    let descriptor = command.descriptor.clone().unwrap_or_else(|| {
+        let stem = input.path.file_stem().unwrap_or_default();
+        descriptor_for(&stem.to_string_lossy())
+    });
+    let text = rgbds_text(&loaded.song, &descriptor).map_err(|refused| {
+        let code = match refused {
+            AsmRefusal::Descriptor(_) => ErrorCode::BadRequest,
+            AsmRefusal::NotText { .. } => ErrorCode::SongUnreadable,
+        };
+        Box::new(ErrorBody::new(
+            code,
+            format!("{}: {}", input.shown, refused.message()),
+            refused.remedy(),
+        ))
+    })?;
+    let output = SongOutput {
+        descriptor: Some(descriptor),
+        ..output(SongOutputKind::Asm, given)
+    };
+    Ok((text.into_bytes(), output))
 }
 
 fn piano(

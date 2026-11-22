@@ -103,7 +103,9 @@ pub use shot::{
     Crop, FilmstripArgs, FilmstripMade, ScreenKind, ShotArgs, ShotFrame, ShotMade, ShotReadArgs,
     ShotScreen,
 };
-pub use song::{SongFileFormat, SongMade, SongOutput, SongOutputKind, SongProblem};
+pub use song::{
+    SongArgs, SongAsm, SongFileFormat, SongMade, SongOutput, SongOutputKind, SongProblem,
+};
 pub use stop::{
     BudgetLimits, BudgetUse, Cadence, FrameShown, StepKind, StopReason, StopRecord, StopTime,
     TimeBase, vblank_name,

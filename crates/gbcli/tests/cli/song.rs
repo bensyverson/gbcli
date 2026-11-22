@@ -133,3 +133,65 @@ fn song_needs_its_file() {
     let p = project("song-usage");
     p.gbcli(&["song"]).fails(2, "bad_request", "gbcli song");
 }
+
+/// `--asm` writes exactly what the `song` op answers `serve` for the same
+/// file and descriptor: by default `song_` and the file's stem, or the one
+/// `--descriptor` names.
+#[test]
+fn song_asm_writes_the_source_the_song_op_answers() {
+    let p = project("song-asm");
+    let run = p.gbcli(&["song", "example.song", "--asm", "example.asm"]);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    assert!(
+        run.stdout.contains("asm path=example.asm bytes=")
+            && run.stdout.contains(" descriptor=song_example"),
+        "{}",
+        run.stdout
+    );
+    let named = p.gbcli(&[
+        "song",
+        "peril.uge",
+        "--asm",
+        "peril.asm",
+        "--descriptor",
+        "song_menu",
+    ]);
+    assert_eq!(named.code, 0, "{}", named.stderr);
+    let lines = "{\"id\":\"1\",\"op\":\"song\",\"args\":{\"path\":\"example.song\",\"descriptor\":\"song_example\"}}\n\
+                 {\"id\":\"2\",\"op\":\"song\",\"args\":{\"path\":\"peril.uge\",\"descriptor\":\"song_menu\"}}\n";
+    let serve = p.gbcli_with(&["serve"], &[], Some(lines));
+    assert_eq!(serve.code, 0, "{}", serve.stderr);
+    let answers: Vec<gbcli_protocol::Response> = serve
+        .stdout
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    for (answer, file) in answers.iter().zip(["example.asm", "peril.asm"]) {
+        let made = answer
+            .outcome
+            .as_ref()
+            .expect("ok")
+            .song_asm
+            .clone()
+            .unwrap();
+        assert!(
+            made.asm.as_bytes() == fs::read(p.path(file)).unwrap(),
+            "{file} differs from the op's answer"
+        );
+    }
+}
+
+#[test]
+fn a_descriptor_that_is_no_symbol_is_refused_and_nothing_is_written() {
+    let p = project("song-asm-bad");
+    let run = p.gbcli(&[
+        "song",
+        "example.song",
+        "--asm",
+        "x.asm",
+        "--descriptor",
+        "song.x",
+    ]);
+    run.fails(2, "bad_request", "letters");
+    assert!(!p.path("x.asm").exists());
+}

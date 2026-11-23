@@ -184,6 +184,7 @@ fn start_handler(target: &Target, env: &Env, opens: bool) -> Result<Handler, Ope
     } else {
         Bundle::open_in(&start, gbcli_dir)
     }
+    .map(|bundle| bundle.with_boot_cache(env.boot_cache.as_deref()))
     .map_err(|e| {
         let no_bundle = matches!(e, StoreError::NoBundle { .. });
         let body = Box::new(store(e));

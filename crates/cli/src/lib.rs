@@ -35,6 +35,9 @@ pub struct Env {
     pub actor: Option<String>,
     /// `GBCLI_DIR`: the bundle directory, overriding the search.
     pub gbcli_dir: Option<PathBuf>,
+    /// `GBCLI_BOOT_CACHE`: where the boot cache lives instead of the
+    /// bundle's `cache/`, so projects share their boots.
+    pub boot_cache: Option<PathBuf>,
     /// The working directory: relative paths and the `.gbcli/` search start
     /// here. `--dir PATH` moves it to PATH for the invocation.
     pub cwd: PathBuf,
@@ -45,13 +48,19 @@ pub struct Env {
 impl Env {
     pub fn from_process() -> Env {
         let var = |name| std::env::var(name).ok().filter(|v| !v.is_empty());
+        let path_var = |name| {
+            std::env::var_os(name)
+                .filter(|v| !v.is_empty())
+                .map(PathBuf::from)
+        };
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         Env {
             session: var("GBCLI_SESSION"),
             actor: var("GBCLI_AS"),
-            gbcli_dir: std::env::var_os("GBCLI_DIR")
-                .filter(|v| !v.is_empty())
-                .map(PathBuf::from),
-            cwd: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            gbcli_dir: path_var("GBCLI_DIR"),
+            // Absolute, so `--dir` doesn't move it.
+            boot_cache: path_var("GBCLI_BOOT_CACHE").map(|p| cwd.join(p)),
+            cwd,
             path: std::env::var_os("PATH"),
         }
     }

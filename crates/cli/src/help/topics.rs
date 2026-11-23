@@ -167,7 +167,9 @@ Time — every frame and cycle count says what it counts from.
 
 --since BASE changes the base for run and read; stop rows print since=.
 The first run of a ROM runs the real boot ROM once and caches the handoff in
-.gbcli/cache/; later runs start there. --from power-on starts cold instead.
+.gbcli/cache/ (or GBCLI_BOOT_CACHE=DIR, shared across projects); later runs
+start there, as does a rebuild that changes no header byte the boot reads.
+--from power-on starts cold instead.
 Either --from skips the head: --from boot is how a session starts over on a
 rebuilt ROM, keeping its breakpoints and watches.
 

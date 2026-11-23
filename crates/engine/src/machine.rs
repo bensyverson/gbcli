@@ -23,14 +23,22 @@ mod rebase;
 pub use power::{Battery, Flash, PowerCycled};
 pub use rebase::{DebugEntry, Rebased};
 
+/// Begins what [`Machine::boot_key`] hashes for a ROM's boot inputs, so it
+/// never hashes the same bytes as a whole ROM.
+const BOOT_INPUTS_TAG: &[u8] = b"gbcli boot inputs\0";
+
 /// How to build cores of one backend.
 #[derive(Clone, Copy)]
 pub struct Backend {
     build: fn(CoreConfig) -> Result<Box<dyn Core>, CoreError>,
     builtin_boot_rom: fn(Model) -> &'static [u8],
+    /// The ROM bytes that decide the built-in boot's handoff on a model, or
+    /// `None` when only the whole ROM does.
+    boot_inputs: fn(&[u8], Model) -> Option<Vec<u8>>,
 }
 
 impl Backend {
+    /// A backend whose boot handoff is keyed on the whole ROM.
     pub fn new(
         build: fn(CoreConfig) -> Result<Box<dyn Core>, CoreError>,
         builtin_boot_rom: fn(Model) -> &'static [u8],
@@ -38,6 +46,16 @@ impl Backend {
         Backend {
             build,
             builtin_boot_rom,
+            boot_inputs: |_, _| None,
+        }
+    }
+
+    /// This backend with the ROM bytes that decide its built-in boot's
+    /// handoff named by `inputs` (design §9).
+    pub fn with_boot_inputs(self, inputs: fn(&[u8], Model) -> Option<Vec<u8>>) -> Backend {
+        Backend {
+            boot_inputs: inputs,
+            ..self
         }
     }
 
@@ -47,6 +65,7 @@ impl Backend {
             |config| Ok(Box::new(gbcli_sameboy::SameBoy::new(config)?)),
             gbcli_sameboy::builtin_boot_rom,
         )
+        .with_boot_inputs(gbcli_sameboy::boot_inputs)
     }
 }
 
@@ -195,6 +214,23 @@ impl Machine {
     /// The hash of the unpatched ROM file the machine was built from.
     pub fn rom_sha256(&self) -> Sha256 {
         self.rom_sha256
+    }
+
+    /// What the boot cache keys this machine's handoff on (design §9): with
+    /// the backend's built-in boot ROM, a hash of the ROM bytes that decide
+    /// the handoff, so ROMs that differ only elsewhere share it; with any
+    /// other boot ROM, which may read anything, or when the backend names
+    /// no such bytes, the whole ROM's hash.
+    pub fn boot_key(&self) -> Sha256 {
+        let built_in = *self.setup.boot_rom == *(self.backend.builtin_boot_rom)(self.setup.model);
+        match (self.backend.boot_inputs)(&self.rom, self.setup.model) {
+            Some(inputs) if built_in => {
+                let mut keyed = BOOT_INPUTS_TAG.to_vec();
+                keyed.extend_from_slice(&inputs);
+                sha256(&keyed)
+            }
+            _ => self.rom_sha256,
+        }
     }
 
     /// Every way the ROM's header disagrees with the file it heads.

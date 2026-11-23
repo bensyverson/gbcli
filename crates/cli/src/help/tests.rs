@@ -536,6 +536,7 @@ fn the_hblank_recipes_commands_parse() {
         session: Some("dx".into()),
         actor: None,
         gbcli_dir: None,
+        boot_cache: None,
         cwd: cwd.clone(),
         path: None,
     };

@@ -115,9 +115,17 @@ impl SessionStore {
         interrupt: Option<&AtomicBool>,
     ) -> Result<Vec<String>, StoreError> {
         let probe = machine.capture(SaveMeta::default());
-        let key = self.boot_cache_key(&probe);
-        if let Ok(bytes) = self.files().get(&key)
-            && let Ok(cp) = Checkpoint::decode(&bytes)
+        let rom_key = machine.boot_key();
+        let key = self.boot_cache_key(&probe, rom_key);
+        // The entry is keyed on the bytes that decide the handoff, so the ROM
+        // that wrote it may differ elsewhere; its state is this ROM's
+        // handoff all the same, so it is restored as this ROM's.
+        let cached = self.files().get(&key).ok().and_then(|bytes| {
+            let mut cp = Checkpoint::decode(&bytes).ok()?;
+            cp.header.rom_sha256 = machine.rom_sha256();
+            Some(cp)
+        });
+        if let Some(cp) = cached
             && let Ok(warnings) = self.restore(meta, machine, &cp, load)
         {
             return Ok(warnings);
@@ -142,19 +150,21 @@ impl SessionStore {
             return Err(StoreError::NoHandoff);
         }
         let cp = machine.capture(SaveMeta::default());
-        self.write_boot_cache(&cp)?;
+        self.write_boot_cache(&cp, rom_key)?;
         Ok(Vec::new())
     }
 
-    /// Keyed on the ROM, model, boot ROM, seed, flash board and core identity: an entry
-    /// another build of the core wrote is never reused, as its state may have
-    /// another layout. Symbols aren't in the key; the entry carries none.
-    fn boot_cache_key(&self, cp: &Checkpoint) -> Key {
+    /// Keyed on the ROM's `rom_key` ([`Machine::boot_key`]: the bytes that
+    /// decide the handoff, or the whole ROM), model, boot ROM, seed, flash
+    /// board and core identity: an entry another build of the core wrote is
+    /// never reused, as its state may have another layout. Symbols aren't in
+    /// the key; the entry carries none.
+    fn boot_cache_key(&self, cp: &Checkpoint, rom_key: gbcli_protocol::Sha256) -> Key {
         let h = &cp.header;
         let core = sha256(format!("{}\0{}", h.core.backend, h.core.commit).as_bytes());
         let key = format!(
             "{}-{}-{}-{}-{}",
-            &h.rom_sha256.to_string()[..16],
+            &rom_key.to_string()[..16],
             model_name(h.model),
             &h.boot_rom_sha256.to_string()[..16],
             h.seed,
@@ -163,27 +173,32 @@ impl SessionStore {
         // A flash board's name ends the key; mask ROM's keys are unchanged.
         let board = h.flash.as_ref().map_or(String::new(), |b| format!("-{b}"));
         self.bundle()
-            .cache_key()
+            .boot_cache_key()
             .join(&format!("boot-{key}{board}.gbck"))
     }
 
     #[cfg(test)]
     fn boot_cache_path(&self, cp: &Checkpoint) -> std::path::PathBuf {
-        self.files().locate(&self.boot_cache_key(cp))
+        self.files()
+            .locate(&self.boot_cache_key(cp, cp.header.rom_sha256))
     }
 
-    /// Writes a boot cache entry. Sessions over one ROM share it whatever
-    /// their `.sym`, so the entry carries no symbol fields; a machine restored
-    /// from it captures its own.
-    fn write_boot_cache(&self, cp: &Checkpoint) -> Result<(), StoreError> {
-        let dir = self.bundle().cache_key();
+    /// Writes a boot cache entry under `rom_key`. Sessions over one ROM share
+    /// it whatever their `.sym`, so the entry carries no symbol fields; a
+    /// machine restored from it captures its own.
+    fn write_boot_cache(
+        &self,
+        cp: &Checkpoint,
+        rom_key: gbcli_protocol::Sha256,
+    ) -> Result<(), StoreError> {
+        let dir = self.bundle().boot_cache_key();
         self.files()
             .make_dirs(&dir)
             .map_err(self.bundle().io_at(&dir))?;
         let mut entry = cp.clone();
         entry.header.sym_sha256 = None;
         entry.header.symbols_live.clear();
-        let key = self.boot_cache_key(&entry);
+        let key = self.boot_cache_key(&entry, rom_key);
         self.files()
             .put(&key, &entry.encode())
             .map_err(self.bundle().io_at(&key))
@@ -228,7 +243,9 @@ mod tests {
         // written it: reused, it would leave the machine short of the handoff.
         let mut foreign = machine.capture(SaveMeta::default());
         foreign.header.core.commit = "0000000+patches.0000000000000000".into();
-        store.write_boot_cache(&foreign).unwrap();
+        store
+            .write_boot_cache(&foreign, machine.boot_key())
+            .unwrap();
         handoff(&store);
         assert_eq!(
             boot_entries(&f).len(),
@@ -285,6 +302,108 @@ mod tests {
         assert_eq!(second.header.ticks, first.header.ticks);
         let after = Checkpoint::decode(&fs::read(&entries[0]).unwrap()).unwrap();
         assert_eq!(after.header.created_by.as_deref(), Some("cache"));
+    }
+
+    /// The fixture's ROM with `at` flipped, as `name` in the fixture's
+    /// project, and a session `name` over it.
+    fn variant(f: &Fixture, name: &str, at: &[usize]) -> SessionStore {
+        let mut rom = crate::test_fixture::ROM.to_vec();
+        for &i in at {
+            rom[i] ^= 0xFF;
+        }
+        let path = f.root.join(format!("{name}.gb"));
+        fs::write(&path, rom).unwrap();
+        let store = f.bundle.session(name).unwrap();
+        let mut source = f.source();
+        source.rom = path;
+        store.create(&source).unwrap();
+        store
+    }
+
+    /// Marks the one cache entry, so a reuse leaves the mark and a cold
+    /// boot's rewrite drops it.
+    fn mark(entry: &PathBuf) {
+        let mut marked = Checkpoint::decode(&fs::read(entry).unwrap()).unwrap();
+        marked.header.created_by = Some("cache".into());
+        fs::write(entry, marked.encode()).unwrap();
+    }
+
+    fn marked(entry: &PathBuf) -> bool {
+        let cp = Checkpoint::decode(&fs::read(entry).unwrap()).unwrap();
+        cp.header.created_by.as_deref() == Some("cache")
+    }
+
+    /// Past the header ($0150 on) and the global checksum ($014E): bytes no
+    /// boot reads.
+    const UNREAD: [usize; 3] = [0x14E, 0x14F, 0x1234];
+
+    #[test]
+    fn a_rom_that_differs_only_where_the_boot_never_reads_reuses_the_entry() {
+        let f = Fixture::new("boot-cache-unread");
+        handoff(&f.demo());
+        let entries = boot_entries(&f);
+        assert_eq!(entries.len(), 1);
+        mark(&entries[0]);
+        let reused = handoff(&variant(&f, "rebuilt", &UNREAD)).capture(SaveMeta::default());
+        assert_eq!(boot_entries(&f), entries, "no entry of its own");
+        assert!(marked(&entries[0]), "the entry was reused, not rewritten");
+
+        // The reused handoff is the state a cold boot of that ROM reaches,
+        // to the byte, its header naming its own ROM.
+        let cold = Fixture::new("boot-cache-unread-cold");
+        let cold_cp = handoff(&variant(&cold, "rebuilt", &UNREAD)).capture(SaveMeta::default());
+        assert_eq!(reused.header, cold_cp.header);
+        assert!(reused.blob == cold_cp.blob, "the core states differ");
+    }
+
+    #[test]
+    fn a_rom_that_differs_in_a_byte_the_boot_reads_gets_its_own_entry() {
+        let f = Fixture::new("boot-cache-read");
+        handoff(&f.demo());
+        // The logo's first byte and the title's.
+        for (name, at) in [("logo", 0x104), ("title", 0x134)] {
+            handoff(&variant(&f, name, &[at]));
+        }
+        assert_eq!(boot_entries(&f).len(), 3);
+    }
+
+    #[test]
+    fn a_named_boot_cache_holds_the_entries_and_projects_share_it() {
+        let shared = std::env::temp_dir().join(format!(
+            "gbcli-store-{}-boot-cache-shared",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&shared);
+        let entries = || -> Vec<PathBuf> {
+            let mut e: Vec<PathBuf> = fs::read_dir(&shared)
+                .map(|d| d.map(|e| e.unwrap().path()).collect())
+                .unwrap_or_default();
+            e.sort();
+            e
+        };
+        let a = Fixture::new("boot-cache-shared-a");
+        let bundle = a.bundle.clone().with_boot_cache(Some(&shared));
+        let store = bundle.session("demo").unwrap();
+        store.create(&a.source()).unwrap();
+        handoff(&store);
+        assert_eq!(entries().len(), 1, "written to the named cache");
+        assert!(boot_entries(&a).is_empty(), "not to the bundle's own");
+        mark(&entries()[0]);
+
+        let b = Fixture::new("boot-cache-shared-b");
+        let rebuilt = variant(&b, "rebuilt", &UNREAD);
+        let store = b
+            .bundle
+            .clone()
+            .with_boot_cache(Some(&shared))
+            .session("rebuilt")
+            .unwrap();
+        handoff(&store);
+        assert_eq!(entries().len(), 1);
+        assert!(marked(&entries()[0]), "another project reused it");
+        assert!(boot_entries(&b).is_empty());
+        drop(rebuilt);
+        let _ = fs::remove_dir_all(&shared);
     }
 
     #[test]

@@ -275,3 +275,43 @@ fn batch_without_a_bundle_answers_the_ops_that_need_none() {
     );
     let _ = fs::remove_dir_all(&dir);
 }
+
+/// `GBCLI_BOOT_CACHE` names the directory the boot cache lives in, so
+/// projects share their boots; the project's own `cache/` stays empty.
+#[test]
+fn gbcli_boot_cache_names_where_the_boot_cache_lives() {
+    let dir = project("boot-cache-env");
+    let shared = dir.with_extension("boot-cache");
+    let _ = fs::remove_dir_all(&shared);
+    let output = Command::new(env!("CARGO_BIN_EXE_gbcli"))
+        .args(["serve", "--session", "demo", "--dir"])
+        .arg(&dir)
+        .arg("--rom")
+        .arg(dir.join("demo.gb"))
+        .env_remove("GBCLI_DIR")
+        .env("GBCLI_BOOT_CACHE", &shared)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .and_then(|mut child| {
+            let line = concat!(r#"{"id":"1","op":"run","args":{"frames":1}}"#, "\n");
+            child.stdin.take().unwrap().write_all(line.as_bytes())?;
+            child.wait_with_output()
+        })
+        .expect("gbcli serve");
+    assert!(output.status.success(), "{output:?}");
+    let names = |d: &Path| -> Vec<String> {
+        fs::read_dir(d).map_or(Vec::new(), |entries| {
+            entries
+                .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+                .collect()
+        })
+    };
+    let entries = names(&shared);
+    assert_eq!(entries.len(), 1, "{entries:?}");
+    assert!(entries[0].starts_with("boot-"), "{entries:?}");
+    assert_eq!(names(&dir.join(".gbcli/cache")), Vec::<String>::new());
+    let _ = fs::remove_dir_all(&dir);
+    let _ = fs::remove_dir_all(&shared);
+}

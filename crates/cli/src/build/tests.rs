@@ -11,6 +11,7 @@ fn env() -> Env {
         session: Some("envsession".into()),
         actor: Some("envactor".into()),
         gbcli_dir: None,
+        boot_cache: None,
         cwd: PathBuf::from("/work"),
         path: None,
     }

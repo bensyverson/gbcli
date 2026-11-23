@@ -2,6 +2,7 @@
 //! One binary links once and starts once; a test that needs a process of its
 //! own is a file beside this directory instead, saying why.
 
+mod boot_key;
 mod boot_rom_overlay;
 mod cart_memory;
 mod checkpoints;

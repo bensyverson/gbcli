@@ -6,6 +6,7 @@
 mod audio;
 mod battery;
 mod blob;
+mod boot_inputs;
 mod display;
 mod flash;
 mod hooks;
@@ -28,6 +29,7 @@ use gbcli_core::{
 };
 use sameboy_sys as sb;
 
+pub use boot_inputs::boot_inputs;
 use hooks::Hooks;
 pub use support::builtin_boot_rom;
 pub(crate) use support::unsupported_err;

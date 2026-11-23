@@ -5,6 +5,7 @@
 mod apu;
 mod audio;
 mod battery;
+mod boot_inputs;
 mod clock_bounds;
 mod common;
 mod cpu_instrs;

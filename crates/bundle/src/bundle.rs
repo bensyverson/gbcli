@@ -23,6 +23,9 @@ pub struct Bundle {
     /// Where the store puts the bundle and the project, for messages.
     root: PathBuf,
     project: PathBuf,
+    /// Where boot cache entries live when not under `cache/`
+    /// ([`Bundle::with_boot_cache`]).
+    boot_cache: Option<Key>,
 }
 
 impl Bundle {
@@ -37,6 +40,7 @@ impl Bundle {
             clock,
             root,
             project,
+            boot_cache: None,
         }
     }
 
@@ -160,6 +164,19 @@ impl Bundle {
 
     pub fn cache_dir(&self) -> PathBuf {
         self.store.locate(&self.cache_key())
+    }
+
+    /// This bundle with its boot cache entries kept under the host directory
+    /// `dir` instead of its own `cache/` (`GBCLI_BOOT_CACHE`), so projects
+    /// share them; `None` keeps its own.
+    pub fn with_boot_cache(mut self, dir: Option<&Path>) -> Bundle {
+        self.boot_cache = dir.map(|d| self.store.key_of(d));
+        self
+    }
+
+    /// The key boot cache entries sit under.
+    pub(crate) fn boot_cache_key(&self) -> Key {
+        self.boot_cache.clone().unwrap_or_else(|| self.cache_key())
     }
 
     /// An `io::Error` about `key`, naming where the store puts it.

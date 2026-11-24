@@ -109,6 +109,7 @@ pub(crate) unsafe extern "C" fn on_line_scroll(
     line: u8,
     scx: u8,
     scy: u8,
+    lcdc: u8,
 ) {
     guard(gb, (), |hooks| {
         if hooks.raster.is_none() {
@@ -122,6 +123,7 @@ pub(crate) unsafe extern "C" fn on_line_scroll(
                 ly: line,
                 scx,
                 scy,
+                lcdc,
                 at,
             });
         }

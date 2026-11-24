@@ -1874,7 +1874,7 @@ void GB_display_run(GB_gameboy_t *gb, unsigned cycles, bool force)
         mode_3_start:
             gb->disable_window_pixel_insertion_glitch = false;
             if (gb->line_scroll_callback) {
-                gb->line_scroll_callback(gb, gb->current_line, gb->io_registers[GB_IO_SCX], gb->io_registers[GB_IO_SCY]);
+                gb->line_scroll_callback(gb, gb->current_line, gb->io_registers[GB_IO_SCX], gb->io_registers[GB_IO_SCY], gb->io_registers[GB_IO_LCDC]);
             }
 
             fifo_clear(&gb->bg_fifo);

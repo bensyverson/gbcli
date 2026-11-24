@@ -40,13 +40,16 @@ pub struct RasterLineRow {
     pub writes: Vec<RasterWriteRow>,
 }
 
-/// The scroll one frame's visible lines were drawn with. A whole frame has
-/// `first_line` 0 and 144 entries in each array; a run that starts or stops
+/// The scroll and LCDC one frame's visible lines were drawn with. A whole
+/// frame has `first_line` 0 and 144 entries in each array; a run that starts or stops
 /// mid-frame has fewer. Entry `i` is line `first_line + i`.
 ///
 /// Each value is the register as that line's first tile fetch began, a few
-/// dots after STAT reads 3. A later write is not in the line's entry: the
-/// rest of that line shows it, the write is in the line's row, `mode`
+/// dots after STAT reads 3. LCDC is the whole byte, so a client reads its own
+/// bits from it: on a DMG, bit 0 clear draws the line's background and window
+/// as color 0, which is how a program blanks a line. A later write is not in
+/// the line's entry: the rest of that line shows it, the write is in the
+/// line's row, `mode`
 /// drawing, and the next line has it. A write in those first few dots also
 /// reports `mode` drawing, but is in the entry, since the line is drawn with
 /// it. The frame after the LCD comes on is listed too, though the core
@@ -58,6 +61,9 @@ pub struct RasterFrameScroll {
     pub first_line: u8,
     pub scx: Vec<u8>,
     pub scy: Vec<u8>,
+    /// LCDC as each line began; empty in a document from before protocol 13.
+    #[serde(default)]
+    pub lcdc: Vec<u8>,
 }
 
 /// What `run --raster` found. Only the lines with writes are listed; `lines`
@@ -140,8 +146,22 @@ impl RasterMade {
 
 #[cfg(test)]
 mod tests {
-    use super::{RasterLineRow, RasterMade, RasterWriteRow, RasterWriter};
+    use super::{RasterFrameScroll, RasterLineRow, RasterMade, RasterWriteRow, RasterWriter};
     use crate::PpuModeView;
+
+    /// A document from before protocol 13 has no `lcdc`; it reads as empty,
+    /// not as an error, and an empty one is written out as `[]` beside the
+    /// scroll arrays.
+    #[test]
+    fn a_frame_scroll_without_lcdc_reads_as_empty() {
+        let old = r#"{"frame":0,"first_line":0,"scx":[1],"scy":[2]}"#;
+        let f: RasterFrameScroll = serde_json::from_str(old).expect("parses");
+        assert!(f.lcdc.is_empty());
+        let new: RasterFrameScroll =
+            serde_json::from_str(r#"{"frame":0,"first_line":0,"scx":[1],"scy":[2],"lcdc":[145]}"#)
+                .unwrap();
+        assert_eq!(new.lcdc, vec![0x91]);
+    }
 
     fn write(reg: &str, pc: u16, mode: Option<PpuModeView>) -> RasterWriteRow {
         RasterWriteRow {

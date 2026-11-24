@@ -383,9 +383,9 @@ pub type GB_lcd_status_callback_t = Option<unsafe extern "C" fn(gb: *mut GB_game
 pub type gbcli_ignored_write_callback_t =
     Option<unsafe extern "C" fn(gb: *mut GB_gameboy_t, addr: u16)>;
 /// `gbcli_line_scroll_callback_t` (the patched gb.h): visible line `line`
-/// began drawing with this scroll.
+/// began drawing with this scroll and LCDC.
 pub type gbcli_line_scroll_callback_t =
-    Option<unsafe extern "C" fn(gb: *mut GB_gameboy_t, line: u8, scx: u8, scy: u8)>;
+    Option<unsafe extern "C" fn(gb: *mut GB_gameboy_t, line: u8, scx: u8, scy: u8, lcdc: u8)>;
 
 unsafe extern "C" {
     /// SameBoy calls this at the start of every line but 153 and the first

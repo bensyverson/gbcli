@@ -245,10 +245,16 @@ pub enum Event {
     /// still carries its line.
     Scanline { ly: u8, at: Ticks },
     /// The PPU began drawing a visible line, with the scroll registers as
-    /// they stood then ([`Feature::LineScroll`](crate::Feature::LineScroll)).
+    /// they stood then, and LCDC ([`Feature::LineScroll`](crate::Feature::LineScroll)).
     /// A later write in the same mode 3 shows on the rest of the line but
     /// doesn't change this.
-    LineScroll { ly: u8, scx: u8, scy: u8, at: Ticks },
+    LineScroll {
+        ly: u8,
+        scx: u8,
+        scy: u8,
+        lcdc: u8,
+        at: Ticks,
+    },
     /// One CPU step, sent after it completes. A step that leaves HALT to
     /// dispatch or run an instruction is sent as two, when the core can
     /// split it: the HALT cycles it ran first as [`CpuStep::Idle`], then the

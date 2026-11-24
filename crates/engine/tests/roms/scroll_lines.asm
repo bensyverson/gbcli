@@ -9,7 +9,11 @@
 ;   - line 40, mode 3: SCX = 16, after line 40's drawing began, so line 41 is
 ;     the first drawn with it;
 ;   - line 60, mode 0: SCX = 32, so line 61 is the first drawn with it;
-;   - line 144: both back to 0.
+;   - line 60, mode 0, after the SCX write: LCDC = $90 (the background off),
+;     so line 61 is the first drawn with bit 0 clear;
+;   - line 100, mode 0: LCDC = $91, so line 101 is the first drawn with it set
+;     again;
+;   - line 144: both scrolls back to 0.
 ; IME stays off.
 
 DEF rLCDC EQU $FF40
@@ -77,6 +81,15 @@ ScxDrawing:
     ld a, 32
 ScxHBlank:
     ldh [rSCX], a
+    ld a, $90
+LcdcBgOff:
+    ldh [rLCDC], a
+    wait_ly 100
+    wait_mode 3
+    wait_mode 0
+    ld a, $91
+LcdcBgOn:
+    ldh [rLCDC], a
     wait_ly 144
     xor a
     ldh [rSCX], a

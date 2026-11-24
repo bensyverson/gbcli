@@ -89,6 +89,27 @@ fn run_raster_gives_the_scroll_each_visible_line_began_with() {
     }
 }
 
+/// LoadHigh's `show_at`: LCDC as each line began drawing, around writes that
+/// clear and set the background bit in HBlank (`roms/scroll_lines.asm`).
+#[test]
+fn run_raster_gives_lcdc_as_each_visible_line_began() {
+    let f = Fixture::with_rom("raster-lcdc", SCROLL_LINES);
+    let t = made(raster_run(&f, 4));
+    let whole: Vec<_> = t
+        .drawn
+        .iter()
+        .filter(|d| d.first_line == 0 && d.scx.len() == 144)
+        .collect();
+    assert!(whole.len() >= 2, "{:?}", t.drawn);
+    for d in whole {
+        assert_eq!(d.lcdc.len(), 144, "frame {}", d.frame);
+        let mut lcdc = vec![0x91u8; 61];
+        lcdc.resize(101, 0x90);
+        lcdc.resize(144, 0x91);
+        assert_eq!(d.lcdc, lcdc, "frame {}", d.frame);
+    }
+}
+
 #[test]
 fn run_raster_lists_each_write_on_its_line() {
     let f = Fixture::with_rom("raster-rows", RASTER);

@@ -97,9 +97,9 @@ Find who writes a variable
   with budget_exhausted if none comes in 600 frames)
 Stop at a routine only in some cases
   gbcli break Main.loop --if 'a == 3', then gbcli run
-What scroll was each line drawn with?
+What scroll and LCDC was each line drawn with?
   gbcli run --frames 2 --raster --json: result.raster.drawn has one entry a
-  frame, {frame, first_line, scx: [...], scy: [...]}, entry i for line
+  frame, {frame, first_line, scx: [...], scy: [...], lcdc: [...]}, entry i for line
   first_line + i, each the register as that line's first tile fetch began, a
   few dots after STAT reads 3. A later write shows on the rest of the line,
   and the next line has it.

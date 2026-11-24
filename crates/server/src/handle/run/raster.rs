@@ -41,12 +41,14 @@ fn drawn(t: &RasterTimeline) -> Vec<RasterFrameScroll> {
             Some(f) if f.frame == l.frame && next(f) == usize::from(line) => {
                 f.scx.push(scroll.scx);
                 f.scy.push(scroll.scy);
+                f.lcdc.push(scroll.lcdc);
             }
             _ => out.push(RasterFrameScroll {
                 frame: l.frame,
                 first_line: line,
                 scx: vec![scroll.scx],
                 scy: vec![scroll.scy],
+                lcdc: vec![scroll.lcdc],
             }),
         }
     }
@@ -89,7 +91,11 @@ mod tests {
             start: None,
             modes: Vec::new(),
             writes: Vec::new(),
-            scroll: scroll.map(|(scx, scy)| LineScroll { scx, scy }),
+            scroll: scroll.map(|(scx, scy)| LineScroll {
+                scx,
+                scy,
+                lcdc: 0x91,
+            }),
         }
     }
 
@@ -112,12 +118,14 @@ mod tests {
                     first_line: 142,
                     scx: vec![1, 3],
                     scy: vec![2, 4],
+                    lcdc: vec![0x91, 0x91],
                 },
                 RasterFrameScroll {
                     frame: 1,
                     first_line: 0,
                     scx: vec![5],
                     scy: vec![6],
+                    lcdc: vec![0x91],
                 },
             ]
         );

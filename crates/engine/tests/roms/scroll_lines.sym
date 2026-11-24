@@ -11,4 +11,9 @@
 00:0194 ScxDrawing.mode_u6
 00:019c ScxDrawing.mode_u7
 00:01a6 ScxHBlank
-00:01a8 ScxHBlank.ly_u8
+00:01aa LcdcBgOff
+00:01ac LcdcBgOff.ly_u8
+00:01b2 LcdcBgOff.mode_u9
+00:01ba LcdcBgOff.mode_u10
+00:01c4 LcdcBgOn
+00:01c6 LcdcBgOn.ly_u11

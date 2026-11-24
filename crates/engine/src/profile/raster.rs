@@ -28,11 +28,13 @@ pub struct RasterWrite {
     pub mode: Option<PpuMode>,
 }
 
-/// The scroll registers as a visible line began drawing (at mode 3's start).
+/// The scroll registers and LCDC as a visible line began drawing (at mode
+/// 3's start).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LineScroll {
     pub scx: u8,
     pub scy: u8,
+    pub lcdc: u8,
 }
 
 /// A PPU mode change, where the core reports them.
@@ -193,8 +195,9 @@ impl EventSink for Raster {
                 ly,
                 scx,
                 scy,
+                lcdc,
                 at: _,
-            } => self.row_for(Some(ly)).scroll = Some(LineScroll { scx, scy }),
+            } => self.row_for(Some(ly)).scroll = Some(LineScroll { scx, scy, lcdc }),
             Event::Exec { .. } => {}
         }
     }
@@ -334,6 +337,7 @@ mod tests {
             ly,
             scx,
             scy: 9,
+            lcdc: if ly == 0 { 0x91 } else { 0x90 },
             at: Ticks(at),
         };
         let mut s = sink();
@@ -346,8 +350,22 @@ mod tests {
         assert_eq!(
             got,
             vec![
-                (Some(0), Some(LineScroll { scx: 1, scy: 9 })),
-                (Some(1), Some(LineScroll { scx: 2, scy: 9 })),
+                (
+                    Some(0),
+                    Some(LineScroll {
+                        scx: 1,
+                        scy: 9,
+                        lcdc: 0x91
+                    })
+                ),
+                (
+                    Some(1),
+                    Some(LineScroll {
+                        scx: 2,
+                        scy: 9,
+                        lcdc: 0x90
+                    })
+                ),
             ]
         );
     }

@@ -38,8 +38,12 @@ use serde::{Deserialize, Serialize};
 /// before it reads as `false`. 12 since LoadHigh's song path (its leaf
 /// V8Ms61): the `song` op, a song file's RGBDS source, and `SongOutputKind`
 /// gains `asm`, which `gbcli song --asm` writes; a client that sends `song`
-/// checks for 12, since a gbcli before it refuses the op as unknown.
-pub const PROTOCOL_VERSION: u32 = 12;
+/// checks for 12, since a gbcli before it refuses the op as unknown. 13
+/// since LoadHigh's `show_at` in `ldh test` (its leaf qMT4Z1): `RasterFrameScroll`
+/// gains `lcdc`, LCDC as each drawn line began, so a client can tell a line a
+/// program blanked (bit 0 clear) from a shown one; a document from before it
+/// reads as an empty array.
+pub const PROTOCOL_VERSION: u32 = 13;
 
 /// What `version` answers.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -82,7 +86,7 @@ mod tests {
         };
         assert_eq!(
             serde_json::to_string(&result).unwrap(),
-            r#"{"version":{"gbcli":"0.1.0","protocol":12,"sameboy":"abc","patch_set":"def"}}"#
+            r#"{"version":{"gbcli":"0.1.0","protocol":13,"sameboy":"abc","patch_set":"def"}}"#
         );
     }
 }

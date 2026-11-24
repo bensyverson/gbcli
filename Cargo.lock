@@ -67,7 +67,7 @@ dependencies = [
 
 [[package]]
 name = "gbcli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "gbcli-build",
  "gbcli-bundle",
@@ -82,7 +82,7 @@ dependencies = [
 
 [[package]]
 name = "gbcli-audio"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "gbcli-core",
  "gbcli-protocol",
@@ -92,7 +92,7 @@ dependencies = [
 
 [[package]]
 name = "gbcli-build"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "gbcli-audio",
  "gbcli-core",
@@ -108,7 +108,7 @@ dependencies = [
 
 [[package]]
 name = "gbcli-bundle"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "gbcli-core",
  "gbcli-engine",
@@ -119,7 +119,7 @@ dependencies = [
 
 [[package]]
 name = "gbcli-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "gbcli-bundle",
  "gbcli-core",
@@ -134,14 +134,14 @@ dependencies = [
 
 [[package]]
 name = "gbcli-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "gbcli-flash",
 ]
 
 [[package]]
 name = "gbcli-corpus"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "gbcli-core",
  "gbcli-sameboy",
@@ -153,7 +153,7 @@ dependencies = [
 
 [[package]]
 name = "gbcli-engine"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "gbcli-core",
  "gbcli-protocol",
@@ -164,11 +164,11 @@ dependencies = [
 
 [[package]]
 name = "gbcli-flash"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "gbcli-font"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "gbcli-pixels",
  "gbcli-protocol",
@@ -177,7 +177,7 @@ dependencies = [
 
 [[package]]
 name = "gbcli-music"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "gbcli-audio",
  "gbcli-core",
@@ -187,7 +187,7 @@ dependencies = [
 
 [[package]]
 name = "gbcli-pixels"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "gbcli-view",
  "png",
@@ -195,7 +195,7 @@ dependencies = [
 
 [[package]]
 name = "gbcli-protocol"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "gbcli-core",
  "serde",
@@ -204,7 +204,7 @@ dependencies = [
 
 [[package]]
 name = "gbcli-sameboy"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "gbcli-core",
  "sameboy-sys",
@@ -212,7 +212,7 @@ dependencies = [
 
 [[package]]
 name = "gbcli-server"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "gbcli-audio",
  "gbcli-build",
@@ -231,7 +231,7 @@ dependencies = [
 
 [[package]]
 name = "gbcli-view"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "gbcli-core",
  "gbcli-engine",
@@ -312,7 +312,7 @@ dependencies = [
 
 [[package]]
 name = "sameboy-sys"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cc",
 ]

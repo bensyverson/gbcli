@@ -18,7 +18,7 @@
 //! rule is chosen and run over every color, pinned ones included, before
 //! the pins apply, so a pin never moves another color's shade.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use gbcli_protocol::{
     ColorShade, DmgPalette, GbcPalette, KnownPalette, NamedPalette, Rgb555, ShadeChoice, ShadePin,
@@ -61,6 +61,9 @@ pub(crate) struct Shading {
     by_key: HashMap<Key, u8>,
     /// The pinned colors' shades, which `by_key` already holds for the art.
     pins: HashMap<Key, u8>,
+    /// The colors the target's art draws: `by_key` less the colors only a
+    /// discarded color sheet carries (`drawing`).
+    drawn: HashSet<Key>,
     mapping: Mapping,
 }
 
@@ -155,6 +158,15 @@ impl Shading {
         self
     }
 
+    /// This shading with `art` use narrowed to `colors`, the colors the
+    /// target's art draws: the rule still chose over every color, so no
+    /// shade moves, but a color only a discarded color sheet carries (a
+    /// `dmg` override replaces it in a plain build) is no longer art.
+    pub fn drawing(mut self, colors: &[Rgba]) -> Shading {
+        self.drawn = colors.iter().map(|&c| key(c)).collect();
+        self
+    }
+
     /// Every art color's shade and every color of `palettes`', each color
     /// once, sorted by its RGB555 word, with whether art uses it and what
     /// decided it.
@@ -170,7 +182,7 @@ impl Shading {
             .map(|color| ColorShade {
                 color,
                 shade: self.any(color),
-                art: self.by_key.contains_key(&color.channels()),
+                art: self.drawn.contains(&color.channels()),
                 rule: match self.pins.contains_key(&color.channels()) {
                     true => ShadeSource::Pinned,
                     false => self.choice.rule.into(),
@@ -210,6 +222,7 @@ pub(crate) fn choose(
         source: source.clone(),
         by_key: colors.iter().map(|&c| (key(c), mapping.shade(c))).collect(),
         pins: HashMap::new(),
+        drawn: colors.iter().map(|&c| key(c)).collect(),
         mapping,
     };
     if let Some(entries) = declared {
@@ -626,5 +639,18 @@ mod tests {
                 (c(W), true, ShadeSource::Stretched),
             ]
         );
+    }
+
+    /// A color only a discarded color sheet carries keeps its shade (the
+    /// rule chose over it) but is not art.
+    #[test]
+    fn a_color_only_a_discarded_sheet_carries_is_not_art() {
+        let kept = choose(&file(), None, &[LIGHT, DARK, MID]);
+        let shades: Vec<u8> = kept.color_shades(&[]).iter().map(|c| c.shade).collect();
+        let s = kept.drawing(&[DARK]);
+        let listed = s.color_shades(&[]);
+        assert_eq!(listed.iter().map(|c| c.shade).collect::<Vec<_>>(), shades);
+        let art: Vec<bool> = listed.iter().map(|c| c.art).collect();
+        assert_eq!(art, [true, false, false], "{listed:?}");
     }
 }

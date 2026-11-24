@@ -337,9 +337,11 @@ pub struct ColorShade {
     pub color: crate::Rgb555,
     /// 0 (lightest) to 3.
     pub shade: u8,
-    /// The color appears in the art of some converted image; a named palette
-    /// may also name it. False for a color only a named palette names, whose
-    /// shade the build still writes into the palette's byte.
+    /// The color appears in the art this build draws: a color only a discarded
+    /// color sheet carries (a `dmg` override replaces it in a plain build, not
+    /// under `--gbc`) is not art, though it still shaped the shade rule. A
+    /// named palette may also name it. False for a color only a named
+    /// palette names, whose shade the build still writes into the palette's byte.
     #[serde(default)]
     pub art: bool,
     pub rule: ShadeSource,

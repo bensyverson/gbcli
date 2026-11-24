@@ -193,7 +193,15 @@ pub(crate) fn convert(
         Version::Override(o) => vec![p, o],
         _ => vec![p],
     }));
+    // A plain build draws a `dmg` override, not the color sheet it replaces
+    // (which still shaped the choice above); --gbc draws both.
+    let drawn = project_colors(versioned.iter().flat_map(|(_, _, p, v)| match v {
+        Version::Override(o) if !gbc => vec![o],
+        Version::Override(o) => vec![p, o],
+        _ => vec![p],
+    }));
     let shading = shades::choose(&palettes, named_palettes.dmg.as_ref(), &colors)
+        .drawing(&drawn)
         .pinned(&named_palettes.pins);
     made.shades = Some(shading.choice);
     made.dmg_palettes = shading.named(&named_palettes.palettes);

@@ -4,9 +4,8 @@
 //! D0/D1 swapped (the sequence gbvm hard-codes) the save survives; on a
 //! straight board it is lost, and the chip's notes say why.
 //!
-//! The ROM is built by hand and never committed, like the fetched corpus:
-//! `GBCLI_GBSTUDIO_BATTERYLESS_ROM` names it, else `local/demo/build/rom/
-//! demo.gb` under the repo root, with its `.sym` beside it.
+//! The ROM is a committed export (MIT; `tests/roms/gbstudio/README.md`):
+//! `GBCLI_GBSTUDIO_BATTERYLESS_ROM` names another, with its `.sym` beside it.
 
 use std::path::PathBuf;
 
@@ -23,9 +22,7 @@ const SAVED_AT: (u8, u8) = (12, 11);
 fn rom_path() -> PathBuf {
     match std::env::var_os("GBCLI_GBSTUDIO_BATTERYLESS_ROM") {
         Some(path) => PathBuf::from(path),
-        None => {
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../local/demo/build/rom/demo.gb")
-        }
+        None => PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/roms/gbstudio/demo.gb"),
     }
 }
 
@@ -34,11 +31,9 @@ fn demo() -> (Vec<u8>, String) {
     let path = rom_path();
     let missing = |what: &str, err: std::io::Error| -> ! {
         panic!(
-            "the GB Studio batteryless {what} {} is missing ({err}). Build it: open GB Studio's \
-             default project, set Settings > Cartridge Type to MBC5, check \"Save game data to \
-             ROM\", and Export ROM (preview and web builds ignore the setting); then copy \
-             build/rom/demo.gb and demo.sym to local/demo/build/rom/ in the repo, or name the \
-             ROM with GBCLI_GBSTUDIO_BATTERYLESS_ROM (the .sym must sit beside it)",
+            "the GB Studio batteryless {what} {} is missing ({err}); the committed copy is \
+             crates/engine/tests/roms/gbstudio/ (see its README), or name a ROM with \
+             GBCLI_GBSTUDIO_BATTERYLESS_ROM (the .sym must sit beside it)",
             path.display()
         )
     };

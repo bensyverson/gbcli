@@ -391,7 +391,11 @@ pub const VERBS: &[VerbSpec] = &[
         groups: &[],
         about: "One request per stdin line, one response per stdout line, each flushed. \
                 stdout carries protocol only. --session sets the default session (created \
-                from --rom if new). See `gbcli schema` for the request shape.",
+                from --rom if new). --ephemeral keeps the sessions in memory: nothing is \
+                written under .gbcli/, no other process sees them, and they end with serve \
+                (so `sessions` lists only this process's, and a later serve can't restore \
+                them); for a client that makes one session, drives it and discards it. See \
+                `gbcli schema` for the request shape.",
         example: (
             "gbcli serve --session dx --rom game.gb",
             "answers requests such as {\"id\":\"1\",\"op\":\"show\"} until stdin closes",

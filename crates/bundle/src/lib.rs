@@ -9,6 +9,7 @@ mod boot;
 mod bundle;
 mod checkpoints;
 mod created;
+mod ephemeral;
 mod error;
 mod events;
 mod file_store;

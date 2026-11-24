@@ -16,6 +16,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use crate::io::{append, atomic_write, ensure_dir, temp_path};
 mod open;
 
+pub(crate) use open::absolute;
+
 use crate::project_store::{
     ChangeToken, Clock, Entry, Guard, Key, Kind, LockError, ProjectStore, PutAllError,
 };

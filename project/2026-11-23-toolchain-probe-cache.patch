@@ -1,0 +1,944 @@
+diff --git a/crates/build/src/toolchain.rs b/crates/build/src/toolchain.rs
+index 9a0c4a5..41ee246 100644
+--- a/crates/build/src/toolchain.rs
++++ b/crates/build/src/toolchain.rs
+@@ -3,6 +3,7 @@
+ use std::ffi::OsStr;
+ use std::fmt;
+ use std::path::{Path, PathBuf};
++use std::time::SystemTime;
+ 
+ use gbcli_protocol::{ErrorBody, ErrorCode, Tool};
+ 
+@@ -180,25 +181,76 @@ impl ToolFound {
+ /// relative `PATH` entry is relative to `cwd`.
+ pub fn probe(tool: Tool, path_var: Option<&OsStr>, cwd: &Path) -> Result<ToolFound, ToolProblem> {
+     let path = find(tool.name(), path_var, cwd).ok_or(ToolProblem::Missing { tool })?;
+-    let output = std::process::Command::new(&path)
++    let (version, _) = run_version(tool, &path)?;
++    accept(tool, path, version)
++}
++
++/// [`probe`], but a tool file whose version was already read is not run
++/// again: from this process's memory, or from the files other processes left
++/// in `cache_dir` when one is given (see `cache.rs` for which files qualify
++/// and how they are told apart). A build's three probes cost three process
++/// starts, and the suite's parallel builds are limited by how fast the
++/// machine starts processes.
++pub fn probe_cached(
++    tool: Tool,
++    path_var: Option<&OsStr>,
++    cwd: &Path,
++    cache_dir: Option<&Path>,
++) -> Result<ToolFound, ToolProblem> {
++    probe_with(&cache::PROCESS, tool, path_var, cwd, cache_dir)
++}
++
++fn probe_with(
++    cache: &cache::VersionCache,
++    tool: Tool,
++    path_var: Option<&OsStr>,
++    cwd: &Path,
++    cache_dir: Option<&Path>,
++) -> Result<ToolFound, ToolProblem> {
++    let path = find(tool.name(), path_var, cwd).ok_or(ToolProblem::Missing { tool })?;
++    let id = cache::FileId::of(tool.name(), &path, SystemTime::now());
++    if let Some(id) = &id
++        && let Some(version) = cache
++            .lookup(id, cache_dir)
++            .and_then(|line| Version::parse(&line))
++    {
++        return accept(tool, path, version);
++    }
++    let (version, line) = run_version(tool, &path)?;
++    if let Some(id) = &id {
++        cache.remember(id, cache_dir, &line);
++    }
++    accept(tool, path, version)
++}
++
++/// Runs `path --version`: the version it printed, and the line it was read
++/// from.
++fn run_version(tool: Tool, path: &Path) -> Result<(Version, String), ToolProblem> {
++    let output = std::process::Command::new(path)
+         .arg("--version")
+         .output()
+         .map_err(|e| ToolProblem::NoVersion {
+             tool,
+-            path: path.clone(),
++            path: path.to_path_buf(),
+             output: e.to_string(),
+         })?;
+     let text = String::from_utf8_lossy(&output.stdout).into_owned();
+-    let Some(version) = Version::parse(text.lines().next().unwrap_or("")) else {
++    let line = text.lines().next().unwrap_or("").to_string();
++    let Some(version) = Version::parse(&line) else {
+         let mut said = text;
+         said.push_str(&String::from_utf8_lossy(&output.stderr));
+         said.truncate(200);
+         return Err(ToolProblem::NoVersion {
+             tool,
+-            path,
++            path: path.to_path_buf(),
+             output: said,
+         });
+     };
++    Ok((version, line))
++}
++
++/// `version` of the tool at `path`, if gbcli accepts it.
++fn accept(tool: Tool, path: PathBuf, version: Version) -> Result<ToolFound, ToolProblem> {
+     if version.against_pin() == PinMatch::Other {
+         return Err(ToolProblem::Unsupported {
+             tool,
+@@ -252,10 +304,25 @@ pub struct ToolchainError {
+ impl Toolchain {
+     /// Finds the three on `path_var`; a relative entry is relative to `cwd`.
+     pub fn discover(path_var: Option<&OsStr>, cwd: &Path) -> Result<Toolchain, ToolchainError> {
++        Toolchain::discover_with(|tool| probe(tool, path_var, cwd))
++    }
++
++    /// [`Toolchain::discover`] with [`probe_cached`] for each tool.
++    pub fn discover_cached(
++        path_var: Option<&OsStr>,
++        cwd: &Path,
++        cache_dir: Option<&Path>,
++    ) -> Result<Toolchain, ToolchainError> {
++        Toolchain::discover_with(|tool| probe_cached(tool, path_var, cwd, cache_dir))
++    }
++
++    fn discover_with(
++        probe: impl Fn(Tool) -> Result<ToolFound, ToolProblem>,
++    ) -> Result<Toolchain, ToolchainError> {
+         let mut found = Vec::new();
+         let mut problems = Vec::new();
+         for tool in Tool::ALL {
+-            match probe(tool, path_var, cwd) {
++            match probe(tool) {
+                 Ok(f) => found.push(f),
+                 Err(p) => problems.push(p),
+             }
+@@ -301,5 +368,6 @@ impl ToolchainError {
+     }
+ }
+ 
++mod cache;
+ #[cfg(test)]
+ mod tests;
+diff --git a/crates/build/src/toolchain/cache.rs b/crates/build/src/toolchain/cache.rs
+new file mode 100644
+index 0000000..dcf44b2
+--- /dev/null
++++ b/crates/build/src/toolchain/cache.rs
+@@ -0,0 +1,209 @@
++//! Remembering what a tool's `--version` said, so a build doesn't run three
++//! processes to learn what the files already say.
++//!
++//! A line is believed only for the file it was read from, as that file is
++//! identified by [`FileId`], and only for files whose identity says what they
++//! will print: a compiled program with the tool's own name. A script (a
++//! version manager's shim, a user's wrapper) or a link to a dispatcher named
++//! for something else (mise's shims) picks its version from where it is run,
++//! so what its file says is no promise, and it is run every time.
++//!
++//! The lines are kept for the life of the process and, when the caller names
++//! a directory (`GBCLI_CACHE`), in files there that other processes read.
++
++use std::collections::HashMap;
++use std::collections::hash_map::DefaultHasher;
++use std::fs;
++use std::hash::{Hash, Hasher};
++use std::io::Read;
++use std::path::{Path, PathBuf};
++use std::sync::Mutex;
++use std::sync::atomic::{AtomicU64, Ordering};
++use std::time::{Duration, SystemTime};
++
++/// A file modified this recently could be rewritten within the same
++/// timestamp tick and keep its size and times.
++const RACY: Duration = Duration::from_secs(2);
++
++/// The first bytes of the program formats a compiled tool starts with:
++/// Mach-O (both byte orders, 32 and 64 bit, and a universal binary) and ELF.
++/// Anything else, `#!` above all, is a script.
++const MAGIC: [&[u8]; 7] = [
++    &[0xfe, 0xed, 0xfa, 0xce],
++    &[0xfe, 0xed, 0xfa, 0xcf],
++    &[0xce, 0xfa, 0xed, 0xfe],
++    &[0xcf, 0xfa, 0xed, 0xfe],
++    &[0xca, 0xfe, 0xba, 0xbe],
++    &[0xbe, 0xba, 0xfe, 0xca],
++    &[0x7f, b'E', b'L', b'F'],
++];
++
++/// A tool file as it was when its version was read: where it really is (every
++/// link resolved, so a link retargeted elsewhere is another file), its size,
++/// modification and status-change times, and its device and inode. The status
++/// change time can't be set by a program, so a file edited in place, replaced
++/// or touched is another id even if it keeps its size and modification time.
++#[derive(Clone, Debug, PartialEq, Eq)]
++pub(super) struct FileId {
++    text: String,
++}
++
++impl FileId {
++    /// The id of the file `found` is the path of for `tool`, as of `now`, or
++    /// `None` when its version can't be taken from the file alone: it isn't a
++    /// compiled program, isn't named `tool` once links are resolved, changed
++    /// within [`RACY`] of `now`, or the host can't say (not unix).
++    pub(super) fn of(tool: &str, found: &Path, now: SystemTime) -> Option<FileId> {
++        let real = fs::canonicalize(found).ok()?;
++        let name = format!("{tool}{}", std::env::consts::EXE_SUFFIX);
++        if real.file_name()? != name.as_str() {
++            return None;
++        }
++        let stat = fs::metadata(&real).ok()?;
++        if !stat.is_file() || !is_program(&real) {
++            return None;
++        }
++        let (times, device, inode) = unix_identity(&stat)?;
++        let recent = [stat.modified().ok()?, times.changed_at]
++            .into_iter()
++            .any(|changed| now.duration_since(changed).map_or(true, |age| age < RACY));
++        if recent {
++            return None;
++        }
++        Some(FileId {
++            text: format!(
++                "{} {} {} {} {device}:{inode}",
++                real.display(),
++                stat.len(),
++                times.modified,
++                times.changed,
++            ),
++        })
++    }
++
++    pub(super) fn text(&self) -> &str {
++        &self.text
++    }
++}
++
++/// Whether the file starts like a compiled program.
++fn is_program(path: &Path) -> bool {
++    let mut head = [0u8; 4];
++    fs::File::open(path)
++        .and_then(|mut file| file.read_exact(&mut head))
++        .is_ok()
++        && MAGIC.contains(&head.as_slice())
++}
++
++/// A file's modification and status-change times as seconds and nanoseconds.
++struct Times {
++    modified: String,
++    changed: String,
++    changed_at: SystemTime,
++}
++
++#[cfg(unix)]
++fn unix_identity(stat: &fs::Metadata) -> Option<(Times, u64, u64)> {
++    use std::os::unix::fs::MetadataExt;
++    let changed_at = match u64::try_from(stat.ctime()) {
++        Ok(secs) => {
++            SystemTime::UNIX_EPOCH + Duration::new(secs, u32::try_from(stat.ctime_nsec()).ok()?)
++        }
++        Err(_) => return None,
++    };
++    let times = Times {
++        modified: format!("{}.{:09}", stat.mtime(), stat.mtime_nsec()),
++        changed: format!("{}.{:09}", stat.ctime(), stat.ctime_nsec()),
++        changed_at,
++    };
++    Some((times, stat.dev(), stat.ino()))
++}
++
++#[cfg(not(unix))]
++fn unix_identity(_: &fs::Metadata) -> Option<(Times, u64, u64)> {
++    None
++}
++
++/// The version lines remembered: in memory, and in a shared directory.
++#[derive(Debug, Default)]
++pub(super) struct VersionCache {
++    memo: Mutex<HashMap<String, String>>,
++}
++
++/// Distinguishes the temporary files one process writes.
++static TEMP_SEQ: AtomicU64 = AtomicU64::new(0);
++
++impl VersionCache {
++    pub(super) fn new() -> VersionCache {
++        VersionCache::default()
++    }
++
++    /// The line read from the file `id` names: this process's, else the one
++    /// in `dir`, which must say it is for this very id.
++    pub(super) fn lookup(&self, id: &FileId, dir: Option<&Path>) -> Option<String> {
++        if let Some(line) = self.memo().get(id.text()) {
++            return Some(line.clone());
++        }
++        let line = read_entry(&entry_path(dir?, id), id)?;
++        self.memo().insert(id.text().to_string(), line.clone());
++        Some(line)
++    }
++
++    /// Keeps `line` for the file `id` names, in `dir` too when one is given.
++    /// A directory that can't be written is no loss: the next process reads
++    /// the version itself.
++    pub(super) fn remember(&self, id: &FileId, dir: Option<&Path>, line: &str) {
++        self.memo().insert(id.text().to_string(), line.to_string());
++        if let Some(dir) = dir {
++            let _ = write_entry(dir, id, line);
++        }
++    }
++
++    fn memo(&self) -> std::sync::MutexGuard<'_, HashMap<String, String>> {
++        self.memo
++            .lock()
++            .unwrap_or_else(|poisoned| poisoned.into_inner())
++    }
++}
++
++/// Where `id`'s line is kept under `dir`: a name from a hash of the id, whose
++/// file repeats the id so a collision is seen.
++fn entry_path(dir: &Path, id: &FileId) -> PathBuf {
++    let mut hasher = DefaultHasher::new();
++    id.text().hash(&mut hasher);
++    dir.join(format!("rgbds-{:016x}.txt", hasher.finish()))
++}
++
++/// The line in the entry at `path`, if it is `id`'s and whole.
++fn read_entry(path: &Path, id: &FileId) -> Option<String> {
++    let text = fs::read_to_string(path).ok()?;
++    let mut lines = text.lines();
++    if lines.next()? != id.text() {
++        return None;
++    }
++    let line = lines.next()?;
++    (!line.is_empty() && lines.next().is_none() && text.ends_with('\n')).then(|| line.to_string())
++}
++
++/// Writes `id`'s entry, replacing any, so a reader sees the old entry or the
++/// new one.
++fn write_entry(dir: &Path, id: &FileId, line: &str) -> std::io::Result<()> {
++    fs::create_dir_all(dir)?;
++    let path = entry_path(dir, id);
++    let temp = path.with_extension(format!(
++        "tmp-{}-{}",
++        std::process::id(),
++        TEMP_SEQ.fetch_add(1, Ordering::Relaxed)
++    ));
++    fs::write(&temp, format!("{}\n{line}\n", id.text()))?;
++    fs::rename(&temp, &path).inspect_err(|_| {
++        let _ = fs::remove_file(&temp);
++    })
++}
++
++/// The process's own cache, shared by every build it answers.
++pub(super) static PROCESS: std::sync::LazyLock<VersionCache> =
++    std::sync::LazyLock::new(VersionCache::new);
++
++#[cfg(test)]
++mod tests;
+diff --git a/crates/build/src/toolchain/cache/tests.rs b/crates/build/src/toolchain/cache/tests.rs
+new file mode 100644
+index 0000000..f5cf528
+--- /dev/null
++++ b/crates/build/src/toolchain/cache/tests.rs
+@@ -0,0 +1,228 @@
++use std::fs;
++use std::path::{Path, PathBuf};
++use std::time::{Duration, SystemTime};
++
++use super::*;
++
++/// A scratch directory, removed on drop.
++struct Dir(PathBuf);
++
++impl Dir {
++    fn new(name: &str) -> Dir {
++        let dir = std::env::temp_dir().join(format!(
++            "gbcli-build-probe-cache-{}-{name}",
++            std::process::id()
++        ));
++        let _ = fs::remove_dir_all(&dir);
++        fs::create_dir_all(&dir).unwrap();
++        Dir(dir)
++    }
++
++    fn join(&self, name: &str) -> PathBuf {
++        self.0.join(name)
++    }
++
++    /// A compiled program (the system's `echo`) named `name` here.
++    fn binary(&self, name: &str) -> PathBuf {
++        let path = self.join(name);
++        fs::copy("/bin/echo", &path).unwrap();
++        path
++    }
++
++    /// A subdirectory.
++    fn sub(&self, name: &str) -> Dir {
++        let dir = self.join(name);
++        fs::create_dir_all(&dir).unwrap();
++        // Removed with its parent, not on its own.
++        Dir(dir)
++    }
++}
++
++impl Drop for Dir {
++    fn drop(&mut self) {
++        let _ = fs::remove_dir_all(&self.0);
++    }
++}
++
++/// Long enough after any file this test made that it is not racy.
++fn later() -> SystemTime {
++    SystemTime::now() + Duration::from_secs(3600)
++}
++
++fn id(path: &Path) -> Option<FileId> {
++    FileId::of("rgbasm", path, later())
++}
++
++#[test]
++fn a_program_is_identified_and_the_same_file_has_the_same_id() {
++    let d = Dir::new("same");
++    let path = d.binary("rgbasm");
++    let first = id(&path).expect("a compiled program");
++    assert_eq!(id(&path), Some(first));
++}
++
++#[test]
++fn a_script_is_never_identified() {
++    // A version manager's shim is a script whose answer depends on where it
++    // runs, and a script's file says nothing of what it will print.
++    let d = Dir::new("script");
++    let path = d.join("rgbasm");
++    fs::write(&path, "#!/bin/sh\necho 'rgbasm v1.0.4'\n").unwrap();
++    assert_eq!(id(&path), None);
++}
++
++#[test]
++fn a_file_that_is_not_a_program_is_never_identified() {
++    let d = Dir::new("text");
++    let path = d.join("rgbasm");
++    fs::write(&path, "just some text, long enough to read four bytes").unwrap();
++    assert_eq!(id(&path), None);
++}
++
++#[test]
++fn a_link_to_a_program_of_another_name_is_never_identified() {
++    // mise and rbenv-style shims are links to one dispatcher that picks the
++    // version from the directory it is run in.
++    let d = Dir::new("dispatcher");
++    let dispatcher = d.binary("mise");
++    let shim = d.join("rgbasm");
++    std::os::unix::fs::symlink(&dispatcher, &shim).unwrap();
++    assert_eq!(id(&shim), None);
++    assert!(id(&dispatcher).is_none(), "named for another tool too");
++}
++
++#[test]
++fn a_link_is_identified_by_its_target_and_a_retargeted_link_is_another_id() {
++    let d = Dir::new("retarget");
++    let (a_dir, b_dir) = (d.sub("a"), d.sub("b"));
++    let (a, b) = (a_dir.binary("rgbasm"), b_dir.binary("rgbasm"));
++    let link = d.join("rgbasm");
++    std::os::unix::fs::symlink(&a, &link).unwrap();
++    let through_a = id(&link).expect("a link to a program of its own name");
++    assert_eq!(id(&a), Some(through_a.clone()), "the target's own id");
++    fs::remove_file(&link).unwrap();
++    std::os::unix::fs::symlink(&b, &link).unwrap();
++    let through_b = id(&link).expect("still a program");
++    assert_ne!(through_a, through_b);
++}
++
++#[test]
++fn a_replaced_file_is_another_id_even_with_the_same_bytes() {
++    let d = Dir::new("replaced");
++    let path = d.binary("rgbasm");
++    let before = id(&path).unwrap();
++    fs::remove_file(&path).unwrap();
++    fs::copy("/bin/echo", &path).unwrap();
++    assert_ne!(id(&path).unwrap(), before);
++}
++
++#[test]
++fn an_edit_in_place_is_another_id() {
++    use std::io::Write;
++    let d = Dir::new("edited");
++    let path = d.binary("rgbasm");
++    let before = id(&path).unwrap();
++    fs::OpenOptions::new()
++        .append(true)
++        .open(&path)
++        .unwrap()
++        .write_all(b"x")
++        .unwrap();
++    assert_ne!(id(&path).unwrap(), before, "its size changed");
++}
++
++#[test]
++fn a_touched_file_is_another_id() {
++    let d = Dir::new("touched");
++    let path = d.binary("rgbasm");
++    let before = id(&path).unwrap();
++    let file = fs::OpenOptions::new().write(true).open(&path).unwrap();
++    file.set_modified(SystemTime::now() - Duration::from_secs(86_400))
++        .unwrap();
++    assert_ne!(id(&path).unwrap(), before, "its mtime changed");
++}
++
++#[test]
++fn a_file_changed_within_the_last_two_seconds_is_never_identified() {
++    // It could be rewritten within the same timestamp tick and keep its
++    // size and times.
++    let d = Dir::new("racy");
++    let path = d.binary("rgbasm");
++    assert_eq!(FileId::of("rgbasm", &path, SystemTime::now()), None);
++    assert!(FileId::of("rgbasm", &path, SystemTime::now() + Duration::from_secs(5)).is_some());
++    let before = SystemTime::now() - Duration::from_secs(5);
++    assert_eq!(
++        FileId::of("rgbasm", &path, before),
++        None,
++        "a time in the future is racy"
++    );
++}
++
++#[test]
++fn a_file_missing_is_never_identified() {
++    assert_eq!(id(Path::new("/no/such/rgbasm")), None);
++}
++
++#[test]
++fn the_process_remembers_a_line_for_one_id_only() {
++    let d = Dir::new("memo");
++    let a = id(&d.binary("rgbasm")).unwrap();
++    let other = Dir::new("memo-other");
++    let b = id(&other.binary("rgbasm")).unwrap();
++    let cache = VersionCache::new();
++    assert_eq!(cache.lookup(&a, None), None);
++    cache.remember(&a, None, "rgbasm v1.0.4");
++    assert_eq!(cache.lookup(&a, None).as_deref(), Some("rgbasm v1.0.4"));
++    assert_eq!(cache.lookup(&b, None), None);
++}
++
++#[test]
++fn a_cache_directory_shares_a_line_between_processes() {
++    let d = Dir::new("shared");
++    let cache_dir = d.join("cache");
++    let a = id(&d.binary("rgbasm")).unwrap();
++    VersionCache::new().remember(&a, Some(&cache_dir), "rgbasm v1.0.4");
++    // A fresh memo, as a new process has, finds it on disk.
++    let found = VersionCache::new().lookup(&a, Some(&cache_dir));
++    assert_eq!(found.as_deref(), Some("rgbasm v1.0.4"));
++    assert_eq!(
++        VersionCache::new().lookup(&a, None),
++        None,
++        "with no directory nothing is shared"
++    );
++}
++
++#[test]
++fn an_entry_for_another_file_or_one_that_is_damaged_is_not_believed() {
++    let d = Dir::new("damaged");
++    let cache_dir = d.join("cache");
++    let a = id(&d.binary("rgbasm")).unwrap();
++    VersionCache::new().remember(&a, Some(&cache_dir), "rgbasm v1.0.4");
++    let entry = fs::read_dir(&cache_dir)
++        .unwrap()
++        .map(|e| e.unwrap().path())
++        .next()
++        .expect("an entry");
++    let text = fs::read_to_string(&entry).unwrap();
++    // Another file's key under this file's name: a hash collision.
++    fs::write(&entry, text.replacen(a.text(), "/some/other/rgbasm 1 2", 1)).unwrap();
++    assert_eq!(VersionCache::new().lookup(&a, Some(&cache_dir)), None);
++    fs::write(&entry, "garbage").unwrap();
++    assert_eq!(VersionCache::new().lookup(&a, Some(&cache_dir)), None);
++    fs::write(&entry, "").unwrap();
++    assert_eq!(VersionCache::new().lookup(&a, Some(&cache_dir)), None);
++}
++
++#[test]
++fn an_unwritable_cache_directory_is_not_an_error() {
++    let d = Dir::new("unwritable");
++    let a = id(&d.binary("rgbasm")).unwrap();
++    // The directory's parent is a file, so it can't be made.
++    let blocked = d.join("rgbasm").join("cache");
++    let cache = VersionCache::new();
++    cache.remember(&a, Some(&blocked), "rgbasm v1.0.4");
++    assert_eq!(
++        cache.lookup(&a, Some(&blocked)).as_deref(),
++        Some("rgbasm v1.0.4")
++    );
++}
+diff --git a/crates/build/src/toolchain/tests.rs b/crates/build/src/toolchain/tests.rs
+index 6332197..4e0790e 100644
+--- a/crates/build/src/toolchain/tests.rs
++++ b/crates/build/src/toolchain/tests.rs
+@@ -176,3 +176,190 @@ fn probe_takes_the_first_match_on_path() {
+     assert_eq!(found.path, first.0.join("rgbasm"));
+     assert_eq!(found.warning(), None);
+ }
++
++/// The RGBDS on this machine's `PATH`: what the cache tests read a real
++/// compiled program's version from.
++fn real_path() -> std::ffi::OsString {
++    std::env::var_os("PATH").expect("a PATH with RGBDS on it")
++}
++
++/// A directory of this test's own, removed on drop.
++struct Scratch(PathBuf);
++
++impl Scratch {
++    fn new(name: &str) -> Scratch {
++        let dir = std::env::temp_dir().join(format!(
++            "gbcli-build-probe-cached-{}-{name}",
++            std::process::id()
++        ));
++        let _ = fs::remove_dir_all(&dir);
++        fs::create_dir_all(&dir).unwrap();
++        Scratch(dir)
++    }
++
++    fn entries(&self) -> Vec<PathBuf> {
++        fs::read_dir(&self.0)
++            .map(|dir| dir.map(|e| e.unwrap().path()).collect())
++            .unwrap_or_default()
++    }
++}
++
++impl Drop for Scratch {
++    fn drop(&mut self) {
++        let _ = fs::remove_dir_all(&self.0);
++    }
++}
++
++/// Replaces the version line of the one entry in `dir`.
++fn rewrite_line(dir: &Scratch, line: &str) {
++    let entries = dir.entries();
++    assert_eq!(entries.len(), 1, "{entries:?}");
++    let text = fs::read_to_string(&entries[0]).unwrap();
++    let key = text.lines().next().unwrap();
++    fs::write(&entries[0], format!("{key}\n{line}\n")).unwrap();
++}
++
++#[test]
++fn a_cached_probe_reads_a_compiled_tool_once_and_others_trust_the_entry() {
++    let path = real_path();
++    let dir = Scratch::new("trust");
++    let first = probe_with(
++        &cache::VersionCache::new(),
++        Tool::Rgbasm,
++        Some(&path),
++        Path::new("/"),
++        Some(&dir.0),
++    )
++    .expect("RGBDS on PATH");
++    assert_eq!(
++        dir.entries().len(),
++        1,
++        "the line was kept for other processes"
++    );
++    // The entry says another patch; a process that believes it never runs
++    // the tool, so the answer is the entry's.
++    rewrite_line(&dir, "rgbasm v1.0.9");
++    let second = probe_with(
++        &cache::VersionCache::new(),
++        Tool::Rgbasm,
++        Some(&path),
++        Path::new("/"),
++        Some(&dir.0),
++    )
++    .unwrap();
++    assert_eq!(second.version, Version::release(1, 0, 9));
++    assert_eq!(second.path, first.path);
++    // With no directory, and a memory of its own, the tool is run.
++    let alone = probe_with(
++        &cache::VersionCache::new(),
++        Tool::Rgbasm,
++        Some(&path),
++        Path::new("/"),
++        None,
++    )
++    .unwrap();
++    assert_eq!(alone.version, first.version);
++}
++
++#[test]
++fn an_entry_is_held_to_the_pin_like_a_fresh_reading() {
++    let path = real_path();
++    let dir = Scratch::new("pin");
++    let fresh = || cache::VersionCache::new();
++    probe_with(
++        &fresh(),
++        Tool::Rgbasm,
++        Some(&path),
++        Path::new("/"),
++        Some(&dir.0),
++    )
++    .unwrap();
++    rewrite_line(&dir, "rgbasm v2.0.0");
++    let refused = probe_with(
++        &fresh(),
++        Tool::Rgbasm,
++        Some(&path),
++        Path::new("/"),
++        Some(&dir.0),
++    )
++    .unwrap_err();
++    assert!(
++        matches!(refused, ToolProblem::Unsupported { .. }),
++        "{refused:?}"
++    );
++}
++
++#[test]
++fn an_entry_that_does_not_read_as_a_version_is_run_again() {
++    let path = real_path();
++    let dir = Scratch::new("garbled");
++    let fresh = || cache::VersionCache::new();
++    let first = probe_with(
++        &fresh(),
++        Tool::Rgbasm,
++        Some(&path),
++        Path::new("/"),
++        Some(&dir.0),
++    )
++    .unwrap();
++    rewrite_line(&dir, "no version here");
++    let again = probe_with(
++        &fresh(),
++        Tool::Rgbasm,
++        Some(&path),
++        Path::new("/"),
++        Some(&dir.0),
++    )
++    .unwrap();
++    assert_eq!(again.version, first.version);
++}
++
++#[test]
++fn a_script_is_run_every_time_whatever_the_cache() {
++    // The fake tools are scripts: nothing is kept, in memory or on disk, so a
++    // wrapper that changes its answer is read again.
++    let fake = fake("uncached", &all("v1.0.4"));
++    let dir = Scratch::new("script");
++    let cache = cache::VersionCache::new();
++    let probe = || {
++        probe_with(
++            &cache,
++            Tool::Rgbasm,
++            Some(&fake.var()),
++            Path::new("/"),
++            Some(&dir.0),
++        )
++    };
++    assert_eq!(probe().unwrap().version, Version::release(1, 0, 4));
++    assert!(dir.entries().is_empty(), "{:?}", dir.entries());
++    fs::write(fake.0.join("rgbasm"), "#!/bin/sh\necho 'rgbasm v1.0.6'\n").unwrap();
++    assert_eq!(probe().unwrap().version, Version::release(1, 0, 6));
++}
++
++#[test]
++fn a_cached_discovery_finds_the_same_tools_as_an_uncached_one() {
++    let path = real_path();
++    let plain = Toolchain::discover(Some(&path), Path::new("/")).unwrap();
++    let dir = Scratch::new("discover");
++    for _ in 0..2 {
++        let cached = Toolchain::discover_cached(Some(&path), Path::new("/"), Some(&dir.0)).unwrap();
++        for tool in Tool::ALL {
++            assert_eq!(cached.path(tool), plain.path(tool));
++        }
++        assert_eq!(cached.version(), plain.version());
++    }
++    assert_eq!(dir.entries().len(), 3, "one entry a tool");
++}
++
++#[test]
++fn a_missing_tool_is_missing_whatever_the_cache() {
++    let dir = Scratch::new("missing");
++    let err = probe_cached(
++        Tool::Rgbasm,
++        Some(Path::new("/no/such/dir").as_os_str()),
++        Path::new("/"),
++        Some(&dir.0),
++    )
++    .unwrap_err();
++    assert_eq!(err, ToolProblem::Missing { tool: Tool::Rgbasm });
++}
+diff --git a/crates/cli/src/lib.rs b/crates/cli/src/lib.rs
+index 59e1b69..a749408 100644
+--- a/crates/cli/src/lib.rs
++++ b/crates/cli/src/lib.rs
+@@ -38,6 +38,10 @@ pub struct Env {
+     /// `GBCLI_BOOT_CACHE`: where the boot cache lives instead of the
+     /// bundle's `cache/`, so projects share their boots.
+     pub boot_cache: Option<PathBuf>,
++    /// `GBCLI_CACHE`: a directory processes share what they learn about the
++    /// machine in (which RGBDS is installed), so a build needn't ask the
++    /// tools again.
++    pub cache: Option<PathBuf>,
+     /// The working directory: relative paths and the `.gbcli/` search start
+     /// here. `--dir PATH` moves it to PATH for the invocation.
+     pub cwd: PathBuf,
+@@ -60,6 +64,7 @@ impl Env {
+             gbcli_dir: path_var("GBCLI_DIR"),
+             // Absolute, so `--dir` doesn't move it.
+             boot_cache: path_var("GBCLI_BOOT_CACHE").map(|p| cwd.join(p)),
++            cache: path_var("GBCLI_CACHE").map(|p| cwd.join(p)),
+             cwd,
+             path: std::env::var_os("PATH"),
+         }
+diff --git a/crates/gbcli/tests/cli/build_cache.rs b/crates/gbcli/tests/cli/build_cache.rs
+new file mode 100644
+index 0000000..dcfc667
+--- /dev/null
++++ b/crates/gbcli/tests/cli/build_cache.rs
+@@ -0,0 +1,85 @@
++//! `GBCLI_CACHE`: processes share what they learned about the installed
++//! RGBDS, so a build doesn't run `--version` on all three tools again. Needs
++//! the pinned RGBDS on `PATH`, like `rgbds.rs`.
++
++use std::fs;
++use std::path::PathBuf;
++
++use crate::common::{Project, Run};
++use crate::rgbds::rgbds_dir;
++
++fn entries(cache: &PathBuf) -> Vec<PathBuf> {
++    fs::read_dir(cache)
++        .map(|dir| dir.map(|e| e.unwrap().path()).collect())
++        .unwrap_or_default()
++}
++
++/// `gbcli build game --json` with the pinned RGBDS on `PATH` and `cache` as
++/// `GBCLI_CACHE`, when given.
++fn build(p: &Project, cache: Option<&PathBuf>) -> Run {
++    let path = rgbds_dir();
++    let mut env = vec![("PATH", path.as_str())];
++    if let Some(cache) = cache {
++        env.push(("GBCLI_CACHE", cache.to_str().unwrap()));
++    }
++    p.gbcli_with(&["build", "game", "--json"], &env, None)
++}
++
++fn project(name: &str) -> Project {
++    let p = Project::new(name);
++    let made = p.rgbds(&["new", "game"]);
++    assert_eq!(made.code, 0, "{}", made.stderr);
++    p
++}
++
++#[test]
++fn a_build_leaves_one_entry_a_tool_and_the_next_build_believes_them() {
++    let p = project("cache-believed");
++    let cache = p.path("shared-cache");
++    let first = build(&p, Some(&cache));
++    assert_eq!(first.code, 0, "{}{}", first.stdout, first.stderr);
++    assert!(!first.stdout.contains("not the pinned"), "{}", first.stdout);
++    let found = entries(&cache);
++    assert_eq!(found.len(), 3, "{found:?}");
++
++    // An entry that says another patch: the next process takes its word, so
++    // its build carries the unpinned-version warning a real 1.0.9 would earn.
++    let rgbasm = found
++        .iter()
++        .find(|e| fs::read_to_string(e).unwrap().contains("\nrgbasm v"))
++        .expect("an entry for rgbasm");
++    let text = fs::read_to_string(rgbasm).unwrap();
++    let key = text.lines().next().unwrap();
++    fs::write(rgbasm, format!("{key}\nrgbasm v1.0.9\n")).unwrap();
++    let second = build(&p, Some(&cache));
++    assert_eq!(second.code, 0, "{}{}", second.stdout, second.stderr);
++    assert!(
++        second.stdout.contains("rgbasm is 1.0.9, not the pinned"),
++        "{}",
++        second.stdout
++    );
++
++    // Without the variable nothing is believed or written.
++    let alone = build(&p, None);
++    assert_eq!(alone.code, 0, "{}{}", alone.stdout, alone.stderr);
++    assert!(!alone.stdout.contains("not the pinned"), "{}", alone.stdout);
++}
++
++#[test]
++fn doctor_reads_the_tools_itself() {
++    let p = project("cache-doctor");
++    let cache = p.path("shared-cache");
++    assert_eq!(build(&p, Some(&cache)).code, 0);
++    let entry = entries(&cache).into_iter().next().expect("an entry");
++    let text = fs::read_to_string(&entry).unwrap();
++    let key = text.lines().next().unwrap();
++    fs::write(&entry, format!("{key}\nrgbasm v9.9.9\n")).unwrap();
++    let path = rgbds_dir();
++    let env = [
++        ("PATH", path.as_str()),
++        ("GBCLI_CACHE", cache.to_str().unwrap()),
++    ];
++    let doctor = p.gbcli_with(&["doctor"], &env, None);
++    assert!(!doctor.stdout.contains("9.9.9"), "{}", doctor.stdout);
++    assert!(!doctor.stderr.contains("9.9.9"), "{}", doctor.stderr);
++}
+diff --git a/crates/server/src/handle/build.rs b/crates/server/src/handle/build.rs
+index d3c6ce9..f07ef91 100644
+--- a/crates/server/src/handle/build.rs
++++ b/crates/server/src/handle/build.rs
+@@ -292,7 +292,7 @@ fn build(host: &Host, request: &Request, args: &BuildArgs) -> Result<Built, Box<
+         );
+         return Err(Box::new(Response::failed(id, None, body)));
+     }
+-    let tools = Toolchain::discover(host.path(), host.cwd())
++    let tools = Toolchain::discover_cached(host.path(), host.cwd(), host.cache_dir())
+         .map_err(|e| Box::new(Response::failed(id, None, e.body())))?;
+     let warnings = tools.warnings();
+     let project = host.resolve(args.dir.as_deref().unwrap_or("."));
+diff --git a/crates/server/src/handle/host.rs b/crates/server/src/handle/host.rs
+index 894ed74..7394697 100644
+--- a/crates/server/src/handle/host.rs
++++ b/crates/server/src/handle/host.rs
+@@ -15,6 +15,7 @@ use gbcli_protocol::{ErrorBody, ErrorCode, Op};
+ pub struct Host {
+     cwd: PathBuf,
+     files: HostFiles,
++    cache_dir: Option<PathBuf>,
+ }
+ 
+ /// Whether a request may read or write the host's own files, or run a
+@@ -59,7 +60,28 @@ impl Host {
+         if !cwd.is_absolute() {
+             return Err(RelativeCwd(cwd));
+         }
+-        Ok(Host { cwd, files })
++        Ok(Host {
++            cwd,
++            files,
++            cache_dir: None,
++        })
++    }
++
++    /// This host with a directory where processes share what they have
++    /// learned about the machine (which RGBDS is installed: `GBCLI_CACHE`).
++    /// Ignored when the host denies host files.
++    pub fn with_cache_dir(mut self, dir: Option<PathBuf>) -> Host {
++        self.cache_dir = dir;
++        self
++    }
++
++    /// The shared cache directory, if the host allows host files and names
++    /// one.
++    pub fn cache_dir(&self) -> Option<&Path> {
++        match &self.files {
++            HostFiles::Allowed { .. } => self.cache_dir.as_deref(),
++            HostFiles::Denied => None,
++        }
+     }
+ 
+     /// The working directory: always absolute.
+
+# Also (not in the diff above): crates/cli/src/exec.rs `host()` ends
+#   Host::new(env.cwd.clone(), files).map(|host| host.with_cache_dir(env.cache.clone())).map_err(...)
+# and crates/gbcli/tests/cli/main.rs gains `mod build_cache;`.

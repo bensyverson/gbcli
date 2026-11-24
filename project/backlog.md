@@ -183,3 +183,20 @@ What: let pixel text (or a sheet's name) name its tiles and frames so `images.in
 **Why parked:** C (the raycaster) wanted it for its speed-ups, but a renderer that takes a new pose each view samples input at different frames once it is faster, so the faster build shows *different* views while keys are held, not only earlier ones. A frame-locked test mode in the ROM is the sound check, and `help optimize` now says so; `equiv --screen off` covers the timing-free `--ram` compare ([2026-11-09-examples-dx-review-c.md](2026-11-09-examples-dx-review-c.md), C-1).
 
 **Un-park when:** a game whose views don't depend on input timing (a demo, a replayed cutscene, a pose taken from a fixed table) needs to check a speed-up and a frame lock won't do.
+
+## 2026-11-23 — A cross-process cache of the RGBDS `--version` probes
+
+**What:** a build runs `rgbasm`, `rgblink` and `rgbfix` with `--version` (three process starts, 1 to 1.5 ms each alone) before it runs them. Built and tested, then taken out: `GBCLI_CACHE=DIR` keeps each tool's first version line in `DIR/rgbds-<hash>.txt` and a process-wide memo, keyed by the tool file's resolved path, size, mtime, ctime, device and inode, and only for a compiled program (Mach-O or ELF magic) whose resolved file is named for the tool, older than 2 s; a script (asdf, rbenv and user wrappers) or a link to a dispatcher with another name (mise) is never cached, since its version comes from where it runs. `doctor` kept probing. The whole change, with its 14 + 6 unit tests and two CLI tests, is `project/2026-11-23-toolchain-probe-cache.patch` (`git apply`; its last lines name the two hunks the diff leaves out: `exec.rs`'s `host()` and `mod build_cache;` in `tests/cli/main.rs`).
+
+**Why parked:** it saved 2.1 ms CPU of a 54 ms build serve (3.9%; `gbcli serve --ephemeral` building the starter project, 40 runs alternated with and without the cache, load 28; wall 69.4 to 66.7 ms), about 0.9% of loadhigh's warm suite's CPU, and its suite wall time did not move (medians of 3 alternating runs at load 14 to 25, `LDH_GBCLI=… cargo test --quiet --workspace`: 37.4 s without, 40.2 s with; user 315.8 and 316.1 CPU-s, sys 141.4 and 140.8) although it removed 5,600 of the suite's roughly 15,000 process starts. So process-start rate was not what limited the suite.
+
+**Un-park when:** a suite or a tool builds so often that three version probes show in a profile (more than a few percent of a run), or process starts become the measured bottleneck (for example a slower filesystem or an endpoint scanner that charges each exec).
+
+## 2026-11-23 — A protocol op that opens a session inside a running serve
+
+**What:** `{"op":"open","args":{session, rom, sym?, model?, seed?, flash?}}`, so a client that builds a ROM in `gbcli serve` and then runs it (LoadHigh's harness: one serve to `build`, a second to run) does both in one process. No op creates a session today (`Bundle::start_session` runs before the first request, as the CLI and `serve` do).
+
+**Why parked:** not built. It would save one process start, one `version` round trip and one exit wait a ROM test: measured 5.2 ms CPU for a `serve --ephemeral` start, `version` and exit (200 cycles; 8.8 ms wall alone, 27 ms a cycle with 12 in parallel), about 1,800 times a loadhigh suite run, which is about 9 CPU-s of 450 (2%), inside the run-to-run noise at the load the suite is measured under. A new op is additive under §5's rule (no `PROTOCOL_VERSION` bump), but a client would need it from a gbcli that has it and a fallback for one that doesn't, and loadhigh pins `gbcli-protocol` by git rev, so adopting it is a rev bump on both sides.
+
+**Un-park when:** the suite's remaining time is dominated by per-test process overhead (after the emulation and RGBDS costs are cut), or a second client wants to create sessions over the wire (a web caller with a `MemoryStore` has the same need, since it can only create one before its first request).
+

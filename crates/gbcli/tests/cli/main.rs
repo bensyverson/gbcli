@@ -30,6 +30,7 @@ mod restart;
 mod rgbds;
 mod serve;
 mod serve_bare;
+mod serve_ephemeral;
 mod song;
 mod starter_gbc;
 mod starter_text;

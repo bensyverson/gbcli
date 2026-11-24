@@ -6,7 +6,7 @@ use gbcli_bundle::{Bundle, RomSource, StoreError};
 use gbcli_protocol::{ErrorBody, ErrorCode, Op, Request, Response};
 use gbcli_server::{Answer, Handler, Host, HostFiles, Interrupt, Tooling, Watchdog, serve};
 
-use crate::build::Target;
+use crate::build::{SessionStorage, Target};
 use crate::{Env, Io, render};
 
 pub fn request(target: &Target, op: Op, env: &Env, io: Io) -> u8 {
@@ -179,10 +179,11 @@ fn start_handler(target: &Target, env: &Env, opens: bool) -> Result<Handler, Ope
         None => (env.cwd.clone(), env.gbcli_dir.as_deref()),
     };
     let creates = target.session.is_some() && target.create.is_some();
-    let bundle = if creates {
-        Bundle::open_or_create_in(&start, gbcli_dir)
-    } else {
-        Bundle::open_in(&start, gbcli_dir)
+    let bundle = match target.storage {
+        // Nothing to find or make: the bundle is this process's memory.
+        SessionStorage::Memory => Ok(Bundle::ephemeral(&start)),
+        SessionStorage::Project if creates => Bundle::open_or_create_in(&start, gbcli_dir),
+        SessionStorage::Project => Bundle::open_in(&start, gbcli_dir),
     }
     .map(|bundle| bundle.with_boot_cache(env.boot_cache.as_deref()))
     .map_err(|e| {

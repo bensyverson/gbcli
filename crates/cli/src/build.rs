@@ -33,6 +33,18 @@ pub enum Command {
     Song(Box<crate::song::SongCommand>),
 }
 
+/// Where a target's sessions are kept.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SessionStorage {
+    /// In the project's `.gbcli/`, found by walking up or named by
+    /// `GBCLI_DIR`, shared with every other process.
+    #[default]
+    Project,
+    /// In this process's memory (`serve --ephemeral`): nothing is written
+    /// under `.gbcli/`, and no session of another process is seen.
+    Memory,
+}
+
 /// Where a request goes and how its answer is printed: the flags every
 /// session verb shares.
 #[derive(Debug, Default)]
@@ -48,6 +60,7 @@ pub struct Target {
     pub dir: Option<PathBuf>,
     /// Create the session from this when it doesn't exist.
     pub create: Option<Create>,
+    pub storage: SessionStorage,
 }
 
 /// A new session's ROM and settings (`--rom`, `--sym`, `--model`, `--seed`, `--flash`).
@@ -413,6 +426,11 @@ pub(crate) fn target(inv: &Invocation, env: &Env, rom: Option<String>) -> Result
         // `--dir` already moved the working directory there (`Env::anchored`).
         dir: inv.has("dir").then(|| env.cwd.clone()),
         create,
+        storage: if inv.has("ephemeral") {
+            SessionStorage::Memory
+        } else {
+            SessionStorage::Project
+        },
     })
 }
 

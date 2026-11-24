@@ -119,8 +119,25 @@ pub const CHANGE: &[FlagSpec] = &[value(
 /// `batch`: a default session, created from a ROM if new.
 pub const CREATE: &[FlagSpec] = &[SESSION_FLAG, ROM, SYM, MODEL, SEED, FLASH];
 
+pub const EPHEMERAL: FlagSpec = switch(
+    "ephemeral",
+    "keep sessions in memory: nothing is written under .gbcli/, and no other process's \
+     sessions are seen (GBCLI_DIR and an existing .gbcli/ are ignored); the sessions are gone \
+     when serve ends",
+);
+
 /// `serve`: a default session, created from a ROM if new, and who asks.
-pub const SERVE: &[FlagSpec] = &[SESSION_FLAG, ROM, SYM, MODEL, SEED, FLASH, DIR, AS];
+pub const SERVE: &[FlagSpec] = &[
+    SESSION_FLAG,
+    ROM,
+    SYM,
+    MODEL,
+    SEED,
+    FLASH,
+    DIR,
+    AS,
+    EPHEMERAL,
+];
 
 pub const SINCE: FlagSpec = value(
     "since",

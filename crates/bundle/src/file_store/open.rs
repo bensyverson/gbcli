@@ -108,7 +108,7 @@ fn gbcli_dir() -> Option<PathBuf> {
 }
 
 /// Absolute without requiring the path to exist.
-fn absolute(path: &Path) -> PathBuf {
+pub(crate) fn absolute(path: &Path) -> PathBuf {
     if path.is_absolute() {
         return normalize(path);
     }
